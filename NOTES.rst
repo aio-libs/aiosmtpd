@@ -1,0 +1,31 @@
+=======
+ Notes
+=======
+
+RFCs
+====
+
+* `RFC 5321 <http://www.faqs.org/rfcs/rfc5321.html>`__ - Simple Mail Transfer
+  Protocol (SMTP)
+* `RFC 2033 <http://www.faqs.org/rfcs/rfc2033.html>`__ - Local Mail Transfer
+  Protocol (LMTP)
+* `RFC 2034 <http://www.faqs.org/rfcs/rfc2034.html>`__ - SMTP Service
+  Extension for Returning Enhanced Error Codes
+* `RFC 6531 <http://www.faqs.org/rfcs/rfc6531.html>`__ - SMTP Extension for
+  Internationalized Email
+
+
+Other references
+================
+
+* `Wikipedia page on SMTP <https://en.wikipedia.org/wiki/Simple_Mail_Transfer_Protocol>`__
+* `asyncio module documentation <https://docs.python.org/3/library/asyncio.html>`__
+
+
+Implementations to study
+========================
+
+* `Python 3.5's smtpd.py <https://hg.python.org/cpython/file/3.5/Lib/smtpd.py>`__
+* `lazr.smtptest <http://bazaar.launchpad.net/~lazr-developers/lazr.smtptest/devel/files>`__
+* `benjamin-bader/aiosmtp <https://github.com/benjamin-bader/aiosmtp>`__
+* `Mailman 3's LMTP server <https://gitlab.com/mailman/mailman/blob/master/src/mailman/runners/lmtp.py#L138>`__
