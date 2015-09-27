@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 
 require_python(0x30400f0)
-__version__ = get_version('aiosmtpd/version.txt')
+__version__ = get_version('aiosmtpd/version.py')
 
 install_requires = ['aiohttp']
 
