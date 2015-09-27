@@ -1,3 +1,5 @@
+import sys
+
 from setup_helpers import require_python, get_version
 from setuptools import setup, find_packages
 
@@ -5,6 +7,12 @@ from setuptools import setup, find_packages
 require_python(0x30400f0)
 __version__ = get_version('aiosmtpd/version.txt')
 
+install_requires = ['aiohttp']
+
+if sys.version_info >= (3, 4):
+    install_requires = install_requires + ['aiohttp']
+
+tests_require = install_requires + ['nose', 'mocks']
 
 setup(
     name            = 'aoismtpd',
@@ -19,6 +27,15 @@ Python 3.""",
     keywords        = 'email',
     packages= find_packages(),
     include_package_data = True,
-    install_requires = [],
+    install_requires = install_requires,
+    tests_require = tests_require,
+    test_suite = 'nose.collector',
     license = "http://www.apache.org/licenses/LICENSE-2.0",
+    classifiers = [
+          'License :: OSI Approved',
+          'Intended Audience :: Developers',
+          'Programming Language :: Python :: 3.3',
+          'Programming Language :: Python :: 3.4',
+          'Topic :: Internet :: WWW/SMTP',
+    ],
     )
