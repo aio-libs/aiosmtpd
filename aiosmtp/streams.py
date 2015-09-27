@@ -61,7 +61,7 @@ class SmtpStreamReader(asyncio.StreamReader):
                 break
 
             if not_enough:
-                self._waiter = self._create_waiter('read_crlf_line')
+                self._waiter = self._wait_for_data('read_crlf_line')
                 try:
                     yield from self._waiter
                 finally:
