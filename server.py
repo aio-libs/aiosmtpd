@@ -7,9 +7,11 @@ logging.basicConfig(level=logging.DEBUG)
 
 class Handler:
 
+    @asyncio.coroutine
     def message_received(*args, **kw):
         print('message received:', *args, **kw)
 
+    @asyncio.coroutine
     def verify(*args, **kw):
         print('verify:', *args, **kw)
 
