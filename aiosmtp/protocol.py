@@ -59,7 +59,7 @@ class SmtpProtocol(asyncio.StreamReaderProtocol):
             b'QUIT': SmtpProtocol.quit,
         }
 
-        self.worker = asyncio.async(self.run(), loop=loop)
+        self.worker = asyncio.ensure_future(self.run(), loop=loop)
 
         if self.is_open():
             self.connection_open.set_result(True)
@@ -150,7 +150,7 @@ class SmtpProtocol(asyncio.StreamReaderProtocol):
             yield from self.send(b'522 Message exceeds fixed maximum size')
             return
 
-        asyncio.async(
+        asyncio.ensure_future(
             self.handler.message_received(
                 self._sender, self._recipients, data), loop=self._loop)
 
