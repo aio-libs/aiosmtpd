@@ -11,7 +11,7 @@ from . import const
 from . import errors
 from . import streams
 
-ACCESS_LOG = logging.getLogger("smtp.access")
+access_log = logging.getLogger("smtp.access")
 
 STATE_CONNECTING = 0
 STATE_OPEN = 1
@@ -86,6 +86,7 @@ class SmtpProtocol(asyncio.StreamReaderProtocol):
         super(SmtpProtocol, self).connection_made(transport)
         # What should we do if peername is None due to some OS error?
         self._peername = transport.get_extra_info('peername')
+        access_log.debug("Connection made: %s %s", transport, self._peername)
 
     def client_connected(self, reader, writer):
         """The StreamReaderProtocol callback where things can truly begin."""
@@ -112,6 +113,7 @@ class SmtpProtocol(asyncio.StreamReaderProtocol):
         yield from self.connection_open
 
         # Say hi, then process commands.
+        access_log.debug('Welcome banner sent')
         yield from self.send(b'220 ' + self._fqdn + b' ESMTP')
         while not self.connection_closed.done():
             try:
@@ -122,6 +124,7 @@ class SmtpProtocol(asyncio.StreamReaderProtocol):
             except asyncio.CancelledError:
                 break
 
+        access_log.debug('Closing connection')
         yield from self.close()
 
     @asyncio.coroutine
@@ -131,6 +134,8 @@ class SmtpProtocol(asyncio.StreamReaderProtocol):
         except errors.TooMuchDataError:
             yield from self.send(b'500 Line too long')
             return
+        else:
+            access_log.debug('Command received: %r', line)
 
         yield from self.handle_command(line)
 

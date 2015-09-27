@@ -3,10 +3,12 @@
 __all__ = ['SmtpStreamReader']
 
 import asyncio
+import logging
 
 from . import const
 from . import errors
 
+access_log = logging.getLogger("smtp.access")
 
 class SmtpStreamReader(asyncio.StreamReader):
     @asyncio.coroutine
@@ -17,6 +19,7 @@ class SmtpStreamReader(asyncio.StreamReader):
 
         while True:
             line = yield from self.read_crlf_line(max_len=None)
+            access_log.debug("Data line read: %r", line)
 
             if line == const.DATA_TERM:
                 break
@@ -26,6 +29,7 @@ class SmtpStreamReader(asyncio.StreamReader):
 
             data_length += len(line)
             if max_len and data_length > max_len:
+                access_log.error('Too much data: %i bytes', data_length)
                 raise errors.TooMuchDataError()
 
             lines.append(line)
