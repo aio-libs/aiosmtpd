@@ -172,7 +172,7 @@ class SmtpProtocol(asyncio.StreamReaderProtocol):
             cmd = line.strip()
             arg = None
 
-        method = self.COMMANDS[cmd.upper()]
+        method = self.COMMANDS.get(cmd.upper())
         if method:
             yield from method(self, arg)
         else:
