@@ -191,8 +191,6 @@ class SmtpProtocol(asyncio.StreamReaderProtocol):
         except Exception:
             pass
 
-        self.connection_closed.set_result(None)
-
     @asyncio.coroutine
     def send(self, line):
         if not line.endswith(const.LINE_TERM):
