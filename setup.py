@@ -20,7 +20,5 @@ Python 3.""",
     packages= find_packages(),
     include_package_data = True,
     install_requires = [],
-    classifiers = [
-        'License :: OSI Approved :: Python Software Foundation License',
-    ],
+    license = "http://www.apache.org/licenses/LICENSE-2.0",
     )
