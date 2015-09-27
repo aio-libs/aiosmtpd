@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from aiosmtp import SmtpProtocol
+from aiosmtpd import SmtpProtocol
 
 logging.basicConfig(level=logging.DEBUG)
 
