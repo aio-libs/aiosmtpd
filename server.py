@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import socket
 
 from aiosmtpd import SmtpProtocol
 
@@ -20,5 +21,8 @@ def factory():
     return SmtpProtocol(Handler())
 
 loop = asyncio.get_event_loop()
-server = loop.run_until_complete(loop.create_server(factory, '::0', 9978))
+sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+sock.bind(('::0', 9978))
+server = loop.run_until_complete(loop.create_server(factory, sock=sock))
 loop.run_forever()
