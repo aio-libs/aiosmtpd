@@ -1,11 +1,8 @@
 __all__ = [
-    'DebuggingServer',
-    'PureProxy',
-    'SMTPServer',
+    'SMTP',
     ]
 
 
-import time
 import socket
 import logging
 import asyncio
@@ -28,7 +25,7 @@ class State(Enum):
     data = 1
 
 
-class SMTPChannel(asyncio.StreamReaderProtocol):
+class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
     command_size_limits = collections.defaultdict(
         lambda x=command_size_limit: x)
@@ -154,8 +151,8 @@ class SMTPChannel(asyncio.StreamReaderProtocol):
 
     # SMTP and ESMTP commands
     @asyncio.coroutine
-    def smtp_HELO(self, arg):
-        if not arg:
+    def smtp_HELO(self, hostname):
+        if not hostname:
             yield from self.push('501 Syntax: HELO hostname')
             return
         # See issue #21783 for a discussion of this behavior.
@@ -163,7 +160,8 @@ class SMTPChannel(asyncio.StreamReaderProtocol):
             yield from self.push('503 Duplicate HELO/EHLO')
             return
         self._set_rset_state()
-        self.seen_greeting = arg
+        self.seen_greeting = hostname
+        self.handler.handle_HELO(hostname)
         yield from self.push('250 %s' % self.fqdn)
 
     @asyncio.coroutine
@@ -439,143 +437,3 @@ class SMTPChannel(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def smtp_EXPN(self, arg):
         yield from self.push('502 EXPN not implemented')
-
-
-class SMTPServer:
-    # SMTPChannel class to use for managing client connections
-    channel_class = SMTPChannel
-
-    def __init__(self, localaddr, remoteaddr,
-                 data_size_limit=DATA_SIZE_DEFAULT, map=None,
-                 enable_SMTPUTF8=False, decode_data=None):
-        self._localaddr = localaddr
-        self._remoteaddr = remoteaddr
-        self.data_size_limit = data_size_limit
-        self.enable_SMTPUTF8 = enable_SMTPUTF8
-        if enable_SMTPUTF8:
-            if decode_data:
-                raise ValueError("The decode_data and enable_SMTPUTF8"
-                                 " parameters cannot be set to True at the"
-                                 " same time.")
-            decode_data = False
-        if decode_data is None:
-            warn("The decode_data default of True will change to False in 3.6;"
-                 " specify an explicit value for this keyword",
-                 DeprecationWarning, 2)
-            decode_data = True
-        self._decode_data = decode_data
-
-        log.info('%s created at %s\n\tLocal addr: %s\n\tRemote addr:%s',
-                 self.__class__.__name__,
-                 time.ctime(time.time()),
-                 localaddr,
-                 remoteaddr)
-
-    # API for "doing something useful with the message"
-    def process_message(self, peer, mailfrom, rcpttos, data, **kwargs):
-        """Override this abstract method to handle messages from the client.
-
-        peer is a tuple containing (ipaddr, port) of the client that made the
-        socket connection to our smtp port.
-
-        mailfrom is the raw address the client claims the message is coming
-        from.
-
-        rcpttos is a list of raw addresses the client wishes to deliver the
-        message to.
-
-        data is a string containing the entire full text of the message,
-        headers (if supplied) and all.  It has been `de-transparencied'
-        according to RFC 821, Section 4.5.2.  In other words, a line
-        containing a `.' followed by other text has had the leading dot
-        removed.
-
-        kwargs is a dictionary containing additional information. It is empty
-        unless decode_data=False or enable_SMTPUTF8=True was given as init
-        parameter, in which case ut will contain the following keys:
-            'mail_options': list of parameters to the mail command.  All
-                            elements are uppercase strings.  Example:
-                            ['BODY=8BITMIME', 'SMTPUTF8'].
-            'rcpt_options': same, for the rcpt command.
-
-        This function should return None for a normal `250 Ok' response;
-        otherwise, it should return the desired response string in RFC 821
-        format.
-
-        """
-        raise NotImplementedError
-
-
-class DebuggingServer(SMTPServer):
-
-    def _print_message_content(self, peer, data):
-        inheaders = 1
-        lines = data.splitlines()
-        for line in lines:
-            # headers first
-            if inheaders and not line:
-                peerheader = 'X-Peer: ' + peer[0]
-                if not isinstance(data, str):
-                    # decoded_data=false; make header match other binary output
-                    peerheader = repr(peerheader.encode('utf-8'))
-                print(peerheader)
-                inheaders = 0
-            if not isinstance(data, str):
-                # Avoid spurious 'str on bytes instance' warning.
-                line = repr(line)
-            print(line)
-
-    def process_message(self, peer, mailfrom, rcpttos, data, **kwargs):
-        print('---------- MESSAGE FOLLOWS ----------')
-        if kwargs:
-            if kwargs.get('mail_options'):
-                print('mail options: %s' % kwargs['mail_options'])
-            if kwargs.get('rcpt_options'):
-                print('rcpt options: %s\n' % kwargs['rcpt_options'])
-        self._print_message_content(peer, data)
-        print('------------ END MESSAGE ------------')
-
-
-class PureProxy(SMTPServer):
-    def __init__(self, *args, **kwargs):
-        if 'enable_SMTPUTF8' in kwargs and kwargs['enable_SMTPUTF8']:
-            raise ValueError("PureProxy does not support SMTPUTF8.")
-        super(PureProxy, self).__init__(*args, **kwargs)
-
-    def process_message(self, peer, mailfrom, rcpttos, data):
-        lines = data.split('\n')
-        # Look for the last header
-        i = 0
-        for line in lines:
-            if not line:
-                break
-            i += 1
-        lines.insert(i, 'X-Peer: %s' % peer[0])
-        data = NEWLINE.join(lines)
-        refused = self._deliver(mailfrom, rcpttos, data)
-        # TBD: what to do with refused addresses?
-        log.info('we got some refusals: %s', refused)
-
-    def _deliver(self, mailfrom, rcpttos, data):
-        import smtplib
-        refused = {}
-        try:
-            s = smtplib.SMTP()
-            s.connect(self._remoteaddr[0], self._remoteaddr[1])
-            try:
-                refused = s.sendmail(mailfrom, rcpttos, data)
-            finally:
-                s.quit()
-        except smtplib.SMTPRecipientsRefused as e:
-            log.info('got SMTPRecipientsRefused')
-            refused = e.recipients
-        except (OSError, smtplib.SMTPException) as e:
-            log.exception('got', e.__class__)
-            # All recipients were refused.  If the exception had an associated
-            # error code, use it.  Otherwise,fake it with a non-triggering
-            # exception code.
-            errcode = getattr(e, 'smtp_code', -1)
-            errmsg = getattr(e, 'smtp_error', 'ignore')
-            for r in rcpttos:
-                refused[r] = (errcode, errmsg)
-        return refused
