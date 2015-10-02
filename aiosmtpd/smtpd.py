@@ -1,116 +1,37 @@
-#! /usr/bin/env python3
-"""An RFC 5321 smtp proxy with optional RFC 1870 and RFC 6531 extensions.
+__all__ = [
+    'DebuggingServer',
+    'PureProxy',
+    'SMTPServer',
+    ]
 
-Usage: %(program)s [options] [localhost:localport [remotehost:remoteport]]
 
-Options:
-
-    --nosetuid
-    -n
-        This program generally tries to setuid `nobody', unless this flag is
-        set.  The setuid call will fail if this program is not run as root (in
-        which case, use this flag).
-
-    --version
-    -V
-        Print the version number and exit.
-
-    --class classname
-    -c classname
-        Use `classname' as the concrete SMTP proxy class.  Uses `PureProxy' by
-        default.
-
-    --size limit
-    -s limit
-        Restrict the total size of the incoming message to "limit" number of
-        bytes via the RFC 1870 SIZE extension.  Defaults to 33554432 bytes.
-
-    --smtputf8
-    -u
-        Enable the SMTPUTF8 extension and behave as an RFC 6531 smtp proxy.
-
-    --debug
-    -d
-        Turn on debugging prints.
-
-    --help
-    -h
-        Print this message and exit.
-
-Version: %(__version__)s
-
-If localhost is not given then `localhost' is used, and if localport is not
-given then 8025 is used.  If remotehost is not given then `localhost' is used,
-and if remoteport is not given, then 25 is used.
-"""
-
-# Overview:
-#
-# This file implements the minimal SMTP protocol as defined in RFC 5321.  It
-# has a hierarchy of classes which implement the backend functionality for the
-# smtpd.  A number of classes are provided:
-#
-#   SMTPServer - the base class for the backend.  Raises NotImplementedError
-#   if you try to use it.
-#
-#   DebuggingServer - simply prints each message it receives on stdout.
-#
-#   PureProxy - Proxies all messages to a real smtpd which does final
-#   delivery.  One known problem with this class is that it doesn't handle
-#   SMTP errors from the backend server at all.  This should be fixed
-#   (contributions are welcome!).
-#
-# Author: Barry Warsaw <barry@python.org>
-#
-# TODO:
-#
-# - support mailbox delivery
-# - alias files
-# - Handle more ESMTP extensions
-# - handle error codes from the backend smtpd
-
-import sys
-import os
-import getopt
 import time
 import socket
-import signal
+import logging
 import asyncio
 import collections
-from warnings import warn
+
+from enum import Enum
 from email._header_value_parser import get_addr_spec, get_angle_addr
+from warnings import warn
 
 
-__all__ = ["SMTPServer","DebuggingServer","PureProxy"]
-
-program = sys.argv[0]
 __version__ = 'Python SMTP proxy version 0.3'
+log = logging.getLogger('mail.log')
 
 
-class Devnull:
-    def write(self, msg): pass
-    def flush(self): pass
-
-
-DEBUGSTREAM = Devnull()
 NEWLINE = '\n'
-COMMASPACE = ', '
 DATA_SIZE_DEFAULT = 33554432
 
-
-def usage(code, msg=''):
-    print(__doc__ % globals(), file=sys.stderr)
-    if msg:
-        print(msg, file=sys.stderr)
-    sys.exit(code)
+class State(Enum):
+    command = 0
+    data = 1
 
 
 class SMTPChannel(asyncio.StreamReaderProtocol):
-    COMMAND = 0
-    DATA = 1
-
     command_size_limit = 512
-    command_size_limits = collections.defaultdict(lambda x=command_size_limit: x)
+    command_size_limits = collections.defaultdict(
+        lambda x=command_size_limit: x)
 
     @property
     def max_command_size_limit(self):
@@ -119,7 +40,7 @@ class SMTPChannel(asyncio.StreamReaderProtocol):
         except ValueError:
             return self.command_size_limit
 
-    def __init__(self, server, conn, addr, data_size_limit=DATA_SIZE_DEFAULT,
+    def __init__(self, server, data_size_limit=DATA_SIZE_DEFAULT,
                  map=None, enable_SMTPUTF8=False, decode_data=None, *,
                  loop=None):
         self.loop = loop if loop else asyncio.get_event_loop()
@@ -128,8 +49,6 @@ class SMTPChannel(asyncio.StreamReaderProtocol):
             client_connected_cb=self._client_connected_cb,
             loop=self.loop)
         self.smtp_server = server
-        self.conn = conn
-        self.addr = addr
         self.data_size_limit = data_size_limit
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         if enable_SMTPUTF8:
@@ -163,7 +82,7 @@ class SMTPChannel(asyncio.StreamReaderProtocol):
         super().connection_made(transport)
         self.peer = transport.get_extra_info('peername')
         self.transport = transport
-        print('Peer:', repr(self.peer), file=DEBUGSTREAM)
+        log.info('Peer: %s', repr(self.peer))
         # Process the client's requests.
         self.connection_closed = False
         self._handler_coroutine = self.loop.create_task(self._handle_client())
@@ -175,14 +94,14 @@ class SMTPChannel(asyncio.StreamReaderProtocol):
         self._writer = writer
 
     def connection_lost(self, exc):
-        print('Disconnect:', str(exc), file=DEBUGSTREAM)
+        log.exception('Disconnect')
         self._connection_closed = True
         super().connection_lost(exc)
         yield from self._handler_coroutine
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
-        self.smtp_state = self.COMMAND
+        self.smtp_state = State.command
         self.mailfrom = None
         self.rcpttos = []
         self.require_SMTPUTF8 = False
@@ -201,15 +120,15 @@ class SMTPChannel(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def _handle_client(self):
-        print('handling connection', file=DEBUGSTREAM)
+        log.info('handling connection')
         yield from self.push('220 %s %s' % (self.fqdn, __version__))
         while not self.connection_closed:
             # XXX Put the line limit stuff into the StreamReader?
             line = yield from self._reader.readline()
             # XXX this rstrip may not completely preserve old behavior.
             line = line.decode('utf-8').rstrip('\r\n')
-            print('Data:', repr(line), file=DEBUGSTREAM)
-            if self.smtp_state != self.COMMAND:
+            log.info('Data: %r', line)
+            if self.smtp_state is not State.command:
                 yield from self.push('451 Internal confusion')
                 continue
             if not line:
@@ -372,7 +291,7 @@ class SMTPChannel(asyncio.StreamReaderProtocol):
         if not self.seen_greeting:
             yield from self.push('503 Error: send HELO first')
             return
-        print('===> MAIL', arg, file=DEBUGSTREAM)
+        log.debug('===> MAIL %s', arg)
         syntaxerr = '501 Syntax: MAIL FROM: <address>'
         if self.extended_smtp:
             syntaxerr += ' [SP <mail-parameters>]'
@@ -419,7 +338,7 @@ class SMTPChannel(asyncio.StreamReaderProtocol):
             yield from self.push('555 MAIL FROM parameters not recognized or not implemented')
             return
         self.mailfrom = address
-        print('sender:', self.mailfrom, file=DEBUGSTREAM)
+        log.info('sender: %s', self.mailfrom)
         yield from self.push('250 OK')
 
     @asyncio.coroutine
@@ -427,7 +346,7 @@ class SMTPChannel(asyncio.StreamReaderProtocol):
         if not self.seen_greeting:
             yield from self.push('503 Error: send HELO first');
             return
-        print('===> RCPT', arg, file=DEBUGSTREAM)
+        log.debug('===> RCPT %s', arg)
         if not self.mailfrom:
             yield from self.push('503 Error: need MAIL command')
             return
@@ -455,7 +374,7 @@ class SMTPChannel(asyncio.StreamReaderProtocol):
             yield from self.push('555 RCPT TO parameters not recognized or not implemented')
             return
         self.rcpttos.append(address)
-        print('recips:', self.rcpttos, file=DEBUGSTREAM)
+        log.info('recips: %s', self.rcpttos)
         yield from self.push('250 OK')
 
     @asyncio.coroutine
@@ -477,7 +396,7 @@ class SMTPChannel(asyncio.StreamReaderProtocol):
         if arg:
             yield from self.push('501 Syntax: DATA')
             return
-        self.smtp_state = self.DATA
+        self.smtp_state = State.data
         yield from self.push('354 End data with <CR><LF>.<CR><LF>')
         data = []
         self.num_bytes = 0
@@ -546,9 +465,11 @@ class SMTPServer:
             decode_data = True
         self._decode_data = decode_data
 
-        print('%s created at %s\n\tLocal addr: %s\n\tRemote addr:%s' % (
-            self.__class__.__name__, time.ctime(time.time()),
-            localaddr, remoteaddr), file=DEBUGSTREAM)
+        log.info('%s created at %s\n\tLocal addr: %s\n\tRemote addr:%s',
+                 self.__class__.__name__,
+                 time.ctime(time.time()),
+                 localaddr,
+                 remoteaddr)
 
     # API for "doing something useful with the message"
     def process_message(self, peer, mailfrom, rcpttos, data, **kwargs):
@@ -633,7 +554,7 @@ class PureProxy(SMTPServer):
         data = NEWLINE.join(lines)
         refused = self._deliver(mailfrom, rcpttos, data)
         # TBD: what to do with refused addresses?
-        print('we got some refusals:', refused, file=DEBUGSTREAM)
+        log.info('we got some refusals: %s', refused)
 
     def _deliver(self, mailfrom, rcpttos, data):
         import smtplib
@@ -646,10 +567,10 @@ class PureProxy(SMTPServer):
             finally:
                 s.quit()
         except smtplib.SMTPRecipientsRefused as e:
-            print('got SMTPRecipientsRefused', file=DEBUGSTREAM)
+            log.info('got SMTPRecipientsRefused')
             refused = e.recipients
         except (OSError, smtplib.SMTPException) as e:
-            print('got', e.__class__, file=DEBUGSTREAM)
+            log.exception('got', e.__class__)
             # All recipients were refused.  If the exception had an associated
             # error code, use it.  Otherwise,fake it with a non-triggering
             # exception code.
@@ -658,120 +579,3 @@ class PureProxy(SMTPServer):
             for r in rcpttos:
                 refused[r] = (errcode, errmsg)
         return refused
-
-
-class Options:
-    setuid = True
-    classname = 'PureProxy'
-    size_limit = None
-    enable_SMTPUTF8 = False
-
-
-def parseargs():
-    global DEBUGSTREAM
-    try:
-        opts, args = getopt.getopt(
-            sys.argv[1:], 'nVhc:s:du',
-            ['class=', 'nosetuid', 'version', 'help', 'size=', 'debug',
-             'smtputf8'])
-    except getopt.error as e:
-        usage(1, e)
-
-    options = Options()
-    for opt, arg in opts:
-        if opt in ('-h', '--help'):
-            usage(0)
-        elif opt in ('-V', '--version'):
-            print(__version__)
-            sys.exit(0)
-        elif opt in ('-n', '--nosetuid'):
-            options.setuid = False
-        elif opt in ('-c', '--class'):
-            options.classname = arg
-        elif opt in ('-d', '--debug'):
-            DEBUGSTREAM = sys.stderr
-        elif opt in ('-u', '--smtputf8'):
-            options.enable_SMTPUTF8 = True
-        elif opt in ('-s', '--size'):
-            try:
-                int_size = int(arg)
-                options.size_limit = int_size
-            except:
-                print('Invalid size: ' + arg, file=sys.stderr)
-                sys.exit(1)
-
-    # parse the rest of the arguments
-    if len(args) < 1:
-        localspec = 'localhost:8025'
-        remotespec = 'localhost:25'
-    elif len(args) < 2:
-        localspec = args[0]
-        remotespec = 'localhost:25'
-    elif len(args) < 3:
-        localspec = args[0]
-        remotespec = args[1]
-    else:
-        usage(1, 'Invalid arguments: %s' % COMMASPACE.join(args))
-
-    # split into host/port pairs
-    i = localspec.find(':')
-    if i < 0:
-        usage(1, 'Bad local spec: %s' % localspec)
-    options.localhost = localspec[:i]
-    try:
-        options.localport = int(localspec[i+1:])
-    except ValueError:
-        usage(1, 'Bad local port: %s' % localspec)
-    i = remotespec.find(':')
-    if i < 0:
-        usage(1, 'Bad remote spec: %s' % remotespec)
-    options.remotehost = remotespec[:i]
-    try:
-        options.remoteport = int(remotespec[i+1:])
-    except ValueError:
-        usage(1, 'Bad remote port: %s' % remotespec)
-    return options
-
-
-if __name__ == '__main__':
-    options = parseargs()
-    # Become nobody
-    classname = options.classname
-    if "." in classname:
-        lastdot = classname.rfind(".")
-        mod = __import__(classname[:lastdot], globals(), locals(), [""])
-        classname = classname[lastdot+1:]
-    else:
-        import __main__ as mod
-    class_ = getattr(mod, classname)
-    proxy = class_((options.localhost, options.localport),
-                   (options.remotehost, options.remoteport),
-                   options.size_limit, enable_SMTPUTF8=options.enable_SMTPUTF8)
-    if options.setuid:
-        try:
-            import pwd
-        except ImportError:
-            print('Cannot import module "pwd"; try running with -n option.', file=sys.stderr)
-            sys.exit(1)
-        nobody = pwd.getpwnam('nobody')[2]
-        try:
-            os.setuid(nobody)
-        except PermissionError:
-            print('Cannot setuid "nobody"; try running with -n option.', file=sys.stderr)
-            sys.exit(1)
-
-    def handler():
-        return class_.channel_class(proxy, 'FIXME', 'FIXME', options.size_limit,
-                                    None, options.enable_SMTPUTF8)
-
-    import logging
-    logging.basicConfig(level=logging.DEBUG)
-    loop = asyncio.get_event_loop()
-    server = loop.run_until_complete(
-        loop.create_server(handler, options.localhost, options.localport))
-    loop.add_signal_handler(signal.SIGINT, loop.stop)
-    loop.run_forever()
-    server.close()
-    # XXX This cleanup is probably incomplete.
-    loop.run_until_complete(server.wait_closed())
-    loop.close()
