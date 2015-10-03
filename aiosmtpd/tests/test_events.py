@@ -3,45 +3,21 @@ __all__ = [
     ]
 
 
-import socket
-import asyncio
 import smtplib
 import unittest
-import threading
 
-from aiosmtpd.smtpd import SMTP
 from aiosmtpd.events import Debugging
-from functools import partial
+from aiosmtpd.testing.helpers import Controller
 from io import StringIO
 
 
-class TestableSMTP(SMTP):
-    def smtp_EXIT(self):
-        self.stop()
-
-
-def factory(stream):
-    return SMTP(Debugging(stream))
-
-
 class TestEvents(unittest.TestCase):
-    def _start(self, loop, stream):
-        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-        sock.bind(('::0', 9978))
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(
-            loop.create_server(partial(factory, stream), sock=sock))
-        loop.run_forever()
+    def setUp(self):
+        self.stream = StringIO()
+        self.controller = Controller(Debugging(self.stream))
+        self.controller.start()
 
     def test_debugging(self):
-        stream = StringIO()
-        loop = asyncio.get_event_loop()
-        thread = threading.Thread(
-            target=self._start, args=(loop, stream))
-        thread.daemon = True
-        thread.start()
         client = smtplib.SMTP()
         client.connect('::0', 9978)
         client.sendmail('anne@example.com', ['bart@example.com'], """\
@@ -52,7 +28,7 @@ Subject: A test
 Testing
 """)
         client.docmd('EXIT')
-        text = stream.getvalue()
+        text = self.stream.getvalue()
         self.assertMultiLineEqual(text, """\
 ---------- MESSAGE FOLLOWS ----------
 From: Anne Person <anne@example.com>
