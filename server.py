@@ -1,8 +1,10 @@
+import sys
+import socket
 import asyncio
 import logging
-import socket
 
-from aiosmtpd.smtpd import DebuggingServer, SMTPChannel
+from aiosmtpd.events import Debugging
+from aiosmtpd.smtp import SMTP
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger('mail.log')
@@ -14,7 +16,7 @@ sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
 sock.bind(('::0', 9978))
 
 def factory():
-    return SMTPChannel(DebuggingServer('::0', 9978))
+    return SMTP(Debugging(sys.stderr))
 
 server = loop.run_until_complete(loop.create_server(factory, sock=sock))
 

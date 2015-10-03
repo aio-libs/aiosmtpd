@@ -20,6 +20,7 @@ log = logging.getLogger('mail.log')
 NEWLINE = '\n'
 DATA_SIZE_DEFAULT = 33554432
 
+
 class State(Enum):
     command = 0
     data = 1
@@ -30,22 +31,18 @@ class SMTP(asyncio.StreamReaderProtocol):
     command_size_limits = collections.defaultdict(
         lambda x=command_size_limit: x)
 
-    @property
-    def max_command_size_limit(self):
-        try:
-            return max(self.command_size_limits.values())
-        except ValueError:
-            return self.command_size_limit
-
-    def __init__(self, server, data_size_limit=DATA_SIZE_DEFAULT,
-                 map=None, enable_SMTPUTF8=False, decode_data=None, *,
+    def __init__(self, handler,
+                 data_size_limit=DATA_SIZE_DEFAULT,
+                 enable_SMTPUTF8=False,
+                 decode_data=None,
+                 *,
                  loop=None):
         self.loop = loop if loop else asyncio.get_event_loop()
         super().__init__(
             asyncio.StreamReader(loop=self.loop),
             client_connected_cb=self._client_connected_cb,
             loop=self.loop)
-        self.smtp_server = server
+        self.event_handler = handler
         self.data_size_limit = data_size_limit
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         if enable_SMTPUTF8:
@@ -74,6 +71,13 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.extended_smtp = False
         self.command_size_limits.clear()
         self.fqdn = socket.getfqdn()   # XXX this blocks, fix it?
+
+    @property
+    def max_command_size_limit(self):
+        try:
+            return max(self.command_size_limits.values())
+        except ValueError:
+            return self.command_size_limit
 
     def connection_made(self, transport):
         super().connection_made(transport)
@@ -426,7 +430,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 'mail_options': self.mail_options,
                 'rcpt_options': self.rcpt_options,
             }
-        status = self.smtp_server.process_message(*args, **kwargs)
+        status = self.event_handler.process_message(*args, **kwargs)
         self._set_post_data_state()
         if not status:
             yield from self.push('250 OK')

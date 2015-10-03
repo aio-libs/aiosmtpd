@@ -8,82 +8,50 @@ your own handling of messages.  Implement only the methods you care about.
 
 
 __all__ = [
-    'Base',
     'Debugging',
     'Proxy',
     ]
 
 
+import sys
 import logging
 
-NEWLINE = '\n'
 
+NEWLINE = '\n'
 log = logging.getLogger('mail.debug')
 
 
-class Base:
-    # API for "doing something useful with the message"
-    def process_message(self, peer, mailfrom, rcpttos, data, **kwargs):
-        """Override this abstract method to handle messages from the client.
-
-        peer is a tuple containing (ipaddr, port) of the client that made the
-        socket connection to our smtp port.
-
-        mailfrom is the raw address the client claims the message is coming
-        from.
-
-        rcpttos is a list of raw addresses the client wishes to deliver the
-        message to.
-
-        data is a string containing the entire full text of the message,
-        headers (if supplied) and all.  It has been `de-transparencied'
-        according to RFC 821, Section 4.5.2.  In other words, a line
-        containing a `.' followed by other text has had the leading dot
-        removed.
-
-        kwargs is a dictionary containing additional information. It is empty
-        unless decode_data=False or enable_SMTPUTF8=True was given as init
-        parameter, in which case ut will contain the following keys:
-            'mail_options': list of parameters to the mail command.  All
-                            elements are uppercase strings.  Example:
-                            ['BODY=8BITMIME', 'SMTPUTF8'].
-            'rcpt_options': same, for the rcpt command.
-
-        This function should return None for a normal `250 Ok' response;
-        otherwise, it should return the desired response string in RFC 821
-        format.
-
-        """
-        raise NotImplementedError
-
-
 class Debugging:
+    def __init__(self, stream=None):
+        self.stream = sys.stdout if stream is None else stream
+
     def _print_message_content(self, peer, data):
-        inheaders = 1
-        lines = data.splitlines()
-        for line in lines:
-            # headers first
-            if inheaders and not line:
+        in_headers = True
+        for line in data.splitlines():
+            # Dump the RFC 2822 headers first.
+            if in_headers and not line:
                 peerheader = 'X-Peer: ' + peer[0]
                 if not isinstance(data, str):
                     # decoded_data=false; make header match other binary output
                     peerheader = repr(peerheader.encode('utf-8'))
-                print(peerheader)
-                inheaders = 0
+                print(peerheader, file=self.stream)
+                in_headers = False
             if not isinstance(data, str):
                 # Avoid spurious 'str on bytes instance' warning.
                 line = repr(line)
-            print(line)
+            print(line, file=self.stream)
 
     def process_message(self, peer, mailfrom, rcpttos, data, **kwargs):
-        print('---------- MESSAGE FOLLOWS ----------')
+        print('---------- MESSAGE FOLLOWS ----------', file=self.stream)
         if kwargs:
             if kwargs.get('mail_options'):
-                print('mail options: %s' % kwargs['mail_options'])
+                print('mail options: %s' % kwargs['mail_options'],
+                      file=self.stream)
             if kwargs.get('rcpt_options'):
-                print('rcpt options: %s\n' % kwargs['rcpt_options'])
+                print('rcpt options: %s\n' % kwargs['rcpt_options'],
+                      file=self.stream())
         self._print_message_content(peer, data)
-        print('------------ END MESSAGE ------------')
+        print('------------ END MESSAGE ------------', file=self.stream)
 
 
 class Proxy:
