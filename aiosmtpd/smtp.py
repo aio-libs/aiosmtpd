@@ -13,7 +13,8 @@ from email._header_value_parser import get_addr_spec, get_angle_addr
 from warnings import warn
 
 
-__version__ = 'Python SMTP proxy version 0.3'
+__version__ = '1.0a1'
+__ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
 
