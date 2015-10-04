@@ -115,8 +115,10 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def push(self, msg):
-        self._writer.write(bytes(
-            msg + '\r\n', 'utf-8' if self.require_SMTPUTF8 else 'ascii'))
+        response = bytes(
+            msg + '\r\n', 'utf-8' if self.require_SMTPUTF8 else 'ascii')
+        self._writer.write(response)
+        log.debug(response)
         yield from self._writer.drain()
 
     @asyncio.coroutine
@@ -149,7 +151,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                 continue
             method = getattr(self, 'smtp_' + command, None)
             if not method:
-                yield from self.push('500 Error: command "%s" not recognized' % command)
+                yield from self.push(
+                    '500 Error: command "%s" not recognized' % command)
                 continue
             yield from method(arg)
 
@@ -165,7 +168,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         self._set_rset_state()
         self.seen_greeting = hostname
-        self.handler.handle_HELO(hostname)
         yield from self.push('250 %s' % self.fqdn)
 
     @asyncio.coroutine
@@ -202,8 +204,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def smtp_QUIT(self, arg):
         # arg is ignored
         yield from self.push('221 Bye')
-        # XXX this close is probably not quite right.
-        yield from self.close()
+        self._handler_coroutine.cancel()
 
     @asyncio.coroutine
     def close(self):
