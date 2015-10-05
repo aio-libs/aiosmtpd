@@ -10,6 +10,7 @@ your own handling of messages.  Implement only the methods you care about.
 __all__ = [
     'Debugging',
     'Proxy',
+    'Sink',
     ]
 
 
@@ -92,3 +93,8 @@ class Proxy:
             for r in rcpttos:
                 refused[r] = (errcode, errmsg)
         return refused
+
+
+class Sink:
+    def process_message(self, peer, mailfrom, rcpttos, data):
+        pass

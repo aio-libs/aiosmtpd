@@ -3,12 +3,12 @@ __all__ = [
     ]
 
 
-import smtplib
 import unittest
 
 from aiosmtpd.events import Debugging
 from aiosmtpd.testing.helpers import Controller
 from io import StringIO
+from smtplib import SMTP
 
 
 class TestEvents(unittest.TestCase):
@@ -16,18 +16,18 @@ class TestEvents(unittest.TestCase):
         self.stream = StringIO()
         self.controller = Controller(Debugging(self.stream))
         self.controller.start()
+        self.addCleanup(self.controller.stop)
 
     def test_debugging(self):
-        client = smtplib.SMTP()
-        client.connect('::0', 9978)
-        client.sendmail('anne@example.com', ['bart@example.com'], """\
+        with SMTP() as client:
+            client.connect('::0', 9978)
+            client.sendmail('anne@example.com', ['bart@example.com'], """\
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>
 Subject: A test
 
 Testing
 """)
-        client.docmd('EXIT')
         text = self.stream.getvalue()
         self.assertMultiLineEqual(text, """\
 ---------- MESSAGE FOLLOWS ----------

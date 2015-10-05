@@ -4,19 +4,7 @@ import asyncio
 import logging
 
 from aiosmtpd.events import Debugging
-from aiosmtpd.smtp import SMTP
-
-class ExitableSMTP(SMTP):
-    @asyncio.coroutine
-    def smtp_EXIT(self, arg):
-        if arg:
-            yield from self.push('501 Syntax: NOOP')
-        else:
-            yield from self.push('250 OK')
-            self.loop.stop()
-            self._connection_closed = True
-            self._handler_coroutine.cancel()
-
+from aiosmtpd.helpers import ExitableSMTP
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger('mail.log')
