@@ -272,11 +272,13 @@ class SMTP(asyncio.StreamReaderProtocol):
             elif lc_arg == 'VRFY':
                 yield from self.push('250 Syntax: VRFY <address>')
             else:
-                yield from self.push('501 Supported commands: EHLO HELO MAIL RCPT '
-                          'DATA RSET NOOP QUIT VRFY')
+                yield from self.push(
+                    '501 Supported commands: EHLO HELO MAIL RCPT '
+                    'DATA RSET NOOP QUIT VRFY')
         else:
-            yield from self.push('250 Supported commands: EHLO HELO MAIL RCPT DATA '
-                      'RSET NOOP QUIT VRFY')
+            yield from self.push(
+                '250 Supported commands: EHLO HELO MAIL RCPT DATA '
+                'RSET NOOP QUIT VRFY')
 
     @asyncio.coroutine
     def smtp_VRFY(self, arg):
