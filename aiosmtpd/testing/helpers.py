@@ -4,14 +4,12 @@ __all__ = [
     ]
 
 
-import time
 import socket
 import asyncio
 import smtplib
 import threading
 
 from aiosmtpd.smtp import SMTP
-from datetime import datetime, timedelta
 
 
 PORT = 9978
@@ -40,7 +38,7 @@ class Controller:
     def factory(self):
         return ExitableSMTP(self.handler)
 
-    def _run(self):
+    def _run(self, ready_event):
         sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
@@ -48,6 +46,7 @@ class Controller:
         asyncio.set_event_loop(self.loop)
         server = self.loop.run_until_complete(
             self.loop.create_server(self.factory, sock=sock))
+        self.loop.call_soon(ready_event.set)
         self.loop.run_forever()
         server.close()
         self.loop.run_until_complete(server.wait_closed())
@@ -55,20 +54,12 @@ class Controller:
 
     def start(self):
         assert self.thread is None, 'SMTP daemon already running'
-        self.thread = threading.Thread(target=self._run)
+        ready_event = threading.Event()
+        self.thread = threading.Thread(target=self._run, args=(ready_event,))
         self.thread.daemon = True
         self.thread.start()
         # Wait a while until the server is responding.
-        until = datetime.now() + timedelta(days=1)
-        while datetime.now() < until:
-            try:
-                client = smtplib.SMTP()
-                client.connect(self.hostname, self.port)
-                client.noop()
-                client.quit()
-                break
-            except ConnectionRefusedError:
-                time.sleep(1)
+        ready_event.wait()
 
     def stop(self):
         assert self.thread is not None, 'SMTP daemon not running'
