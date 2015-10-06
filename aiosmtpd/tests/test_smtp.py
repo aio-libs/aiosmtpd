@@ -121,3 +121,9 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('help', 'ehlo')
             self.assertEqual(code, 250)
             self.assertEqual(response, b'Syntax: EHLO hostname')
+
+    def test_expn(self):
+        with SMTP(self.controller.hostname, self.controller.port) as client:
+            code, response = client.expn('anne@example.com')
+            self.assertEqual(code, 502)
+            self.assertEqual(response, b'EXPN not implemented')
