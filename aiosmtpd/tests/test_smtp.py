@@ -1,3 +1,5 @@
+"""Test the SMTP protocol."""
+
 __all__ = [
     'TestSMTP',
     ]
