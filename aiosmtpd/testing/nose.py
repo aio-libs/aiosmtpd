@@ -8,10 +8,10 @@ __all__ = [
 import os
 import re
 import doctest
+import logging
 import aiosmtpd
 
 from nose2.events import Plugin
-
 
 DOT = '.'
 FLAGS = doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE | doctest.REPORT_NDIFF
@@ -25,11 +25,14 @@ class NosePlugin(Plugin):
     def __init__(self):
         super(NosePlugin, self).__init__()
         self.patterns = []
-        self.stderr = False
-        def set_stderr(ignore):
-            self.stderr = True
+        def set_debug(ignore):
+            logging.basicConfig(level=logging.DEBUG)
+            log = logging.getLogger('mail.log')
+            log.setLevel(logging.DEBUG)
         self.addArgument(self.patterns, 'P', 'pattern',
                          'Add a test matching pattern')
+        self.addOption(set_debug, 'V',
+                       'Turn on mail.log debugging')
 
     def getTestCaseNames(self, event):
         if len(self.patterns) == 0:

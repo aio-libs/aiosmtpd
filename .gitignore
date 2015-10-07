@@ -24,3 +24,4 @@ var/*
 docs/_build/
 nosetests.xml
 __pycache__/
+htmlcov
