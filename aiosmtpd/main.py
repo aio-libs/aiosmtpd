@@ -1,130 +1,58 @@
-#! /usr/bin/env python3
-"""An RFC 5321 smtp proxy with optional RFC 1870 and RFC 6531 extensions.
-
-Usage: %(program)s [options] [localhost:localport [remotehost:remoteport]]
-
-Options:
-
-    --nosetuid
-    -n
-        This program generally tries to setuid `nobody', unless this flag is
-        set.  The setuid call will fail if this program is not run as root (in
-        which case, use this flag).
-
-    --version
-    -V
-        Print the version number and exit.
-
-    --class classname
-    -c classname
-        Use `classname' as the concrete SMTP proxy class.  Uses `PureProxy' by
-        default.
-
-    --size limit
-    -s limit
-        Restrict the total size of the incoming message to "limit" number of
-        bytes via the RFC 1870 SIZE extension.  Defaults to 33554432 bytes.
-
-    --smtputf8
-    -u
-        Enable the SMTPUTF8 extension and behave as an RFC 6531 smtp proxy.
-
-    --debug
-    -d
-        Turn on debugging prints.
-
-    --help
-    -h
-        Print this message and exit.
-
-Version: %(__version__)s
-
-If localhost is not given then `localhost' is used, and if localport is not
-given then 8025 is used.  If remotehost is not given then `localhost' is used,
-and if remoteport is not given, then 25 is used.
-"""
-
-program = sys.argv[0]
+__all__ = [
+    'main',
+    ]
 
 
-def usage(code, msg=''):
-    print(__doc__ % globals(), file=sys.stderr)
-    if msg:
-        print(msg, file=sys.stderr)
-    sys.exit(code)
+from aiosmtpd.smtp import DATA_SIZE_DEFAULT
+from argparse import ArgumentParser
 
 
-class Options:
-    setuid = True
-    classname = 'PureProxy'
-    size_limit = None
-    enable_SMTPUTF8 = False
+DEFAULT_HOST = 'localhost'
+DEFAULT_PORT = 8025
 
 
 def parseargs():
-    global DEBUGSTREAM
-    try:
-        opts, args = getopt.getopt(
-            sys.argv[1:], 'nVhc:s:du',
-            ['class=', 'nosetuid', 'version', 'help', 'size=', 'debug',
-             'smtputf8'])
-    except getopt.error as e:
-        usage(1, e)
-
-    options = Options()
-    for opt, arg in opts:
-        if opt in ('-h', '--help'):
-            usage(0)
-        elif opt in ('-V', '--version'):
-            print(__version__)
-            sys.exit(0)
-        elif opt in ('-n', '--nosetuid'):
-            options.setuid = False
-        elif opt in ('-c', '--class'):
-            options.classname = arg
-        elif opt in ('-d', '--debug'):
-            DEBUGSTREAM = sys.stderr
-        elif opt in ('-u', '--smtputf8'):
-            options.enable_SMTPUTF8 = True
-        elif opt in ('-s', '--size'):
-            try:
-                int_size = int(arg)
-                options.size_limit = int_size
-            except:
-                print('Invalid size: ' + arg, file=sys.stderr)
-                sys.exit(1)
-
-    # parse the rest of the arguments
-    if len(args) < 1:
-        localspec = 'localhost:8025'
-        remotespec = 'localhost:25'
-    elif len(args) < 2:
-        localspec = args[0]
-        remotespec = 'localhost:25'
-    elif len(args) < 3:
-        localspec = args[0]
-        remotespec = args[1]
-    else:
-        usage(1, 'Invalid arguments: %s' % COMMASPACE.join(args))
-
-    # split into host/port pairs
-    i = localspec.find(':')
-    if i < 0:
-        usage(1, 'Bad local spec: %s' % localspec)
-    options.localhost = localspec[:i]
-    try:
-        options.localport = int(localspec[i+1:])
-    except ValueError:
-        usage(1, 'Bad local port: %s' % localspec)
-    i = remotespec.find(':')
-    if i < 0:
-        usage(1, 'Bad remote spec: %s' % remotespec)
-    options.remotehost = remotespec[:i]
-    try:
-        options.remoteport = int(remotespec[i+1:])
-    except ValueError:
-        usage(1, 'Bad remote port: %s' % remotespec)
-    return options
+    parser = ArgumentParser(
+        description='An RFC 5321 SMTP server with extensions',
+        epilog="""Additional arguments can be given on the command line which
+                  are passed to the handler CLASS.""")
+    parser.add_argument(
+        '-n', '--nosetuid',
+        help="""This program generally tries to setuid `nobody', unless this
+                flag is set.  The setuid call will fail if this program is not
+                run as root (in which case, use this flag).""")
+    parser.add_argument(
+        '-c', '--class',
+        default='aiosmtpd.events.Debugging',
+        help="""Use the given class, as a Python dotted import path, as the
+                handler class for SMTP events.  This class can process
+                received messages and do other actions during the SMTP
+                dialog.  Uses a debugging handler by default.""")
+    parser.add_argument(
+        '-s', '--size',
+        type=int,
+        help="""Restrict the total size of the incoming message to
+                SIZE number of bytes via the RFC 1870 SIZE extension.
+                Defaults to {} bytes.""".format(DATA_SIZE_DEFAULT))
+    parser.add_argument(
+        '-u', '--smtputf8',
+        default=False, action='store_true',
+        help="""Enable the SMTPUTF8 extension and behave as an RFC 6531
+                SMTP proxy.""")
+    parser.add_argument(
+        '-d', '--debug',
+        default=0, action='count',
+        help="""Increase debugging output.""")
+    parser.add_argument(
+        'hostport', metavar='HOST:PORT',
+        nargs='?', default=None,
+        help="""Optional host and port to listen on.  If the PORT part is not
+                given, then port {port} is used.  If only :PORT is given,
+                then {host} is used for the hostname.  If neither are given,
+                {host}:{port} is used.""".format(
+                    host=DEFAULT_HOST, port=DEFAULT_PORT))
+    args = parseargs()
+    return args
 
 
 if __name__ == '__main__':
