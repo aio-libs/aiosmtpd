@@ -19,13 +19,15 @@ Python 3.""",
     keywords        = 'email',
     packages= find_packages(),
     include_package_data = True,
-    test_suite = 'nose.collector',
     license = "http://www.apache.org/licenses/LICENSE-2.0",
+    entry_points={
+        'console_scripts': ['smtpd = aiosmtpd.main:main'],
+        },
     classifiers = [
         'License :: OSI Approved',
         'Intended Audience :: Developers',
-        'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
         'Topic :: Internet :: WWW/SMTP',
         ],
     )

@@ -3,8 +3,16 @@ __all__ = [
     ]
 
 
-from aiosmtpd.smtp import DATA_SIZE_DEFAULT
+import os
+import sys
+import signal
+import socket
+import asyncio
+import logging
+
+from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP
 from argparse import ArgumentParser
+from importlib import import_module
 
 
 DEFAULT_HOST = 'localhost'
@@ -18,11 +26,13 @@ def parseargs():
                   are passed to the handler CLASS.""")
     parser.add_argument(
         '-n', '--nosetuid',
+        dest='setuid', default=True, action='store_false',
         help="""This program generally tries to setuid `nobody', unless this
                 flag is set.  The setuid call will fail if this program is not
                 run as root (in which case, use this flag).""")
     parser.add_argument(
         '-c', '--class',
+        dest='classpath',
         default='aiosmtpd.events.Debugging',
         help="""Use the given class, as a Python dotted import path, as the
                 handler class for SMTP events.  This class can process
@@ -51,49 +61,75 @@ def parseargs():
                 then {host} is used for the hostname.  If neither are given,
                 {host}:{port} is used.""".format(
                     host=DEFAULT_HOST, port=DEFAULT_PORT))
-    args = parseargs()
+    args = parser.parse_args()
+    # Find the handler class.
+    path, dot, name = args.classpath.rpartition('.')
+    module = import_module(path)
+    args.handler = getattr(module, name)
+    # Parse the host:port argument.
+    if args.hostport is None:
+        args.host = DEFAULT_HOST
+        args.port = DEFAULT_PORT
+    else:
+        host, colon, port = args.hostport.rpartition(':')
+        args.host = DEFAULT_HOST if len(host) == 0 else host
+        try:
+            args.port = int(DEFAULT_PORT if len(port) == 0 else port)
+        except ValueError:
+            parser.error('Invalid port number: {}'.format(port))
     return args
 
 
-if __name__ == '__main__':
-    options = parseargs()
-    # Become nobody
-    classname = options.classname
-    if "." in classname:
-        lastdot = classname.rfind(".")
-        mod = __import__(classname[:lastdot], globals(), locals(), [""])
-        classname = classname[lastdot+1:]
-    else:
-        import __main__ as mod
-    class_ = getattr(mod, classname)
-    proxy = class_((options.localhost, options.localport),
-                   (options.remotehost, options.remoteport),
-                   options.size_limit, enable_SMTPUTF8=options.enable_SMTPUTF8)
-    if options.setuid:
+def main():
+    args = parseargs()
+
+    if args.setuid:
         try:
             import pwd
         except ImportError:
-            print('Cannot import module "pwd"; try running with -n option.', file=sys.stderr)
+            print('Cannot import module "pwd"; try running with -n option.',
+                  file=sys.stderr)
             sys.exit(1)
         nobody = pwd.getpwnam('nobody')[2]
         try:
             os.setuid(nobody)
         except PermissionError:
-            print('Cannot setuid "nobody"; try running with -n option.', file=sys.stderr)
+            print('Cannot setuid "nobody"; try running with -n option.',
+                  file=sys.stderr)
             sys.exit(1)
 
-    def handler():
-        return class_.channel_class(proxy, 'FIXME', 'FIXME', options.size_limit,
-                                    None, options.enable_SMTPUTF8)
+    def factory():
+        return SMTP(args.handler(),
+                    data_size_limit=args.size,
+                    enable_SMTPUTF8=args.smtputf8)
 
-    import logging
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
+    log = logging.getLogger('mail.log')
+    if args.debug > 0:
+        log.setLevel(logging.DEBUG)
+
     loop = asyncio.get_event_loop()
-    server = loop.run_until_complete(
-        loop.create_server(handler, options.localhost, options.localport))
+    if args.debug > 1:
+        loop.set_debug(enabled=True)
+    sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+    log.info('Server listening on %s:%s', args.host, args.port)
+    sock.bind((args.host, args.port))
+
+    server = loop.run_until_complete(loop.create_server(factory, sock=sock))
     loop.add_signal_handler(signal.SIGINT, loop.stop)
-    loop.run_forever()
+
+    log.info('Starting asyncio loop')
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
     server.close()
-    # XXX This cleanup is probably incomplete.
+    log.info('Completed asyncio loop')
     loop.run_until_complete(server.wait_closed())
     loop.close()
+
+
+if __name__ == '__main__':
+    main()
