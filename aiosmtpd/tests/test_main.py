@@ -6,7 +6,7 @@ __all__ = [
 import logging
 import unittest
 
-from aiosmtpd.main import main
+from aiosmtpd.main import main, parseargs
 from contextlib import ExitStack
 from io import StringIO
 from unittest.mock import patch
@@ -18,6 +18,19 @@ except ImportError:
 
 
 log = logging.getLogger('mail.log')
+
+
+class TestHandler1:
+    def __init__(self, called):
+        self.called = called
+
+    @classmethod
+    def from_cli(cls, parser, *args):
+        return cls(*args)
+
+
+class TestHandler2:
+    pass
 
 
 class TestMain(unittest.TestCase):
@@ -85,3 +98,34 @@ class TestMain(unittest.TestCase):
             # Getting the RuntimeError means that a SystemExit was never
             # triggered in the setuid section.
             self.assertRaises(RuntimeError, main, ('--nosetuid',))
+
+    def test_handler_from_cli(self):
+        # Ignore the host:port positional argument.
+        parser, args = parseargs(
+            ('-c', 'aiosmtpd.tests.test_main.TestHandler1', '--', 'FOO'))
+        self.assertIsInstance(args.handler, TestHandler1)
+        self.assertEqual(args.handler.called, 'FOO')
+
+    def test_handler_no_from_cli(self):
+        # Ignore the host:port positional argument.
+        parser, args = parseargs(
+            ('-c', 'aiosmtpd.tests.test_main.TestHandler2'))
+        self.assertIsInstance(args.handler, TestHandler2)
+
+    def test_handler_from_cli_exception(self):
+        self.assertRaises(TypeError, parseargs,
+                          ('-c', 'aiosmtpd.tests.test_main.TestHandler1',
+                           'FOO', 'BAR'))
+
+    def test_handler_no_from_cli_exception(self):
+        stderr = StringIO()
+        with patch('sys.stderr', stderr):
+            with self.assertRaises(SystemExit) as cm:
+                parseargs(
+                    ('-c', 'aiosmtpd.tests.test_main.TestHandler2',
+                     'FOO', 'BAR'))
+            self.assertEqual(cm.exception.code, 2)
+        usage_lines = stderr.getvalue().splitlines()
+        self.assertEqual(
+            usage_lines[-1][-57:],
+            'Handler class aiosmtpd.tests.test_main takes no arguments')

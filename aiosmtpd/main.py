@@ -18,7 +18,7 @@ from importlib import import_module
 try:
     import pwd
 except ImportError:
-    pwd = None
+    pwd = None                                      # pragma: no cover
 
 
 DEFAULT_HOST = 'localhost'
@@ -58,7 +58,7 @@ def parseargs(args=None):
         default=0, action='count',
         help="""Increase debugging output.""")
     parser.add_argument(
-        'hostport', metavar='HOST:PORT',
+        '-l', '--listen', metavar='HOST:PORT',
         nargs='?', default=None,
         help="""Optional host and port to listen on.  If the PORT part is not
                 given, then port {port} is used.  If only :PORT is given,
@@ -77,13 +77,15 @@ def parseargs(args=None):
     if hasattr(handler_class, 'from_cli'):
         args.handler = handler_class.from_cli(parser, *args.classargs)
     else:
+        if len(args.classargs) > 0:
+            parser.error('Handler class {} takes no arguments'.format(path))
         args.handler = handler_class()
     # Parse the host:port argument.
-    if args.hostport is None:
+    if args.listen is None:
         args.host = DEFAULT_HOST
         args.port = DEFAULT_PORT
     else:
-        host, colon, port = args.hostport.rpartition(':')
+        host, colon, port = args.listen.rpartition(':')
         args.host = DEFAULT_HOST if len(host) == 0 else host
         try:
             args.port = int(DEFAULT_PORT if len(port) == 0 else port)
