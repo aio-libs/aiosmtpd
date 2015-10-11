@@ -7,7 +7,7 @@ __version__ = get_version('aiosmtpd/smtp.py')
 
 
 setup(
-    name            = 'aoismtpd',
+    name            = 'aiosmtpd',
     version         = __version__,
     description     = 'aiosmtpd - asyncio based SMTP server',
     long_description= """\
