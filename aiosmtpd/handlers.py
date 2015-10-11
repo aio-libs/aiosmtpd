@@ -26,6 +26,24 @@ class Debugging:
     def __init__(self, stream=None):
         self.stream = sys.stdout if stream is None else stream
 
+    @classmethod
+    def from_cli(cls, parser, *args):
+        error = False
+        stream = None
+        if len(args) == 0:
+            pass
+        elif len(args) > 1:
+            error = True
+        elif args[0] == 'stdout':
+            stream = sys.stdout
+        elif args[0] == 'stderr':
+            stream = sys.stderr
+        else:
+            error = True
+        if error:
+            parser.error('Debugging usage: [stdout|stderr]')
+        return cls(stream)
+
     def _print_message_content(self, peer, data):
         in_headers = True
         for line in data.splitlines():
@@ -96,5 +114,11 @@ class Proxy:
 
 
 class Sink:
+    @classmethod
+    def from_cli(cls, parser, *args):
+        if len(args) > 0:
+            parser.error('Sink handler does not accept arguments')
+        return cls()
+
     def process_message(self, peer, mailfrom, rcpttos, data):
         pass

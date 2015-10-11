@@ -12,18 +12,22 @@ import logging
 
 from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP
 from argparse import ArgumentParser
+from functools import partial
 from importlib import import_module
+
+try:
+    import pwd
+except ImportError:
+    pwd = None
 
 
 DEFAULT_HOST = 'localhost'
 DEFAULT_PORT = 8025
 
 
-def parseargs():
+def parseargs(args=None):
     parser = ArgumentParser(
-        description='An RFC 5321 SMTP server with extensions',
-        epilog="""Additional arguments can be given on the command line which
-                  are passed to the handler CLASS.""")
+        description='An RFC 5321 SMTP server with extensions')
     parser.add_argument(
         '-n', '--nosetuid',
         dest='setuid', default=True, action='store_false',
@@ -61,11 +65,19 @@ def parseargs():
                 then {host} is used for the hostname.  If neither are given,
                 {host}:{port} is used.""".format(
                     host=DEFAULT_HOST, port=DEFAULT_PORT))
-    args = parser.parse_args()
+    parser.add_argument(
+        'classargs', metavar='CLASSARGS',
+        nargs='*', default=(),
+        help="""Additional arguments passed to the handler CLASS.""")
+    args = parser.parse_args(args)
     # Find the handler class.
     path, dot, name = args.classpath.rpartition('.')
     module = import_module(path)
-    args.handler = getattr(module, name)
+    handler_class = getattr(module, name)
+    if hasattr(handler_class, 'from_cli'):
+        args.handler = handler_class.from_cli(parser, *args.classargs)
+    else:
+        args.handler = handler_class()
     # Parse the host:port argument.
     if args.hostport is None:
         args.host = DEFAULT_HOST
@@ -77,20 +89,18 @@ def parseargs():
             args.port = int(DEFAULT_PORT if len(port) == 0 else port)
         except ValueError:
             parser.error('Invalid port number: {}'.format(port))
-    return args
+    return parser, args
 
 
-def main():
-    args = parseargs()
+def main(args=None):
+    parser, args = parseargs(args=args)
 
     if args.setuid:
-        try:
-            import pwd
-        except ImportError:
+        if pwd is None:
             print('Cannot import module "pwd"; try running with -n option.',
                   file=sys.stderr)
             sys.exit(1)
-        nobody = pwd.getpwnam('nobody')[2]
+        nobody = pwd.getpwnam('nobody').pw_uid
         try:
             os.setuid(nobody)
         except PermissionError:
@@ -98,19 +108,21 @@ def main():
                   file=sys.stderr)
             sys.exit(1)
 
-    def factory():
-        return SMTP(args.handler(),
-                    data_size_limit=args.size,
-                    enable_SMTPUTF8=args.smtputf8)
+    factory = partial(
+        SMTP, args.handler,
+        data_size_limit=args.size, enable_SMTPUTF8=args.smtputf8)
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.ERROR)
     log = logging.getLogger('mail.log')
-    if args.debug > 0:
-        log.setLevel(logging.DEBUG)
-
     loop = asyncio.get_event_loop()
+
+    if args.debug > 0:
+        log.setLevel(logging.INFO)
     if args.debug > 1:
+        log.setLevel(logging.DEBUG)
+    if args.debug > 2:
         loop.set_debug(enabled=True)
+
     sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
     sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
