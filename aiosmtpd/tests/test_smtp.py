@@ -8,7 +8,7 @@ __all__ = [
 import socket
 import unittest
 
-from aiosmtpd.events import Sink
+from aiosmtpd.handlers import Sink
 from aiosmtpd.testing.helpers import Controller
 from smtplib import SMTP
 

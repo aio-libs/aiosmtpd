@@ -33,7 +33,7 @@ def parseargs():
     parser.add_argument(
         '-c', '--class',
         dest='classpath',
-        default='aiosmtpd.events.Debugging',
+        default='aiosmtpd.handlers.Debugging',
         help="""Use the given class, as a Python dotted import path, as the
                 handler class for SMTP events.  This class can process
                 received messages and do other actions during the SMTP

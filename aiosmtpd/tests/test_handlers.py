@@ -5,7 +5,7 @@ __all__ = [
 
 import unittest
 
-from aiosmtpd.events import Debugging
+from aiosmtpd.handlers import Debugging
 from aiosmtpd.testing.helpers import Controller
 from io import StringIO
 from smtplib import SMTP

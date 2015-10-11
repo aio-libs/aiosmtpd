@@ -8,7 +8,7 @@ __all__ = [
 
 import unittest
 
-from aiosmtpd.events import Sink
+from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP
 
 
