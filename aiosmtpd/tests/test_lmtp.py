@@ -9,7 +9,7 @@ import socket
 import asyncio
 import unittest
 
-from aiosmtpd.events import Sink
+from aiosmtpd.handlers import Sink
 from aiosmtpd.lmtp import LMTP
 from aiosmtpd.testing.helpers import Controller
 from smtplib import SMTP
