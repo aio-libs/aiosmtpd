@@ -86,11 +86,15 @@ def parseargs(args=None):
         args.port = DEFAULT_PORT
     else:
         host, colon, port = args.listen.rpartition(':')
-        args.host = DEFAULT_HOST if len(host) == 0 else host
-        try:
-            args.port = int(DEFAULT_PORT if len(port) == 0 else port)
-        except ValueError:
-            parser.error('Invalid port number: {}'.format(port))
+        if len(colon) == 0:
+            args.host = port
+            args.port = DEFAULT_PORT
+        else:
+            args.host = DEFAULT_HOST if len(host) == 0 else host
+            try:
+                args.port = int(DEFAULT_PORT if len(port) == 0 else port)
+            except ValueError:
+                parser.error('Invalid port number: {}'.format(port))
     return parser, args
 
 
@@ -145,5 +149,5 @@ def main(args=None):
     loop.close()
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':                          # pragma: no cover
     main()
