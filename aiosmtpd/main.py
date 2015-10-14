@@ -17,8 +17,8 @@ from importlib import import_module
 
 try:
     import pwd
-except ImportError:
-    pwd = None                                      # pragma: no cover
+except ImportError:                                         # pragma: no cover
+    pwd = None
 
 
 DEFAULT_HOST = 'localhost'
