@@ -1,30 +1,16 @@
 __all__ = [
     'Controller',
-    'ExitableSMTP',
     ]
 
 
 import socket
 import asyncio
-import smtplib
 import threading
 
 from aiosmtpd.smtp import SMTP
 
 
 PORT = 9978
-
-
-class ExitableSMTP(SMTP):
-    @asyncio.coroutine
-    def smtp_EXIT(self, arg):
-        if arg:
-            yield from self.push('501 Syntax: NOOP')
-        else:
-            yield from self.push('250 OK')
-            self.loop.stop()
-            self._connection_closed = True
-            self._handler_coroutine.cancel()
 
 
 class Controller:
@@ -34,9 +20,18 @@ class Controller:
         self.port = PORT if port is None else port
         self.loop = asyncio.new_event_loop() if loop is None else loop
         self.thread = None
+        # For exiting the loop.
+        self._rsock, self._wsock = socket.socketpair()
+        self.loop.add_reader(self._rsock, self._reader)
+
+    def _reader(self):
+        self.loop.remove_reader(self._rsock)
+        self.loop.stop()
+        self._rsock.close()
+        self._wsock.close()
 
     def factory(self):
-        return ExitableSMTP(self.handler)
+        return SMTP(self.handler)
 
     def _run(self, ready_event):
         sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
@@ -63,7 +58,5 @@ class Controller:
 
     def stop(self):
         assert self.thread is not None, 'SMTP daemon not running'
-        client = smtplib.SMTP()
-        client.connect(self.hostname, self.port)
-        client.docmd('EXIT')
+        self._wsock.send(b'x')
         self.thread.join()
