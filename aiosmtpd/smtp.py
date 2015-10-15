@@ -286,8 +286,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg:
             address, params = self._getaddr(arg)
             if address:
-                yield from self.push('252 Cannot VRFY user, but will accept message '
-                          'and attempt delivery')
+                yield from self.push(
+                    '252 Cannot VRFY user, but will accept message '
+                    'and attempt delivery')
             else:
                 yield from self.push('502 Could not VRFY %s' % arg)
         else:
@@ -324,7 +325,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not self._decode_data:
             body = params.pop('BODY', '7BIT')
             if body not in ['7BIT', '8BITMIME']:
-                yield from self.push('501 Error: BODY can only be one of 7BIT, 8BITMIME')
+                yield from self.push(
+                    '501 Error: BODY can only be one of 7BIT, 8BITMIME')
                 return
         if self.enable_SMTPUTF8:
             smtputf8 = params.pop('SMTPUTF8', False)
@@ -339,10 +341,13 @@ class SMTP(asyncio.StreamReaderProtocol):
                 yield from self.push(syntaxerr)
                 return
             elif self.data_size_limit and int(size) > self.data_size_limit:
-                yield from self.push('552 Error: message size exceeds fixed maximum message size')
+                yield from self.push(
+                    '552 Error: message size exceeds fixed maximum message '
+                    'size')
                 return
         if len(params.keys()) > 0:
-            yield from self.push('555 MAIL FROM parameters not recognized or not implemented')
+            yield from self.push(
+                '555 MAIL FROM parameters not recognized or not implemented')
             return
         self.mailfrom = address
         log.info('sender: %s', self.mailfrom)
@@ -378,7 +383,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         # XXX currently there are no options we recognize.
         if len(params.keys()) > 0:
-            yield from self.push('555 RCPT TO parameters not recognized or not implemented')
+            yield from self.push(
+                '555 RCPT TO parameters not recognized or not implemented')
             return
         self.rcpttos.append(address)
         log.info('recips: %s', self.rcpttos)

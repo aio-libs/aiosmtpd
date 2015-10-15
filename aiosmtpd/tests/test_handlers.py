@@ -1,26 +1,27 @@
 __all__ = [
-    'TestEvents',
+    'TestHandlers',
     ]
 
 
 import unittest
 
+from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Debugging
-from aiosmtpd.testing.helpers import Controller
 from io import StringIO
 from smtplib import SMTP
 
 
-class TestEvents(unittest.TestCase):
+class TestHandlers(unittest.TestCase):
     def setUp(self):
         self.stream = StringIO()
-        self.controller = Controller(Debugging(self.stream))
-        self.controller.start()
-        self.addCleanup(self.controller.stop)
+        handler = Debugging(self.stream)
+        controller = Controller(handler)
+        controller.start()
+        self.address = (controller.hostname, controller.port)
+        self.addCleanup(controller.stop)
 
     def test_debugging(self):
-        with SMTP() as client:
-            client.connect('::0', 9978)
+        with SMTP(*self.address) as client:
             client.sendmail('anne@example.com', ['bart@example.com'], """\
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>

@@ -10,14 +10,12 @@ import threading
 from aiosmtpd.smtp import SMTP
 
 
-PORT = 9978
-
-
 class Controller:
-    def __init__(self, handler, loop=None, hostname=None, port=None):
+    def __init__(self, handler, loop=None, hostname='::0', port=8025):
         self.handler = handler
+        self.server = None
         self.hostname = '::0' if hostname is None else hostname
-        self.port = PORT if port is None else port
+        self.port = port
         self.loop = asyncio.new_event_loop() if loop is None else loop
         self.thread = None
         # For exiting the loop.
