@@ -15,13 +15,13 @@ class TestHandlers(unittest.TestCase):
     def setUp(self):
         self.stream = StringIO()
         handler = Debugging(self.stream)
-        self.controller = Controller(handler, port=9978)
-        self.controller.start()
-        self.addCleanup(self.controller.stop)
+        controller = Controller(handler)
+        controller.start()
+        self.address = (controller.hostname, controller.port)
+        self.addCleanup(controller.stop)
 
     def test_debugging(self):
-        with SMTP() as client:
-            client.connect('::0', 9978)
+        with SMTP(*self.address) as client:
             client.sendmail('anne@example.com', ['bart@example.com'], """\
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>

@@ -74,12 +74,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.command_size_limits.clear()
         self.fqdn = socket.getfqdn()   # XXX this blocks, fix it?
 
-    @asyncio.coroutine
-    def stop(self):
-        self.loop.stop()
-        self._connection_closed = True
-        self._handler_coroutine.cancel()
-
     @property
     def max_command_size_limit(self):
         try:

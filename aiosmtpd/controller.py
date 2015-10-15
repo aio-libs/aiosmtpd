@@ -11,7 +11,7 @@ from aiosmtpd.smtp import SMTP
 
 
 class Controller:
-    def __init__(self, handler, loop=None, hostname='localhost', port=8025):
+    def __init__(self, handler, loop=None, hostname='::0', port=8025):
         self.handler = handler
         self.server = None
         self.hostname = '::0' if hostname is None else hostname
