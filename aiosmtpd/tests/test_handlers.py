@@ -1,20 +1,21 @@
 __all__ = [
-    'TestEvents',
+    'TestHandlers',
     ]
 
 
 import unittest
 
+from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Debugging
-from aiosmtpd.testing.helpers import Controller
 from io import StringIO
 from smtplib import SMTP
 
 
-class TestEvents(unittest.TestCase):
+class TestHandlers(unittest.TestCase):
     def setUp(self):
         self.stream = StringIO()
-        self.controller = Controller(Debugging(self.stream))
+        handler = Debugging(self.stream)
+        self.controller = Controller(handler, port=9978)
         self.controller.start()
         self.addCleanup(self.controller.stop)
 
