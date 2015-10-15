@@ -121,4 +121,4 @@ class Sink:
         return cls()
 
     def process_message(self, peer, mailfrom, rcpttos, data):
-        pass
+        pass                                        # pragma: no cover
