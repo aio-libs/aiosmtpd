@@ -11,6 +11,7 @@ import doctest
 import logging
 import aiosmtpd
 
+from contextlib import ExitStack
 from nose2.events import Plugin
 
 DOT = '.'
@@ -18,7 +19,14 @@ FLAGS = doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE | doctest.REPORT_NDIFF
 TOPDIR = os.path.dirname(aiosmtpd.__file__)
 
 
-
+def setup(testobj):
+    testobj.globs['resources'] = ExitStack()
+
+
+def teardown(testobj):
+    testobj.globs['resources'].close()
+
+
 class NosePlugin(Plugin):
     configSection = 'aiosmtpd'
 
@@ -31,8 +39,7 @@ class NosePlugin(Plugin):
             log.setLevel(logging.DEBUG)
         self.addArgument(self.patterns, 'P', 'pattern',
                          'Add a test matching pattern')
-        self.addOption(set_debug, 'V',
-                       'Turn on mail.log debugging')
+        self.addOption(set_debug, 'V', 'Turn on mail.log debugging')
 
     def getTestCaseNames(self, event):
         if len(self.patterns) == 0:
@@ -72,6 +79,8 @@ class NosePlugin(Plugin):
         test = doctest.DocFileTest(
             path, package='aiosmtpd',
             optionflags=FLAGS,
+            setUp=setup,
+            tearDown=teardown,
             )
         # Suppress the extra "Doctest: ..." line.
         test.shortDescription = lambda: None

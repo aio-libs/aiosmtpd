@@ -25,6 +25,8 @@ class Controller:
     def _reader(self):
         self.loop.remove_reader(self._rsock)
         self.loop.stop()
+        for task in asyncio.Task.all_tasks(self.loop):
+            task.cancel()
         self._rsock.close()
         self._wsock.close()
 
