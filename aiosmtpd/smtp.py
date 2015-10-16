@@ -10,7 +10,6 @@ import collections
 
 from enum import Enum
 from email._header_value_parser import get_addr_spec, get_angle_addr
-from warnings import warn
 
 
 __version__ = '1.0a1'
@@ -33,10 +32,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         lambda x=command_size_limit: x)
 
     def __init__(self, handler,
+                 *,
                  data_size_limit=DATA_SIZE_DEFAULT,
                  enable_SMTPUTF8=False,
-                 decode_data=None,
-                 *,
+                 decode_data=False,
                  loop=None):
         self.loop = loop if loop else asyncio.get_event_loop()
         super().__init__(
@@ -52,11 +51,6 @@ class SMTP(asyncio.StreamReaderProtocol):
                     "decode_data and enable_SMTPUTF8 cannot be set to "
                     "True at the same time")
             decode_data = False
-        if decode_data is None:
-            warn("The decode_data default of True will change to False in 3.6;"
-                 " specify an explicit value for this keyword",
-                 DeprecationWarning, 2)
-            decode_data = True
         self._decode_data = decode_data
         if decode_data:
             self._emptystring = ''

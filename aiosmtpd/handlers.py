@@ -9,6 +9,7 @@ your own handling of messages.  Implement only the methods you care about.
 
 __all__ = [
     'Debugging',
+    'Message',
     'Proxy',
     'Sink',
     ]
@@ -17,7 +18,11 @@ __all__ = [
 import sys
 import logging
 
+from email import message_from_bytes, message_from_string
+from email.message import Message
 
+
+COMMASPACE = ', '
 NEWLINE = '\n'
 log = logging.getLogger('mail.debug')
 
@@ -60,21 +65,21 @@ class Debugging:
                 line = repr(line)
             print(line, file=self.stream)
 
-    def process_message(self, peer, mailfrom, rcpttos, data, **kwargs):
+    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         print('---------- MESSAGE FOLLOWS ----------', file=self.stream)
-        if kwargs:
-            if kwargs.get('mail_options'):
-                print('mail options: %s' % kwargs['mail_options'],
+        if kws:
+            if kws.get('mail_options'):
+                print('mail options: %s' % kws['mail_options'],
                       file=self.stream)
-            if kwargs.get('rcpt_options'):
-                print('rcpt options: %s\n' % kwargs['rcpt_options'],
+            if kws.get('rcpt_options'):
+                print('rcpt options: %s\n' % kws['rcpt_options'],
                       file=self.stream())
         self._print_message_content(peer, data)
         print('------------ END MESSAGE ------------', file=self.stream)
 
 
 class Proxy:
-    def process_message(self, peer, mailfrom, rcpttos, data):
+    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         lines = data.split('\n')
         # Look for the last header
         i = 0
@@ -120,5 +125,27 @@ class Sink:
             parser.error('Sink handler does not accept arguments')
         return cls()
 
-    def process_message(self, peer, mailfrom, rcpttos, data):
+    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         pass                                        # pragma: no cover
+
+
+class Message:
+    def __init__(self, message_class=Message):
+        self.message_class = message_class
+
+    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
+        # If the server was created with decode_data True, then data will be a
+        # str, otherwise it will be bytes.
+        if isinstance(data, bytes):
+            message = message_from_bytes(data, self.message_class)
+        else:
+            assert isinstance(data, str), (
+              'Expected str or bytes, got {}'.format(type(data)))
+            message = message_from_string(data, self.message_class)
+        message['X-Peer'] = str(peer)
+        message['X-MailFrom'] = mailfrom
+        message['X-RcptTos'] = COMMASPACE.join(rcpttos)
+        self.handle_message(message)
+
+    def handle_message(self, message):
+        raise NotImplementedError                   # pragma: no cover

@@ -8,14 +8,20 @@ __all__ = [
 import socket
 import unittest
 
+from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from smtplib import SMTP
 
 
+class UTF8Controller(Controller):
+    def factory(self):
+        return Server(self.handler, decode_data=True)
+
+
 class TestSMTP(unittest.TestCase):
     def setUp(self):
-        controller = Controller(Sink)
+        controller = UTF8Controller(Sink)
         controller.start()
         self.address = (controller.hostname, controller.port)
         self.addCleanup(controller.stop)
