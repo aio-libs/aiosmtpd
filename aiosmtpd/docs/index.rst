@@ -46,6 +46,23 @@ Other references
 * `Developing with asyncio <https://docs.python.org/3/library/asyncio-dev.html#asyncio-dev>`__
 
 
+License
+=======
+
+``aiosmtpd`` is released under the Apache License version 2.0.
+
+
+Project details
+===============
+
+* Project home: https://gitlab.com/python-smtpd-hackers/aiosmtpd
+* Report bugs at: https://gitlab.com/python-smtpd-hackers/aiosmtpd/issues
+* Code hosting: git@gitlab.com:python-smtpd-hackers/aiosmtpd.git
+* Documentation: http://aiosmtpd.readthedocs.org/
+
+The best way to contact the developers is through the GitLab links above.
+
+
 Contents
 ========
 
