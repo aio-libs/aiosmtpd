@@ -29,9 +29,6 @@ You need at least Python 3.4 to use this library.  Python 3.3 might work if
 you install the standalone `asyncio <https://pypi.python.org/pypi/asyncio>`__
 library, but this combination is untested.
 
-- Python >= 3.4 (3.3 might work but it's untested)
-- asyncio https://pypy.python.org/pypi/asyncio/0.4.1
-
 
 License
 =======
