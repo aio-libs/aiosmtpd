@@ -10,9 +10,8 @@ Contents:
 
 .. toctree::
    :maxdepth: 2
-   :glob:
 
-   ../NEWS
+   ../../NEWS
    controller
    mailbox
 
