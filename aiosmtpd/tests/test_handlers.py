@@ -1,18 +1,23 @@
 __all__ = [
     'TestCLI',
     'TestDebugging',
+    'TestMailbox',
     'TestMessage',
     ]
 
 
+import os
 import sys
 import unittest
 
 from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import Debugging, Message, Sink
+from aiosmtpd.handlers import Debugging, Mailbox, Message, Sink
 from io import StringIO
+from mailbox import Maildir
+from operator import itemgetter
 from smtplib import SMTP
+from tempfile import TemporaryDirectory
 
 
 class UTF8Controller(Controller):
@@ -107,6 +112,54 @@ Testing
         self.assertEqual(
             self.handled_message['X-MailFrom'], 'anne@example.com')
         self.assertEqual(self.handled_message['X-RcptTos'], 'bart@example.com')
+
+
+class TestMailbox(unittest.TestCase):
+    def setUp(self):
+        self.tempdir = TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+        self.maildir_path = os.path.join(self.tempdir.name, 'maildir')
+        handler = Mailbox(self.maildir_path)
+        controller = Controller(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_mailbox(self):
+        with SMTP(*self.address) as client:
+            client.sendmail(
+                'aperson@example.com', ['bperson@example.com'], """\
+From: Anne Person <anne@example.com>
+To: Bart Person <bart@example.com>
+Subject: A test
+Message-ID: <ant>
+
+Hi Bart, this is Anne.
+""")
+            client.sendmail(
+                'cperson@example.com', ['dperson@example.com'], """\
+From: Cate Person <cate@example.com>
+To: Dave Person <dave@example.com>
+Subject: A test
+Message-ID: <bee>
+
+Hi Dave, this is Cate.
+""")
+            client.sendmail(
+                'eperson@example.com', ['fperson@example.com'], """\
+From: Elle Person <elle@example.com>
+To: Fred Person <fred@example.com>
+Subject: A test
+Message-ID: <cat>
+
+Hi Fred, this is Elle.
+""")
+        # Check the messages in the mailbox.
+        mailbox = Maildir(self.maildir_path)
+        messages = sorted(mailbox, key=itemgetter('message-id'))
+        self.assertEqual(
+            list(message['message-id'] for message in messages),
+            ['<ant>', '<bee>', '<cat>'])
 
 
 class FakeParser:

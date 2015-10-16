@@ -9,6 +9,7 @@ your own handling of messages.  Implement only the methods you care about.
 
 __all__ = [
     'Debugging',
+    'Mailbox',
     'Message',
     'Proxy',
     'Sink',
@@ -17,9 +18,9 @@ __all__ = [
 
 import sys
 import logging
+import mailbox
 
 from email import message_from_bytes, message_from_string
-from email.message import Message
 
 
 COMMASPACE = ', '
@@ -130,7 +131,7 @@ class Sink:
 
 
 class Message:
-    def __init__(self, message_class=Message):
+    def __init__(self, message_class=None):
         self.message_class = message_class
 
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
@@ -149,3 +150,15 @@ class Message:
 
     def handle_message(self, message):
         raise NotImplementedError                   # pragma: no cover
+
+
+class Mailbox(Message):
+    def __init__(self, mail_dir, message_class=None):
+        self.mailbox = mailbox.Maildir(mail_dir)
+        super().__init__(message_class)
+
+    def handle_message(self, message):
+        self.mailbox.add(message)
+
+    def reset(self):
+        self.mailbox.clear()
