@@ -42,10 +42,10 @@ License
 Project details
 ===============
 
- * Project home: https://gitlab.com/python-smtpd-hackers/aiosmtpd
- * Report bugs at: https://gitlab.com/python-smtpd-hackers/aiosmtpd/issues
- * Code hosting: git@gitlab.com:python-smtpd-hackers/aiosmtpd.git
- * Documentation: http://aiosmtpd.readthedocs.org/
+* Project home: https://gitlab.com/python-smtpd-hackers/aiosmtpd
+* Report bugs at: https://gitlab.com/python-smtpd-hackers/aiosmtpd/issues
+* Code hosting: git@gitlab.com:python-smtpd-hackers/aiosmtpd.git
+* Documentation: http://aiosmtpd.readthedocs.org/
 
 The best way to contact the developers is through the GitLab links above.
 
@@ -53,7 +53,7 @@ The best way to contact the developers is through the GitLab links above.
 Building
 ========
 
-You can install this package in a virtual environment like so:
+You can install this package in a virtual environment like so::
 
     $ python3 -m venv /path/to/venv
     $ source /path/to/venv/bin/activate
@@ -71,12 +71,12 @@ Developing
 ==========
 
 You'll need the `tox <https://pypi.python.org/pypi/tox>`__ tool to run the
-test suite for Python 3.4 and 3.5.  Once you've got that, run:
+test suite for Python 3.4 and 3.5.  Once you've got that, run::
 
     $ tox
 
 After tox has built the virtual environments, you can run individual tests
-like this:
+like this::
 
     $ .tox/py35/bin/python -m nose2 -vv -P <pattern>
 
