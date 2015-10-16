@@ -19,7 +19,7 @@ Python 3.""",
     keywords        = 'email',
     packages= find_packages(),
     include_package_data = True,
-    license = "http://www.apache.org/licenses/LICENSE-2.0",
+    license = 'http://www.apache.org/licenses/LICENSE-2.0',
     entry_points={
         'console_scripts': ['smtpd = aiosmtpd.main:main'],
         },

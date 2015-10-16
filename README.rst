@@ -18,30 +18,66 @@ obvious that an asyncio-based version of the SMTP and related protocols are
 needed for Python 3.  This project brings together several highly experienced
 Python developers collaborating on this reimplementation.
 
-Stay tuned for additional details.
+This package provides such a implementation of both the SMTP and LMTP
+protocols.
+
 
 Requirements
-------------
+============
 
-- Python >= 3.3
+You need at least Python 3.4 to use this library.  Python 3.3 might work if
+you install the standalone `asyncio <https://pypi.python.org/pypi/asyncio>`__
+library, but this combination is untested.
+
+- Python >= 3.4 (3.3 might work but it's untested)
 - asyncio https://pypy.python.org/pypi/asyncio/0.4.1
 
+
 License
--------
-``aiosmtp`` is offered under the Apache 2.0 license.
+=======
+
+``aiosmtpd`` is released under the Apache License version 2.0.
+
+
+Project details
+===============
+
+ * Project home: https://gitlab.com/python-smtpd-hackers/aiosmtpd
+ * Report bugs at: https://gitlab.com/python-smtpd-hackers/aiosmtpd/issues
+ * Code hosting: git@gitlab.com:python-smtpd-hackers/aiosmtpd.git
+ * Documentation: http://aiosmtpd.readthedocs.org/
+
+The best way to contact the developers is through the GitLab links above.
+
 
 Building
---------
+========
 
-.. code-block:: bash
+You can install this package in a virtual environment like so:
 
-    make venv
-    . venv/bin/activate
+    $ python3 -m venv /path/to/venv
+    $ source /path/to/venv/bin/activate
+    $ python setup.py install
+
+This will give you a command line script called ``smtpd`` which implements the
+SMTP server.  Use ``smtpd --help`` for details.
+
+You will also have access to the ``aiosmtpd`` library, which you can use as a
+testing environment for your SMTP clients.  See the documentation links above
+for details.
+
 
 Developing
-----------
-.. code-block:: bash
+==========
 
-    make dev
-    make test
+You'll need the `tox <https://pypi.python.org/pypi/tox>`__ tool to run the
+test suite for Python 3.4 and 3.5.  Once you've got that, run:
 
+    $ tox
+
+After tox has built the virtual environments, you can run individual tests
+like this:
+
+    $ .tox/py35/bin/python -m nose2 -vv -P <pattern>
+
+where *<pattern>* is a Python regular expression matching a test name.
