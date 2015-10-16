@@ -40,7 +40,7 @@ Connect to the server...
     ... """)
     {}
 
-The message is in the queue, and we can print it.
+The message was received, and we can print it.
 
     >>> print(handled_message)
     From: Anne Person <anne@example.com>
