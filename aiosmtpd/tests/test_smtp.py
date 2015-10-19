@@ -187,3 +187,13 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('MAIL FROM: Anne <anne@example.com>')
             self.assertEqual(code, 501)
             self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
+
+    def test_mail_mailformed_params_esmtp(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd(
+                'MAIL FROM: <anne@example.com> SIZE 10000')
+            self.assertEqual(code, 501)
+            self.assertEqual(
+                response,
+                b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')

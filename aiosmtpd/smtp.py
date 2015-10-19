@@ -333,7 +333,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 return
         size = params.pop('SIZE', None)
         if size:
-            if not size.isdigit():
+            if isinstance(size, bool) or not size.isdigit():
                 yield from self.push(syntaxerr)
                 return
             elif self.data_size_limit and int(size) > self.data_size_limit:
