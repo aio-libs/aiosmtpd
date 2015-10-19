@@ -198,9 +198,11 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_QUIT(self, arg):
-        # arg is ignored
-        yield from self.push('221 Bye')
-        self._handler_coroutine.cancel()
+        if arg:
+            yield from self.push('501 Syntax: QUIT')
+        else:
+            yield from self.push('221 Bye')
+            self._handler_coroutine.cancel()
 
     @asyncio.coroutine
     def close(self):

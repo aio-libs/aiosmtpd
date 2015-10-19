@@ -107,11 +107,11 @@ class TestSMTP(unittest.TestCase):
         self.assertEqual(code, 221)
         self.assertEqual(response, b'Bye')
 
-    def test_quit_with_ignored_argument(self):
+    def test_quit_with_arg(self):
         client = SMTP(*self.address)
         code, response = client.docmd('quit', 'oops')
-        self.assertEqual(code, 221)
-        self.assertEqual(response, b'Bye')
+        self.assertEqual(code, 501)
+        self.assertEqual(response, b'Syntax: QUIT')
 
     def test_help(self):
         with SMTP(*self.address) as client:
@@ -134,3 +134,56 @@ class TestSMTP(unittest.TestCase):
             code, response = client.expn('anne@example.com')
             self.assertEqual(code, 502)
             self.assertEqual(response, b'EXPN not implemented')
+
+    def test_mail_no_helo(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 503)
+            self.assertEqual(response, b'Error: send HELO first')
+
+    def test_mail_no_arg(self):
+        with SMTP(*self.address) as client:
+            client.helo('example.com')
+            code, response = client.docmd('MAIL')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
+
+    def test_mail_no_from(self):
+        with SMTP(*self.address) as client:
+            client.helo('example.com')
+            code, response = client.docmd('MAIL <anne@example.com>')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
+
+    def test_mail_params_no_esmtp(self):
+        with SMTP(*self.address) as client:
+            client.helo('example.com')
+            code, response = client.docmd(
+                'MAIL FROM: <anne@example.com> SIZE=10000')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
+
+    def test_mail_params_esmtp(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd(
+                'MAIL FROM: <anne@example.com> SIZE=10000')
+            self.assertEqual(code, 250)
+            self.assertEqual(response, b'OK')
+
+    def test_mail_from_twice(self):
+        with SMTP(*self.address) as client:
+            client.helo('example.com')
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            self.assertEqual(response, b'OK')
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 503)
+            self.assertEqual(response, b'Error: nested MAIL command')
+
+    def test_mail_from_malformed(self):
+        with SMTP(*self.address) as client:
+            client.helo('example.com')
+            code, response = client.docmd('MAIL FROM: Anne <anne@example.com>')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
