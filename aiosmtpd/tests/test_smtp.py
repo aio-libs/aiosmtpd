@@ -278,6 +278,42 @@ class TestSMTP(unittest.TestCase):
                 response,
                 b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
 
+    def test_rcpt_no_address(self):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT TO:')
+            self.assertEqual(code, 501)
+            self.assertEqual(
+                response,
+                b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
+
+    def test_rcpt_with_params_no_esmtp(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd(
+                'RCPT TO: <bart@example.com> SIZE=1000')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: RCPT TO: <address>')
+
+    def test_rcpt_with_bad_params(self):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd(
+                'RCPT TO: <bart@example.com> #$%=!@#')
+            self.assertEqual(code, 501)
+            self.assertEqual(
+                response,
+                b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
+
 
 class TestSMTPWithController(unittest.TestCase):
     def test_mail_with_size_too_large(self):
