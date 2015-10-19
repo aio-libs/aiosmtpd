@@ -2,6 +2,7 @@
 
 __all__ = [
     'TestSMTP',
+    'TestSMTPWithController',
     ]
 
 
@@ -19,12 +20,26 @@ class UTF8Controller(Controller):
         return Server(self.handler, decode_data=True)
 
 
+class SizedController(Controller):
+    def __init__(self, handler, size, loop=None, hostname='::0', port=8025):
+        self.size = size
+        super().__init__(handler, loop, hostname, port)
+
+    def factory(self):
+        return Server(self.handler, data_size_limit=self.size)
+
+
+class SMTPUTF8Controller(Controller):
+    def factory(self):
+        return Server(self.handler, enable_SMTPUTF8=True)
+
+
 class TestSMTP(unittest.TestCase):
     def setUp(self):
         controller = UTF8Controller(Sink)
         controller.start()
-        self.address = (controller.hostname, controller.port)
         self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
 
     def test_helo(self):
         with SMTP(*self.address) as client:
@@ -188,7 +203,7 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 501)
             self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
 
-    def test_mail_mailformed_params_esmtp(self):
+    def test_mail_malformed_params_esmtp(self):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd(
@@ -197,3 +212,91 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(
                 response,
                 b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')
+
+    def test_mail_missing_params_esmtp(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd('MAIL FROM: <anne@example.com> SIZE')
+            self.assertEqual(code, 501)
+            self.assertEqual(
+                response,
+                b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')
+
+    def test_mail_unrecognized_params_esmtp(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd(
+                'MAIL FROM: <anne@example.com> FOO=BAR')
+            self.assertEqual(code, 555)
+            self.assertEqual(
+                response,
+                b'MAIL FROM parameters not recognized or not implemented')
+
+    def test_mail_params_bad_syntax_esmtp(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd(
+                'MAIL FROM: <anne@example.com> #$%=!@#')
+            self.assertEqual(code, 501)
+            self.assertEqual(
+                response,
+                b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')
+
+
+class TestSMTPWithController(unittest.TestCase):
+    def test_mail_with_size_too_large(self):
+        controller = SizedController(Sink(), 9999)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd(
+                'MAIL FROM: <anne@example.com> SIZE=10000')
+            self.assertEqual(code, 552)
+            self.assertEqual(
+                response,
+                b'Error: message size exceeds fixed maximum message size')
+
+    def test_mail_with_compatible_smtputf8(self):
+        controller = SMTPUTF8Controller(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd(
+                'MAIL FROM: <anne@example.com> SMTPUTF8')
+            self.assertEqual(code, 250)
+            self.assertEqual(response, b'OK')
+
+    def test_mail_with_unrequited_smtputf8(self):
+        controller = SMTPUTF8Controller(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            self.assertEqual(response, b'OK')
+
+    def test_mail_with_incompatible_smtputf8(self):
+        controller = SMTPUTF8Controller(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd(
+                'MAIL FROM: <anne@example.com> SMTPUTF8=YES')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Error: SMTPUTF8 takes no arguments')
+
+    def test_mail_invalid_body(self):
+        controller = Controller(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd(
+                'MAIL FROM: <anne@example.com> BODY 9BIT')
+            self.assertEqual(code, 501)
+            self.assertEqual(response,
+                             b'Error: BODY can only be one of 7BIT, 8BITMIME')
