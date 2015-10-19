@@ -242,6 +242,42 @@ class TestSMTP(unittest.TestCase):
                 response,
                 b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')
 
+    def test_rcpt_no_helo(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('RCPT TO: <anne@example.com>')
+            self.assertEqual(code, 503)
+            self.assertEqual(response, b'Error: send HELO first')
+
+    def test_rcpt_no_mail(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT TO: <anne@example.com>')
+            self.assertEqual(code, 503)
+            self.assertEqual(response, b'Error: need MAIL command')
+
+    def test_rcpt_no_arg(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: RCPT TO: <address>')
+
+    def test_rcpt_no_arg_esmtp(self):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT')
+            self.assertEqual(code, 501)
+            self.assertEqual(
+                response,
+                b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
+
 
 class TestSMTPWithController(unittest.TestCase):
     def test_mail_with_size_too_large(self):
@@ -300,3 +336,13 @@ class TestSMTPWithController(unittest.TestCase):
             self.assertEqual(code, 501)
             self.assertEqual(response,
                              b'Error: BODY can only be one of 7BIT, 8BITMIME')
+
+    def test_esmtp_no_size_limit(self):
+        controller = SizedController(Sink(), size=None)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            for line in response.splitlines():
+                self.assertNotEqual(line[:4], b'SIZE')
