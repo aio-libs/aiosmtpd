@@ -443,10 +443,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             }
         status = self.event_handler.process_message(*args, **kwargs)
         self._set_post_data_state()
-        if not status:
-            yield from self.push('250 OK')
-        else:
+        if status:
             yield from self.push(status)
+        else:
+            yield from self.push('250 OK')
 
     # Commands that have not been implemented
     @asyncio.coroutine

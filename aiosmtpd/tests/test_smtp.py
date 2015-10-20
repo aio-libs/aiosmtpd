@@ -12,7 +12,7 @@ import unittest
 from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
-from smtplib import SMTP
+from smtplib import SMTP, SMTPDataError
 
 
 class UTF8Controller(Controller):
@@ -32,6 +32,11 @@ class SizedController(Controller):
 class SMTPUTF8Controller(Controller):
     def factory(self):
         return Server(self.handler, enable_SMTPUTF8=True)
+
+
+class ErroringHandler:
+    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
+        return '499 Could not accept the message'
 
 
 class TestSMTP(unittest.TestCase):
@@ -112,7 +117,7 @@ class TestSMTP(unittest.TestCase):
     def test_noop_with_arg(self):
         with SMTP(*self.address) as client:
             # .noop() doesn't accept arguments.
-            code, response = client.docmd('noop', 'oops')
+            code, response = client.docmd('NOOP', 'oops')
             self.assertEqual(code, 501)
             self.assertEqual(response, b'Syntax: NOOP')
 
@@ -124,14 +129,14 @@ class TestSMTP(unittest.TestCase):
 
     def test_quit_with_arg(self):
         client = SMTP(*self.address)
-        code, response = client.docmd('quit', 'oops')
+        code, response = client.docmd('QUIT', 'oops')
         self.assertEqual(code, 501)
         self.assertEqual(response, b'Syntax: QUIT')
 
     def test_help(self):
         with SMTP(*self.address) as client:
             # Don't get tricked by smtplib processing of the response.
-            code, response = client.docmd('help')
+            code, response = client.docmd('HELP')
             self.assertEqual(code, 250)
             self.assertEqual(response,
                              b'Supported commands: EHLO HELO MAIL RCPT '
@@ -140,21 +145,21 @@ class TestSMTP(unittest.TestCase):
     def test_help_helo(self):
         with SMTP(*self.address) as client:
             # Don't get tricked by smtplib processing of the response.
-            code, response = client.docmd('help', 'helo')
+            code, response = client.docmd('HELP', 'HELO')
             self.assertEqual(code, 250)
             self.assertEqual(response, b'Syntax: HELO hostname')
 
     def test_help_ehlo(self):
         with SMTP(*self.address) as client:
             # Don't get tricked by smtplib processing of the response.
-            code, response = client.docmd('help', 'ehlo')
+            code, response = client.docmd('HELP', 'EHLO')
             self.assertEqual(code, 250)
             self.assertEqual(response, b'Syntax: EHLO hostname')
 
     def test_help_mail(self):
         with SMTP(*self.address) as client:
             # Don't get tricked by smtplib processing of the response.
-            code, response = client.docmd('help', 'mail')
+            code, response = client.docmd('HELP', 'MAIL')
             self.assertEqual(code, 250)
             self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
 
@@ -162,7 +167,7 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
-            code, response = client.docmd('help', 'mail')
+            code, response = client.docmd('HELP', 'MAIL')
             self.assertEqual(code, 250)
             self.assertEqual(
                 response,
@@ -171,7 +176,7 @@ class TestSMTP(unittest.TestCase):
     def test_help_rcpt(self):
         with SMTP(*self.address) as client:
             # Don't get tricked by smtplib processing of the response.
-            code, response = client.docmd('help', 'rcpt')
+            code, response = client.docmd('HELP', 'RCPT')
             self.assertEqual(code, 250)
             self.assertEqual(response, b'Syntax: RCPT TO: <address>')
 
@@ -179,7 +184,7 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
-            code, response = client.docmd('help', 'rcpt')
+            code, response = client.docmd('HELP', 'RCPT')
             self.assertEqual(code, 250)
             self.assertEqual(
                 response,
@@ -187,38 +192,38 @@ class TestSMTP(unittest.TestCase):
 
     def test_help_data(self):
         with SMTP(*self.address) as client:
-            code, response = client.docmd('help', 'data')
+            code, response = client.docmd('HELP', 'DATA')
             self.assertEqual(code, 250)
             self.assertEqual(response, b'Syntax: DATA')
 
     def test_help_rset(self):
         with SMTP(*self.address) as client:
-            code, response = client.docmd('help', 'rset')
+            code, response = client.docmd('HELP', 'RSET')
             self.assertEqual(code, 250)
             self.assertEqual(response, b'Syntax: RSET')
 
     def test_help_noop(self):
         with SMTP(*self.address) as client:
-            code, response = client.docmd('help', 'noop')
+            code, response = client.docmd('HELP', 'NOOP')
             self.assertEqual(code, 250)
             self.assertEqual(response, b'Syntax: NOOP')
 
     def test_help_quit(self):
         with SMTP(*self.address) as client:
-            code, response = client.docmd('help', 'quit')
+            code, response = client.docmd('HELP', 'QUIT')
             self.assertEqual(code, 250)
             self.assertEqual(response, b'Syntax: QUIT')
 
     def test_help_vrfy(self):
         with SMTP(*self.address) as client:
-            code, response = client.docmd('help', 'vrfy')
+            code, response = client.docmd('HELP', 'VRFY')
             self.assertEqual(code, 250)
             self.assertEqual(response, b'Syntax: VRFY <address>')
 
     def test_help_bad_arg(self):
         with SMTP(*self.address) as client:
             # Don't get tricked by smtplib processing of the response.
-            code, response = client.docmd('help me!')
+            code, response = client.docmd('HELP me!')
             self.assertEqual(code, 501)
             self.assertEqual(response,
                              b'Supported commands: EHLO HELO MAIL RCPT '
@@ -427,6 +432,20 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 502)
             self.assertEqual(response, b'Could not VRFY @@')
 
+    def test_data_no_helo(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('DATA')
+            self.assertEqual(code, 503)
+            self.assertEqual(response, b'Error: send HELO first')
+
+    def test_data_no_rcpt(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('DATA')
+            self.assertEqual(code, 503)
+            self.assertEqual(response, b'Error: need RCPT command')
+
 
 class TestSMTPWithController(unittest.TestCase):
     def test_mail_with_size_too_large(self):
@@ -495,3 +514,22 @@ class TestSMTPWithController(unittest.TestCase):
             self.assertEqual(code, 250)
             for line in response.splitlines():
                 self.assertNotEqual(line[:4], b'SIZE')
+
+    def test_process_message_error(self):
+        controller = Controller(ErroringHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            with self.assertRaises(SMTPDataError) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], """\
+From: anne@example.com
+To: bart@example.com
+Subject: A test
+
+Testing
+""")
+                self.assertEqual(cm.exception.code, 499)
+                self.assertEqual(cm.exception.response,
+                                 b'Could not accept the message')
