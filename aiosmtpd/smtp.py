@@ -142,7 +142,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                 command = line[:i].upper()
                 arg = line[i+1:].strip()
             max_sz = (self.command_size_limits[command]
-                        if self.extended_smtp else self.command_size_limit)
+                      if self.extended_smtp
+                      else self.command_size_limit)
             if len(line) > max_sz:
                 yield from self.push('500 Error: line too long')
                 continue

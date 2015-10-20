@@ -34,3 +34,12 @@ class TestServer(unittest.TestCase):
             code, response = client.ehlo('example.com')
         self.assertEqual(code, 250)
         self.assertIn(b'SMTPUTF8', response.splitlines())
+
+    def test_default_max_command_size_limit(self):
+        server = Server(Sink())
+        self.assertEqual(server.max_command_size_limit, 512)
+
+    def test_special_max_command_size_limit(self):
+        server = Server(Sink())
+        server.command_size_limits['DATA'] = 1024
+        self.assertEqual(server.max_command_size_limit, 1024)
