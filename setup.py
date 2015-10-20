@@ -28,6 +28,6 @@ Python 3.""",
         'Intended Audience :: Developers',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
-        'Topic :: Internet :: WWW/SMTP',
+        'Topic :: Communications :: Email :: Mail Transport Agents',
         ],
     )
