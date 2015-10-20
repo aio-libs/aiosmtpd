@@ -10,6 +10,7 @@ import collections
 
 from enum import Enum
 from email._header_value_parser import get_addr_spec, get_angle_addr
+from email.errors import HeaderParseError
 
 
 __version__ = '1.0a1'
@@ -280,7 +281,10 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def smtp_VRFY(self, arg):
         if arg:
-            address, params = self._getaddr(arg)
+            try:
+                address, params = self._getaddr(arg)
+            except HeaderParseError:
+                address = None
             if address:
                 yield from self.push(
                     '252 Cannot VRFY user, but will accept message '
