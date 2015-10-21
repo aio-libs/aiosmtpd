@@ -129,11 +129,8 @@ def main(args=None):
     if args.debug > 2:
         loop.set_debug(enabled=True)
 
-    sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+    sock = setup_sock(args.host, args.port)
     log.info('Server listening on %s:%s', args.host, args.port)
-    sock.bind((args.host, args.port))
 
     server = loop.run_until_complete(loop.create_server(factory, sock=sock))
     loop.add_signal_handler(signal.SIGINT, loop.stop)
@@ -147,6 +144,15 @@ def main(args=None):
     log.info('Completed asyncio loop')
     loop.run_until_complete(server.wait_closed())
     loop.close()
+
+
+def setup_sock(host, port):
+    sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+    addr = host, port
+    sock.bind(addr)
+    return sock
 
 
 if __name__ == '__main__':                          # pragma: no cover
