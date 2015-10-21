@@ -147,11 +147,43 @@ def main(args=None):
 
 
 def setup_sock(host, port):
-    sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-    addr = host, port
+    try:
+        # first try to determine the sock type
+        info = socket.getaddrinfo(
+            host, port,
+            socket.AF_UNSPEC,
+            socket.SOCK_STREAM,
+            0,
+            socket.AI_PASSIVE,
+        )
+    except socket.gaierror:
+        # infer the type from the host
+        addr = host, port
+        if ':' in host:
+            addr += 0, 0
+            type_ = socket.AF_INET6
+        else:
+            type_ = socket.AF_INET
+        info_0 = type_, socket.SOCK_STREAM, 0, "", addr
+        info = info_0,
+
+    family, type, proto, canonname, addr = next(iter(info))
+    sock = bind(family, type, proto)
+    log = logging.getLogger('mail.log')
+    log.info('Binding to %s', addr)
     sock.bind(addr)
+    return sock
+
+
+def bind(family, type, proto):
+    """Create (or recreate) the actual socket object."""
+    sock = socket.socket(family, type, proto)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+
+    # If listening on IPv6, activate dual-stack.
+    if family == socket.AF_INET6:
+        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+
     return sock
 
 
