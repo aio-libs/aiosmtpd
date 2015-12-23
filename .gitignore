@@ -24,4 +24,5 @@ var/*
 docs/_build/
 nosetests.xml
 __pycache__/
-htmlcov
+py34-cov
+py35-cov
