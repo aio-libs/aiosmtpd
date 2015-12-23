@@ -148,7 +148,7 @@ def main(args=None):
 
 def setup_sock(host, port):
     try:
-        # first try to determine the sock type
+        # First try to determine the socket type.
         info = socket.getaddrinfo(
             host, port,
             socket.AF_UNSPEC,
@@ -157,7 +157,7 @@ def setup_sock(host, port):
             socket.AI_PASSIVE,
         )
     except socket.gaierror:
-        # infer the type from the host
+        # Infer the type from the host.
         addr = host, port
         if ':' in host:
             addr += 0, 0
