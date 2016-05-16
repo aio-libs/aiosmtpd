@@ -1,6 +1,6 @@
 tests:
   script:
-    - tox
+    - tox -e py34-nocov,py35-nocov
 
 qa:
   script:
