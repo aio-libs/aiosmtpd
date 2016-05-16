@@ -1,0 +1,15 @@
+qa:
+  script:
+    - tox -e qa
+
+tests:
+  script:
+    - tox
+
+coverage:
+  script:
+    - tox -e coverage
+
+docs:
+  script:
+    - tox -e docs
