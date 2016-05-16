@@ -1,10 +1,6 @@
-.. aiosmtpd documentation master file, created by
-   sphinx-quickstart on Fri Oct 16 12:18:52 2015.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
-aiosmtpd
-========
+==============
+ Introduction
+==============
 
 This library provides an `asyncio <https://pypi.python.org/pypi/asyncio>`__
 based implementation of a server for
@@ -45,41 +41,4 @@ Other references
 * `asyncio module documentation <https://docs.python.org/3/library/asyncio.html>`__
 * `Developing with asyncio <https://docs.python.org/3/library/asyncio-dev.html#asyncio-dev>`__
 * `Python issue #25508 <http://bugs.python.org/issue25008>`__ which started
-the whole thing.
-
-
-License
-=======
-
-``aiosmtpd`` is released under the Apache License version 2.0.
-
-
-Project details
-===============
-
-* Project home: https://gitlab.com/python-smtpd-hackers/aiosmtpd
-* Report bugs at: https://gitlab.com/python-smtpd-hackers/aiosmtpd/issues
-* Code hosting: git@gitlab.com:python-smtpd-hackers/aiosmtpd.git
-* Documentation: http://aiosmtpd.readthedocs.org/
-
-The best way to contact the developers is through the GitLab links above.
-
-
-Contents
-========
-
-.. toctree::
-   :maxdepth: 2
-
-   NEWS
-   controller
-   mailbox
-
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+  the whole thing.

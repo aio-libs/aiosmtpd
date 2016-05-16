@@ -1,15 +1,12 @@
-__all__ = [
-    'Controller',
-    ]
-
-
 import socket
 import asyncio
 import threading
 
 from aiosmtpd.smtp import SMTP
+from public import public
 
 
+@public
 class Controller:
     def __init__(self, handler, loop=None, hostname='::0', port=8025):
         self.handler = handler

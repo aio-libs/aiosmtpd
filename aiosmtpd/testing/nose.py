@@ -1,10 +1,5 @@
 """nose2 test infrastructure."""
 
-__all__ = [
-    'NosePlugin',
-    ]
-
-
 import os
 import re
 import doctest
@@ -33,7 +28,7 @@ class NosePlugin(Plugin):
     def __init__(self):
         super(NosePlugin, self).__init__()
         self.patterns = []
-        def set_debug(ignore):
+        def set_debug(ignore):                      # noqa
             logging.basicConfig(level=logging.DEBUG)
             log = logging.getLogger('mail.log')
             log.setLevel(logging.DEBUG)
@@ -86,8 +81,8 @@ class NosePlugin(Plugin):
         test.shortDescription = lambda: None
         event.extraTests.append(test)
 
-    ## def startTest(self, event):
-    ##     import sys; print('vvvvv', event.test, file=sys.stderr)
+    # def startTest(self, event):
+    #     import sys; print('vvvvv', event.test, file=sys.stderr)
 
-    ## def stopTest(self, event):
-    ##     import sys; print('^^^^^', event.test, file=sys.stderr)
+    # def stopTest(self, event):
+    #     import sys; print('^^^^^', event.test, file=sys.stderr)

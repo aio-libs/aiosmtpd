@@ -1,8 +1,3 @@
-__all__ = [
-    'main',
-    ]
-
-
 import os
 import sys
 import signal
@@ -14,6 +9,7 @@ from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP
 from argparse import ArgumentParser
 from functools import partial
 from importlib import import_module
+from public import public
 
 try:
     import pwd
@@ -98,6 +94,7 @@ def parseargs(args=None):
     return parser, args
 
 
+@public
 def main(args=None):
     parser, args = parseargs(args=args)
 

@@ -78,3 +78,24 @@ like this::
     $ .tox/py35/bin/python -m nose2 -vv -P <pattern>
 
 where *<pattern>* is a Python regular expression matching a test name.
+
+
+Contents
+========
+
+.. toctree::
+   :maxdepth: 2
+
+   aiosmtpd/docs/intro
+   aiosmtpd/docs/controller
+   aiosmtpd/docs/mailbox
+   aiosmtpd/docs/NEWS
+
+
+
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`

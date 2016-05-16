@@ -1,16 +1,12 @@
-__all__ = [
-    'SMTP',
-    ]
-
-
 import socket
-import logging
 import asyncio
+import logging
 import collections
 
-from enum import Enum
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
+from enum import Enum
+from public import public
 
 
 __version__ = '1.0a2'
@@ -27,6 +23,7 @@ class State(Enum):
     data = 1
 
 
+@public
 class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
     command_size_limits = collections.defaultdict(
@@ -357,7 +354,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def smtp_RCPT(self, arg):
         if not self.seen_greeting:
-            yield from self.push('503 Error: send HELO first');
+            yield from self.push('503 Error: send HELO first')
             return
         log.debug('===> RCPT %s', arg)
         if not self.mailfrom:
@@ -402,7 +399,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def smtp_DATA(self, arg):
         if not self.seen_greeting:
-            yield from self.push('503 Error: send HELO first');
+            yield from self.push('503 Error: send HELO first')
             return
         if not self.rcpttos:
             yield from self.push('503 Error: need RCPT command')

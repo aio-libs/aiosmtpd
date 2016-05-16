@@ -26,3 +26,4 @@ nosetests.xml
 __pycache__/
 py34-cov
 py35-cov
+htmlcov

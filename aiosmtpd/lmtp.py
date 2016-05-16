@@ -1,13 +1,10 @@
-__all__ = [
-    'LMTP',
-    ]
-
-
 import asyncio
 
 from aiosmtpd.smtp import SMTP
+from public import public
 
 
+@public
 class LMTP(SMTP):
     @asyncio.coroutine
     def smtp_LHLO(self, arg):

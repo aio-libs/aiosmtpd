@@ -1,17 +1,11 @@
 """Test the SMTP protocol."""
 
-__all__ = [
-    'TestSMTP',
-    'TestSMTPWithController',
-    ]
-
-
 import socket
 import unittest
 
-from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
+from aiosmtpd.smtp import SMTP as Server
 from smtplib import SMTP, SMTPDataError
 
 

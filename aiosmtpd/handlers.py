@@ -7,20 +7,12 @@ your own handling of messages.  Implement only the methods you care about.
 """
 
 
-__all__ = [
-    'Debugging',
-    'Mailbox',
-    'Message',
-    'Proxy',
-    'Sink',
-    ]
-
-
 import sys
 import logging
 import mailbox
 
 from email import message_from_bytes, message_from_string
+from public import public
 
 
 COMMASPACE = ', '
@@ -28,6 +20,7 @@ NEWLINE = '\n'
 log = logging.getLogger('mail.debug')
 
 
+@public
 class Debugging:
     def __init__(self, stream=None):
         self.stream = sys.stdout if stream is None else stream
@@ -79,6 +72,7 @@ class Debugging:
         print('------------ END MESSAGE ------------', file=self.stream)
 
 
+@public
 class Proxy:
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         lines = data.split('\n')
@@ -119,6 +113,7 @@ class Proxy:
         return refused
 
 
+@public
 class Sink:
     @classmethod
     def from_cli(cls, parser, *args):
@@ -130,6 +125,7 @@ class Sink:
         pass                                        # pragma: no cover
 
 
+@public
 class Message:
     def __init__(self, message_class=None):
         self.message_class = message_class
@@ -152,6 +148,7 @@ class Message:
         raise NotImplementedError                   # pragma: no cover
 
 
+@public
 class Mailbox(Message):
     def __init__(self, mail_dir, message_class=None):
         self.mailbox = mailbox.Maildir(mail_dir)

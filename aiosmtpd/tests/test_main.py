@@ -1,17 +1,10 @@
-__all__ = [
-    'TestLoop',
-    'TestMain',
-    'TestParseArgs',
-    ]
-
-
 import signal
 import asyncio
 import logging
 import unittest
 
-from aiosmtpd.main import main, parseargs
 from aiosmtpd.handlers import Debugging
+from aiosmtpd.main import main, parseargs
 from aiosmtpd.smtp import SMTP
 from contextlib import ExitStack
 from functools import partial
@@ -46,7 +39,7 @@ class TestMain(unittest.TestCase):
         self.addCleanup(log.setLevel, old_log_level)
         loop = asyncio.get_event_loop()
         self.resources = ExitStack()
-        def run_forever(*args):
+        def run_forever(*args):                     # noqa
             pass
         self.resources.enter_context(
             patch.object(loop, 'run_forever', run_forever))

@@ -1,18 +1,10 @@
-__all__ = [
-    'TestCLI',
-    'TestDebugging',
-    'TestMailbox',
-    'TestMessage',
-    ]
-
-
 import os
 import sys
 import unittest
 
-from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Debugging, Mailbox, Message, Sink
+from aiosmtpd.smtp import SMTP as Server
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter

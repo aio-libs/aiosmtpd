@@ -1,11 +1,6 @@
 """Test other aspects of the server implementation."""
 
 
-__all__ = [
-    'TestServer',
-    ]
-
-
 import unittest
 
 from aiosmtpd.controller import Controller

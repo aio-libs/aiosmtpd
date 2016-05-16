@@ -7,23 +7,27 @@ __version__ = get_version('aiosmtpd/smtp.py')
 
 
 setup(
-    name            = 'aiosmtpd',
-    version         = __version__,
-    description     = 'aiosmtpd - asyncio based SMTP server',
-    long_description= """\
+    name='aiosmtpd',
+    version=__version__,
+    description='aiosmtpd - asyncio based SMTP server',
+    long_description="""\
 This is a server for SMTP and related protocols, similar in utility to the
 standard library's smtpd.py module, but rewritten to be based on asyncio for
 Python 3.""",
-    author          = 'https://gitlab.com/groups/python-smtpd-hackers',
-    url             = 'https://gitlab.com/python-smtpd-hackers/aiosmtpd',
-    keywords        = 'email',
-    packages= find_packages(),
-    include_package_data = True,
-    license = 'http://www.apache.org/licenses/LICENSE-2.0',
+    author='https://gitlab.com/groups/python-smtpd-hackers',
+    url='https://gitlab.com/python-smtpd-hackers/aiosmtpd',
+    keywords='email',
+    packages=find_packages(),
+    include_package_data=True,
+    license='http://www.apache.org/licenses/LICENSE-2.0',
+    install_requires=[
+        'atpublic',
+        ],
     entry_points={
         'console_scripts': ['smtpd = aiosmtpd.main:main'],
+        'flake8.extension': ['B40 = public.tests.flake8:ImportOrder'],
         },
-    classifiers = [
+    classifiers=[
         'License :: OSI Approved',
         'Intended Audience :: Developers',
         'Programming Language :: Python :: 3.4',

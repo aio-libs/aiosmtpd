@@ -1,10 +1,5 @@
 """Test the LMTP protocol."""
 
-__all__ = [
-    'TestLMTP',
-    ]
-
-
 import socket
 import unittest
 
