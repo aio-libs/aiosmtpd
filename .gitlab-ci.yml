@@ -1,10 +1,10 @@
-qa:
-  script:
-    - tox -e qa
-
 tests:
   script:
     - tox
+
+qa:
+  script:
+    - tox -e qa
 
 coverage:
   script:
