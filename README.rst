@@ -41,8 +41,8 @@ Project details
 
 * Project home: https://gitlab.com/python-smtpd-hackers/aiosmtpd
 * Report bugs at: https://gitlab.com/python-smtpd-hackers/aiosmtpd/issues
-* Code hosting: git@gitlab.com:python-smtpd-hackers/aiosmtpd.git
-* Documentation: http://aiosmtpd.readthedocs.org/
+* Git clone: https://gitlab.com/python-smtpd-hackers/aiosmtpd.git
+* Documentation: http://aiosmtpd.readthedocs.io/
 
 The best way to contact the developers is through the GitLab links above.
 
