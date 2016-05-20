@@ -10,6 +10,7 @@ your own handling of messages.  Implement only the methods you care about.
 import sys
 import logging
 import mailbox
+import smtplib
 
 from email import message_from_bytes, message_from_string
 from public import public
@@ -62,10 +63,10 @@ class Debugging:
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         print('---------- MESSAGE FOLLOWS ----------', file=self.stream)
         if kws:
-            if kws.get('mail_options'):
+            if 'mail_options' in kws:
                 print('mail options: %s' % kws['mail_options'],
                       file=self.stream)
-            if kws.get('rcpt_options'):
+            if 'rcpt_options' in kws:
                 print('rcpt options: %s\n' % kws['rcpt_options'],
                       file=self.stream())
         self._print_message_content(peer, data)
@@ -74,11 +75,15 @@ class Debugging:
 
 @public
 class Proxy:
+    def __init__(self, remote_hostname, remote_port):
+        self._hostname = remote_hostname
+        self._port = remote_port
+
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         lines = data.split('\n')
         # Look for the last header
         i = 0
-        for line in lines:
+        for line in lines:                          # pragma: no branch
             if not line:
                 break
             i += 1
@@ -89,11 +94,10 @@ class Proxy:
         log.info('we got some refusals: %s', refused)
 
     def _deliver(self, mailfrom, rcpttos, data):
-        import smtplib
         refused = {}
         try:
             s = smtplib.SMTP()
-            s.connect(self._remoteaddr[0], self._remoteaddr[1])
+            s.connect(self._hostname, self._port)
             try:
                 refused = s.sendmail(mailfrom, rcpttos, data)
             finally:
@@ -104,7 +108,7 @@ class Proxy:
         except (OSError, smtplib.SMTPException) as e:
             log.exception('got', e.__class__)
             # All recipients were refused.  If the exception had an associated
-            # error code, use it.  Otherwise,fake it with a non-triggering
+            # error code, use it.  Otherwise, fake it with a non-triggering
             # exception code.
             errcode = getattr(e, 'smtp_code', -1)
             errmsg = getattr(e, 'smtp_error', 'ignore')

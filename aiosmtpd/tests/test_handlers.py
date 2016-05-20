@@ -3,13 +3,15 @@ import sys
 import unittest
 
 from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import Debugging, Mailbox, Message, Sink
+from aiosmtpd.handlers import Debugging, Mailbox, Message, Proxy, Sink
 from aiosmtpd.smtp import SMTP as Server
+from contextlib import ExitStack
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
-from smtplib import SMTP
+from smtplib import SMTP, SMTPRecipientsRefused
 from tempfile import TemporaryDirectory
+from unittest.mock import call, patch
 
 
 class UTF8Controller(Controller):
@@ -23,8 +25,8 @@ class TestDebugging(unittest.TestCase):
         handler = Debugging(self.stream)
         controller = UTF8Controller(handler)
         controller.start()
-        self.address = (controller.hostname, controller.port)
         self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
 
     def test_debugging(self):
         with SMTP(*self.address) as client:
@@ -35,6 +37,38 @@ Subject: A test
 
 Testing
 """)
+        text = self.stream.getvalue()
+        self.assertMultiLineEqual(text, """\
+---------- MESSAGE FOLLOWS ----------
+From: Anne Person <anne@example.com>
+To: Bart Person <bart@example.com>
+Subject: A test
+X-Peer: ::1
+
+Testing
+------------ END MESSAGE ------------
+""")
+
+
+class TestDebuggingOptions(unittest.TestCase):
+    def setUp(self):
+        self.stream = StringIO()
+        handler = Debugging(self.stream)
+        controller = Controller(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    @unittest.skip('hangs')
+    def test_debugging_with_options(self):
+        with SMTP(*self.address) as client:
+            client.sendmail('anne@example.com', ['bart@example.com'], """\
+From: Anne Person <anne@example.com>
+To: Bart Person <bart@example.com>
+Subject: A test
+
+Testing
+""", mail_options=['BODY=7BIT'])
         text = self.stream.getvalue()
         self.assertMultiLineEqual(text, """\
 ---------- MESSAGE FOLLOWS ----------
@@ -111,7 +145,7 @@ class TestMailbox(unittest.TestCase):
         self.tempdir = TemporaryDirectory()
         self.addCleanup(self.tempdir.cleanup)
         self.maildir_path = os.path.join(self.tempdir.name, 'maildir')
-        handler = Mailbox(self.maildir_path)
+        self.handler = handler = Mailbox(self.maildir_path)
         controller = Controller(handler)
         controller.start()
         self.addCleanup(controller.stop)
@@ -152,6 +186,21 @@ Hi Fred, this is Elle.
         self.assertEqual(
             list(message['message-id'] for message in messages),
             ['<ant>', '<bee>', '<cat>'])
+
+    def test_mailbox_reset(self):
+        with SMTP(*self.address) as client:
+            client.sendmail(
+                'aperson@example.com', ['bperson@example.com'], """\
+From: Anne Person <anne@example.com>
+To: Bart Person <bart@example.com>
+Subject: A test
+Message-ID: <ant>
+
+Hi Bart, this is Anne.
+""")
+        self.handler.reset()
+        mailbox = Maildir(self.maildir_path)
+        self.assertEqual(list(mailbox), [])
 
 
 class FakeParser:
@@ -207,3 +256,77 @@ class TestCLI(unittest.TestCase):
             Sink.from_cli, self.parser, 'foo')
         self.assertEqual(
             self.parser.message, 'Sink handler does not accept arguments')
+
+
+class TestProxy(unittest.TestCase):
+    def setUp(self):
+        self.stream = StringIO()
+        handler = Proxy('localhost', 9025)
+        controller = UTF8Controller(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+        self.message = """\
+From: Anne Person <anne@example.com>
+To: Bart Person <bart@example.com>
+Subject: A test
+
+Testing
+"""
+
+    def test_deliver(self):
+        with ExitStack() as resources:
+            mock = resources.enter_context(
+                patch('aiosmtpd.handlers.smtplib.SMTP'))
+            client = resources.enter_context(SMTP(*self.address))
+            client.sendmail(
+                'anne@example.com', ['bart@example.com'], self.message)
+            client.quit()
+            mock().connect.assert_called_once_with('localhost', 9025)
+            mock().sendmail.assert_called_once_with(
+                'anne@example.com', ['bart@example.com'], """\
+From: Anne Person <anne@example.com>
+To: Bart Person <bart@example.com>
+Subject: A test
+X-Peer: ::1
+
+Testing""")
+            mock().quit.assert_called_once_with()
+
+    def test_recipients_refused(self):
+        with ExitStack() as resources:
+            log_mock = resources.enter_context(patch('aiosmtpd.handlers.log'))
+            mock = resources.enter_context(
+                patch('aiosmtpd.handlers.smtplib.SMTP'))
+            mock().sendmail.side_effect = SMTPRecipientsRefused({
+                'bart@example.com': (500, 'Bad Bart'),
+                })
+            client = resources.enter_context(SMTP(*self.address))
+            client.sendmail(
+                'anne@example.com', ['bart@example.com'], self.message)
+            client.quit()
+            # The log contains information about what happened in the proxy.
+            self.assertEqual(
+                log_mock.info.call_args_list, [
+                    call('got SMTPRecipientsRefused'),
+                    call('we got some refusals: %s',
+                         {'bart@example.com': (500, 'Bad Bart')})]
+                )
+
+    def test_oserror(self):
+        with ExitStack() as resources:
+            log_mock = resources.enter_context(patch('aiosmtpd.handlers.log'))
+            mock = resources.enter_context(
+                patch('aiosmtpd.handlers.smtplib.SMTP'))
+            mock().sendmail.side_effect = OSError
+            client = resources.enter_context(SMTP(*self.address))
+            client.sendmail(
+                'anne@example.com', ['bart@example.com'], self.message)
+            client.quit()
+            # The log contains information about what happened in the proxy.
+            self.assertEqual(
+                log_mock.info.call_args_list, [
+                    call('we got some refusals: %s',
+                         {'bart@example.com': (-1, 'ignore')}),
+                    ]
+                )
