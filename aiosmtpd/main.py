@@ -161,7 +161,7 @@ def setup_sock(host, port):
             type_ = socket.AF_INET6
         else:
             type_ = socket.AF_INET
-        info_0 = type_, socket.SOCK_STREAM, 0, "", addr
+        info_0 = type_, socket.SOCK_STREAM, 0, '', addr
         info = info_0,
 
     family, type, proto, canonname, addr = next(iter(info))

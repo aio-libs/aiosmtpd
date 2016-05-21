@@ -21,6 +21,12 @@ NEWLINE = '\n'
 log = logging.getLogger('mail.debug')
 
 
+def _format_peer(peer):
+    # This is a separate function mostly so the test suite can craft a
+    # reproducible output.
+    return 'X-Peer: {!r}'.format(peer)
+
+
 @public
 class Debugging:
     def __init__(self, stream=None):
@@ -49,26 +55,22 @@ class Debugging:
         for line in data.splitlines():
             # Dump the RFC 2822 headers first.
             if in_headers and not line:
-                peerheader = 'X-Peer: ' + peer[0]
-                if not isinstance(data, str):
-                    # decoded_data=false; make header match other binary output
-                    peerheader = repr(peerheader.encode('utf-8'))
-                print(peerheader, file=self.stream)
+                print(_format_peer(peer), file=self.stream)
                 in_headers = False
-            if not isinstance(data, str):
+            if isinstance(data, bytes):
                 # Avoid spurious 'str on bytes instance' warning.
-                line = repr(line)
+                line = line.decode('utf-8', 'replace')
             print(line, file=self.stream)
 
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         print('---------- MESSAGE FOLLOWS ----------', file=self.stream)
         if kws:
-            if 'mail_options' in kws:
+            if 'mail_options' in kws:               # pragma: no branch
                 print('mail options: %s' % kws['mail_options'],
                       file=self.stream)
-            if 'rcpt_options' in kws:
+            if 'rcpt_options' in kws:               # pragma: no branch
                 print('rcpt options: %s\n' % kws['rcpt_options'],
-                      file=self.stream())
+                      file=self.stream)
         self._print_message_content(peer, data)
         print('------------ END MESSAGE ------------', file=self.stream)
 

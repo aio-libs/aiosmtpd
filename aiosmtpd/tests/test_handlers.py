@@ -19,6 +19,11 @@ class UTF8Controller(Controller):
         return Server(self.handler, decode_data=True)
 
 
+def _format_peer_address(peer):
+    # Format only the address bits, which is the only preditable parts.
+    return 'X-Peer: {}'.format(peer[0])
+
+
 class TestDebugging(unittest.TestCase):
     def setUp(self):
         self.stream = StringIO()
@@ -29,7 +34,10 @@ class TestDebugging(unittest.TestCase):
         self.address = (controller.hostname, controller.port)
 
     def test_debugging(self):
-        with SMTP(*self.address) as client:
+        with ExitStack() as resources:
+            client = resources.enter_context(SMTP(*self.address))
+            resources.enter_context(
+                patch('aiosmtpd.handlers._format_peer', _format_peer_address))
             client.sendmail('anne@example.com', ['bart@example.com'], """\
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>
@@ -40,6 +48,44 @@ Testing
         text = self.stream.getvalue()
         self.assertMultiLineEqual(text, """\
 ---------- MESSAGE FOLLOWS ----------
+From: Anne Person <anne@example.com>
+To: Bart Person <bart@example.com>
+Subject: A test
+X-Peer: ::1
+
+Testing
+------------ END MESSAGE ------------
+""")
+
+
+class TestDebuggingBytes(unittest.TestCase):
+    def setUp(self):
+        self.stream = StringIO()
+        handler = Debugging(self.stream)
+        controller = Controller(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_debugging(self):
+        with ExitStack() as resources:
+            client = resources.enter_context(SMTP(*self.address))
+            resources.enter_context(
+                patch('aiosmtpd.handlers._format_peer', _format_peer_address))
+            client.sendmail('anne@example.com', ['bart@example.com'], """\
+From: Anne Person <anne@example.com>
+To: Bart Person <bart@example.com>
+Subject: A test
+
+Testing
+""")
+        text = self.stream.getvalue()
+        # This includes mail and rcpt options because decode_data=False.
+        self.assertMultiLineEqual(text, """\
+---------- MESSAGE FOLLOWS ----------
+mail options: ['SIZE=102']
+rcpt options: []
+
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>
 Subject: A test
