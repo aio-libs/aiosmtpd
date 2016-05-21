@@ -8,7 +8,7 @@ qa:
 
 coverage:
   script:
-    - tox -e coverage
+    - tox -e py34-cov,py35-cov
 
 docs:
   script:
