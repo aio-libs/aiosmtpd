@@ -4,6 +4,8 @@ python:
   - "3.5"
   - "nightly"  # currently points to 3.6-dev
 install:
-  - pip install atpublic tox
+  - pip install tox
+env:
+  - PYTHONASYNCIODEBUG=1
 script:
   - tox
