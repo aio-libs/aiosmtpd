@@ -14,8 +14,8 @@ setup(
 This is a server for SMTP and related protocols, similar in utility to the
 standard library's smtpd.py module, but rewritten to be based on asyncio for
 Python 3.""",
-    author='https://gitlab.com/groups/python-smtpd-hackers',
-    url='https://gitlab.com/python-smtpd-hackers/aiosmtpd',
+    author='https://github.com/aio-libs',
+    url='https://github.com/aio-libs/aiosmtpd',
     keywords='email',
     packages=find_packages(),
     include_package_data=True,

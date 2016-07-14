@@ -39,12 +39,15 @@ License
 Project details
 ===============
 
-* Project home: https://gitlab.com/python-smtpd-hackers/aiosmtpd
-* Report bugs at: https://gitlab.com/python-smtpd-hackers/aiosmtpd/issues
-* Git clone: https://gitlab.com/python-smtpd-hackers/aiosmtpd.git
+As of 2016-07-14, aiosmtpd has been put under the `aio-libs
+<https://github.com/aio-libs>`__ umbrella project and moved to GitHub.
+
+* Project home: https://github.com/aio-libs/aiosmtpd
+* Report bugs at: https://github.com/aio-libs/aiosmtpd/issues
+* Git clone: https://github.com/aio-libs/aiosmtpd.git
 * Documentation: http://aiosmtpd.readthedocs.io/
 
-The best way to contact the developers is through the GitLab links above.
+The best way to contact the developers is through the GitHub links above.
 
 
 Building
