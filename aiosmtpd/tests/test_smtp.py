@@ -4,7 +4,7 @@ import socket
 import unittest
 
 from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import Sink, Mailbox
+from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
 from smtplib import SMTP, SMTPDataError
 
