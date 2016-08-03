@@ -4,7 +4,7 @@ import socket
 import unittest
 
 from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import Sink
+from aiosmtpd.handlers import Sink, Mailbox
 from aiosmtpd.smtp import SMTP as Server
 from smtplib import SMTP, SMTPDataError
 
@@ -31,6 +31,15 @@ class SMTPUTF8Controller(Controller):
 class ErroringHandler:
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         return '499 Could not accept the message'
+
+
+class ReceivingHandler:
+    box = None
+
+    def process_message(self, *args, **kws):
+        if not self.box:
+            self.box = []
+        self.box.append(args)
 
 
 class TestSMTP(unittest.TestCase):
@@ -456,15 +465,38 @@ class TestSMTPWithController(unittest.TestCase):
                 b'Error: message size exceeds fixed maximum message size')
 
     def test_mail_with_compatible_smtputf8(self):
-        controller = SMTPUTF8Controller(Sink())
+        handler = ReceivingHandler()
+        controller = SMTPUTF8Controller(handler)
         controller.start()
         self.addCleanup(controller.stop)
+        recipient = 'bart\xCB@example.com'
+        sender = 'anne\xCB@example.com'
         with SMTP(controller.hostname, controller.port) as client:
             client.ehlo('example.com')
-            code, response = client.docmd(
-                'MAIL FROM: <anne@example.com> SMTPUTF8')
+            client.send(
+                bytes(
+                    'MAIL FROM: <' + sender + '> SMTPUTF8\r\n',
+                    encoding='utf-8'
+                )
+            )
+            code, response = client.getreply()
             self.assertEqual(code, 250)
             self.assertEqual(response, b'OK')
+            client.send(
+                bytes(
+                    'RCPT TO: <' + recipient + '> SMTPUTF8\r\n',
+                    encoding='utf-8'
+                )
+            )
+            code, response = client.getreply()
+            self.assertEqual(code, 250)
+            self.assertEqual(response, b'OK')
+            code, response = client.data("")
+            self.assertEqual(code, 250)
+            self.assertEqual(response, b'OK')
+        self.assertEqual(handler.box[0][2][0], recipient)
+        self.assertEqual(handler.box[0][1], sender)
+
 
     def test_mail_with_unrequited_smtputf8(self):
         controller = SMTPUTF8Controller(Sink())
@@ -527,3 +559,28 @@ Testing
                 self.assertEqual(cm.exception.code, 499)
                 self.assertEqual(cm.exception.response,
                                  b'Could not accept the message')
+
+    def test_rcpt_8bit_user_names(self):
+        handler = ReceivingHandler()
+        controller = Controller(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        recipient = b'bart\xCB@example.com'
+        sender = b'anne\xCB@example.com'
+        with SMTP(controller.hostname, controller.port) as client:
+            client.ehlo('example.com')
+            client.send(b'MAIL FROM:<' + sender + b'>\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 250)
+            self.assertEqual(response, b'OK')
+            client.send(b'RCPT TO:' + recipient + b'\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 250)
+            self.assertEqual(response, b'OK')
+            code, response = client.data("")
+            self.assertEqual(code, 250)
+            self.assertEqual(response, b'OK')
+        self.assertEqual(handler.box[0][2][0],
+                         str(recipient, encoding='latin-1'))
+        self.assertEqual(handler.box[0][1],
+                 str(sender, encoding='latin-1'))

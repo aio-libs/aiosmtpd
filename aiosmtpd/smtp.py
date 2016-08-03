@@ -117,39 +117,45 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def _handle_client(self):
-        log.info('handling connection')
-        yield from self.push('220 %s %s' % (self.fqdn, __version__))
-        while not self.connection_closed:
-            # XXX Put the line limit stuff into the StreamReader?
-            line = yield from self._reader.readline()
-            # XXX this rstrip may not completely preserve old behavior.
-            line = line.decode('utf-8').rstrip('\r\n')
-            log.info('Data: %r', line)
-            if self.smtp_state is not State.command:
-                yield from self.push('451 Internal confusion')
-                continue
-            if not line:
-                yield from self.push('500 Error: bad syntax')
-                continue
-            i = line.find(' ')
-            if i < 0:
-                command = line.upper()
-                arg = None
-            else:
-                command = line[:i].upper()
-                arg = line[i+1:].strip()
-            max_sz = (self.command_size_limits[command]
-                      if self.extended_smtp
-                      else self.command_size_limit)
-            if len(line) > max_sz:
-                yield from self.push('500 Error: line too long')
-                continue
-            method = getattr(self, 'smtp_' + command, None)
-            if not method:
-                yield from self.push(
-                    '500 Error: command "%s" not recognized' % command)
-                continue
-            yield from method(arg)
+        try:
+            log.info('handling connection')
+            yield from self.push('220 %s %s' % (self.fqdn, __version__))
+            while not self.connection_closed:
+                # XlXX Put the line limit stuff into the StreamReader?
+                line = yield from self._reader.readline()
+                # XXX this rstrip may not completely preserve old behavior.
+                try:
+                    line = line.rstrip(b'\r\n')
+                    log.info('Data: %r', line)
+                    if self.smtp_state is not State.command:
+                        yield from self.push('451 Internal confusion')
+                        continue
+                    if not line:
+                        yield from self.push('500 Error: bad syntax')
+                        continue
+                    i = line.find(b' ')
+                    if i < 0:
+                        command = str(line.upper(), encoding='ascii')
+                        arg = None
+                    else:
+                        command = str(line[:i].upper(), encoding='ascii')
+                        arg = line[i + 1:].strip()
+                    max_sz = (self.command_size_limits[command]
+                              if self.extended_smtp
+                              else self.command_size_limit)
+                    if len(line) > max_sz:
+                        yield from self.push('500 Error: line too long')
+                        continue
+                    method = getattr(self, 'smtp_' + command, None)
+                    if not method:
+                        yield from self.push(
+                            '500 Error: command "%s" not recognized' % command)
+                        continue
+                    yield from method(arg)
+                except Exception as e:
+                    yield from self.push('500 Error: %s' % e)
+        finally:
+            self.close()
 
     # SMTP and ESMTP commands
     @asyncio.coroutine
@@ -162,7 +168,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push('503 Duplicate HELO/EHLO')
             return
         self._set_rset_state()
-        self.seen_greeting = hostname
+        self.seen_greeting = str(hostname, encoding='latin-1')
         yield from self.push('250 %s' % self.fqdn)
 
     @asyncio.coroutine
@@ -175,7 +181,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push('503 Duplicate HELO/EHLO')
             return
         self._set_rset_state()
-        self.seen_greeting = arg
+        self.seen_greeting = str(arg, encoding='latin-1')
         self.extended_smtp = True
         yield from self.push('250-%s' % self.fqdn)
         if self.data_size_limit:
@@ -242,7 +248,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def smtp_HELP(self, arg):
         if arg:
             extended = ' [SP <mail-parameters>]'
-            lc_arg = arg.upper()
+            lc_arg = str(arg, encoding='latin-1').upper()
             if lc_arg == 'EHLO':
                 yield from self.push('250 Syntax: EHLO hostname')
             elif lc_arg == 'HELO':
@@ -279,6 +285,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def smtp_VRFY(self, arg):
         if arg:
+            arg = str(arg, encoding='latin-1')
             try:
                 address, params = self._getaddr(arg)
             except HeaderParseError:
@@ -297,6 +304,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not self.seen_greeting:
             yield from self.push('503 Error: send HELO first')
             return
+        if arg:
+            arg = str(arg, encoding='latin-1')
         log.debug('===> MAIL %s', arg)
         syntaxerr = '501 Syntax: MAIL FROM: <address>'
         if self.extended_smtp:
@@ -333,6 +342,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             elif smtputf8 is not False:
                 yield from self.push('501 Error: SMTPUTF8 takes no arguments')
                 return
+        if self.require_SMTPUTF8:
+            address = address.encode('latin-1').decode('utf-8')
         size = params.pop('SIZE', None)
         if size:
             if isinstance(size, bool) or not size.isdigit():
@@ -356,6 +367,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not self.seen_greeting:
             yield from self.push('503 Error: send HELO first')
             return
+        if arg:
+            arg = str(arg, encoding='latin-1')
         log.debug('===> RCPT %s', arg)
         if not self.mailfrom:
             yield from self.push('503 Error: need MAIL command')
@@ -379,6 +392,15 @@ class SMTP(asyncio.StreamReaderProtocol):
         if params is None:
             yield from self.push(syntaxerr)
             return
+        if self.enable_SMTPUTF8:
+            smtputf8 = params.pop('SMTPUTF8', False)
+            if smtputf8 is True:
+                self.require_SMTPUTF8 = True
+            elif smtputf8 is not False:
+                yield from self.push('501 Error: SMTPUTF8 takes no arguments')
+                return
+        if self.require_SMTPUTF8:
+            address = address.encode('latin-1').decode('utf-8')
         # XXX currently there are no options we recognize.
         if len(params.keys()) > 0:
             yield from self.push(
