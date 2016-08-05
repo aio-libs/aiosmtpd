@@ -118,13 +118,25 @@ class SMTP(asyncio.StreamReaderProtocol):
         yield from self._writer.drain()
 
     @asyncio.coroutine
+    def handle_exception(self, e):
+        if hasattr(self.event_handler, 'handle_exception'):
+            yield from self.event_handler.handle_exception(e)
+
+    @asyncio.coroutine
     def _handle_client(self):
         try:
             log.info('handling connection')
             yield from self.push('220 %s %s' % (self.fqdn, __version__))
             while not self.connection_closed:
                 # XlXX Put the line limit stuff into the StreamReader?
-                line = yield from self._reader.readline()
+                try:
+                    line = yield from self._reader.readline()
+                    if not line.endswith(b'\r\n'):
+                        raise asyncio.streams.IncompleteReadError(line, None)
+                except asyncio.streams.IncompleteReadError as exc:
+                    if exc.partial:
+                        yield from self.handle_exception(exc)
+                    break
                 # XXX this rstrip may not completely preserve old behavior.
                 try:
                     line = line.rstrip(b'\r\n')
@@ -156,6 +168,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                     yield from method(arg)
                 except Exception as e:
                     yield from self.push('500 Error: %s' % e)
+                    yield from self.handle_exception(e)
         finally:
             self.close()
 
@@ -467,21 +480,28 @@ class SMTP(asyncio.StreamReaderProtocol):
         yield from self.push('354 End data with <CR><LF>.<CR><LF>')
         data = []
         self.num_bytes = 0
+        size_exceeded = False
         while not self.connection_closed:
             line = yield from self._reader.readline()
             if line == b'.\r\n':
                 break
             self.num_bytes += len(line)
-            if self.data_size_limit and self.num_bytes > self.data_size_limit:
-                yield from self.push('552 Error: Too much mail data')
+            if (not size_exceeded) and self.data_size_limit and \
+                            self.num_bytes > self.data_size_limit:
+                size_exceeded = True
             # XXX this rstrip may not exactly preserve the old behavior
-            line = line.rstrip(b'\r\n')
-            data.append(line)
+            if not size_exceeded:
+                line = line.rstrip(b'\r\n')
+                data.append(line)
+        if size_exceeded:
+            yield from self.push('552 Error: Too much mail data')
+            self._set_post_data_state()
+            return
         # Remove extraneous carriage returns and de-transparency
         # according to RFC 5321, Section 4.5.2.
         for i in range(len(data)):
             text = data[i]
-            if text and text[0] == self._dotsep:
+            if text and text[:1] == b'.':
                 data[i] = text[1:]
         self.received_data = b'\n'.join(data)
         if self._decode_data:

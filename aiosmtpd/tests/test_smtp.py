@@ -2,16 +2,25 @@
 
 import socket
 import unittest
+import asyncio
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
-from smtplib import SMTP, SMTPDataError
-
+from smtplib import SMTP, SMTPDataError, SMTPResponseException
 
 class UTF8Controller(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True)
+
+
+class StrictASCIIController(Controller):
+    def factory(self):
+        return Server(
+            self.handler,
+            decode_data=True,
+            default_8bit_encoding='ascii'
+        )
 
 
 class SizedController(Controller):
@@ -29,8 +38,14 @@ class SMTPUTF8Controller(Controller):
 
 
 class ErroringHandler:
+    error = None
+
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         return '499 Could not accept the message'
+
+    @asyncio.coroutine
+    def handle_exception(self, e):
+        self.error = e
 
 
 class ReceivingHandler:
@@ -497,7 +512,6 @@ class TestSMTPWithController(unittest.TestCase):
         self.assertEqual(handler.box[0][2][0], recipient)
         self.assertEqual(handler.box[0][1], sender)
 
-
     def test_mail_with_unrequited_smtputf8(self):
         controller = SMTPUTF8Controller(Sink())
         controller.start()
@@ -560,27 +574,198 @@ Testing
                 self.assertEqual(cm.exception.response,
                                  b'Could not accept the message')
 
-    def test_rcpt_8bit_user_names(self):
-        handler = ReceivingHandler()
-        controller = Controller(handler)
+    def test_too_long_message_body(self):
+        controller = SizedController(Sink(), size=100)
         controller.start()
         self.addCleanup(controller.stop)
-        recipient = b'bart\xCB@example.com'
-        sender = b'anne\xCB@example.com'
         with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = '\r\n'.join(['z' * 20] * 10)
+            with self.assertRaises(SMTPResponseException) as ctx:
+                client.sendmail('anne@example.com', ['bart@example.com'], mail)
+            e = ctx.exception
+            self.assertEqual(e.smtp_code, 552)
+            self.assertEqual(e.smtp_error, b'Error: Too much mail data')
+
+    def test_dots_escaped(self):
+        handler = ReceivingHandler()
+        controller = UTF8Controller(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = '\r\n'.join([
+                'Test', '.', 'mail'
+            ])
+            client.sendmail('anne@example.com', ['bart@example.com'], mail)
+        self.assertEqual(len(handler.box), 1)
+        mail = handler.box[0]
+        self.assertEqual(mail[3], 'Test\n.\nmail')
+
+    def test_incomplete_read_error_logged(self):
+        handler = ErroringHandler()
+        controller = UTF8Controller(handler)
+        controller.start()
+        try:
+            # repeat twice to prevent loop be closed before
+            # event will be logged
+            for i in range(2):
+                client = SMTP(controller.hostname, controller.port)
+                try:
+                    client.send('HELO')
+                finally:
+                    client.close()
+        finally:
+            controller.stop()
+        self.assertIsInstance(handler.error,
+                              asyncio.streams.IncompleteReadError)
+
+    def test_unexpected_errors(self):
+        class ErrorSMTP(Server):
+            @asyncio.coroutine
+            def smtp_HELO(self, hostname):
+                raise ValueError('test')
+
+        class ErrorController(Controller):
+            def factory(self):
+                return ErrorSMTP(self.handler)
+
+        handler = ErroringHandler()
+        controller = ErrorController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            code, response = client.helo('example.com')
+        self.assertEqual(code, 500)
+        self.assertEqual(response, b'Error: test')
+        self.assertIsInstance(handler.error, ValueError)
+
+
+class Test8bitEncodings(unittest.TestCase):
+    def setUp(self):
+        self.controller = UTF8Controller(Sink)
+        self.controller.start()
+        self.addCleanup(self.controller.stop)
+        self.address = (self.controller.hostname, self.controller.port)
+
+    def test_bad_helo(self):
+        with SMTP(*self.address) as client:
+            client.send(b'HELO \xFF\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 250)
+
+    def test_bad_ehlo(self):
+        with SMTP(*self.address) as client:
+            client.send(b'EHLO \xFF\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 250)
+
+    def test_bad_help(self):
+        with SMTP(*self.address) as client:
+            client.send(b'help \xFF\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 501)
+
+    def test_8bit_mail(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('test')
+            client.send(b'MAIL FROM:ann\xFF@example.com\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 250)
+
+    def test_8bit_rcpt(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('test')
+            client.mail('anne@example.com')
+            client.send(b'RCPT TO:\xFF\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 250)
+
+
+class TestBadEncodings(unittest.TestCase):
+    def setUp(self):
+        self.controller = StrictASCIIController(Sink)
+        self.controller.start()
+        self.addCleanup(self.controller.stop)
+        self.address = (self.controller.hostname, self.controller.port)
+
+    def test_bad_helo(self):
+        with SMTP(*self.address) as client:
+            client.send(b'HELO \xFF\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 250)
+
+    def test_bad_ehlo(self):
+        with SMTP(*self.address) as client:
+            client.send(b'EHLO \xFF\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 250)
+
+    def test_bad_help(self):
+        with SMTP(*self.address) as client:
+            client.send(b'help \xFF\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 501)
+
+    def test_8bit_mail(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('test')
+            client.send(b'MAIL FROM:ann\xFF@example.com\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 501)
+
+    def test_8bit_rcpt(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('test')
+            client.mail('anne@example.com')
+            client.send(b'RCPT TO:\xFF\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 501)
+
+
+class TestBadBody(unittest.TestCase):
+    def setUp(self):
+        controller = SMTPUTF8Controller(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_rcpt_bad_body(self):
+        with SMTP(*self.address) as client:
             client.ehlo('example.com')
-            client.send(b'MAIL FROM:<' + sender + b'>\r\n')
-            code, response = client.getreply()
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'OK')
-            client.send(b'RCPT TO:' + recipient + b'\r\n')
-            code, response = client.getreply()
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'OK')
-            code, response = client.data("")
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'OK')
-        self.assertEqual(handler.box[0][2][0],
-                         str(recipient, encoding='latin-1'))
-        self.assertEqual(handler.box[0][1],
-                 str(sender, encoding='latin-1'))
+            client.mail('anne@example.com')
+            code, response = client.docmd(
+                'RCPT TO: <anne@example.com> BODY=UTF8')
+            self.assertEqual(code, 555)
+            self.assertEqual(
+                response,
+                b'RCPT TO parameters not recognized or not implemented'
+            )
+
+    def test_data_arg(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            client.mail('anne@example.com')
+            client.rcpt('anne@example.com')
+            code, response = client.docmd('DATA BODY=UTF8')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: DATA')
+
+    def test_too_long_command(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('HELLO')
+            code, response = client.docmd('HELLO ' + 'z' * 512)
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Error: line too long')
+
+    def test_unknown_command(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('ZZ')
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Error: command "ZZ" not recognized')
+
+    def test_empty_command(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('')
+        self.assertEqual(code, 500)
+        self.assertEqual(response, b'Error: bad syntax')
