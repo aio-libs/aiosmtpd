@@ -484,7 +484,7 @@ class TestSMTPWithController(unittest.TestCase):
             self.assertEqual(response, b'OK')
             client.send(
                 bytes(
-                    'RCPT TO: <' + recipient + '> SMTPUTF8\r\n',
+                    'RCPT TO: <' + recipient + '>\r\n',
                     encoding='utf-8'
                 )
             )
