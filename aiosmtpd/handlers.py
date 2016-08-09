@@ -6,7 +6,7 @@ Pass in an instance of one of these classes, or derive your own, to provide
 your own handling of messages.  Implement only the methods you care about.
 """
 
-
+import asyncio
 import sys
 import logging
 import mailbox
@@ -136,7 +136,7 @@ class Message:
     def __init__(self, message_class=None):
         self.message_class = message_class
 
-    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
+    def prepare_message(self, peer, mailfrom, rcpttos, data, **kws):
         # If the server was created with decode_data True, then data will be a
         # str, otherwise it will be bytes.
         if isinstance(data, bytes):
@@ -148,9 +148,30 @@ class Message:
         message['X-Peer'] = str(peer)
         message['X-MailFrom'] = mailfrom
         message['X-RcptTos'] = COMMASPACE.join(rcpttos)
+
+        return message
+
+    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
+        message = self.prepare_message(peer, mailfrom, rcpttos, data, **kws)
         self.handle_message(message)
 
     def handle_message(self, message):
+        raise NotImplementedError                   # pragma: no cover
+
+
+@public
+class AsyncMessage(Message):
+    def __init__(self, message_class=None, *, loop=None):
+        super().__init__(message_class)
+        self.loop = loop or asyncio.get_event_loop()
+
+    @asyncio.coroutine
+    def process_message(self, peer, mailfrom, rcpttos, data, *, loop, **kws):
+        message = self.prepare_message(peer, mailfrom, rcpttos, data, **kws)
+        yield from self.handle_message(message, loop=loop)
+
+    @asyncio.coroutine
+    def handle_message(self, message, *, loop):
         raise NotImplementedError                   # pragma: no cover
 
 
