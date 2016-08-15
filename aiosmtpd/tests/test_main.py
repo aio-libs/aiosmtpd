@@ -40,7 +40,7 @@ class TestMain(unittest.TestCase):
         self.addCleanup(log.setLevel, old_log_level)
         loop = asyncio.get_event_loop()
         self.resources = ExitStack()
-        def run_forever(*args):                     # noqa
+        def run_forever(*args):                     # noqa: E301
             pass
         self.resources.enter_context(
             patch.object(loop, 'run_forever', run_forever))
