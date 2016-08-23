@@ -88,11 +88,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._reader = reader
         self._writer = writer
 
-    def connection_lost(self, exc):
-        if exc is not None:
-            self._handler_coroutine.cancel()
-        super().connection_lost(exc)
-
     def eof_received(self):
         self._handler_coroutine.cancel()
         return super().eof_received()
