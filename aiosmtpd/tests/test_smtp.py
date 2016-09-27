@@ -86,7 +86,8 @@ class TestSMTP(unittest.TestCase):
             lines = response.splitlines()
             self.assertEqual(lines[0], bytes(socket.getfqdn(), 'utf-8'))
             self.assertEqual(lines[1], b'SIZE 33554432')
-            self.assertEqual(lines[2], b'HELP')
+            self.assertEqual(lines[2], b'AUTH PLAIN')
+            self.assertEqual(lines[3], b'HELP')
 
     def test_ehlo_duplicate(self):
         with SMTP(*self.address) as client:
@@ -151,7 +152,7 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 250)
             self.assertEqual(response,
                              b'Supported commands: EHLO HELO MAIL RCPT '
-                             b'DATA RSET NOOP QUIT VRFY')
+                             b'DATA RSET NOOP QUIT VRFY AUTH')
 
     def test_help_helo(self):
         with SMTP(*self.address) as client:
@@ -238,7 +239,7 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 501)
             self.assertEqual(response,
                              b'Supported commands: EHLO HELO MAIL RCPT '
-                             b'DATA RSET NOOP QUIT VRFY')
+                             b'DATA RSET NOOP QUIT VRFY AUTH')
 
     def test_expn(self):
         with SMTP(*self.address) as client:
