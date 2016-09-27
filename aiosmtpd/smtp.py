@@ -2,6 +2,7 @@ import socket
 import asyncio
 import logging
 import collections
+from base64 import b64decode
 
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
@@ -72,6 +73,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  hostname=None,
                  tls_context=None,
                  require_starttls=False,
+                 auth_method=lambda loggin, password: False,
                  loop=None):
         self.__ident__ = __ident__
         self.loop = loop if loop else make_loop()
@@ -83,6 +85,20 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.data_size_limit = data_size_limit
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self._decode_data = decode_data
+        if decode_data:
+            self._emptystring = ''
+            self._linesep = '\r\n'
+            self._dotsep = '.'
+            self._newline = NEWLINE
+        else:
+            self._emptystring = b''
+            self._linesep = b'\r\n'
+            self._dotsep = ord(b'.')
+            self._newline = b'\n'
+        self.auth_method = auth_method
+        self._set_rset_state()
+        self.seen_greeting = ''
+        self.extended_smtp = False
         self.command_size_limits.clear()
         if hostname:
             self.hostname = hostname
@@ -384,6 +400,33 @@ class SMTP(asyncio.StreamReaderProtocol):
         # Start handshake.
         self._tls_protocol.connection_made(socket_transport)
 
+    def smtp_AUTH(self, arg):
+        try:
+            method, blob = arg.split(" ", 2)
+        except ValueError:  # not enough args
+            yield from self.push('500 value is missing')
+            return
+        if method != 'PLAIN':
+            yield from self.push('500 PLAIN method or die')
+            return
+        try:
+            _, login, password = b64decode(blob).split(b"\x00")
+        except ValueError:  # not enough args
+            yield from self.push("500 Can't decode auth value")
+            return
+        if self.auth_method(login, password):
+            yield from self.push('235 2.7.0 Authentication successful')
+        else:
+            yield from self.push('535 5.7.8 Authentication credentials '
+                                 'invalid')
+
+    @asyncio.coroutine
+    def close(self):
+        # XXX this close is probably not quite right.
+        if self._writer:
+            self._writer.close()
+        self._connection_closed = True
+
     def _strip_command_keyword(self, keyword, arg):
         keylen = len(keyword)
         if arg[:keylen].upper() == keyword:
@@ -439,14 +482,16 @@ class SMTP(asyncio.StreamReaderProtocol):
                 yield from self.push('250 Syntax: QUIT')
             elif lc_arg == 'VRFY':
                 yield from self.push('250 Syntax: VRFY <address>')
+            elif lc_arg == 'AUTH':
+                yield from self.push('250 Syntax: AUTH PLAIN')
             else:
                 yield from self.push(
                     '501 Supported commands: EHLO HELO MAIL RCPT '
-                    'DATA RSET NOOP QUIT VRFY')
+                    'DATA RSET NOOP QUIT VRFY AUTH')
         else:
             yield from self.push(
                 '250 Supported commands: EHLO HELO MAIL RCPT DATA '
-                'RSET NOOP QUIT VRFY')
+                'RSET NOOP QUIT VRFY AUTH')
 
     @asyncio.coroutine
     def smtp_VRFY(self, arg):
