@@ -88,11 +88,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._reader = reader
         self._writer = writer
 
-    def connection_lost(self, exc):
-        log.exception('Disconnect')
-        self._connection_closed = True
-        super().connection_lost(exc)
-        yield from self._handler_coroutine
+    def eof_received(self):
+        self._handler_coroutine.cancel()
+        return super().eof_received()
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
