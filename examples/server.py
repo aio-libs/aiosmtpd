@@ -1,8 +1,8 @@
 import asyncio
 import logging
 
-from aiosmtpd.handlers import Sink
 from aiosmtpd.controller import Controller
+from aiosmtpd.handlers import Sink
 
 
 async def amain(loop):
