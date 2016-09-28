@@ -1,7 +1,7 @@
-from smtplib import *
+from smtplib import SMTP
 
-s = SMTP()
-s.connect('localhost', 9978)
+
+s = SMTP('localhost', 8025)
 s.sendmail('anne@example.com', ['bart@example.com'], """\
 From: anne@example.com
 To: bart@example.com
