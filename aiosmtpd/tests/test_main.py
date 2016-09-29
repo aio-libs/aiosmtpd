@@ -179,6 +179,7 @@ class TestLoop(unittest.TestCase):
         self.assertEqual(len(positional[0].args), 1)
         self.assertIsInstance(positional[0].args[0], Debugging)
         self.assertEqual(positional[0].keywords, dict(
+            auth_required=False,
             data_size_limit=None,
             enable_SMTPUTF8=False))
         self.assertEqual(list(keywords), ['sock'])
@@ -206,6 +207,7 @@ class TestLoop(unittest.TestCase):
         main(('-n', '-s', '3000'))
         positional, keywords = self.create_server.call_args
         self.assertEqual(positional[0].keywords, dict(
+            auth_required=False,
             data_size_limit=3000,
             enable_SMTPUTF8=False))
 
@@ -215,6 +217,7 @@ class TestLoop(unittest.TestCase):
         main(('-n', '--size', '3000'))
         positional, keywords = self.create_server.call_args
         self.assertEqual(positional[0].keywords, dict(
+            auth_required=False,
             data_size_limit=3000,
             enable_SMTPUTF8=False))
 
@@ -224,6 +227,7 @@ class TestLoop(unittest.TestCase):
         main(('-n', '-u'))
         positional, keywords = self.create_server.call_args
         self.assertEqual(positional[0].keywords, dict(
+            auth_required=False,
             data_size_limit=None,
             enable_SMTPUTF8=True))
 
@@ -233,6 +237,7 @@ class TestLoop(unittest.TestCase):
         main(('-n', '--smtputf8'))
         positional, keywords = self.create_server.call_args
         self.assertEqual(positional[0].keywords, dict(
+            auth_required=False,
             data_size_limit=None,
             enable_SMTPUTF8=True))
 
