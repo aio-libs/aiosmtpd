@@ -74,6 +74,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  tls_context=None,
                  require_starttls=False,
                  auth_method=lambda loggin, password: False,
+                 auth_required=False,
                  loop=None):
         self.__ident__ = __ident__
         self.loop = loop if loop else make_loop()
@@ -98,7 +99,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.auth_method = auth_method
         self._set_rset_state()
         self.seen_greeting = ''
-        self.autheticated = False
+        self.authenticated = False
+        self.auth_required = auth_required
         self.extended_smtp = False
         self.command_size_limits.clear()
         if hostname:
@@ -486,6 +488,10 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_HELP(self, arg):
+        if self.auth_required and not self.authenticated:
+            log.info('Authentication required')
+            yield from self.push('530 5.7.0  Authentication required')
+            return
         if arg:
             extended = ' [SP <mail-parameters>]'
             lc_arg = arg.upper()
@@ -526,6 +532,10 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_VRFY(self, arg):
+        if self.auth_required and not self.authenticated:
+            log.info('Authentication required')
+            yield from self.push('530 5.7.0  Authentication required')
+            return
         if arg:
             try:
                 address, params = self._getaddr(arg)
@@ -546,6 +556,10 @@ class SMTP(asyncio.StreamReaderProtocol):
     def smtp_MAIL(self, arg):
         if not self.session.host_name:
             yield from self.push('503 Error: send HELO first')
+            return
+        if self.auth_required and not self.authenticated:
+            log.info('Authentication required')
+            yield from self.push('530 5.7.0  Authentication required')
             return
         log.debug('===> MAIL %s', arg)
         syntaxerr = '501 Syntax: MAIL FROM: <address>'
@@ -612,6 +626,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not self.session.host_name:
             yield from self.push('503 Error: send HELO first')
             return
+        if self.auth_required and not self.authenticated:
+            log.info('Authentication required')
+            yield from self.push('530 5.7.0  Authentication required')
+            return
         log.debug('===> RCPT %s', arg)
         if not self.envelope.mail_from:
             yield from self.push('503 Error: need MAIL command')
@@ -666,6 +684,10 @@ class SMTP(asyncio.StreamReaderProtocol):
     def smtp_DATA(self, arg):
         if not self.session.host_name:
             yield from self.push('503 Error: send HELO first')
+            return
+        if self.auth_required and not self.authenticated:
+            log.info('Authentication required')
+            yield from self.push('530 5.7.0  Authentication required')
             return
         if not self.envelope.rcpt_tos:
             yield from self.push('503 Error: need RCPT command')
