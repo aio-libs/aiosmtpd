@@ -402,6 +402,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._tls_protocol.connection_made(socket_transport)
 
     def smtp_AUTH(self, arg):
+        if not self.seen_greeting:
+            yield from self.push('503 Error: send HELO first')
+            return
         args = arg.split(' ')
         if len(args) > 2:
             yield from self.push('500 Too many values')
