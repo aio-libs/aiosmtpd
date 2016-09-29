@@ -98,6 +98,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.auth_method = auth_method
         self._set_rset_state()
         self.seen_greeting = ''
+        self.autheticated = False
         self.extended_smtp = False
         self.command_size_limits.clear()
         if hostname:
@@ -401,20 +402,46 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._tls_protocol.connection_made(socket_transport)
 
     def smtp_AUTH(self, arg):
-        try:
-            method, blob = arg.split(" ", 2)
-        except ValueError:  # not enough args
-            yield from self.push('500 value is missing')
+        args = arg.split(' ')
+        if len(args) > 2:
+            yield from self.push('500 Too many values')
             return
+        if len(args) == 0:
+            yield from self.push('500 Not enough value')
+            return
+        if self.autheticated:
+            yield from self.push('503 Already authenticated')
+            return
+        method = args[0]
         if method != 'PLAIN':
             yield from self.push('500 PLAIN method or die')
             return
-        try:
-            _, login, password = b64decode(blob).split(b"\x00")
-        except ValueError:  # not enough args
-            yield from self.push("500 Can't decode auth value")
-            return
+        blob = None
+        is_password = True
+        if len(args) == 1:
+            yield from self.push('334')  # your turn, send me login/password
+            blob = yield from self._reader.readline()
+            if blob == '*':
+                yield from self.push("501 Auth aborted")
+                return
+            if blob == '=':
+                password = None
+                is_password = False
+        else:
+            blob = args[1]
+        if is_password:
+            try:
+                loginpassword = b64decode(blob, validate=True)
+            except Exception:
+                yield from self.push("501 5.5.2 Can't decode base64")
+                return
+            try:
+                _, login, password = loginpassword.split(b"\x00")
+            except ValueError:  # not enough args
+                yield from self.push("500 Can't split auth value")
+                return
         if self.auth_method(login, password):
+            self.authenticated = True
             yield from self.push('235 2.7.0 Authentication successful')
         else:
             yield from self.push('535 5.7.8 Authentication credentials '
