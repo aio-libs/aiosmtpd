@@ -319,12 +319,14 @@ class SMTP(asyncio.StreamReaderProtocol):
         blob = None
         if len(args) == 1:
             yield from self.push('334')  # your turn, send me login/password
-            blob = yield from self._reader.readline()
+            line = yield from self._reader.readline()
+            blob = line.strip()
             if blob == '*':
                 yield from self.push("501 Auth aborted")
                 return
         else:
             blob = args[1]
+        log.debug('login/password %s', blob)
         if blob == '=':
             login = None
             password = None
