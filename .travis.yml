@@ -4,20 +4,11 @@ python:
   - "3.5"
   - "nightly"  # currently points to 3.6-dev
 install:
-  # Should probably use a requirements.txt file, or whatever will allow us to
-  # avoid duplication of dependency listings (e.g. setup.py and tox.ini).
-  - pip install atpublic nose2 coverage flake8 flake8-respect-noqa sphinx
+  - pip install tox
 env:
   - PYTHONASYNCIODEBUG=1
 script:
-  # We can't use tox here.  See GH #3
-  # Also, don't run twice, once without coverage and once with.  Any failure
-  # discovered by the coverage run would just duplicate a non-coverage run
-  # failure, so once is enough.
-  - python -m coverage run --rcfile=coverage.ini -m nose2 -v
-  - python -m coverage combine --rcfile=coverage.ini
-  # Skip the html report.
-  - python -m coverage report --rcfile=coverage.ini --fail-under=96
-  # Make sure the docs can build.
-  - python setup.py build_sphinx
-  - python -m flake8 aiosmtpd --max-line-length=79 --jobs=1 --exclude=conf.py
+  - tox -e py34-nocov,py35-nocov
+  - tox -e qa
+  - tox -e py34-cov,py35-cov
+  - tox -e docs

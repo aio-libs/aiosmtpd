@@ -28,7 +28,7 @@ class NosePlugin(Plugin):
     def __init__(self):
         super(NosePlugin, self).__init__()
         self.patterns = []
-        def set_debug(ignore):                      # noqa
+        def set_debug(ignore):                      # noqa: E301
             logging.basicConfig(level=logging.DEBUG)
             log = logging.getLogger('mail.log')
             log.setLevel(logging.DEBUG)
