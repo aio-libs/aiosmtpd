@@ -1,0 +1,10 @@
+language: python
+python:
+  - "3.4"
+  - "3.5"
+
+script:
+  - tox -e py py34-nocov,py35-nocov
+  - tox -e qa
+  - tox -e py34-cov,py35-cov
+  - tox -e docs
