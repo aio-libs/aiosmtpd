@@ -3,6 +3,9 @@ python:
   - "3.4"
   - "3.5"
 
+install:
+  - pip install tox
+
 script:
   - tox -e py py34-nocov,py35-nocov
   - tox -e qa
