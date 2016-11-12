@@ -2,10 +2,11 @@ language: python
 python:
   - "3.4"
   - "3.5"
-
+  - "nightly"  # currently points to 3.6-dev
 install:
   - pip install tox
-
+env:
+  - PYTHONASYNCIODEBUG=1
 script:
   - tox -e py34-nocov,py35-nocov
   - tox -e qa
