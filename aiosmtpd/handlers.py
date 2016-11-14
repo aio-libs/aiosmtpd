@@ -6,8 +6,8 @@ Pass in an instance of one of these classes, or derive your own, to provide
 your own handling of messages.  Implement only the methods you care about.
 """
 
-import asyncio
 import sys
+import asyncio
 import logging
 import mailbox
 import smtplib

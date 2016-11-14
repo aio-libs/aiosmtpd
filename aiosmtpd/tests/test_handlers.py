@@ -1,6 +1,6 @@
-import asyncio
 import os
 import sys
+import asyncio
 import unittest
 
 from aiosmtpd.controller import Controller
