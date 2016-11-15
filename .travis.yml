@@ -5,6 +5,8 @@ python:
   - "nightly"  # currently points to 3.6-dev
 install:
   - pip install tox
+  - python3 setup.py egg_info
+  - pip install -r aiosmtpd.egg-info/requires.txt
 env:
   - PYTHONASYNCIODEBUG=1
 script:
@@ -12,3 +14,4 @@ script:
   - tox -e qa
   - tox -e py34-cov,py35-cov
   - tox -e docs
+
