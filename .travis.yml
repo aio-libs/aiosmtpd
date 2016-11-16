@@ -14,4 +14,3 @@ script:
   - tox -e qa
   - tox -e py34-cov,py35-cov
   - tox -e docs
-
