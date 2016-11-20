@@ -28,6 +28,11 @@ class SMTPUTF8Controller(Controller):
         return Server(self.handler, enable_SMTPUTF8=True)
 
 
+class CustomHostnameController(Controller):
+    def factory(self):
+        return Server(self.handler, hostname='custom.localhost')
+
+
 class ErroringHandler:
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         return '499 Could not accept the message'
@@ -527,3 +532,17 @@ Testing
                 self.assertEqual(cm.exception.code, 499)
                 self.assertEqual(cm.exception.response,
                                  b'Could not accept the message')
+
+
+class TestCustomHostname(unittest.TestCase):
+    def setUp(self):
+        controller = CustomHostnameController(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_helo(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            self.assertEqual(response, bytes('custom.localhost', 'utf-8'))
