@@ -440,7 +440,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             }
         kwargs.update({'loop': self.loop})
         if asyncio.iscoroutinefunction(self.event_handler.process_message):
-            kwargs['loop'] = self.loop
             status = yield from self.event_handler.process_message(
                 *args, **kwargs)
         else:
