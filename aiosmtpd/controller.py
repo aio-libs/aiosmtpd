@@ -36,12 +36,12 @@ class Controller:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
         sock.bind((self.hostname, self.port))
         asyncio.set_event_loop(self.loop)
-        server = self.loop.run_until_complete(
+        self.server = self.loop.run_until_complete(
             self.loop.create_server(self.factory, sock=sock))
         self.loop.call_soon(ready_event.set)
         self.loop.run_forever()
-        server.close()
-        self.loop.run_until_complete(server.wait_closed())
+        self.server.close()
+        self.loop.run_until_complete(self.server.wait_closed())
         self.loop.close()
 
     def start(self):
