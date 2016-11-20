@@ -438,7 +438,12 @@ class SMTP(asyncio.StreamReaderProtocol):
                 'mail_options': self.mail_options,
                 'rcpt_options': self.rcpt_options,
             }
-        status = self.event_handler.process_message(*args, **kwargs)
+        kwargs.update({'loop': self.loop})
+        if asyncio.iscoroutinefunction(self.event_handler.process_message):
+            status = yield from self.event_handler.process_message(
+                *args, **kwargs)
+        else:
+            status = self.event_handler.process_message(*args, **kwargs)
         self._set_post_data_state()
         if status:
             yield from self.push(status)
