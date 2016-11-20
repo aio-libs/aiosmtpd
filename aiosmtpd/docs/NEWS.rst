@@ -8,6 +8,7 @@
   Jason Coombs.  (Closes #3)
 * Correctly handle client disconnects.  Given by Konstantin vz'One Enchant.
 * Close the transport and thus the connection on SMTP QUIT.  (Closes #11)
+* Added an AsyncMessage handler.  Given by Konstantin vz'One Enchant
 * Add an examples/ directory.
 * Flake8 clean.
 
