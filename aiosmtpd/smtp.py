@@ -65,10 +65,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.seen_greeting = ''
         self.extended_smtp = False
         self.command_size_limits.clear()
-        if not hostname:
-            self.hostname = socket.getfqdn()   # XXX this blocks, fix it?
-        else:
+        if hostname:
             self.hostname = hostname
+        else:
+            self.hostname = socket.getfqdn()
 
     @property
     def max_command_size_limit(self):
