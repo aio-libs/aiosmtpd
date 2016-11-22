@@ -2,7 +2,7 @@
  NEWS for aiosmtpd
 ===================
 
-1.0a2 (20XX-XX-XX)
+1.0a2 (2016-11-22)
 ==================
 * Officially support Python 3.6.
 * Fix support for both IPv4 and IPv6 based on the --listen option.  Given by
