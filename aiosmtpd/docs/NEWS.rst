@@ -2,6 +2,9 @@
  NEWS for aiosmtpd
 ===================
 
+1.0a3 (20XX-XX-XX)
+==================
+
 1.0a2 (2016-11-22)
 ==================
 * Officially support Python 3.6.
