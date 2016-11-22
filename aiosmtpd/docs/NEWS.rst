@@ -4,6 +4,7 @@
 
 1.0a2 (20XX-XX-XX)
 ==================
+* Officially support Python 3.6
 * Fix support for both IPv4 and IPv6 based on the --listen option.  Given by
   Jason Coombs.  (Closes #3)
 * Correctly handle client disconnects.  Given by Konstantin vz'One Enchant.
