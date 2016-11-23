@@ -110,8 +110,8 @@ class TestStartTLS(unittest.TestCase):
             with SMTP(controller.hostname, controller.port) as client:
                 code, response = client.ehlo('example.com')
                 self.assertEqual(code, 250)
-                self.assertIn('starttls', client.esmtp_features)
-                code, response = client.starttls()
+                self.assertNotIn('starttls', client.esmtp_features)
+                code, response = client.docmd('STARTTLS')
                 self.assertEqual(code, 454)
 
     def test_disabled_tls(self):
@@ -191,7 +191,8 @@ class TestRequireTLS(unittest.TestCase):
         with SMTP(*self.address) as client:
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
-            self.assertIn('starttls', client.esmtp_features)
+            startls = 'starttls' in client.esmtp_features
+            self.assertEqual(startls, _has_ssl)
 
     def test_mail_fails(self):
         with SMTP(*self.address) as client:

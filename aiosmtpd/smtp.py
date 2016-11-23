@@ -242,7 +242,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if self.enable_SMTPUTF8:
             yield from self.push('250-SMTPUTF8')
             self.command_size_limits['MAIL'] += 10
-        if self.tls_context and (not self._tls_protocol):
+        if self.tls_context and (not self._tls_protocol) and _has_ssl:
             yield from self.push('250-STARTTLS')
         yield from self.push('250 HELP')
 
