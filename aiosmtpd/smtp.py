@@ -9,7 +9,7 @@ from enum import Enum
 from public import public
 
 
-__version__ = '1.0a2'
+__version__ = '1.0a3'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
@@ -30,6 +30,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  enable_SMTPUTF8=False,
                  default_8bit_encoding='latin1',
                  decode_data=False,
+                 hostname=None,
                  loop=None):
         self.loop = loop if loop else asyncio.get_event_loop()
         super().__init__(
@@ -61,7 +62,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.seen_greeting = ''
         self.extended_smtp = False
         self.command_size_limits.clear()
-        self.fqdn = socket.getfqdn()   # XXX this blocks, fix it?
+        if hostname:
+            self.hostname = hostname
+        else:
+            self.hostname = socket.getfqdn()
 
     @property
     def max_command_size_limit(self):
@@ -85,11 +89,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._reader = reader
         self._writer = writer
 
-    def connection_lost(self, exc):
-        log.exception('Disconnect')
-        self._connection_closed = True
-        super().connection_lost(exc)
-        yield from self._handler_coroutine
+    def eof_received(self):
+        self._handler_coroutine.cancel()
+        return super().eof_received()
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
@@ -126,7 +128,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def _handle_client(self):
         try:
             log.info('handling connection')
-            yield from self.push('220 %s %s' % (self.fqdn, __version__))
+            yield from self.push('220 %s %s' % (self.hostname, __version__))
             while not self.connection_closed:
                 # XlXX Put the line limit stuff into the StreamReader?
                 try:
@@ -192,7 +194,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             pass
         self._set_rset_state()
         self.seen_greeting = hostname
-        yield from self.push('250 %s' % self.fqdn)
+        yield from self.push('250 %s' % self.hostname)
 
     @asyncio.coroutine
     def smtp_EHLO(self, arg):
@@ -211,7 +213,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._set_rset_state()
         self.seen_greeting = arg
         self.extended_smtp = True
-        yield from self.push('250-%s' % self.fqdn)
+        yield from self.push('250-%s' % self.hostname)
         if self.data_size_limit:
             yield from self.push('250-SIZE %s' % self.data_size_limit)
             self.command_size_limits['MAIL'] += 26
@@ -236,6 +238,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         else:
             yield from self.push('221 Bye')
             self._handler_coroutine.cancel()
+            self.transport.close()
 
     @asyncio.coroutine
     def close(self):
@@ -516,7 +519,12 @@ class SMTP(asyncio.StreamReaderProtocol):
                 'mail_options': self.mail_options,
                 'rcpt_options': self.rcpt_options,
             }
-        status = self.event_handler.process_message(*args, **kwargs)
+        kwargs.update({'loop': self.loop})
+        if asyncio.iscoroutinefunction(self.event_handler.process_message):
+            status = yield from self.event_handler.process_message(
+                *args, **kwargs)
+        else:
+            status = self.event_handler.process_message(*args, **kwargs)
         self._set_post_data_state()
         if status:
             yield from self.push(status)

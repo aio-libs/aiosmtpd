@@ -37,6 +37,11 @@ class SMTPUTF8Controller(Controller):
         return Server(self.handler, enable_SMTPUTF8=True)
 
 
+class CustomHostnameController(Controller):
+    def factory(self):
+        return Server(self.handler, hostname='custom.localhost')
+
+
 class ErroringHandler:
     error = None
 
@@ -769,3 +774,17 @@ class TestBadBody(unittest.TestCase):
             code, response = client.docmd('')
         self.assertEqual(code, 500)
         self.assertEqual(response, b'Error: bad syntax')
+
+
+class TestCustomHostname(unittest.TestCase):
+    def setUp(self):
+        controller = CustomHostnameController(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_helo(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            self.assertEqual(response, bytes('custom.localhost', 'utf-8'))
