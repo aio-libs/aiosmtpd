@@ -607,24 +607,6 @@ Testing
         mail = handler.box[0]
         self.assertEqual(mail[3], 'Test\n.\nmail')
 
-    def test_incomplete_read_error_logged(self):
-        handler = ErroringHandler()
-        controller = UTF8Controller(handler)
-        controller.start()
-        try:
-            # repeat twice to prevent loop be closed before
-            # event will be logged
-            for i in range(2):
-                client = SMTP(controller.hostname, controller.port)
-                try:
-                    client.send('HELO')
-                finally:
-                    client.close()
-        finally:
-            controller.stop()
-        self.assertIsInstance(handler.error,
-                              asyncio.streams.IncompleteReadError)
-
     def test_unexpected_errors(self):
         class ErrorSMTP(Server):
             @asyncio.coroutine
