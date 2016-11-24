@@ -4,6 +4,9 @@
 
 1.0a3 (20XX-XX-XX)
 ==================
+* Fix typo in `Message.prepare_message()` handler.  The crafted `X-RcptTos`
+  header is renamed to `X-RcptTo` for backward compatibility with older
+  libraries.
 
 1.0a2 (2016-11-22)
 ==================

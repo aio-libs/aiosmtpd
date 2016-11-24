@@ -147,7 +147,7 @@ class Message:
             message = message_from_string(data, self.message_class)
         message['X-Peer'] = str(peer)
         message['X-MailFrom'] = mailfrom
-        message['X-RcptTos'] = COMMASPACE.join(rcpttos)
+        message['X-RcptTo'] = COMMASPACE.join(rcpttos)
 
         return message
 
