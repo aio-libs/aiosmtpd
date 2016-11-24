@@ -28,12 +28,18 @@ class Controller:
         self._wsock.close()
 
     def factory(self):
+        """Allow subclasses to customize the handler/server creation."""
         return SMTP(self.handler)
 
-    def _run(self, ready_event):
+    def make_socket(self):
+        """Allow subclasses to customize socket creation."""
         sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+        return sock
+
+    def _run(self, ready_event):
+        sock = self.make_socket()
         sock.bind((self.hostname, self.port))
         asyncio.set_event_loop(self.loop)
         server = self.loop.run_until_complete(
