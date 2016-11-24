@@ -2,6 +2,9 @@
  NEWS for aiosmtpd
 ===================
 
+1.0a4 (20XX-XX-XX)
+==================
+
 1.0a3 (2016-11-24)
 ==================
 * Fix typo in `Message.prepare_message()` handler.  The crafted `X-RcptTos`
