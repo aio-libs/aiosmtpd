@@ -36,6 +36,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  decode_data=False,
                  hostname=None,
                  loop=None):
+        self.__ident__ = __ident__
         self.loop = loop if loop else asyncio.get_event_loop()
         super().__init__(
             asyncio.StreamReader(loop=self.loop),
@@ -120,7 +121,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def _handle_client(self):
         log.info('handling connection')
-        yield from self.push('220 %s %s' % (self.hostname, __version__))
+        yield from self.push('220 {} {}'.format(self.hostname, self.__ident__))
         while not self.connection_closed:
             # XXX Put the line limit stuff into the StreamReader?
             line = yield from self._reader.readline()
