@@ -2,6 +2,9 @@
  NEWS for aiosmtpd
 ===================
 
+1.0a5 (201X-XX-XX)
+==================
+
 1.0a4 (2016-11-29)
 ==================
 * The SMTP server connection identifier can be changed by setting the
