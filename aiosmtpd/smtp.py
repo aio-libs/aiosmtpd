@@ -9,7 +9,7 @@ from enum import Enum
 from public import public
 
 
-__version__ = '1.0a3+'
+__version__ = '1.0a4'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
