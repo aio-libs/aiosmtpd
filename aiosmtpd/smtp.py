@@ -16,7 +16,7 @@ from enum import Enum
 from public import public
 
 
-__version__ = '1.0a3'
+__version__ = '1.0a3+'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
@@ -45,6 +45,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  tls_context=None,
                  require_starttls=False,
                  loop=None):
+        self.__ident__ = __ident__
         self.loop = loop if loop else asyncio.get_event_loop()
         super().__init__(
             asyncio.StreamReader(loop=self.loop),
@@ -163,7 +164,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def _handle_client(self):
         log.info('handling connection')
-        yield from self.push('220 %s %s' % (self.hostname, __version__))
+        yield from self.push('220 {} {}'.format(self.hostname, self.__ident__))
         while not self.connection_closed:
             # XXX Put the line limit stuff into the StreamReader?
             line = yield from self._reader.readline()
@@ -221,6 +222,16 @@ class SMTP(asyncio.StreamReaderProtocol):
         yield from self.push('250 %s' % self.hostname)
 
     @asyncio.coroutine
+    def ehlo_hook(self):
+        """Allow subclasses to extend EHLO responses.
+
+        This hook is called just before the final, non-continuing
+        `250 HELP` response.  Subclasses can add additional `250-<cmd>`
+        responses for custom behavior.
+        """
+        pass
+
+    @asyncio.coroutine
     def smtp_EHLO(self, arg):
         if not arg:
             yield from self.push('501 Syntax: EHLO hostname')
@@ -243,6 +254,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.command_size_limits['MAIL'] += 10
         if self.tls_context and (not self._tls_protocol) and _has_ssl:
             yield from self.push('250-STARTTLS')
+        yield from self.ehlo_hook()
         yield from self.push('250 HELP')
 
     @asyncio.coroutine
@@ -473,11 +485,17 @@ class SMTP(asyncio.StreamReaderProtocol):
         yield from self.push('250 OK')
 
     @asyncio.coroutine
+    def rset_hook(self):
+        """Allow subclasses to hook into the RSET command."""
+        pass
+
+    @asyncio.coroutine
     def smtp_RSET(self, arg):
         if arg:
             yield from self.push('501 Syntax: RSET')
             return
         self._set_rset_state()
+        yield from self.rset_hook()
         yield from self.push('250 OK')
 
     @asyncio.coroutine

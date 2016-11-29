@@ -2,8 +2,23 @@
  NEWS for aiosmtpd
 ===================
 
-1.0a3 (20XX-XX-XX)
+1.0a4 (20XX-XX-XX)
 ==================
+* The SMTP server connection identifier can be changed by setting the
+  `__ident__` attribute on the `SMTP` instance.  (Closes #20)
+
+1.0a3 (2016-11-24)
+==================
+* Fix typo in `Message.prepare_message()` handler.  The crafted `X-RcptTos`
+  header is renamed to `X-RcptTo` for backward compatibility with older
+  libraries.
+* Add a few hooks to make subclassing easier:
+  - `SMTP.ehlo_hook()` is called just before the final, non-continuing 250
+    response to allow subclasses to add additional EHLO sub-responses.
+  - `SMTP.rset_hook()` is called just before the final 250 command to allow
+    subclasses to provide additional `RSET` functionality.
+  - `Controller.make_socket()` allows subclasses to customize the creation of
+    the socket before binding.
 
 1.0a2 (2016-11-22)
 ==================

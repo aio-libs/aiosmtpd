@@ -49,7 +49,7 @@ The message was received, and we can print it.
     Message-ID: <ant>
     X-Peer: ...
     X-MailFrom: aperson@example.com
-    X-RcptTos: bperson@example.com
+    X-RcptTo: bperson@example.com
     <BLANKLINE>
     Hi Bart, this is Anne.
 
