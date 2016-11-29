@@ -160,7 +160,7 @@ Testing
         self.assertIsNotNone(self.handled_message['X-Peer'])
         self.assertEqual(
             self.handled_message['X-MailFrom'], 'anne@example.com')
-        self.assertEqual(self.handled_message['X-RcptTos'], 'bart@example.com')
+        self.assertEqual(self.handled_message['X-RcptTo'], 'bart@example.com')
 
     def test_message_decoded(self):
         # With a server that decodes the data, the messages come in as
@@ -185,7 +185,7 @@ Testing
         self.assertIsNotNone(self.handled_message['X-Peer'])
         self.assertEqual(
             self.handled_message['X-MailFrom'], 'anne@example.com')
-        self.assertEqual(self.handled_message['X-RcptTos'], 'bart@example.com')
+        self.assertEqual(self.handled_message['X-RcptTo'], 'bart@example.com')
 
 
 class TestAsyncMessage(unittest.TestCase):
@@ -218,7 +218,7 @@ Testing
         self.assertIsNotNone(self.handled_message['X-Peer'])
         self.assertEqual(
             self.handled_message['X-MailFrom'], 'anne@example.com')
-        self.assertEqual(self.handled_message['X-RcptTos'], 'bart@example.com')
+        self.assertEqual(self.handled_message['X-RcptTo'], 'bart@example.com')
 
     def test_message_decoded(self):
         # With a server that decodes the data, the messages come in as
@@ -243,7 +243,7 @@ Testing
         self.assertIsNotNone(self.handled_message['X-Peer'])
         self.assertEqual(
             self.handled_message['X-MailFrom'], 'anne@example.com')
-        self.assertEqual(self.handled_message['X-RcptTos'], 'bart@example.com')
+        self.assertEqual(self.handled_message['X-RcptTo'], 'bart@example.com')
 
 
 class TestMailbox(unittest.TestCase):

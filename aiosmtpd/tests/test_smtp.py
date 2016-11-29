@@ -6,8 +6,9 @@ import asyncio
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import SMTP as Server
+from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
 from smtplib import SMTP, SMTPDataError, SMTPResponseException
+
 
 class UTF8Controller(Controller):
     def factory(self):
@@ -40,6 +41,13 @@ class SMTPUTF8Controller(Controller):
 class CustomHostnameController(Controller):
     def factory(self):
         return Server(self.handler, hostname='custom.localhost')
+
+
+class CustomIdentController(Controller):
+    def factory(self):
+        server = Server(self.handler)
+        server.__ident__ = 'Identifying SMTP v2112'
+        return server
 
 
 class ErroringHandler:
@@ -758,15 +766,32 @@ class TestBadBody(unittest.TestCase):
         self.assertEqual(response, b'Error: bad syntax')
 
 
-class TestCustomHostname(unittest.TestCase):
-    def setUp(self):
+class TestCustomizations(unittest.TestCase):
+    def test_custom_hostname(self):
         controller = CustomHostnameController(Sink)
         controller.start()
         self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
-
-    def test_helo(self):
-        with SMTP(*self.address) as client:
+        with SMTP(controller.hostname, controller.port) as client:
             code, response = client.helo('example.com')
             self.assertEqual(code, 250)
             self.assertEqual(response, bytes('custom.localhost', 'utf-8'))
+
+    def test_custom_greeting(self):
+        controller = CustomIdentController(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP() as client:
+            code, msg = client.connect(controller.hostname, controller.port)
+            self.assertEqual(code, 220)
+            # The hostname prefix is unpredictable.
+            self.assertEqual(msg[-22:], b'Identifying SMTP v2112')
+
+    def test_default_greeting(self):
+        controller = Controller(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP() as client:
+            code, msg = client.connect(controller.hostname, controller.port)
+            self.assertEqual(code, 220)
+            # The hostname prefix is unpredictable.
+            self.assertEqual(msg[-len(GREETING):], bytes(GREETING, 'utf-8'))
