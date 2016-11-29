@@ -80,7 +80,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.hostname = socket.getfqdn()
         self.tls_context = tls_context
         if tls_context:
-            # through rfc3207 part 4.1 certificate checking is part of SMTP
+            # Through rfc3207 part 4.1 certificate checking is part of SMTP
             # protocol, not SSL layer.
             self.tls_context.check_hostname = False
             self.tls_context.verify_mode = ssl.CERT_NONE
@@ -99,23 +99,22 @@ class SMTP(asyncio.StreamReaderProtocol):
     def connection_made(self, transport):
         if(self.transport is not None
                 and isinstance(transport, sslproto._SSLProtocolTransport)):
-            # It is STARTTLS connection over normal connection
+            # It is STARTTLS connection over normal connection.
             self._reader._transport = transport
             self._writer._transport = transport
             self.transport = transport
-            # Reset state due to rfc3207 part 4.2
+            # Reset state due to rfc3207 part 4.2.
             self._set_rset_state()
-            self.seen_greeting = False
-            # Do SSL certificate checking as rfc3207 part 4.1 says
+            self.seen_greeting = ''
+            # Do SSL certificate checking as rfc3207 part 4.1 says.
             # Why _extra is protected attribute?
             extra = self._tls_protocol._extra
             if hasattr(self.event_handler, 'handle_tls_handshake'):
-                self._tls_handshake_failed = \
-                    not self.event_handler.handle_tls_handshake(
-                        extra['ssl_object'],
-                        extra['peercert'],
-                        extra['cipher'],
-                    )
+                auth = self.event_handler.handle_tls_handshake(
+                    extra['ssl_object'],
+                    extra['peercert'],
+                    extra['cipher'])
+                self._tls_handshake_failed = not auth
             else:
                 self._tls_handshake_failed = False
             self._over_ssl = True
@@ -190,7 +189,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             if len(line) > max_sz:
                 yield from self.push('500 Error: line too long')
                 continue
-            if self._tls_handshake_failed and (command != 'QUIT'):
+            if self._tls_handshake_failed and command != 'QUIT':
                 yield from self.push(
                     '554 Command refused due to lack of security')
                 continue
@@ -268,27 +267,24 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg:
             yield from self.push('501 Syntax: STARTTLS')
             return
-        if (not self.tls_context) or (not _has_ssl):
-            yield from self.push(
-                '454 TLS not available due to temporary reason'
-            )
+        if not (self.tls_context and _has_ssl):
+            yield from self.push('454 TLS not available')
             return
         yield from self.push('220 Ready to start TLS')
-        # create SSL layer
+        # Create SSL layer.
         self._tls_protocol = sslproto.SSLProtocol(
             self.loop,
             self,
             self.tls_context,
             None,
-            server_side=True
-        )
-        # reconfigure transport layer
+            server_side=True)
+        # Reconfigure transport layer.
         socket_transport = self.transport
         socket_transport._protocol = self._tls_protocol
-        # reconfigure protocol layer. Cant understand why app transport is
-        # protected property, if it MUST be used externally
+        # Reconfigure protocol layer. Cant understand why app transport is
+        # protected property, if it MUST be used externally.
         self.transport = self._tls_protocol._app_transport
-        # start handshake
+        # Start handshake.
         self._tls_protocol.connection_made(socket_transport)
 
     @asyncio.coroutine

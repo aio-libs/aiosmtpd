@@ -1,8 +1,9 @@
 import asyncio
-import os
+import pkg_resources
 import unittest
 from email.mime.text import MIMEText
 from smtplib import SMTP
+from unittest.mock import patch
 try:
     import ssl
     from asyncio import sslproto
@@ -11,9 +12,8 @@ except ImportError:
 else:
     _has_ssl = True
 
-from .test_smtp import Controller as OldController, Sink
-
 from aiosmtpd.smtp import SMTP as SMTPProtocol
+from .test_smtp import Controller as OldController, Sink
 
 
 class Controller(OldController):
@@ -33,12 +33,9 @@ class ReceivingHandler:
 
 def get_tls_context():
     tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    path = os.path.dirname(__file__)
-    path = os.path.join(path, 'certs')
     tls_context.load_cert_chain(
-        os.path.join(path, 'server.crt'),
-        os.path.join(path, 'server.key')
-    )
+        pkg_resources.resource_filename('aiosmtpd.tests.certs', 'server.crt'),
+        pkg_resources.resource_filename('aiosmtpd.tests.certs', 'server.key'))
     return tls_context
 
 
@@ -48,8 +45,7 @@ class TLSRequiredController(Controller):
             self.handler,
             decode_data=True,
             require_starttls=True,
-            tls_context=get_tls_context()
-        )
+            tls_context=get_tls_context())
 
 
 class TLSController(Controller):
@@ -58,8 +54,7 @@ class TLSController(Controller):
             self.handler,
             decode_data=True,
             require_starttls=False,
-            tls_context=get_tls_context()
-        )
+            tls_context=get_tls_context())
 
 
 class HandshakeFailingHandler:
@@ -69,50 +64,50 @@ class HandshakeFailingHandler:
 
 
 class TestStartTLS(unittest.TestCase):
-    if _has_ssl:
-        def test_starttls(self):
-            handler = ReceivingHandler()
-            controller = TLSController(handler)
-            controller.start()
-            self.addCleanup(controller.stop)
-            with SMTP(controller.hostname, controller.port) as client:
-                code, response = client.ehlo('example.com')
-                self.assertEqual(code, 250)
-                self.assertIn('starttls', client.esmtp_features)
-                code, response = client.starttls()
-                self.assertEqual(code, 220)
-                client.send_message(
-                    MIMEText('hi'),
-                    'sender@example.com',
-                    'rcpt1@example.com'
-                )
-            self.assertEqual(len(handler.box), 1)
+    @unittest.skipIf(not _has_ssl, 'SSL and Python 3.5 required')
+    def test_starttls(self):
+        handler = ReceivingHandler()
+        controller = TLSController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            self.assertIn('starttls', client.esmtp_features)
+            code, response = client.starttls()
+            self.assertEqual(code, 220)
+            client.send_message(
+                MIMEText('hi'),
+                'sender@example.com',
+                'rcpt1@example.com')
+        self.assertEqual(len(handler.box), 1)
 
-        def test_failed_handshake(self):
-            controller = TLSController(HandshakeFailingHandler())
-            controller.start()
-            self.addCleanup(controller.stop)
-            with SMTP(controller.hostname, controller.port) as client:
-                client.ehlo('example.com')
-                code, response = client.starttls()
-                self.assertEqual(code, 220)
-                code, response = client.mail('sender@example.com')
-                self.assertEqual(code, 554)
-                code, response = client.rcpt('rcpt@example.com')
-                self.assertEqual(code, 554)
+    @unittest.skipIf(not _has_ssl, 'SSL and Python 3.5 required')
+    def test_failed_handshake(self):
+        controller = TLSController(HandshakeFailingHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.ehlo('example.com')
+            code, response = client.starttls()
+            self.assertEqual(code, 220)
+            code, response = client.mail('sender@example.com')
+            self.assertEqual(code, 554)
+            code, response = client.rcpt('rcpt@example.com')
+            self.assertEqual(code, 554)
 
-    else:
-        def test_starttls_fails_with_no_ssl(self):
-            handler = ReceivingHandler()
-            controller = TLSController(handler)
-            controller.start()
-            self.addCleanup(controller.stop)
-            with SMTP(controller.hostname, controller.port) as client:
-                code, response = client.ehlo('example.com')
-                self.assertEqual(code, 250)
-                self.assertNotIn('starttls', client.esmtp_features)
-                code, response = client.docmd('STARTTLS')
-                self.assertEqual(code, 454)
+    @patch('aiosmtpd.smtp._has_ssl', False)
+    def test_starttls_fails_with_no_ssl(self):
+        handler = ReceivingHandler()
+        controller = TLSController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            self.assertNotIn('starttls', client.esmtp_features)
+            code, response = client.docmd('STARTTLS')
+            self.assertEqual(code, 454)
 
     def test_disabled_tls(self):
         controller = Controller(Sink)
@@ -120,7 +115,7 @@ class TestStartTLS(unittest.TestCase):
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             client.ehlo('example.com')
-            code, response = client.docmd("STARTTLS")
+            code, response = client.docmd('STARTTLS')
             self.assertEqual(code, 454)
 
     def test_tls_bad_syntax(self):
@@ -129,45 +124,46 @@ class TestStartTLS(unittest.TestCase):
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             client.ehlo('example.com')
-            code, response = client.docmd("STARTTLS", "TRUE")
+            code, response = client.docmd('STARTTLS', 'TRUE')
             self.assertEqual(code, 501)
 
-if _has_ssl:
-    class TestTLSForgetsSessionData(unittest.TestCase):
-        def setUp(self):
-            controller = TLSController(Sink)
-            controller.start()
-            self.addCleanup(controller.stop)
-            self.address = (controller.hostname, controller.port)
 
-        def test_forget_ehlo(self):
-            with SMTP(*self.address) as client:
-                client.starttls()
-                code, response = client.mail('sender@example.com')
-                self.assertEqual(code, 503)
-                self.assertEqual(response, b'Error: send HELO first')
+@unittest.skipIf(not _has_ssl, 'SSL and Python 3.5 required')
+class TestTLSForgetsSessionData(unittest.TestCase):
+    def setUp(self):
+        controller = TLSController(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
 
-        def test_forget_mail(self):
-            with SMTP(*self.address) as client:
-                client.ehlo('example.com')
-                client.mail('sender@example.com')
-                client.starttls()
-                client.ehlo('example.com')
-                code, response = client.rcpt('rcpt@example.com')
-                self.assertEqual(code, 503)
-                self.assertEqual(response, b'Error: need MAIL command')
+    def test_forget_ehlo(self):
+        with SMTP(*self.address) as client:
+            client.starttls()
+            code, response = client.mail('sender@example.com')
+            self.assertEqual(code, 503)
+            self.assertEqual(response, b'Error: send HELO first')
 
-        def test_forget_rcpt(self):
-            with SMTP(*self.address) as client:
-                client.ehlo('example.com')
-                client.mail('sender@example.com')
-                client.rcpt('rcpt@example.com')
-                client.starttls()
-                client.ehlo('example.com')
-                client.mail('sender@example.com')
-                code, response = client.docmd('DATA')
-                self.assertEqual(code, 503)
-                self.assertEqual(response, b'Error: need RCPT command')
+    def test_forget_mail(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            client.mail('sender@example.com')
+            client.starttls()
+            client.ehlo('example.com')
+            code, response = client.rcpt('rcpt@example.com')
+            self.assertEqual(code, 503)
+            self.assertEqual(response, b'Error: need MAIL command')
+
+    def test_forget_rcpt(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            client.mail('sender@example.com')
+            client.rcpt('rcpt@example.com')
+            client.starttls()
+            client.ehlo('example.com')
+            client.mail('sender@example.com')
+            code, response = client.docmd('DATA')
+            self.assertEqual(code, 503)
+            self.assertEqual(response, b'Error: need RCPT command')
 
 
 class TestRequireTLS(unittest.TestCase):
@@ -184,7 +180,7 @@ class TestRequireTLS(unittest.TestCase):
 
     def test_help_fails(self):
         with SMTP(*self.address) as client:
-            code, response = client.docmd("HELP", "HELO")
+            code, response = client.docmd('HELP', 'HELO')
             self.assertEqual(code, 530)
 
     def test_ehlo(self):
@@ -215,5 +211,5 @@ class TestRequireTLS(unittest.TestCase):
     def test_data_fails(self):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
-            code, response = client.docmd("DATA")
+            code, response = client.docmd('DATA')
             self.assertEqual(code, 530)
