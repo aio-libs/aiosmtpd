@@ -480,9 +480,7 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 250)
             code, response = client.docmd('DATA FOOBAR')
             self.assertEqual(code, 501)
-            self.assertEqual(
-                response,
-                b'Error: BODY can only be one of 7BIT, 8BITMIME')
+            self.assertEqual(response, b'Syntax: DATA')
 
     def test_empty_command(self):
         with SMTP(*self.address) as client:
