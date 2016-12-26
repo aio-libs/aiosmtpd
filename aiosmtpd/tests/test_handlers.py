@@ -21,11 +21,6 @@ class UTF8Controller(Controller):
         return Server(self.handler, decode_data=True)
 
 
-def _format_peer_address(peer):
-    # Format only the address bits, which is the only preditable parts.
-    return 'X-Peer: {}'.format(peer[0])
-
-
 class TestDebugging(unittest.TestCase):
     def setUp(self):
         self.stream = StringIO()
@@ -71,8 +66,7 @@ class TestDebuggingBytes(unittest.TestCase):
     def test_debugging(self):
         with ExitStack() as resources:
             client = resources.enter_context(SMTP(*self.address))
-            resources.enter_context(
-                patch('aiosmtpd.handlers._format_peer', _format_peer_address))
+            peer = client.sock.getsockname()
             client.sendmail('anne@example.com', ['bart@example.com'], """\
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>
@@ -85,16 +79,15 @@ Testing
         self.assertMultiLineEqual(text, """\
 ---------- MESSAGE FOLLOWS ----------
 mail options: ['SIZE=102']
-rcpt options: []
 
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>
 Subject: A test
-X-Peer: ::1
+X-Peer: {!r}
 
 Testing
 ------------ END MESSAGE ------------
-""")
+""".format(peer))
 
 
 class TestDebuggingOptions(unittest.TestCase):
@@ -106,9 +99,33 @@ class TestDebuggingOptions(unittest.TestCase):
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
 
-    @unittest.skip('hangs')
+    def test_debugging_without_options(self):
+        with SMTP(*self.address) as client:
+            # Prevent ESMTP options.
+            client.helo()
+            peer = client.sock.getsockname()
+            client.sendmail('anne@example.com', ['bart@example.com'], """\
+From: Anne Person <anne@example.com>
+To: Bart Person <bart@example.com>
+Subject: A test
+
+Testing
+""")
+        text = self.stream.getvalue()
+        self.assertMultiLineEqual(text, """\
+---------- MESSAGE FOLLOWS ----------
+From: Anne Person <anne@example.com>
+To: Bart Person <bart@example.com>
+Subject: A test
+X-Peer: {!r}
+
+Testing
+------------ END MESSAGE ------------
+""".format(peer))
+
     def test_debugging_with_options(self):
         with SMTP(*self.address) as client:
+            peer = client.sock.getsockname()
             client.sendmail('anne@example.com', ['bart@example.com'], """\
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>
@@ -119,14 +136,16 @@ Testing
         text = self.stream.getvalue()
         self.assertMultiLineEqual(text, """\
 ---------- MESSAGE FOLLOWS ----------
+mail options: ['SIZE=102', 'BODY=7BIT']
+
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>
 Subject: A test
-X-Peer: ::1
+X-Peer: {!r}
 
 Testing
 ------------ END MESSAGE ------------
-""")
+""".format(peer))
 
 
 class TestMessage(unittest.TestCase):

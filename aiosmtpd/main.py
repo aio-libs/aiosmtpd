@@ -13,7 +13,7 @@ from public import public
 
 try:
     import pwd
-except ImportError:                                         # pragma: no cover
+except ImportError:                                         # pragma: nocover
     pwd = None
 
 
@@ -184,5 +184,5 @@ def bind(family, type, proto):
     return sock
 
 
-if __name__ == '__main__':                          # pragma: no cover
+if __name__ == '__main__':                          # pragma: nocover
     main()

@@ -10,9 +10,9 @@ from public import public
 try:
     import ssl
     from asyncio import sslproto
-except ImportError:
+except ImportError:                                 # pragma: nocover
     _has_ssl = False
-else:
+else:                                               # pragma: nocover
     _has_ssl = True
 
 
@@ -93,8 +93,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             return self.command_size_limit
 
     def connection_made(self, transport):
-        if (self.transport is not None
-                and isinstance(transport, sslproto._SSLProtocolTransport)):
+        is_instance = (_has_ssl and
+                       isinstance(transport, sslproto._SSLProtocolTransport))
+        if self.transport is not None and is_instance:   # pragma: nossl
             # It is STARTTLS connection over normal connection.
             self._reader._transport = transport
             self._writer._transport = transport
@@ -180,7 +181,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             if len(line) > max_sz:
                 yield from self.push('500 Error: line too long')
                 continue
-            if self._tls_handshake_failed and command != 'QUIT':
+            if (self._tls_handshake_failed
+                    and command != 'QUIT'):                   # pragma: nossl
                 yield from self.push(
                     '554 Command refused due to lack of security')
                 continue
@@ -242,7 +244,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         if self.enable_SMTPUTF8:
             yield from self.push('250-SMTPUTF8')
             self.command_size_limits['MAIL'] += 10
-        if self.tls_context and (not self._tls_protocol) and _has_ssl:
+        if (self.tls_context and
+                not self._tls_protocol and
+                _has_ssl):                        # pragma: nossl
             yield from self.push('250-STARTTLS')
         yield from self.ehlo_hook()
         yield from self.push('250 HELP')
@@ -264,7 +268,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.transport.close()
 
     @asyncio.coroutine
-    def smtp_STARTTLS(self, arg):
+    def smtp_STARTTLS(self, arg):                   # pragma: nossl
         log.info('===> STARTTLS')
         if arg:
             yield from self.push('501 Syntax: STARTTLS')
@@ -466,7 +470,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(syntaxerr)
             return
         # XXX currently there are no options we recognize.
-        if len(params.keys()) > 0:
+        if len(params) > 0:
             yield from self.push(
                 '555 RCPT TO parameters not recognized or not implemented')
             return
