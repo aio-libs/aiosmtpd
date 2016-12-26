@@ -2,7 +2,7 @@ language: python
 python:
   - "3.4"
   - "3.5"
-  - "nightly"  # currently points to 3.6-dev
+  - "3.6"
 install:
   - pip install tox
   - python3 setup.py egg_info
@@ -10,7 +10,4 @@ install:
 env:
   - PYTHONASYNCIODEBUG=1
 script:
-  - tox -e py34-nocov,py35-nocov
-  - tox -e qa
-  - tox -e py34-cov,py35-cov
-  - tox -e docs
+  - tox
