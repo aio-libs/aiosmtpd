@@ -93,7 +93,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             return self.command_size_limit
 
     def connection_made(self, transport):
-        is_instance = isinstance(transport, sslproto._SSLProtocolTransport)
+        is_instance = (_has_ssl and
+                       isinstance(transport, sslproto._SSLProtocolTransport))
         if self.transport is not None and is_instance:   # pragma: nossl
             # It is STARTTLS connection over normal connection.
             self._reader._transport = transport
