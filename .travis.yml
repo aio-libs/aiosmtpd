@@ -12,4 +12,5 @@ matrix:
     - python: "3.6"
       env: INTERP=py36 PYTHONASYNCIODEBUG=1
 script:
-  - tox -e $INTERP-nocov,$INTERP-cov,$INTERP-diffcov,qa,docs
+  - tox -e $INTERP-nocov,$INTERP-cov,qa,docs
+  - 'if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then tox -e $INTERP-diffcov; fi'
