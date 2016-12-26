@@ -5,8 +5,15 @@ import collections
 
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
-from enum import Enum
 from public import public
+
+try:
+    import ssl
+    from asyncio import sslproto
+except ImportError:
+    _has_ssl = False
+else:
+    _has_ssl = True
 
 
 __version__ = '1.0a4+'
@@ -16,11 +23,6 @@ log = logging.getLogger('mail.log')
 
 NEWLINE = '\n'
 DATA_SIZE_DEFAULT = 33554432
-
-
-class State(Enum):
-    command = 0
-    data = 1
 
 
 @public
@@ -35,6 +37,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                  enable_SMTPUTF8=False,
                  decode_data=False,
                  hostname=None,
+                 tls_context=None,
+                 require_starttls=False,
                  loop=None):
         self.__ident__ = __ident__
         self.loop = loop if loop else asyncio.get_event_loop()
@@ -70,6 +74,16 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.hostname = hostname
         else:
             self.hostname = socket.getfqdn()
+        self.tls_context = tls_context
+        if tls_context:
+            # Through rfc3207 part 4.1 certificate checking is part of SMTP
+            # protocol, not SSL layer.
+            self.tls_context.check_hostname = False
+            self.tls_context.verify_mode = ssl.CERT_NONE
+        self.require_starttls = tls_context and require_starttls
+        self._tls_handshake_failed = False
+        self._tls_protocol = None
+        self.transport = None
 
     @property
     def max_command_size_limit(self):
@@ -79,13 +93,36 @@ class SMTP(asyncio.StreamReaderProtocol):
             return self.command_size_limit
 
     def connection_made(self, transport):
-        super().connection_made(transport)
-        self.peer = transport.get_extra_info('peername')
-        self.transport = transport
-        log.info('Peer: %s', repr(self.peer))
-        # Process the client's requests.
-        self.connection_closed = False
-        self._handler_coroutine = self.loop.create_task(self._handle_client())
+        if (self.transport is not None
+                and isinstance(transport, sslproto._SSLProtocolTransport)):
+            # It is STARTTLS connection over normal connection.
+            self._reader._transport = transport
+            self._writer._transport = transport
+            self.transport = transport
+            # Reset state due to rfc3207 part 4.2.
+            self._set_rset_state()
+            self.seen_greeting = ''
+            # Do SSL certificate checking as rfc3207 part 4.1 says.
+            # Why _extra is protected attribute?
+            extra = self._tls_protocol._extra
+            if hasattr(self.event_handler, 'handle_tls_handshake'):
+                auth = self.event_handler.handle_tls_handshake(
+                    extra['ssl_object'],
+                    extra['peercert'],
+                    extra['cipher'])
+                self._tls_handshake_failed = not auth
+            else:
+                self._tls_handshake_failed = False
+            self._over_ssl = True
+        else:
+            super().connection_made(transport)
+            self.peer = transport.get_extra_info('peername')
+            self.transport = transport
+            log.info('Peer: %s', repr(self.peer))
+            # Process the client's requests.
+            self.connection_closed = False
+            self._handler_coroutine = self.loop.create_task(
+                self._handle_client())
 
     def _client_connected_cb(self, reader, writer):
         # This is redundant since we subclass StreamReaderProtocol, but I like
@@ -99,7 +136,6 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
-        self.smtp_state = State.command
         self.mailfrom = None
         self.rcpttos = []
         self.require_SMTPUTF8 = False
@@ -128,9 +164,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             # XXX this rstrip may not completely preserve old behavior.
             line = line.decode('utf-8').rstrip('\r\n')
             log.info('Data: %r', line)
-            if self.smtp_state is not State.command:
-                yield from self.push('451 Internal confusion')
-                continue
             if not line:
                 yield from self.push('500 Error: bad syntax')
                 continue
@@ -146,6 +179,16 @@ class SMTP(asyncio.StreamReaderProtocol):
                       else self.command_size_limit)
             if len(line) > max_sz:
                 yield from self.push('500 Error: line too long')
+                continue
+            if self._tls_handshake_failed and command != 'QUIT':
+                yield from self.push(
+                    '554 Command refused due to lack of security')
+                continue
+            if (self.require_starttls
+                    and (not self._tls_protocol)
+                    and (command not in ['EHLO', 'STARTTLS', 'QUIT'])):
+                # RFC3207 part 4
+                yield from self.push('530 Must issue a STARTTLS command first')
                 continue
             method = getattr(self, 'smtp_' + command, None)
             if not method:
@@ -199,6 +242,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         if self.enable_SMTPUTF8:
             yield from self.push('250-SMTPUTF8')
             self.command_size_limits['MAIL'] += 10
+        if self.tls_context and (not self._tls_protocol) and _has_ssl:
+            yield from self.push('250-STARTTLS')
         yield from self.ehlo_hook()
         yield from self.push('250 HELP')
 
@@ -217,6 +262,32 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push('221 Bye')
             self._handler_coroutine.cancel()
             self.transport.close()
+
+    @asyncio.coroutine
+    def smtp_STARTTLS(self, arg):
+        log.info('===> STARTTLS')
+        if arg:
+            yield from self.push('501 Syntax: STARTTLS')
+            return
+        if not (self.tls_context and _has_ssl):
+            yield from self.push('454 TLS not available')
+            return
+        yield from self.push('220 Ready to start TLS')
+        # Create SSL layer.
+        self._tls_protocol = sslproto.SSLProtocol(
+            self.loop,
+            self,
+            self.tls_context,
+            None,
+            server_side=True)
+        # Reconfigure transport layer.
+        socket_transport = self.transport
+        socket_transport._protocol = self._tls_protocol
+        # Reconfigure protocol layer. Cant understand why app transport is
+        # protected property, if it MUST be used externally.
+        self.transport = self._tls_protocol._app_transport
+        # Start handshake.
+        self._tls_protocol.connection_made(socket_transport)
 
     @asyncio.coroutine
     def close(self):
@@ -428,7 +499,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg:
             yield from self.push('501 Syntax: DATA')
             return
-        self.smtp_state = State.data
         yield from self.push('354 End data with <CR><LF>.<CR><LF>')
         data = []
         self.num_bytes = 0
