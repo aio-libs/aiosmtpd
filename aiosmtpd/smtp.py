@@ -12,7 +12,6 @@ import collections
 
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
-from enum import Enum
 from public import public
 
 
@@ -23,11 +22,6 @@ log = logging.getLogger('mail.log')
 
 NEWLINE = '\n'
 DATA_SIZE_DEFAULT = 33554432
-
-
-class State(Enum):
-    command = 0
-    data = 1
 
 
 @public
@@ -142,7 +136,6 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
-        self.smtp_state = State.command
         self.mailfrom = None
         self.rcpttos = []
         self.require_SMTPUTF8 = False
@@ -171,9 +164,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             # XXX this rstrip may not completely preserve old behavior.
             line = line.decode('utf-8').rstrip('\r\n')
             log.info('Data: %r', line)
-            if self.smtp_state is not State.command:
-                yield from self.push('451 Internal confusion')
-                continue
             if not line:
                 yield from self.push('500 Error: bad syntax')
                 continue
@@ -509,7 +499,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg:
             yield from self.push('501 Syntax: DATA')
             return
-        self.smtp_state = State.data
         yield from self.push('354 End data with <CR><LF>.<CR><LF>')
         data = []
         self.num_bytes = 0

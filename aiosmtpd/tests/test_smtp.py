@@ -452,6 +452,18 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 503)
             self.assertEqual(response, b'Error: need RCPT command')
 
+    def test_empty_command(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('')
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Error: bad syntax')
+
+    def test_too_long_command(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('a' * 513)
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Error: line too long')
+
 
 class TestSMTPWithController(unittest.TestCase):
     def test_mail_with_size_too_large(self):
