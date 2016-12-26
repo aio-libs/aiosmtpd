@@ -268,12 +268,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.transport.close()
 
     @asyncio.coroutine
-    def smtp_STARTTLS(self, arg):
+    def smtp_STARTTLS(self, arg):                   # pragma: nossl
         log.info('===> STARTTLS')
         if arg:
             yield from self.push('501 Syntax: STARTTLS')
             return
-        if not (self.tls_context and _has_ssl):     # pragma: nossl
+        if not (self.tls_context and _has_ssl):
             yield from self.push('454 TLS not available')
             return
         yield from self.push('220 Ready to start TLS')
