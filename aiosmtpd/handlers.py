@@ -92,7 +92,7 @@ class Proxy:
         lines = data.split('\n')
         # Look for the last header
         i = 0
-        for line in lines:                          # pragma: no branch
+        for line in lines:                          # pragma: nobranch
             if not line:
                 break
             i += 1
@@ -135,7 +135,7 @@ class Sink:
         return cls()
 
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
-        pass                                        # pragma: no cover
+        pass                                        # pragma: nocover
 
 
 @public
@@ -163,7 +163,7 @@ class Message:
         self.handle_message(message)
 
     def handle_message(self, message):
-        raise NotImplementedError                   # pragma: no cover
+        raise NotImplementedError                   # pragma: nocover
 
 
 @public
@@ -179,7 +179,7 @@ class AsyncMessage(Message):
 
     @asyncio.coroutine
     def handle_message(self, message, *, loop):
-        raise NotImplementedError                   # pragma: no cover
+        raise NotImplementedError                   # pragma: nocover
 
 
 @public

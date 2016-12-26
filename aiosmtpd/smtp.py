@@ -10,9 +10,9 @@ from public import public
 try:
     import ssl
     from asyncio import sslproto
-except ImportError:
+except ImportError:                                 # pragma: nocover
     _has_ssl = False
-else:
+else:                                               # pragma: nocover
     _has_ssl = True
 
 
@@ -93,8 +93,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             return self.command_size_limit
 
     def connection_made(self, transport):
-        if (self.transport is not None
-                and isinstance(transport, sslproto._SSLProtocolTransport)):
+        is_instance = isinstance(transport, sslproto._SSLProtocolTransport)
+        if self.transport is not None and is_instance:   # pragma: nossl
             # It is STARTTLS connection over normal connection.
             self._reader._transport = transport
             self._writer._transport = transport
@@ -180,7 +180,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             if len(line) > max_sz:
                 yield from self.push('500 Error: line too long')
                 continue
-            if self._tls_handshake_failed and command != 'QUIT':
+            if (self._tls_handshake_failed
+                    and command != 'QUIT'):                   # pragma: nossl
                 yield from self.push(
                     '554 Command refused due to lack of security')
                 continue
