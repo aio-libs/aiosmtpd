@@ -71,7 +71,7 @@ Developing
 ==========
 
 You'll need the `tox <https://pypi.python.org/pypi/tox>`__ tool to run the
-test suite for Python 3.4 and 3.5.  Once you've got that, run::
+test suite for Python 3.4, 3.5, and 3.6.  Once you've got that, run::
 
     $ tox
 

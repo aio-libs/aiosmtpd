@@ -6,13 +6,18 @@ import unittest
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import SMTP as Server
+from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
 from smtplib import SMTP, SMTPDataError
 
 
 class UTF8Controller(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True)
+
+
+class NoDecodeController(Controller):
+    def factory(self):
+        return Server(self.handler, decode_data=False)
 
 
 class SizedController(Controller):
@@ -27,6 +32,18 @@ class SizedController(Controller):
 class SMTPUTF8Controller(Controller):
     def factory(self):
         return Server(self.handler, enable_SMTPUTF8=True)
+
+
+class CustomHostnameController(Controller):
+    def factory(self):
+        return Server(self.handler, hostname='custom.localhost')
+
+
+class CustomIdentController(Controller):
+    def factory(self):
+        server = Server(self.handler)
+        server.__ident__ = 'Identifying SMTP v2112'
+        return server
 
 
 class ErroringHandler:
@@ -394,6 +411,19 @@ class TestSMTP(unittest.TestCase):
                 response,
                 b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
 
+    def test_rcpt_with_unknown_params(self):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd(
+                'RCPT TO: <bart@example.com> FOOBAR')
+            self.assertEqual(code, 555)
+            self.assertEqual(
+                response,
+                b'RCPT TO parameters not recognized or not implemented')
+
     def test_rset(self):
         with SMTP(*self.address) as client:
             code, response = client.rset()
@@ -441,6 +471,38 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 503)
             self.assertEqual(response, b'Error: need RCPT command')
 
+    def test_data_invalid_params(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT TO: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('DATA FOOBAR')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: DATA')
+
+    def test_empty_command(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('')
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Error: bad syntax')
+
+    def test_too_long_command(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('a' * 513)
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Error: line too long')
+
+    def test_unknown_command(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('FOOBAR')
+            self.assertEqual(code, 500)
+            self.assertEqual(
+                response,
+                b'Error: command "FOOBAR" not recognized')    
+            
     def test_connection_close(self):
         client = SMTP(*self.address)
         client.connect()
@@ -535,3 +597,48 @@ Testing
                 self.assertEqual(cm.exception.code, 499)
                 self.assertEqual(cm.exception.response,
                                  b'Could not accept the message')
+
+
+class TestCustomizations(unittest.TestCase):
+    def test_custom_hostname(self):
+        controller = CustomHostnameController(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            self.assertEqual(response, bytes('custom.localhost', 'utf-8'))
+
+    def test_custom_greeting(self):
+        controller = CustomIdentController(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP() as client:
+            code, msg = client.connect(controller.hostname, controller.port)
+            self.assertEqual(code, 220)
+            # The hostname prefix is unpredictable.
+            self.assertEqual(msg[-22:], b'Identifying SMTP v2112')
+
+    def test_default_greeting(self):
+        controller = Controller(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP() as client:
+            code, msg = client.connect(controller.hostname, controller.port)
+            self.assertEqual(code, 220)
+            # The hostname prefix is unpredictable.
+            self.assertEqual(msg[-len(GREETING):], bytes(GREETING, 'utf-8'))
+
+    def test_mail_invalid_body_param(self):
+        controller = NoDecodeController(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP() as client:
+            code, msg = client.connect(controller.hostname, controller.port)
+            client.ehlo('example.com')
+            code, response = client.docmd(
+                'MAIL FROM: <anne@example.com> BODY=FOOBAR')
+            self.assertEqual(code, 501)
+            self.assertEqual(
+                response,
+                b'Error: BODY can only be one of 7BIT, 8BITMIME')

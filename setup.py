@@ -25,13 +25,13 @@ Python 3.""",
         ],
     entry_points={
         'console_scripts': ['smtpd = aiosmtpd.main:main'],
-        'flake8.extension': ['B40 = public.tests.flake8:ImportOrder'],
         },
     classifiers=[
         'License :: OSI Approved',
         'Intended Audience :: Developers',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
         'Topic :: Communications :: Email :: Mail Transport Agents',
         ],
     )

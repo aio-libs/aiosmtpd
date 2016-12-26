@@ -6,8 +6,8 @@ Pass in an instance of one of these classes, or derive your own, to provide
 your own handling of messages.  Implement only the methods you care about.
 """
 
-
 import sys
+import asyncio
 import logging
 import mailbox
 import smtplib
@@ -64,13 +64,20 @@ class Debugging:
 
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         print('---------- MESSAGE FOLLOWS ----------', file=self.stream)
-        if kws:
-            if 'mail_options' in kws:               # pragma: no branch
-                print('mail options: %s' % kws['mail_options'],
-                      file=self.stream)
-            if 'rcpt_options' in kws:               # pragma: no branch
-                print('rcpt options: %s\n' % kws['rcpt_options'],
-                      file=self.stream)
+        # Yes, actually test for truthiness since it's possible for either the
+        # keywords to be missing, or for their values to be empty lists.
+        add_separator = False
+        mail_options = kws.get('mail_options')
+        if mail_options:
+            print('mail options:', mail_options, file=self.stream)
+            add_separator = True
+        # rcpt_options are not currently support by the SMTP class.
+        rcpt_options = kws.get('rcpt_options')
+        if rcpt_options:                            # pragma: nocover
+            print('rcpt options:', rcpt_options, file=self.stream)
+            add_separator = True
+        if add_separator:
+            print(file=self.stream)
         self._print_message_content(peer, data)
         print('------------ END MESSAGE ------------', file=self.stream)
 
@@ -85,7 +92,7 @@ class Proxy:
         lines = data.split('\n')
         # Look for the last header
         i = 0
-        for line in lines:                          # pragma: no branch
+        for line in lines:                          # pragma: nobranch
             if not line:
                 break
             i += 1
@@ -128,7 +135,7 @@ class Sink:
         return cls()
 
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
-        pass                                        # pragma: no cover
+        pass                                        # pragma: nocover
 
 
 @public
@@ -136,7 +143,7 @@ class Message:
     def __init__(self, message_class=None):
         self.message_class = message_class
 
-    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
+    def prepare_message(self, peer, mailfrom, rcpttos, data, **kws):
         # If the server was created with decode_data True, then data will be a
         # str, otherwise it will be bytes.
         if isinstance(data, bytes):
@@ -147,11 +154,32 @@ class Message:
             message = message_from_string(data, self.message_class)
         message['X-Peer'] = str(peer)
         message['X-MailFrom'] = mailfrom
-        message['X-RcptTos'] = COMMASPACE.join(rcpttos)
+        message['X-RcptTo'] = COMMASPACE.join(rcpttos)
+
+        return message
+
+    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
+        message = self.prepare_message(peer, mailfrom, rcpttos, data, **kws)
         self.handle_message(message)
 
     def handle_message(self, message):
-        raise NotImplementedError                   # pragma: no cover
+        raise NotImplementedError                   # pragma: nocover
+
+
+@public
+class AsyncMessage(Message):
+    def __init__(self, message_class=None, *, loop=None):
+        super().__init__(message_class)
+        self.loop = loop or asyncio.get_event_loop()
+
+    @asyncio.coroutine
+    def process_message(self, peer, mailfrom, rcpttos, data, *, loop, **kws):
+        message = self.prepare_message(peer, mailfrom, rcpttos, data, **kws)
+        yield from self.handle_message(message, loop=loop)
+
+    @asyncio.coroutine
+    def handle_message(self, message, *, loop):
+        raise NotImplementedError                   # pragma: nocover
 
 
 @public
