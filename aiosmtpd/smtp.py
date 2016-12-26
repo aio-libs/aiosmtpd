@@ -211,8 +211,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                             '554 Command refused due to lack of security')
                         continue
                     if (self.require_starttls
-                        and (not self._tls_protocol)
-                        and (command not in ['EHLO', 'STARTTLS', 'QUIT'])):
+                            and (not self._tls_protocol)
+                            and (command not in ['EHLO', 'STARTTLS', 'QUIT'])):
                         # RFC3207 part 4
                         yield from self.push(
                             '530 Must issue a STARTTLS command first')
@@ -590,7 +590,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 break
             self.num_bytes += len(line)
             if (not size_exceeded) and self.data_size_limit and \
-                            self.num_bytes > self.data_size_limit:
+                    self.num_bytes > self.data_size_limit:
                 size_exceeded = True
             # XXX this rstrip may not exactly preserve the old behavior
             if not size_exceeded:

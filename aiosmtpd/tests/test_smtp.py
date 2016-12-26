@@ -1,8 +1,8 @@
 """Test the SMTP protocol."""
 
 import socket
-import unittest
 import asyncio
+import unittest
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
