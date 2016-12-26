@@ -244,7 +244,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         if self.enable_SMTPUTF8:
             yield from self.push('250-SMTPUTF8')
             self.command_size_limits['MAIL'] += 10
-        if self.tls_context and (not self._tls_protocol) and _has_ssl:
+        if (self.tls_context and
+                not self._tls_protocol and
+                _has_ssl):                        # pragma: nossl
             yield from self.push('250-STARTTLS')
         yield from self.ehlo_hook()
         yield from self.push('250 HELP')
@@ -271,7 +273,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg:
             yield from self.push('501 Syntax: STARTTLS')
             return
-        if not (self.tls_context and _has_ssl):
+        if not (self.tls_context and _has_ssl):     # pragma: nossl
             yield from self.push('454 TLS not available')
             return
         yield from self.push('220 Ready to start TLS')
