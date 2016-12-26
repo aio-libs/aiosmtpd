@@ -1,13 +1,17 @@
 language: python
-python:
-  - "3.4"
-  - "3.5"
-  - "3.6"
 install:
   - pip install tox
   - python3 setup.py egg_info
   - pip install -r aiosmtpd.egg-info/requires.txt
 env:
   - PYTHONASYNCIODEBUG=1
+matrix:
+  include:
+    - python: "3.4"
+      env: INTERP=py34
+    - python: "3.5"
+      env: INTERP=py35
+    - python: "3.6"
+      env: INTERP=py36
 script:
-  - tox
+  - tox -e $INTERP-nocov,$INTERP-cov,$INTERP-diffcov,qa,docs
