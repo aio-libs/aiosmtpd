@@ -466,7 +466,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(syntaxerr)
             return
         # XXX currently there are no options we recognize.
-        if len(params.keys()) > 0:
+        if len(params) > 0:
             yield from self.push(
                 '555 RCPT TO parameters not recognized or not implemented')
             return

@@ -64,13 +64,20 @@ class Debugging:
 
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         print('---------- MESSAGE FOLLOWS ----------', file=self.stream)
-        if kws:
-            if 'mail_options' in kws:               # pragma: no branch
-                print('mail options: %s' % kws['mail_options'],
-                      file=self.stream)
-            if 'rcpt_options' in kws:               # pragma: no branch
-                print('rcpt options: %s\n' % kws['rcpt_options'],
-                      file=self.stream)
+        # Yes, actually test for truthiness since it's possible for either the
+        # keywords to be missing, or for their values to be empty lists.
+        add_separator = False
+        mail_options = kws.get('mail_options')
+        if mail_options:
+            print('mail options:', mail_options, file=self.stream)
+            add_separator = True
+        # rcpt_options are not currently support by the SMTP class.
+        rcpt_options = kws.get('rcpt_options')
+        if rcpt_options:                            # pragma: nocover
+            print('rcpt options:', rcpt_options, file=self.stream)
+            add_separator = True
+        if add_separator:
+            print(file=self.stream)
         self._print_message_content(peer, data)
         print('------------ END MESSAGE ------------', file=self.stream)
 

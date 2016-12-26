@@ -2,10 +2,11 @@ import asyncio
 import unittest
 import pkg_resources
 
+from aiosmtpd.controller import Controller as BaseController
+from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as SMTPProtocol
 from email.mime.text import MIMEText
 from smtplib import SMTP
-from .test_smtp import Controller as OldController, Sink
 from unittest.mock import patch
 
 try:
@@ -17,7 +18,7 @@ else:
     _has_ssl = bool(sslproto)
 
 
-class Controller(OldController):
+class Controller(BaseController):
     def factory(self):
         return SMTPProtocol(self.handler)
 
