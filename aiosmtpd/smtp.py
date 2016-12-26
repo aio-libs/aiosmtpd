@@ -122,8 +122,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Process the client's requests.
             self.connection_closed = False
             self._handler_coroutine = self.loop.create_task(
-                self._handle_client()
-            )
+                self._handle_client())
 
     def _client_connected_cb(self, reader, writer):
         # This is redundant since we subclass StreamReaderProtocol, but I like
