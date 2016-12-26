@@ -1,19 +1,20 @@
 import asyncio
-import pkg_resources
 import unittest
+import pkg_resources
+
+from aiosmtpd.smtp import SMTP as SMTPProtocol
 from email.mime.text import MIMEText
 from smtplib import SMTP
+from .test_smtp import Controller as OldController, Sink
 from unittest.mock import patch
+
 try:
     import ssl
     from asyncio import sslproto
 except ImportError:
     _has_ssl = False
 else:
-    _has_ssl = True
-
-from aiosmtpd.smtp import SMTP as SMTPProtocol
-from .test_smtp import Controller as OldController, Sink
+    _has_ssl = bool(sslproto)
 
 
 class Controller(OldController):

@@ -1,5 +1,12 @@
 import socket
 import asyncio
+import logging
+import collections
+
+from email._header_value_parser import get_addr_spec, get_angle_addr
+from email.errors import HeaderParseError
+from public import public
+
 try:
     import ssl
     from asyncio import sslproto
@@ -7,12 +14,6 @@ except ImportError:
     _has_ssl = False
 else:
     _has_ssl = True
-import logging
-import collections
-
-from email._header_value_parser import get_addr_spec, get_angle_addr
-from email.errors import HeaderParseError
-from public import public
 
 
 __version__ = '1.0a4+'
