@@ -38,8 +38,7 @@ class TestDebugging(unittest.TestCase):
     def test_debugging(self):
         with ExitStack() as resources:
             client = resources.enter_context(SMTP(*self.address))
-            resources.enter_context(
-                patch('aiosmtpd.handlers._format_peer', _format_peer_address))
+            peer = client.sock.getsockname()
             client.sendmail('anne@example.com', ['bart@example.com'], """\
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>
@@ -53,11 +52,11 @@ Testing
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>
 Subject: A test
-X-Peer: ::1
+X-Peer: {!r}
 
 Testing
 ------------ END MESSAGE ------------
-""")
+""".format(peer))
 
 
 class TestDebuggingBytes(unittest.TestCase):

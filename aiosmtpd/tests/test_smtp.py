@@ -24,6 +24,11 @@ class StrictASCIIController(Controller):
         )
 
 
+class NoDecodeController(Controller):
+    def factory(self):
+        return Server(self.handler, decode_data=False)
+
+
 class SizedController(Controller):
     def __init__(self, handler, size, loop=None, hostname='::0', port=8025):
         self.size = size
@@ -430,6 +435,19 @@ class TestSMTP(unittest.TestCase):
                 response,
                 b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
 
+    def test_rcpt_with_unknown_params(self):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd(
+                'RCPT TO: <bart@example.com> FOOBAR')
+            self.assertEqual(code, 555)
+            self.assertEqual(
+                response,
+                b'RCPT TO parameters not recognized or not implemented')
+
     def test_rset(self):
         with SMTP(*self.address) as client:
             code, response = client.rset()
@@ -476,6 +494,38 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('DATA')
             self.assertEqual(code, 503)
             self.assertEqual(response, b'Error: need RCPT command')
+
+    def test_data_invalid_params(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT TO: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('DATA FOOBAR')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: DATA')
+
+    def test_empty_command(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('')
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Error: bad syntax')
+
+    def test_too_long_command(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('a' * 513)
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Error: line too long')
+
+    def test_unknown_command(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('FOOBAR')
+            self.assertEqual(code, 500)
+            self.assertEqual(
+                response,
+                b'Error: command "FOOBAR" not recognized')
 
 
 class TestSMTPWithController(unittest.TestCase):
@@ -795,3 +845,17 @@ class TestCustomizations(unittest.TestCase):
             self.assertEqual(code, 220)
             # The hostname prefix is unpredictable.
             self.assertEqual(msg[-len(GREETING):], bytes(GREETING, 'utf-8'))
+
+    def test_mail_invalid_body_param(self):
+        controller = NoDecodeController(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP() as client:
+            code, msg = client.connect(controller.hostname, controller.port)
+            client.ehlo('example.com')
+            code, response = client.docmd(
+                'MAIL FROM: <anne@example.com> BODY=FOOBAR')
+            self.assertEqual(code, 501)
+            self.assertEqual(
+                response,
+                b'Error: BODY can only be one of 7BIT, 8BITMIME')

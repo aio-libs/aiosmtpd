@@ -2,10 +2,14 @@
  NEWS for aiosmtpd
 ===================
 
-1.0a4 (20XX-XX-XX)
+1.0a5 (201X-XX-XX)
+==================
+
+1.0a4 (2016-11-29)
 ==================
 * The SMTP server connection identifier can be changed by setting the
   `__ident__` attribute on the `SMTP` instance.  (Closes #20)
+* Fixed a new incompatibility with the `atpublic` library.
 
 1.0a3 (2016-11-24)
 ==================

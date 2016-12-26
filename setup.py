@@ -25,7 +25,6 @@ Python 3.""",
         ],
     entry_points={
         'console_scripts': ['smtpd = aiosmtpd.main:main'],
-        'flake8.extension': ['B40 = public.tests.flake8:ImportOrder'],
         },
     classifiers=[
         'License :: OSI Approved',
