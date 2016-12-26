@@ -464,6 +464,14 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 500)
             self.assertEqual(response, b'Error: line too long')
 
+    def test_unknown_command(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('FOOBAR')
+            self.assertEqual(code, 500)
+            self.assertEqual(
+                response,
+                b'Error: command "FOOBAR" not recognized')
+
 
 class TestSMTPWithController(unittest.TestCase):
     def test_mail_with_size_too_large(self):
