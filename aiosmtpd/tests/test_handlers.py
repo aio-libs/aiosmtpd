@@ -409,11 +409,11 @@ Testing
             mock().connect.assert_called_once_with('localhost', 9025)
             mock().sendmail.assert_called_once_with(
                 'anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-X-Peer: ::1
-
+From: Anne Person <anne@example.com>\r
+To: Bart Person <bart@example.com>\r
+Subject: A test\r
+X-Peer: ::1\r
+\r
 Testing""")
             mock().quit.assert_called_once_with()
 
