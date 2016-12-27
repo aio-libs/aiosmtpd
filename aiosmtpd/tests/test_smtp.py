@@ -6,7 +6,7 @@ import unittest
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
-from smtplib import SMTP, SMTPDataError
+from smtplib import SMTP, SMTPDataError, SMTPResponseException
 
 
 class UTF8Controller(Controller):
@@ -17,6 +17,15 @@ class UTF8Controller(Controller):
 class NoDecodeController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=False)
+
+
+class ReceivingHandler:
+    box = None
+
+    def process_message(self, *args, **kws):
+        if not self.box:
+            self.box = []
+        self.box.append(args)
 
 
 class SizedController(Controller):
@@ -589,6 +598,32 @@ Testing
                 self.assertEqual(cm.exception.code, 499)
                 self.assertEqual(cm.exception.response,
                                  b'Could not accept the message')
+
+    def test_too_long_message_body(self):
+        controller = SizedController(Sink(), size=100)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = '\r\n'.join(['z' * 20] * 10)
+            with self.assertRaises(SMTPResponseException) as ctx:
+                client.sendmail('anne@example.com', ['bart@example.com'], mail)
+            e = ctx.exception
+            self.assertEqual(e.smtp_code, 552)
+            self.assertEqual(e.smtp_error, b'Error: Too much mail data')
+
+    def test_dots_escaped(self):
+        handler = ReceivingHandler()
+        controller = UTF8Controller(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = '\r\n'.join(['Test', '.', 'mail'])
+            client.sendmail('anne@example.com', ['bart@example.com'], mail)
+            self.assertEqual(len(handler.box), 1)
+            mail = handler.box[0]
+            self.assertEqual(mail[3], 'Test\r\n.\r\nmail')
 
 
 class TestCustomizations(unittest.TestCase):

@@ -89,15 +89,15 @@ class Proxy:
         self._port = remote_port
 
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
-        lines = data.split('\n')
+        lines = data.splitlines(keepends=True)
         # Look for the last header
         i = 0
         for line in lines:                          # pragma: nobranch
-            if not line:
+            if line in ('\r', '\n', '\r\n'):
                 break
             i += 1
-        lines.insert(i, 'X-Peer: %s' % peer[0])
-        data = NEWLINE.join(lines)
+        lines.insert(i, 'X-Peer: %s\r\n' % peer[0])
+        data = ''.join(lines)
         refused = self._deliver(mailfrom, rcpttos, data)
         # TBD: what to do with refused addresses?
         log.info('we got some refusals: %s', refused)
