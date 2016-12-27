@@ -1,6 +1,6 @@
 """Test the SMTP protocol."""
-
 import socket
+import asyncio
 import unittest
 
 from aiosmtpd.controller import Controller
@@ -46,8 +46,14 @@ class CustomIdentController(Controller):
 
 
 class ErroringHandler:
+    error = None
+
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         return '499 Could not accept the message'
+
+    @asyncio.coroutine
+    def handle_exception(self, e):
+        self.error = e
 
 
 class TestSMTP(unittest.TestCase):
@@ -589,6 +595,26 @@ Testing
                 self.assertEqual(cm.exception.code, 499)
                 self.assertEqual(cm.exception.response,
                                  b'Could not accept the message')
+
+    def test_unexpected_errors(self):
+        class ErrorSMTP(Server):
+            @asyncio.coroutine
+            def smtp_HELO(self, hostname):
+                raise ValueError('test')
+
+        class ErrorController(Controller):
+            def factory(self):
+                return ErrorSMTP(self.handler)
+
+        handler = ErroringHandler()
+        controller = ErrorController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            code, response = client.helo('example.com')
+        self.assertEqual(code, 500)
+        self.assertEqual(response, b'Error: (ValueError) test')
+        self.assertIsInstance(handler.error, ValueError)
 
 
 class TestCustomizations(unittest.TestCase):
