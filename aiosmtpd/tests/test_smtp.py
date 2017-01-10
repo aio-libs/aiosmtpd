@@ -1,5 +1,6 @@
 """Test the SMTP protocol."""
 
+import time
 import socket
 import unittest
 
@@ -52,10 +53,10 @@ class ErroringHandler:
 
 class TestSMTP(unittest.TestCase):
     def setUp(self):
-        controller = UTF8Controller(Sink)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
+        self.controller = UTF8Controller(Sink)
+        self.controller.start()
+        self.addCleanup(self.controller.stop)
+        self.address = (self.controller.hostname, self.controller.port)
 
     def test_helo(self):
         with SMTP(*self.address) as client:
@@ -500,7 +501,14 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 500)
             self.assertEqual(
                 response,
-                b'Error: command "FOOBAR" not recognized')
+                b'Error: command "FOOBAR" not recognized')    
+            
+    def test_connection_close(self):
+        client = SMTP(*self.address)
+        client.connect()
+        client.close()
+        time.sleep(0.1)
+        self.assertEqual(0, self.controller.server._active_count)
 
 
 class TestSMTPWithController(unittest.TestCase):

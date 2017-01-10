@@ -132,8 +132,11 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._writer = writer
 
     def eof_received(self):
+        super().eof_received()
+
+    def connection_lost(self, exc):
         self._handler_coroutine.cancel()
-        return super().eof_received()
+        super().connection_lost(exc)
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
@@ -198,6 +201,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                     '500 Error: command "%s" not recognized' % command)
                 continue
             yield from method(arg)
+
+            yield  # give a change to switch to another coroutine
 
     # SMTP and ESMTP commands
     @asyncio.coroutine
@@ -298,7 +303,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         # XXX this close is probably not quite right.
         if self._writer:
             self._writer.close()
-        self._connection_closed = True
+        self.connection_closed = True
 
     def _strip_command_keyword(self, keyword, arg):
         keylen = len(keyword)
@@ -519,6 +524,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                 data.append(line.decode('utf-8'))
             else:
                 data.append(line)
+
+            yield  # give a change to switch to another coroutine
         # Remove extraneous carriage returns and de-transparency
         # according to RFC 5321, Section 4.5.2.
         for i in range(len(data)):
