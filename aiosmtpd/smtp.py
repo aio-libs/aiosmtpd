@@ -13,7 +13,7 @@ try:
 except ImportError:                                 # pragma: nocover
     _has_ssl = False
 else:                                               # pragma: nocover
-    _has_ssl = sslproto and hasattr(ssl, "MemoryBIO")
+    _has_ssl = sslproto and hasattr(ssl, 'MemoryBIO')
 
 
 __version__ = '1.0a4+'
