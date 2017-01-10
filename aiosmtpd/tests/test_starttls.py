@@ -15,7 +15,7 @@ try:
 except ImportError:
     _has_ssl = False
 else:
-    _has_ssl = sslproto and hasattr(ssl, "MemoryBIO")
+    _has_ssl = sslproto and hasattr(ssl, 'MemoryBIO')
 
 
 class Controller(BaseController):
