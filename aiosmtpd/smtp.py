@@ -23,6 +23,7 @@ log = logging.getLogger('mail.log')
 
 NEWLINE = '\n'
 DATA_SIZE_DEFAULT = 33554432
+EMPTYBYTES = b''
 
 
 @public
@@ -62,7 +63,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._dotsep = '.'
             self._newline = NEWLINE
         else:
-            self._emptystring = b''
+            self._emptystring = EMPTYBYTES
             self._linesep = b'\r\n'
             self._dotsep = ord(b'.')
             self._newline = b'\n'
@@ -528,7 +529,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             text = data[i]
             if text and text[:1] == b'.':
                 data[i] = text[1:]
-        received_data = b''.join(data)
+        received_data = EMPTYBYTES.join(data)
         if self._decode_data:
             received_data = received_data.decode('utf-8')
         args = (self.peer, self.mailfrom, self.rcpttos, received_data)
