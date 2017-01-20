@@ -5,7 +5,7 @@ import unittest
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import (
-    AsyncMessage, Debugging, Mailbox, Message, Proxy, Sink, NEWLINE)
+    AsyncMessage, Debugging, Mailbox, Message, NEWLINE, Proxy, Sink)
 from aiosmtpd.smtp import SMTP as Server
 from contextlib import ExitStack
 from io import StringIO

@@ -4,7 +4,7 @@ import socket
 import unittest
 
 from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import Sink, NEWLINE
+from aiosmtpd.handlers import NEWLINE, Sink
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
 from smtplib import SMTP, SMTPDataError, SMTPResponseException
 
