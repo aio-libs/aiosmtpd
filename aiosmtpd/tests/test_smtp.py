@@ -22,9 +22,10 @@ class NoDecodeController(Controller):
 class ReceivingHandler:
     box = None
 
+    def __init__(self):
+        self.box = []
+
     def process_message(self, *args, **kws):
-        if not self.box:
-            self.box = []
         self.box.append(args)
 
 
@@ -606,11 +607,11 @@ Testing
         with SMTP(controller.hostname, controller.port) as client:
             client.helo('example.com')
             mail = '\r\n'.join(['z' * 20] * 10)
-            with self.assertRaises(SMTPResponseException) as ctx:
+            with self.assertRaises(SMTPResponseException) as cm:
                 client.sendmail('anne@example.com', ['bart@example.com'], mail)
-            e = ctx.exception
-            self.assertEqual(e.smtp_code, 552)
-            self.assertEqual(e.smtp_error, b'Error: Too much mail data')
+            self.assertEqual(cm.exception.smtp_code, 552)
+            self.assertEqual(cm.exception.smtp_error,
+                             b'Error: Too much mail data')
 
     def test_dots_escaped(self):
         handler = ReceivingHandler()

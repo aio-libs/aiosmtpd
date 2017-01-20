@@ -512,8 +512,9 @@ class SMTP(asyncio.StreamReaderProtocol):
                     data[-1] = data[-1].rstrip(b'\r\n')
                 break
             num_bytes += len(line)
-            if (not size_exceeded) and self.data_size_limit and \
-                    num_bytes > self.data_size_limit:
+            if (not size_exceeded and
+                    self.data_size_limit and
+                    num_bytes > self.data_size_limit):
                 size_exceeded = True
                 yield from self.push('552 Error: Too much mail data')
             if not size_exceeded:
