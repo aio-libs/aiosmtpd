@@ -4,7 +4,7 @@ import socket
 import unittest
 
 from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import Sink
+from aiosmtpd.handlers import Sink, NEWLINE
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
 from smtplib import SMTP, SMTPDataError, SMTPResponseException
 
@@ -620,7 +620,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             client.helo('example.com')
-            mail = '\r\n'.join(['Test', '.', 'mail'])
+            mail = NEWLINE.join(['Test', '.', 'mail'])
             client.sendmail('anne@example.com', ['bart@example.com'], mail)
             self.assertEqual(len(handler.box), 1)
             mail = handler.box[0]
