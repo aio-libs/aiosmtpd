@@ -68,10 +68,13 @@ class ErroringHandler:
 class TestProtocol(unittest.TestCase):
     def setUp(self):
         self.transport = Mock()
+        self._old_loop = asyncio.get_event_loop()
         self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
 
     def tearDown(self):
         self.loop.close()
+        asyncio.set_event_loop(self._old_loop)
 
     def _get_protocol(self, *args, **kwargs):
         protocol = Server(*args, loop=self.loop, **kwargs)
