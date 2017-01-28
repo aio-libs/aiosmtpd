@@ -19,7 +19,7 @@ from public import public
 
 EMPTYSTRING = ''
 COMMASPACE = ', '
-NEWLINE = '\r\n'
+CRLF = '\r\n'
 log = logging.getLogger('mail.debug')
 
 
@@ -94,7 +94,7 @@ class Proxy:
         lines = data.splitlines(keepends=True)
         # Look for the last header
         i = 0
-        ending = NEWLINE
+        ending = CRLF
         for line in lines:                          # pragma: nobranch
             if NLCRE.match(line):
                 ending = line

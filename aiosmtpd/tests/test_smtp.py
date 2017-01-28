@@ -1,12 +1,17 @@
 """Test the SMTP protocol."""
 
+import asyncio
 import socket
 import unittest
+from unittest.mock import Mock
 
 from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import NEWLINE, Sink
+from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
 from smtplib import SMTP, SMTPDataError, SMTPResponseException
+
+CRLF = '\r\n'
+BCRLF = b'\r\n'
 
 
 class UTF8Controller(Controller):
@@ -58,6 +63,39 @@ class CustomIdentController(Controller):
 class ErroringHandler:
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         return '499 Could not accept the message'
+
+
+class TestProtocol(unittest.TestCase):
+    def setUp(self):
+        self.transport = Mock()
+        self.loop = asyncio.new_event_loop()
+
+    def tearDown(self):
+        self.loop.close()
+
+    def _get_protocol(self, *args, **kwargs):
+        protocol = Server(*args, loop=self.loop, **kwargs)
+        protocol.connection_made(self.transport)
+        return protocol
+
+    def test_honors_mail_delimeters(self):
+        handler = ReceivingHandler()
+        data = b'test\r\nmail\rdelimeters\nsaved'
+        protocol = self._get_protocol(handler)
+        protocol.data_received(BCRLF.join([
+            b'HELO example.org',
+            b'MAIL FROM: <anne@example.com>',
+            b'RCPT TO: <anne@example.com>',
+            b'DATA',
+            data + b'\r\n.',
+            b'QUIT\r\n'
+        ]))
+        try:
+            self.loop.run_until_complete(protocol._handler_coroutine)
+        except asyncio.CancelledError:
+            pass
+        assert len(handler.box) == 1
+        assert handler.box[0][3] == data
 
 
 class TestSMTP(unittest.TestCase):
@@ -620,7 +658,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             client.helo('example.com')
-            mail = NEWLINE.join(['Test', '.', 'mail'])
+            mail = CRLF.join(['Test', '.', 'mail'])
             client.sendmail('anne@example.com', ['bart@example.com'], mail)
             self.assertEqual(len(handler.box), 1)
             mail = handler.box[0]

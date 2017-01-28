@@ -5,7 +5,7 @@ import unittest
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import (
-    AsyncMessage, Debugging, Mailbox, Message, NEWLINE, Proxy, Sink)
+    AsyncMessage, Debugging, Mailbox, Message, Proxy, Sink)
 from aiosmtpd.smtp import SMTP as Server
 from contextlib import ExitStack
 from io import StringIO
@@ -14,6 +14,8 @@ from operator import itemgetter
 from smtplib import SMTP, SMTPRecipientsRefused
 from tempfile import TemporaryDirectory
 from unittest.mock import call, patch
+
+CRLF = '\r\n'
 
 
 class UTF8Controller(Controller):
@@ -407,15 +409,14 @@ Testing
                 'anne@example.com', ['bart@example.com'], self.message)
             client.quit()
             mock().connect.assert_called_once_with('localhost', 9025)
-            # SMTP always fixes eols, so it must be always CRLF as delimeter
-            msg = NEWLINE.join([
+            # SMTP always fixes eols, so it must be always CRLF as delimiter
+            msg = CRLF.join([
                 'From: Anne Person <anne@example.com>',
                 'To: Bart Person <bart@example.com>',
                 'Subject: A test',
                 'X-Peer: ::1',
                 '',
-                'Testing',
-            ])
+                'Testing'])
             mock().sendmail.assert_called_once_with(
                 'anne@example.com', ['bart@example.com'], msg)
             mock().quit.assert_called_once_with()
