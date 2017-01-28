@@ -1,14 +1,14 @@
 """Test the SMTP protocol."""
 
-import asyncio
 import socket
+import asyncio
 import unittest
-from unittest.mock import Mock
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
 from smtplib import SMTP, SMTPDataError, SMTPResponseException
+from unittest.mock import Mock
 
 CRLF = '\r\n'
 BCRLF = b'\r\n'
