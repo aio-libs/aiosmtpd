@@ -92,7 +92,7 @@ class TestProtocol(unittest.TestCase):
             b'DATA',
             data + b'\r\n.',
             b'QUIT\r\n'
-        ]))
+            ]))
         try:
             self.loop.run_until_complete(protocol._handler_coroutine)
         except asyncio.CancelledError:

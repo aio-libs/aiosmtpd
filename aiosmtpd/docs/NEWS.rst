@@ -24,11 +24,11 @@
   ``X-RcptTos`` header is renamed to ``X-RcptTo`` for backward compatibility
   with older libraries.
 * Add a few hooks to make subclassing easier:
-  - ``SMTP.ehlo_hook()`` is called just before the final, non-continuing 250
+  * ``SMTP.ehlo_hook()`` is called just before the final, non-continuing 250
     response to allow subclasses to add additional ``EHLO`` sub-responses.
-  - ``SMTP.rset_hook()`` is called just before the final 250 command to allow
+  * ``SMTP.rset_hook()`` is called just before the final 250 command to allow
     subclasses to provide additional ``RSET`` functionality.
-  - ``Controller.make_socket()`` allows subclasses to customize the creation
+  * ``Controller.make_socket()`` allows subclasses to customize the creation
     of the socket before binding.
 
 1.0a2 (2016-11-22)
