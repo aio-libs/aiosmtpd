@@ -15,6 +15,8 @@ from smtplib import SMTP, SMTPRecipientsRefused
 from tempfile import TemporaryDirectory
 from unittest.mock import call, patch
 
+CRLF = '\r\n'
+
 
 class UTF8Controller(Controller):
     def factory(self):
@@ -407,14 +409,16 @@ Testing
                 'anne@example.com', ['bart@example.com'], self.message)
             client.quit()
             mock().connect.assert_called_once_with('localhost', 9025)
+            # SMTP always fixes eols, so it must be always CRLF as delimiter
+            msg = CRLF.join([
+                'From: Anne Person <anne@example.com>',
+                'To: Bart Person <bart@example.com>',
+                'Subject: A test',
+                'X-Peer: ::1',
+                '',
+                'Testing'])
             mock().sendmail.assert_called_once_with(
-                'anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-X-Peer: ::1
-
-Testing""")
+                'anne@example.com', ['bart@example.com'], msg)
             mock().quit.assert_called_once_with()
 
     def test_recipients_refused(self):
