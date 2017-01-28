@@ -8,6 +8,8 @@
 * Minor changes to the way the ``Debugging`` handler prints ``mail_options``
   and ``rcpt_options`` (although the latter is still not support in ``SMTP``).
 * Use ``flufl.testing`` package for nose2 and flake8 plugins.
+* ``DATA`` method now respects original line endings, and passing size limits
+  is now handled better.  Given by Konstantin Volkov.
 * Better Python 3.4 compatibility.
 
 1.0a4 (2016-11-29)
