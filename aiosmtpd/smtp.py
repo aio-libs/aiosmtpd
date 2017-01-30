@@ -13,7 +13,7 @@ try:
 except ImportError:                                 # pragma: nocover
     _has_ssl = False
 else:                                               # pragma: nocover
-    _has_ssl = True
+    _has_ssl = sslproto and hasattr(ssl, 'MemoryBIO')
 
 
 __version__ = '1.0a4+'
@@ -23,6 +23,7 @@ log = logging.getLogger('mail.log')
 
 NEWLINE = '\n'
 DATA_SIZE_DEFAULT = 33554432
+EMPTYBYTES = b''
 
 
 @public
@@ -62,7 +63,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._dotsep = '.'
             self._newline = NEWLINE
         else:
-            self._emptystring = b''
+            self._emptystring = EMPTYBYTES
             self._linesep = b'\r\n'
             self._dotsep = ord(b'.')
             self._newline = b'\n'
@@ -144,8 +145,6 @@ class SMTP(asyncio.StreamReaderProtocol):
     def _set_rset_state(self):
         """Reset all state variables except the greeting."""
         self._set_post_data_state()
-        self.received_data = ''
-        self.received_lines = []
 
     @asyncio.coroutine
     def push(self, msg):
@@ -518,35 +517,41 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         yield from self.push('354 End data with <CR><LF>.<CR><LF>')
         data = []
-        self.num_bytes = 0
+        num_bytes = 0
+        size_exceeded = False
         while not self.connection_closed:
             line = yield from self._reader.readline()
             if line == b'.\r\n':
+                if data:
+                    data[-1] = data[-1].rstrip(b'\r\n')
                 break
-            self.num_bytes += len(line)
-            if self.data_size_limit and self.num_bytes > self.data_size_limit:
+            num_bytes += len(line)
+            if (not size_exceeded and
+                    self.data_size_limit and
+                    num_bytes > self.data_size_limit):
+                size_exceeded = True
                 yield from self.push('552 Error: Too much mail data')
-            # XXX this rstrip may not exactly preserve the old behavior
-            line = line.rstrip(b'\r\n')
-            if self._decode_data:
-                data.append(line.decode('utf-8'))
-            else:
+            if not size_exceeded:
                 data.append(line)
+        if size_exceeded:
+            self._set_post_data_state()
+            return
         # Remove extraneous carriage returns and de-transparency
         # according to RFC 5321, Section 4.5.2.
         for i in range(len(data)):
             text = data[i]
-            if text and text[0] == self._dotsep:
+            if text and text[:1] == b'.':
                 data[i] = text[1:]
-        self.received_data = self._newline.join(data)
-        args = (self.peer, self.mailfrom, self.rcpttos,
-                self.received_data)
+        received_data = EMPTYBYTES.join(data)
+        if self._decode_data:
+            received_data = received_data.decode('utf-8')
+        args = (self.peer, self.mailfrom, self.rcpttos, received_data)
         kwargs = {}
         if not self._decode_data:
             kwargs = {
                 'mail_options': self.mail_options,
                 'rcpt_options': self.rcpt_options,
-            }
+                }
         kwargs.update({'loop': self.loop})
         if asyncio.iscoroutinefunction(self.event_handler.process_message):
             status = yield from self.event_handler.process_message(

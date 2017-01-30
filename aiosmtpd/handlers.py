@@ -13,11 +13,13 @@ import mailbox
 import smtplib
 
 from email import message_from_bytes, message_from_string
+from email.feedparser import NLCRE
 from public import public
 
 
+EMPTYSTRING = ''
 COMMASPACE = ', '
-NEWLINE = '\n'
+CRLF = '\r\n'
 log = logging.getLogger('mail.debug')
 
 
@@ -89,15 +91,17 @@ class Proxy:
         self._port = remote_port
 
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
-        lines = data.split('\n')
+        lines = data.splitlines(keepends=True)
         # Look for the last header
         i = 0
+        ending = CRLF
         for line in lines:                          # pragma: nobranch
-            if not line:
+            if NLCRE.match(line):
+                ending = line
                 break
             i += 1
-        lines.insert(i, 'X-Peer: %s' % peer[0])
-        data = NEWLINE.join(lines)
+        lines.insert(i, 'X-Peer: %s%s' % (peer[0], ending))
+        data = EMPTYSTRING.join(lines)
         refused = self._deliver(mailfrom, rcpttos, data)
         # TBD: what to do with refused addresses?
         log.info('we got some refusals: %s', refused)

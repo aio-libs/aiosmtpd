@@ -8,6 +8,9 @@
 * Minor changes to the way the ``Debugging`` handler prints ``mail_options``
   and ``rcpt_options`` (although the latter is still not support in ``SMTP``).
 * Use ``flufl.testing`` package for nose2 and flake8 plugins.
+* ``DATA`` method now respects original line endings, and passing size limits
+  is now handled better.  Given by Konstantin Volkov.
+* Better Python 3.4 compatibility.
 
 1.0a4 (2016-11-29)
 ==================
@@ -21,11 +24,12 @@
   ``X-RcptTos`` header is renamed to ``X-RcptTo`` for backward compatibility
   with older libraries.
 * Add a few hooks to make subclassing easier:
-  - ``SMTP.ehlo_hook()`` is called just before the final, non-continuing 250
+
+  * ``SMTP.ehlo_hook()`` is called just before the final, non-continuing 250
     response to allow subclasses to add additional ``EHLO`` sub-responses.
-  - ``SMTP.rset_hook()`` is called just before the final 250 command to allow
+  * ``SMTP.rset_hook()`` is called just before the final 250 command to allow
     subclasses to provide additional ``RSET`` functionality.
-  - ``Controller.make_socket()`` allows subclasses to customize the creation
+  * ``Controller.make_socket()`` allows subclasses to customize the creation
     of the socket before binding.
 
 1.0a2 (2016-11-22)

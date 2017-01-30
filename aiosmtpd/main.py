@@ -152,7 +152,7 @@ def setup_sock(host, port):
             socket.SOCK_STREAM,
             0,
             socket.AI_PASSIVE,
-        )
+            )
     except socket.gaierror:
         # Infer the type from the host.
         addr = host, port
