@@ -10,10 +10,10 @@ from public import public
 try:
     import ssl
     from asyncio import sslproto
-except ImportError:
+except ImportError:                                 # pragma: nocover
     _has_ssl = False
-else:
-    _has_ssl = True
+else:                                               # pragma: nocover
+    _has_ssl = sslproto and hasattr(ssl, 'MemoryBIO')
 
 
 __version__ = '1.0a4+'
@@ -23,6 +23,7 @@ log = logging.getLogger('mail.log')
 
 NEWLINE = '\n'
 DATA_SIZE_DEFAULT = 33554432
+EMPTYBYTES = b''
 
 
 @public
@@ -64,7 +65,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._dotsep = '.'
             self._newline = NEWLINE
         else:
-            self._emptystring = b''
+            self._emptystring = EMPTYBYTES
             self._linesep = b'\r\n'
             self._dotsep = ord(b'.')
             self._newline = b'\n'
@@ -95,8 +96,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             return self.command_size_limit
 
     def connection_made(self, transport):
-        if (self.transport is not None
-                and isinstance(transport, sslproto._SSLProtocolTransport)):
+        is_instance = (_has_ssl and
+                       isinstance(transport, sslproto._SSLProtocolTransport))
+        if self.transport is not None and is_instance:   # pragma: nossl
             # It is STARTTLS connection over normal connection.
             self._reader._transport = transport
             self._writer._transport = transport
@@ -145,8 +147,6 @@ class SMTP(asyncio.StreamReaderProtocol):
     def _set_rset_state(self):
         """Reset all state variables except the greeting."""
         self._set_post_data_state()
-        self.received_data = ''
-        self.received_lines = []
 
     @asyncio.coroutine
     def push(self, msg):
@@ -206,7 +206,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                     if len(line) > max_sz:
                         yield from self.push('500 Error: line too long')
                         continue
-                    if self._tls_handshake_failed and command != 'QUIT':
+                    if (self._tls_handshake_failed
+                            and command != 'QUIT'):
                         yield from self.push(
                             '554 Command refused due to lack of security')
                         continue
@@ -287,7 +288,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         if self.enable_SMTPUTF8:
             yield from self.push('250-SMTPUTF8')
             self.command_size_limits['MAIL'] += 10
-        if self.tls_context and (not self._tls_protocol) and _has_ssl:
+        if (self.tls_context and
+                not self._tls_protocol and
+                _has_ssl):                        # pragma: nossl
             yield from self.push('250-STARTTLS')
         yield from self.ehlo_hook()
         yield from self.push('250 HELP')
@@ -309,7 +312,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.transport.close()
 
     @asyncio.coroutine
-    def smtp_STARTTLS(self, arg):
+    def smtp_STARTTLS(self, arg):                   # pragma: nossl
         log.info('===> STARTTLS')
         if arg:
             yield from self.push('501 Syntax: STARTTLS')
@@ -547,7 +550,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(syntaxerr)
             return
         # XXX currently there are no options we recognize.
-        if len(params.keys()) > 0:
+        if len(params) > 0:
             yield from self.push(
                 '555 RCPT TO parameters not recognized or not implemented')
             return
@@ -582,22 +585,23 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         yield from self.push('354 End data with <CR><LF>.<CR><LF>')
         data = []
-        self.num_bytes = 0
+        num_bytes = 0
         size_exceeded = False
         while not self.connection_closed:
             line = yield from self._reader.readline()
             if line == b'.\r\n':
+                if data:
+                    data[-1] = data[-1].rstrip(b'\r\n')
                 break
-            self.num_bytes += len(line)
-            if (not size_exceeded) and self.data_size_limit and \
-                    self.num_bytes > self.data_size_limit:
+            num_bytes += len(line)
+            if (not size_exceeded and
+                    self.data_size_limit and
+                    num_bytes > self.data_size_limit):
                 size_exceeded = True
-            # XXX this rstrip may not exactly preserve the old behavior
+                yield from self.push('552 Error: Too much mail data')
             if not size_exceeded:
-                line = line.rstrip(b'\r\n')
                 data.append(line)
         if size_exceeded:
-            yield from self.push('552 Error: Too much mail data')
             self._set_post_data_state()
             return
         # Remove extraneous carriage returns and de-transparency
@@ -606,19 +610,16 @@ class SMTP(asyncio.StreamReaderProtocol):
             text = data[i]
             if text and text[:1] == b'.':
                 data[i] = text[1:]
-        self.received_data = b'\n'.join(data)
+        received_data = EMPTYBYTES.join(data)
         if self._decode_data:
-            # Try to use utf8 and then 8bit encoding. Keep not decoded if
-            # fails
-            self.received_data = self._decode_arg(self.received_data)
-        args = (self.peer, self.mailfrom, self.rcpttos,
-                self.received_data)
+            received_data = received_data.decode('utf-8')
+        args = (self.peer, self.mailfrom, self.rcpttos, received_data)
         kwargs = {}
         if not self._decode_data:
             kwargs = {
                 'mail_options': self.mail_options,
                 'rcpt_options': self.rcpt_options,
-            }
+                }
         kwargs.update({'loop': self.loop})
         if asyncio.iscoroutinefunction(self.event_handler.process_message):
             status = yield from self.event_handler.process_message(

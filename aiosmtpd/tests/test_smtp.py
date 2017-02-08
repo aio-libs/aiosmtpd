@@ -8,6 +8,10 @@ from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
 from smtplib import SMTP, SMTPDataError, SMTPResponseException
+from unittest.mock import Mock
+
+CRLF = '\r\n'
+BCRLF = b'\r\n'
 
 
 class UTF8Controller(Controller):
@@ -27,6 +31,16 @@ class StrictASCIIController(Controller):
 class NoDecodeController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=False)
+
+
+class ReceivingHandler:
+    box = None
+
+    def __init__(self):
+        self.box = []
+
+    def process_message(self, *args, **kws):
+        self.box.append(args)
 
 
 class SizedController(Controller):
@@ -66,13 +80,40 @@ class ErroringHandler:
         self.error = e
 
 
-class ReceivingHandler:
-    box = None
+class TestProtocol(unittest.TestCase):
+    def setUp(self):
+        self.transport = Mock()
+        self._old_loop = asyncio.get_event_loop()
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
 
-    def process_message(self, *args, **kws):
-        if not self.box:
-            self.box = []
-        self.box.append(args)
+    def tearDown(self):
+        self.loop.close()
+        asyncio.set_event_loop(self._old_loop)
+
+    def _get_protocol(self, *args, **kwargs):
+        protocol = Server(*args, loop=self.loop, **kwargs)
+        protocol.connection_made(self.transport)
+        return protocol
+
+    def test_honors_mail_delimeters(self):
+        handler = ReceivingHandler()
+        data = b'test\r\nmail\rdelimeters\nsaved'
+        protocol = self._get_protocol(handler)
+        protocol.data_received(BCRLF.join([
+            b'HELO example.org',
+            b'MAIL FROM: <anne@example.com>',
+            b'RCPT TO: <anne@example.com>',
+            b'DATA',
+            data + b'\r\n.',
+            b'QUIT\r\n'
+            ]))
+        try:
+            self.loop.run_until_complete(protocol._handler_coroutine)
+        except asyncio.CancelledError:
+            pass
+        assert len(handler.box) == 1
+        assert handler.box[0][3] == data
 
 
 class TestSMTP(unittest.TestCase):
@@ -644,11 +685,11 @@ Testing
         with SMTP(controller.hostname, controller.port) as client:
             client.helo('example.com')
             mail = '\r\n'.join(['z' * 20] * 10)
-            with self.assertRaises(SMTPResponseException) as ctx:
+            with self.assertRaises(SMTPResponseException) as cm:
                 client.sendmail('anne@example.com', ['bart@example.com'], mail)
-            e = ctx.exception
-            self.assertEqual(e.smtp_code, 552)
-            self.assertEqual(e.smtp_error, b'Error: Too much mail data')
+            self.assertEqual(cm.exception.smtp_code, 552)
+            self.assertEqual(cm.exception.smtp_error,
+                             b'Error: Too much mail data')
 
     def test_dots_escaped(self):
         handler = ReceivingHandler()
@@ -657,13 +698,11 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             client.helo('example.com')
-            mail = '\r\n'.join([
-                'Test', '.', 'mail'
-            ])
+            mail = CRLF.join(['Test', '.', 'mail'])
             client.sendmail('anne@example.com', ['bart@example.com'], mail)
-        self.assertEqual(len(handler.box), 1)
-        mail = handler.box[0]
-        self.assertEqual(mail[3], 'Test\n.\nmail')
+            self.assertEqual(len(handler.box), 1)
+            mail = handler.box[0]
+            self.assertEqual(mail[3], 'Test\r\n.\r\nmail')
 
     def test_unexpected_errors(self):
         class ErrorSMTP(Server):

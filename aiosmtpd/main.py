@@ -13,7 +13,7 @@ from public import public
 
 try:
     import pwd
-except ImportError:                                         # pragma: no cover
+except ImportError:                                         # pragma: nocover
     pwd = None
 
 
@@ -152,7 +152,7 @@ def setup_sock(host, port):
             socket.SOCK_STREAM,
             0,
             socket.AI_PASSIVE,
-        )
+            )
     except socket.gaierror:
         # Infer the type from the host.
         addr = host, port
@@ -184,5 +184,5 @@ def bind(family, type, proto):
     return sock
 
 
-if __name__ == '__main__':                          # pragma: no cover
+if __name__ == '__main__':                          # pragma: nocover
     main()
