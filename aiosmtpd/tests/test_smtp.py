@@ -24,8 +24,7 @@ class StrictASCIIController(Controller):
         return Server(
             self.handler,
             decode_data=True,
-            default_8bit_encoding='ascii'
-        )
+            default_8bit_encoding='ascii')
 
 
 class NoDecodeController(Controller):
@@ -595,18 +594,14 @@ class TestSMTPWithController(unittest.TestCase):
             client.send(
                 bytes(
                     'MAIL FROM: <' + sender + '> SMTPUTF8\r\n',
-                    encoding='utf-8'
-                )
-            )
+                    encoding='utf-8'))
             code, response = client.getreply()
             self.assertEqual(code, 250)
             self.assertEqual(response, b'OK')
             client.send(
                 bytes(
                     'RCPT TO: <' + recipient + '>\r\n',
-                    encoding='utf-8'
-                )
-            )
+                    encoding='utf-8'))
             code, response = client.getreply()
             self.assertEqual(code, 250)
             self.assertEqual(response, b'OK')
@@ -823,8 +818,7 @@ class TestBadBody(unittest.TestCase):
             self.assertEqual(code, 555)
             self.assertEqual(
                 response,
-                b'RCPT TO parameters not recognized or not implemented'
-            )
+                b'RCPT TO parameters not recognized or not implemented')
 
     def test_data_arg(self):
         with SMTP(*self.address) as client:
