@@ -169,66 +169,57 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def _handle_client(self):
-        try:
-            log.info('handling connection')
-            yield from self.push(
-                '220 {} {}'.format(self.hostname, self.__ident__))
-            while not self.connection_closed:
-                # XXX Put the line limit stuff into the StreamReader?
-                try:
-                    line = yield from self._reader.readline()
-                    if not line.endswith(b'\r\n'):
-                        raise asyncio.streams.IncompleteReadError(line, None)
-                except asyncio.streams.IncompleteReadError as exc:
-                    if exc.partial:
-                        yield from self.handle_exception(exc)
-                    break
+        log.info('handling connection')
+        yield from self.push(
+            '220 {} {}'.format(self.hostname, self.__ident__))
+        while not self.connection_closed:
+            # XXX Put the line limit stuff into the StreamReader?
+            line = yield from self._reader.readline()
+            try:
                 # XXX this rstrip may not completely preserve old behavior.
-                try:
-                    line = line.rstrip(b'\r\n')
-                    log.info('Data: %r', line)
-                    if not line:
-                        yield from self.push('500 Error: bad syntax')
-                        continue
-                    i = line.find(b' ')
-                    # keep data not decoded, decode only command name part as
-                    # it can be only in ASCII encoding. Let commands decide
-                    # what encoding to expect
-                    if i < 0:
-                        command = str(line.upper(), encoding='ascii')
-                        arg = None
-                    else:
-                        command = str(line[:i].upper(), encoding='ascii')
-                        arg = line[i + 1:].strip()
-                    max_sz = (self.command_size_limits[command]
-                              if self.extended_smtp
-                              else self.command_size_limit)
-                    if len(line) > max_sz:
-                        yield from self.push('500 Error: line too long')
-                        continue
-                    if (self._tls_handshake_failed
-                            and command != 'QUIT'):
-                        yield from self.push(
-                            '554 Command refused due to lack of security')
-                        continue
-                    if (self.require_starttls
-                            and (not self._tls_protocol)
-                            and (command not in ['EHLO', 'STARTTLS', 'QUIT'])):
-                        # RFC3207 part 4
-                        yield from self.push(
-                            '530 Must issue a STARTTLS command first')
-                        continue
-                    method = getattr(self, 'smtp_' + command, None)
-                    if not method:
-                        yield from self.push(
-                            '500 Error: command "%s" not recognized' % command)
-                        continue
-                    yield from method(arg)
-                except Exception as e:
-                    yield from self.push('500 Error: %s' % e)
-                    yield from self.handle_exception(e)
-        finally:
-            self.close()
+                line = line.rstrip(b'\r\n')
+                log.info('Data: %r', line)
+                if not line:
+                    yield from self.push('500 Error: bad syntax')
+                    continue
+                i = line.find(b' ')
+                # keep data not decoded, decode only command name part as
+                # it can be only in ASCII encoding. Let commands decide
+                # what encoding to expect
+                if i < 0:
+                    command = str(line.upper(), encoding='ascii')
+                    arg = None
+                else:
+                    command = str(line[:i].upper(), encoding='ascii')
+                    arg = line[i+1:].strip()
+                max_sz = (self.command_size_limits[command]
+                          if self.extended_smtp
+                          else self.command_size_limit)
+                if len(line) > max_sz:
+                    yield from self.push('500 Error: line too long')
+                    continue
+                if (self._tls_handshake_failed
+                        and command != 'QUIT'):             # pragma: nossl
+                    yield from self.push(
+                        '554 Command refused due to lack of security')
+                    continue
+                if (self.require_starttls
+                        and (not self._tls_protocol)
+                        and (command not in ['EHLO', 'STARTTLS', 'QUIT'])):
+                    # RFC3207 part 4
+                    yield from self.push(
+                        '530 Must issue a STARTTLS command first')
+                    continue
+                method = getattr(self, 'smtp_' + command, None)
+                if not method:
+                    yield from self.push(
+                        '500 Error: command "%s" not recognized' % command)
+                    continue
+                yield from method(arg)
+            except Exception as e:
+                yield from self.push('500 Error: ({}) {}'.format(
+                    e.__class__.__name__, str(e)))
+                yield from self.handle_exception(e)
 
     # SMTP and ESMTP commands
     @asyncio.coroutine

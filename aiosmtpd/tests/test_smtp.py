@@ -721,7 +721,7 @@ Testing
         with SMTP(controller.hostname, controller.port) as client:
             code, response = client.helo('example.com')
         self.assertEqual(code, 500)
-        self.assertEqual(response, b'Error: test')
+        self.assertEqual(response, b'Error: (ValueError) test')
         self.assertIsInstance(handler.error, ValueError)
 
 
