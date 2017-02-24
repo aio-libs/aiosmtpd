@@ -27,7 +27,8 @@ Requirements
 
 You need at least Python 3.4 to use this library.  Python 3.3 might work if
 you install the standalone `asyncio <https://pypi.python.org/pypi/asyncio>`__
-library, but this combination is untested.
+library, but this combination is untested.  Python 3.5 or newer is required
+for SSL support.
 
 
 License
