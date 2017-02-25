@@ -149,10 +149,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def push(self, msg):
         encoding = 'utf-8' if self.require_SMTPUTF8 else 'ascii'
-        if isinstance(msg, bytes):
-            response = msg
-        else:
-            response = bytes(msg + '\r\n', encoding=encoding)
+        response = bytes(msg + '\r\n', encoding=encoding)
         self._writer.write(response)
         log.debug(response)
         yield from self._writer.drain()

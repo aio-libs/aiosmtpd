@@ -736,53 +736,6 @@ Testing
             self.assertEqual(mail_to2, mail_to)
 
 
-class TestBadBody(unittest.TestCase):
-    def setUp(self):
-        controller = SMTPUTF8Controller(Sink)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
-
-    def test_rcpt_bad_body(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            client.mail('anne@example.com')
-            code, response = client.docmd(
-                'RCPT TO: <anne@example.com> BODY=UTF8')
-            self.assertEqual(code, 555)
-            self.assertEqual(
-                response,
-                b'RCPT TO parameters not recognized or not implemented')
-
-    def test_data_arg(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            client.mail('anne@example.com')
-            client.rcpt('anne@example.com')
-            code, response = client.docmd('DATA BODY=UTF8')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: DATA')
-
-    def test_too_long_command(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('HELLO')
-            code, response = client.docmd('HELLO ' + 'z' * 512)
-            self.assertEqual(code, 500)
-            self.assertEqual(response, b'Error: line too long')
-
-    def test_unknown_command(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('ZZ')
-            self.assertEqual(code, 500)
-            self.assertEqual(response, b'Error: command "ZZ" not recognized')
-
-    def test_empty_command(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('')
-        self.assertEqual(code, 500)
-        self.assertEqual(response, b'Error: bad syntax')
-
-
 class TestCustomizations(unittest.TestCase):
     def test_custom_hostname(self):
         controller = CustomHostnameController(Sink)
