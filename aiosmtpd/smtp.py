@@ -216,10 +216,11 @@ class SMTP(asyncio.StreamReaderProtocol):
                         '500 Error: command "%s" not recognized' % command)
                     continue
                 yield from method(arg)
-            except Exception as e:
+            except Exception as error:
                 yield from self.push('500 Error: ({}) {}'.format(
-                    e.__class__.__name__, str(e)))
-                yield from self.handle_exception(e)
+                    error.__class__.__name__, str(error)))
+                log.exception('SMTP session exception')
+                yield from self.handle_exception(error)
 
     # SMTP and ESMTP commands
     @asyncio.coroutine
