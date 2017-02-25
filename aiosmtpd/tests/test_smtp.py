@@ -61,8 +61,14 @@ class CustomIdentController(Controller):
 
 
 class ErroringHandler:
+    error = None
+
     def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         return '499 Could not accept the message'
+
+    @asyncio.coroutine
+    def handle_exception(self, e):
+        self.error = e
 
 
 class TestProtocol(unittest.TestCase):
@@ -666,6 +672,26 @@ Testing
             self.assertEqual(len(handler.box), 1)
             mail = handler.box[0]
             self.assertEqual(mail[3], 'Test\r\n.\r\nmail')
+
+    def test_unexpected_errors(self):
+        class ErrorSMTP(Server):
+            @asyncio.coroutine
+            def smtp_HELO(self, hostname):
+                raise ValueError('test')
+
+        class ErrorController(Controller):
+            def factory(self):
+                return ErrorSMTP(self.handler)
+
+        handler = ErroringHandler()
+        controller = ErrorController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            code, response = client.helo('example.com')
+        self.assertEqual(code, 500)
+        self.assertEqual(response, b'Error: (ValueError) test')
+        self.assertIsInstance(handler.error, ValueError)
 
 
 class TestCustomizations(unittest.TestCase):
