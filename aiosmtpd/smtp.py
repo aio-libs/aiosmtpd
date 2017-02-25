@@ -211,7 +211,6 @@ class SMTP(asyncio.StreamReaderProtocol):
                 log.exception('SMTP session exception')
                 yield from self.handle_exception(error)
 
-
     # SMTP and ESMTP commands
     @asyncio.coroutine
     def smtp_HELO(self, hostname):
