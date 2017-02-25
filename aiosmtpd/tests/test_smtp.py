@@ -19,14 +19,6 @@ class UTF8Controller(Controller):
         return Server(self.handler, decode_data=True)
 
 
-class StrictASCIIController(Controller):
-    def factory(self):
-        return Server(
-            self.handler,
-            decode_data=True,
-            default_8bit_encoding='ascii')
-
-
 class NoDecodeController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=False)
@@ -719,87 +711,29 @@ Testing
         self.assertEqual(response, b'Error: (ValueError) test')
         self.assertIsInstance(handler.error, ValueError)
 
-
-class Test8bitEncodings(unittest.TestCase):
-    def setUp(self):
-        self.controller = UTF8Controller(Sink)
-        self.controller.start()
-        self.addCleanup(self.controller.stop)
-        self.address = (self.controller.hostname, self.controller.port)
-
-    def test_bad_helo(self):
-        with SMTP(*self.address) as client:
-            client.send(b'HELO \xFF\r\n')
-            code, response = client.getreply()
-            self.assertEqual(code, 250)
-
-    def test_bad_ehlo(self):
-        with SMTP(*self.address) as client:
-            client.send(b'EHLO \xFF\r\n')
-            code, response = client.getreply()
-            self.assertEqual(code, 250)
-
-    def test_bad_help(self):
-        with SMTP(*self.address) as client:
-            client.send(b'help \xFF\r\n')
-            code, response = client.getreply()
-            self.assertEqual(code, 501)
-
-    def test_8bit_mail(self):
-        with SMTP(*self.address) as client:
+    def test_bad_encodings(self):
+        handler = ReceivingHandler()
+        controller = UTF8Controller(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail_from = b'anne\xFF@example.com'
+            mail_to = b'bart\xFF@example.com'
             client.ehlo('test')
-            client.send(b'MAIL FROM:ann\xFF@example.com\r\n')
+            client.send(b'MAIL FROM:' + mail_from + b'\r\n')
             code, response = client.getreply()
             self.assertEqual(code, 250)
-
-    def test_8bit_rcpt(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('test')
-            client.mail('anne@example.com')
-            client.send(b'RCPT TO:\xFF\r\n')
+            client.send(b'RCPT TO:' + mail_to + b'\r\n')
             code, response = client.getreply()
             self.assertEqual(code, 250)
-
-
-class TestBadEncodings(unittest.TestCase):
-    def setUp(self):
-        self.controller = StrictASCIIController(Sink)
-        self.controller.start()
-        self.addCleanup(self.controller.stop)
-        self.address = (self.controller.hostname, self.controller.port)
-
-    def test_bad_helo(self):
-        with SMTP(*self.address) as client:
-            client.send(b'HELO \xFF\r\n')
-            code, response = client.getreply()
-            self.assertEqual(code, 250)
-
-    def test_bad_ehlo(self):
-        with SMTP(*self.address) as client:
-            client.send(b'EHLO \xFF\r\n')
-            code, response = client.getreply()
-            self.assertEqual(code, 250)
-
-    def test_bad_help(self):
-        with SMTP(*self.address) as client:
-            client.send(b'help \xFF\r\n')
-            code, response = client.getreply()
-            self.assertEqual(code, 501)
-
-    def test_8bit_mail(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('test')
-            client.send(b'MAIL FROM:ann\xFF@example.com\r\n')
-            code, response = client.getreply()
-            self.assertEqual(code, 501)
-
-    def test_8bit_rcpt(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('test')
-            client.mail('anne@example.com')
-            client.send(b'RCPT TO:\xFF\r\n')
-            code, response = client.getreply()
-            self.assertEqual(code, 501)
+            client.data('Test mail')
+            self.assertEqual(len(handler.box), 1)
+            mail = handler.box[0]
+            mail_from2 = mail[1].encode('utf-8', errors='surrogateescape')
+            self.assertEqual(mail_from2, mail_from)
+            mail_to2 = mail[2][0].encode('utf-8', errors='surrogateescape')
+            self.assertEqual(mail_to2, mail_to)
 
 
 class TestBadBody(unittest.TestCase):

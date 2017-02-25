@@ -36,7 +36,6 @@ class SMTP(asyncio.StreamReaderProtocol):
                  *,
                  data_size_limit=DATA_SIZE_DEFAULT,
                  enable_SMTPUTF8=False,
-                 default_8bit_encoding='latin1',
                  decode_data=False,
                  hostname=None,
                  tls_context=None,
@@ -51,7 +50,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.event_handler = handler
         self.data_size_limit = data_size_limit
         self.enable_SMTPUTF8 = enable_SMTPUTF8
-        self.default_8bit_encoding = default_8bit_encoding
         if enable_SMTPUTF8:
             if decode_data:
                 raise ValueError(
@@ -150,10 +148,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def push(self, msg):
-        if self.require_SMTPUTF8:
-            encoding = 'utf-8'
-        else:
-            encoding = self.default_8bit_encoding
+        encoding = 'utf-8' if self.require_SMTPUTF8 else 'ascii'
         if isinstance(msg, bytes):
             response = msg
         else:
@@ -192,6 +187,11 @@ class SMTP(asyncio.StreamReaderProtocol):
                 else:
                     command = str(line[:i].upper(), encoding='ascii')
                     arg = line[i+1:].strip()
+                    # Remote relay SMTP server can send us UTF-8 content
+                    # despite of was support declared or not.Some old servers
+                    # can send 8bit data, Use surrogates to be sure it can be
+                    # decoded to bytes back as-is.
+                    arg = str(arg, encoding='utf-8', errors='surrogateescape')
                 max_sz = (self.command_size_limits[command]
                           if self.extended_smtp
                           else self.command_size_limit)
@@ -231,14 +231,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         if self.seen_greeting:
             yield from self.push('503 Duplicate HELO/EHLO')
             return
-        try:
-            # rfc5336 3.7.1
-            hostname = str(hostname, encoding='ascii')
-        except UnicodeDecodeError:
-            # if encoding fails, then dont broke session, client just not
-            # RFC complaint. No fatal error occurred, Continue and keep
-            # hostname not decoded.
-            pass
         self._set_rset_state()
         self.seen_greeting = hostname
         yield from self.push('250 %s' % self.hostname)
@@ -262,11 +254,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         if self.seen_greeting:
             yield from self.push('503 Duplicate HELO/EHLO')
             return
-        try:
-            # see HELLO for details
-            arg = str(arg, encoding='ascii')
-        except UnicodeDecodeError:
-            pass
         self._set_rset_state()
         self.seen_greeting = arg
         self.extended_smtp = True
@@ -367,11 +354,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def smtp_HELP(self, arg):
         if arg:
             extended = ' [SP <mail-parameters>]'
-            try:
-                lc_arg = str(arg, encoding='ascii').upper()
-            except UnicodeDecodeError:
-                # command name not recognized
-                lc_arg = ''
+            lc_arg = arg.upper()
             if lc_arg == 'EHLO':
                 yield from self.push('250 Syntax: EHLO hostname')
             elif lc_arg == 'HELO':
@@ -405,32 +388,9 @@ class SMTP(asyncio.StreamReaderProtocol):
                 '250 Supported commands: EHLO HELO MAIL RCPT DATA '
                 'RSET NOOP QUIT VRFY')
 
-    def _decode_arg(self, arg):
-        # Remote relay SMTP server can send us UTF-8 content despite of
-        # was support declared or not. Old mail relay servers can accept mail
-        # address as-is without encoding, so they will transmit utf-8 data
-        # and ignore that we, may be, not declaring support of it. So,
-        # at first, always try to use UTF-8
-        try:
-            return str(arg, encoding='utf-8')
-        except UnicodeDecodeError:
-            pass
-        # if data is not in UTF8, so it may be 7bit or 8bit encoded. So,
-        # try default 8 bit encoding, it will take care about both.
-        try:
-            return str(arg, encoding=self.default_8bit_encoding)
-        except UnicodeDecodeError:
-            # if encoding failed (so, it is not default 8 bit encoding),
-            # lets keep it as-is binary data.
-            return arg
-
     @asyncio.coroutine
     def smtp_VRFY(self, arg):
         if arg:
-            arg = self._decode_arg(arg)
-            if isinstance(arg, bytes):
-                yield from self.push(b'502 Could not VRFY ' + arg)
-                return
             try:
                 address, params = self._getaddr(arg)
             except HeaderParseError:
@@ -449,20 +409,13 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not self.seen_greeting:
             yield from self.push('503 Error: send HELO first')
             return
+        log.debug('===> MAIL %s', arg)
         syntaxerr = '501 Syntax: MAIL FROM: <address>'
         if self.extended_smtp:
             syntaxerr += ' [SP <mail-parameters>]'
         if arg is None:
             yield from self.push(syntaxerr)
             return
-        arg = self._decode_arg(arg)
-        if not isinstance(arg, str):
-            # Good idea will be to extract params before decoding and keep
-            # sender in bytes, so we may proxy mails in unknown encoding, or
-            # make handler decide what to do with it
-            yield from self.push(syntaxerr)
-            return
-        log.debug('===> MAIL %s', arg)
         arg = self._strip_command_keyword('FROM:', arg)
         address, params = self._getaddr(arg)
         if not address:
@@ -513,6 +466,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not self.seen_greeting:
             yield from self.push('503 Error: send HELO first')
             return
+        log.debug('===> RCPT %s', arg)
         if not self.mailfrom:
             yield from self.push('503 Error: need MAIL command')
             return
@@ -522,11 +476,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg is None:
             yield from self.push(syntaxerr)
             return
-        arg = self._decode_arg(arg)
-        if not isinstance(arg, str):
-            yield from self.push(syntaxerr)
-            return
-        log.debug('===> RCPT %s', arg)
         arg = self._strip_command_keyword('TO:', arg)
         address, params = self._getaddr(arg)
         if not address:
