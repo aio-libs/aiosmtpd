@@ -3,6 +3,7 @@ import unittest
 import pkg_resources
 
 from aiosmtpd.controller import Controller as BaseController
+from aiosmtpd.base_handler import BaseHandler
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as SMTPProtocol
 from email.mime.text import MIMEText
@@ -23,7 +24,7 @@ class Controller(BaseController):
         return SMTPProtocol(self.handler)
 
 
-class ReceivingHandler:
+class ReceivingHandler(BaseHandler):
     box = None
 
     @asyncio.coroutine
@@ -112,7 +113,7 @@ class TestStartTLS(unittest.TestCase):
             self.assertEqual(code, 454)
 
     def test_disabled_tls(self):
-        controller = Controller(Sink)
+        controller = Controller(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -121,7 +122,7 @@ class TestStartTLS(unittest.TestCase):
             self.assertEqual(code, 454)
 
     def test_tls_bad_syntax(self):
-        controller = TLSController(Sink)
+        controller = TLSController(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -133,7 +134,7 @@ class TestStartTLS(unittest.TestCase):
 @unittest.skipIf(not _has_ssl, 'SSL and Python 3.5 required')
 class TestTLSForgetsSessionData(unittest.TestCase):
     def setUp(self):
-        controller = TLSController(Sink)
+        controller = TLSController(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
@@ -170,7 +171,7 @@ class TestTLSForgetsSessionData(unittest.TestCase):
 
 class TestRequireTLS(unittest.TestCase):
     def setUp(self):
-        controller = TLSRequiredController(Sink)
+        controller = TLSRequiredController(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)

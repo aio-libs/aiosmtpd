@@ -4,8 +4,7 @@ import asyncio
 import unittest
 
 from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import (
-    AsyncMessage, Debugging, Mailbox, Message, Proxy, Sink)
+from aiosmtpd.handlers import Debugging, Mailbox, Message, Proxy, Sink
 from aiosmtpd.smtp import SMTP as Server
 from contextlib import ExitStack
 from io import StringIO
@@ -46,6 +45,8 @@ Testing
         text = self.stream.getvalue()
         self.assertMultiLineEqual(text, """\
 ---------- MESSAGE FOLLOWS ----------
+mail options: ['SIZE=102']
+
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>
 Subject: A test
@@ -155,6 +156,7 @@ class TestMessage(unittest.TestCase):
         self.handled_message = None
 
         class MessageHandler(Message):
+            @asyncio.coroutine
             def handle_message(handler_self, message):
                 self.handled_message = message
 
@@ -207,63 +209,6 @@ Testing
             self.handled_message['X-MailFrom'], 'anne@example.com')
         self.assertEqual(self.handled_message['X-RcptTo'], 'bart@example.com')
 
-
-class TestAsyncMessage(unittest.TestCase):
-    def setUp(self):
-        self.handled_message = None
-
-        class MessageHandler(AsyncMessage):
-            @asyncio.coroutine
-            def handle_message(handler_self, message, loop):
-                self.handled_message = message
-
-        self.handler = MessageHandler()
-
-    def test_message(self):
-        # In this test, the message data comes in as bytes.
-        controller = Controller(self.handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-Message-ID: <ant>
-
-Testing
-""")
-        self.assertEqual(self.handled_message['subject'], 'A test')
-        self.assertEqual(self.handled_message['message-id'], '<ant>')
-        self.assertIsNotNone(self.handled_message['X-Peer'])
-        self.assertEqual(
-            self.handled_message['X-MailFrom'], 'anne@example.com')
-        self.assertEqual(self.handled_message['X-RcptTo'], 'bart@example.com')
-
-    def test_message_decoded(self):
-        # With a server that decodes the data, the messages come in as
-        # strings.  There's no difference in the message seen by the
-        # handler's handle_message() method, but internally this gives full
-        # coverage.
-        controller = UTF8Controller(self.handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-
-        with SMTP(controller.hostname, controller.port) as client:
-            client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-Message-ID: <ant>
-
-Testing
-""")
-        self.assertEqual(self.handled_message['subject'], 'A test')
-        self.assertEqual(self.handled_message['message-id'], '<ant>')
-        self.assertIsNotNone(self.handled_message['X-Peer'])
-        self.assertEqual(
-            self.handled_message['X-MailFrom'], 'anne@example.com')
-        self.assertEqual(self.handled_message['X-RcptTo'], 'bart@example.com')
 
 
 class TestMailbox(unittest.TestCase):
@@ -381,7 +326,7 @@ class TestCLI(unittest.TestCase):
             SystemExit,
             Sink.from_cli, self.parser, 'foo')
         self.assertEqual(
-            self.parser.message, 'Sink handler does not accept arguments')
+            self.parser.message, 'Handler does not accept arguments')
 
 
 class TestProxy(unittest.TestCase):

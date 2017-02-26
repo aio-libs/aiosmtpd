@@ -2,6 +2,7 @@ import socket
 import asyncio
 import threading
 
+from aiosmtpd.base_handler import BaseHandler
 from aiosmtpd.smtp import SMTP
 from public import public
 
@@ -9,6 +10,7 @@ from public import public
 @public
 class Controller:
     def __init__(self, handler, loop=None, hostname='::0', port=8025):
+        assert isinstance(handler, BaseHandler)
         self.handler = handler
         self.server = None
         self.hostname = '::0' if hostname is None else hostname

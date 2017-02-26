@@ -3,6 +3,7 @@ import asyncio
 import logging
 import collections
 
+from .base_handler import BaseHandler, SMTPException
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
 from public import public
@@ -47,7 +48,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             asyncio.StreamReader(loop=self.loop),
             client_connected_cb=self._client_connected_cb,
             loop=self.loop)
-        self.event_handler = handler
+        assert isinstance(handler, BaseHandler)
+        self.event_handler = handler  # type: BaseHandler
         self.data_size_limit = data_size_limit
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         if enable_SMTPUTF8:
@@ -155,11 +157,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         yield from self._writer.drain()
 
     @asyncio.coroutine
-    def handle_exception(self, e):
-        if hasattr(self.event_handler, 'handle_exception'):
-            yield from self.event_handler.handle_exception(e)
-
-    @asyncio.coroutine
     def _handle_client(self):
         log.info('handling connection')
         yield from self.push(
@@ -205,11 +202,13 @@ class SMTP(asyncio.StreamReaderProtocol):
                         '500 Error: command "%s" not recognized' % command)
                     continue
                 yield from method(arg)
+            except SMTPException as error:
+                yield from self.push('{} {}'.format(error.code, error.message))
             except Exception as error:
                 yield from self.push('500 Error: ({}) {}'.format(
                     error.__class__.__name__, str(error)))
                 log.exception('SMTP session exception')
-                yield from self.handle_exception(error)
+                yield from self.event_handler.handle_exception(error)
 
     # SMTP and ESMTP commands
     @asyncio.coroutine
@@ -380,19 +379,18 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_VRFY(self, arg):
-        if arg:
-            try:
-                address, params = self._getaddr(arg)
-            except HeaderParseError:
-                address = None
-            if address:
-                yield from self.push(
-                    '252 Cannot VRFY user, but will accept message '
-                    'and attempt delivery')
-            else:
-                yield from self.push('502 Could not VRFY %s' % arg)
-        else:
+        if not arg:
             yield from self.push('501 Syntax: VRFY <address>')
+            return
+        try:
+            address, params = self._getaddr(arg)
+        except HeaderParseError:
+            address = None
+        if not address:
+            yield from self.push('502 Could not VRFY %s' % arg)
+            return
+        response = yield from self.event_handler.verify(address)
+        yield from self.push(response)
 
     @asyncio.coroutine
     def smtp_MAIL(self, arg):
@@ -449,7 +447,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(
                 '555 MAIL FROM parameters not recognized or not implemented')
             return
-        self.mailfrom = address
+        self.mailfrom = yield from self.event_handler.mail_from(
+            address, self.mail_options)
         log.info('sender: %s', self.mailfrom)
         yield from self.push('250 OK')
 
@@ -486,7 +485,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(
                 '555 RCPT TO parameters not recognized or not implemented')
             return
-        self.rcpttos.append(address)
+        rcpt = yield from self.event_handler.rcpt(address, self.rcpt_options)
+        self.rcpttos.append(rcpt)
         log.info('recips: %s', self.rcpttos)
         yield from self.push('250 OK')
 
@@ -545,19 +545,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         received_data = EMPTYBYTES.join(data)
         if self._decode_data:
             received_data = received_data.decode('utf-8')
-        args = (self.peer, self.mailfrom, self.rcpttos, received_data)
-        kwargs = {}
-        if not self._decode_data:
-            kwargs = {
-                'mail_options': self.mail_options,
-                'rcpt_options': self.rcpt_options,
-                }
-        kwargs.update({'loop': self.loop})
-        if asyncio.iscoroutinefunction(self.event_handler.process_message):
-            status = yield from self.event_handler.process_message(
-                *args, **kwargs)
-        else:
-            status = self.event_handler.process_message(*args, **kwargs)
+        status = yield from self.event_handler.process_message(
+            self.peer, self.mailfrom, self.rcpttos, received_data)
         self._set_post_data_state()
         if status:
             yield from self.push(status)
