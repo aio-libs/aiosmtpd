@@ -210,7 +210,6 @@ Testing
         self.assertEqual(self.handled_message['X-RcptTo'], 'bart@example.com')
 
 
-
 class TestMailbox(unittest.TestCase):
     def setUp(self):
         self.tempdir = TemporaryDirectory()

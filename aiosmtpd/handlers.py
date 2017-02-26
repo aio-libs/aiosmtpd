@@ -33,6 +33,7 @@ def _format_peer(peer):
 @public
 class Debugging(BaseHandler):
     def __init__(self, stream=None):
+        super(Debugging, self).__init__()
         self.stream = sys.stdout if stream is None else stream
 
     @classmethod

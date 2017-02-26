@@ -2,8 +2,8 @@ import asyncio
 import unittest
 import pkg_resources
 
-from aiosmtpd.controller import Controller as BaseController
 from aiosmtpd.base_handler import BaseHandler
+from aiosmtpd.controller import Controller as BaseController
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as SMTPProtocol
 from email.mime.text import MIMEText
