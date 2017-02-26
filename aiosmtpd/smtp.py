@@ -3,10 +3,11 @@ import asyncio
 import logging
 import collections
 
+from .context import MessageContext, SessionContext
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
 from public import public
-from .context import MessageContext, SessionContext
+
 
 try:
     import ssl
@@ -116,7 +117,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Why _extra is protected attribute?
             self.session.ssl = self._tls_protocol._extra
             if hasattr(self.event_handler, 'handle_tls_handshake'):
-                auth = self.event_handler.handle_tls_handshake(self.session.ssl)
+                auth = self.event_handler.handle_tls_handshake(
+                    self.session.ssl)
                 self._tls_handshake_failed = not auth
             else:
                 self._tls_handshake_failed = False
