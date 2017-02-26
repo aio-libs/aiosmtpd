@@ -11,10 +11,12 @@ and the main thread.  Start by implementing a handler which derives from a
 base handler that processes the incoming message data into an email Message
 object.
 
+    >>> import asyncio
     >>> from aiosmtpd.handlers import Message
     >>> handled_message = None
     >>> class MessageHandler(Message):
-    ...     def handle_message(self, message):
+    ...    @asyncio.coroutine
+    ...    def handle_message(self, message):
     ...         global handled_message
     ...         handled_message = message
 

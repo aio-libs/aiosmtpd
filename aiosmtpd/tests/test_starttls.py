@@ -60,7 +60,7 @@ class TLSController(Controller):
             tls_context=get_tls_context())
 
 
-class HandshakeFailingHandler:
+class HandshakeFailingHandler(BaseHandler):
     @staticmethod
     def handle_tls_handshake(*args):
         return False
