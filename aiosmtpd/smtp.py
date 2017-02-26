@@ -183,7 +183,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                     arg = None
                 else:
                     command = str(line[:i].upper(), encoding='ascii')
-                    arg = line[i+1:].strip()
+                    arg = line[i + 1:].strip()
                     # Remote relay SMTP server can send us UTF-8 content
                     # despite of was support declared or not.Some old servers
                     # can send 8bit data, Use surrogates to be sure it can be
