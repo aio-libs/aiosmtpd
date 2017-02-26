@@ -6,6 +6,7 @@ import collections
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
 from public import public
+from .context import MessageContext, SessionContext
 
 try:
     import ssl
@@ -67,9 +68,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._linesep = b'\r\n'
             self._dotsep = ord(b'.')
             self._newline = b'\n'
-        self._set_rset_state()
-        self.seen_greeting = ''
-        self.extended_smtp = False
         self.command_size_limits.clear()
         if hostname:
             self.hostname = hostname
@@ -84,7 +82,15 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.require_starttls = tls_context and require_starttls
         self._tls_handshake_failed = False
         self._tls_protocol = None
+        self.session = None  # type: SessionContext
+        self.message = None  # type: MessageContext
         self.transport = None
+
+    def _create_session_context(self):
+        return SessionContext()
+
+    def _create_message_context(self):
+        return MessageContext()
 
     @property
     def max_command_size_limit(self):
@@ -94,6 +100,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             return self.command_size_limit
 
     def connection_made(self, transport):
+        # Reset state due to rfc3207 part 4.2.
+        self._set_rset_state()
+        self.session = self._create_session_context()
+        self.session.peer = transport.get_extra_info('peername')
         is_instance = (_has_ssl and
                        isinstance(transport, sslproto._SSLProtocolTransport))
         if self.transport is not None and is_instance:   # pragma: nossl
@@ -101,26 +111,20 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._reader._transport = transport
             self._writer._transport = transport
             self.transport = transport
-            # Reset state due to rfc3207 part 4.2.
-            self._set_rset_state()
             self.seen_greeting = ''
             # Do SSL certificate checking as rfc3207 part 4.1 says.
             # Why _extra is protected attribute?
-            extra = self._tls_protocol._extra
+            self.session.ssl = self._tls_protocol._extra
             if hasattr(self.event_handler, 'handle_tls_handshake'):
-                auth = self.event_handler.handle_tls_handshake(
-                    extra['ssl_object'],
-                    extra['peercert'],
-                    extra['cipher'])
+                auth = self.event_handler.handle_tls_handshake(self.session.ssl)
                 self._tls_handshake_failed = not auth
             else:
                 self._tls_handshake_failed = False
             self._over_ssl = True
         else:
             super().connection_made(transport)
-            self.peer = transport.get_extra_info('peername')
             self.transport = transport
-            log.info('Peer: %s', repr(self.peer))
+            log.info('Peer: %s', repr(self.session.peer))
             # Process the client's requests.
             self.connection_closed = False
             self._handler_coroutine = self.loop.create_task(
@@ -138,8 +142,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
-        self.mailfrom = None
-        self.rcpttos = []
+        self.message = self._create_message_context()
         self.require_SMTPUTF8 = False
 
     def _set_rset_state(self):
@@ -182,7 +185,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                     command = line[:i].upper()
                     arg = line[i+1:].strip()
                 max_sz = (self.command_size_limits[command]
-                          if self.extended_smtp
+                          if self.session.extended_smtp
                           else self.command_size_limit)
                 if len(line) > max_sz:
                     yield from self.push('500 Error: line too long')
@@ -218,11 +221,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push('501 Syntax: HELO hostname')
             return
         # See issue #21783 for a discussion of this behavior.
-        if self.seen_greeting:
+        if self.session.host_name:
             yield from self.push('503 Duplicate HELO/EHLO')
             return
         self._set_rset_state()
-        self.seen_greeting = hostname
+        self.session.host_name = hostname
+        self.session.extended_smtp = False
         yield from self.push('250 %s' % self.hostname)
 
     @asyncio.coroutine
@@ -241,12 +245,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push('501 Syntax: EHLO hostname')
             return
         # See issue #21783 for a discussion of this behavior.
-        if self.seen_greeting:
+        if self.session.host_name:
             yield from self.push('503 Duplicate HELO/EHLO')
             return
         self._set_rset_state()
-        self.seen_greeting = arg
-        self.extended_smtp = True
+        self.session.host_name = arg
+        self.session.extended_smtp = True
         yield from self.push('250-%s' % self.hostname)
         if self.data_size_limit:
             yield from self.push('250-SIZE %s' % self.data_size_limit)
@@ -351,12 +355,12 @@ class SMTP(asyncio.StreamReaderProtocol):
                 yield from self.push('250 Syntax: HELO hostname')
             elif lc_arg == 'MAIL':
                 msg = '250 Syntax: MAIL FROM: <address>'
-                if self.extended_smtp:
+                if self.session.extended_smtp:
                     msg += extended
                 yield from self.push(msg)
             elif lc_arg == 'RCPT':
                 msg = '250 Syntax: RCPT TO: <address>'
-                if self.extended_smtp:
+                if self.session.extended_smtp:
                     msg += extended
                 yield from self.push(msg)
             elif lc_arg == 'DATA':
@@ -396,12 +400,12 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_MAIL(self, arg):
-        if not self.seen_greeting:
+        if not self.session.host_name:
             yield from self.push('503 Error: send HELO first')
             return
         log.debug('===> MAIL %s', arg)
         syntaxerr = '501 Syntax: MAIL FROM: <address>'
-        if self.extended_smtp:
+        if self.session.extended_smtp:
             syntaxerr += ' [SP <mail-parameters>]'
         if arg is None:
             yield from self.push(syntaxerr)
@@ -411,14 +415,14 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not address:
             yield from self.push(syntaxerr)
             return
-        if not self.extended_smtp and params:
+        if not self.session.extended_smtp and params:
             yield from self.push(syntaxerr)
             return
-        if self.mailfrom:
+        if self.message.mailfrom:
             yield from self.push('503 Error: nested MAIL command')
             return
-        self.mail_options = params.upper().split()
-        params = self._getparams(self.mail_options)
+        mail_options = params.upper().split()
+        params = self._getparams(mail_options)
         if params is None:
             yield from self.push(syntaxerr)
             return
@@ -449,21 +453,22 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(
                 '555 MAIL FROM parameters not recognized or not implemented')
             return
-        self.mailfrom = address
-        log.info('sender: %s', self.mailfrom)
+        self.message.mailfrom = address
+        self.message.mail_options = mail_options
+        log.info('sender: %s', address)
         yield from self.push('250 OK')
 
     @asyncio.coroutine
     def smtp_RCPT(self, arg):
-        if not self.seen_greeting:
+        if not self.session.host_name:
             yield from self.push('503 Error: send HELO first')
             return
         log.debug('===> RCPT %s', arg)
-        if not self.mailfrom:
+        if not self.message.mailfrom:
             yield from self.push('503 Error: need MAIL command')
             return
         syntaxerr = '501 Syntax: RCPT TO: <address>'
-        if self.extended_smtp:
+        if self.session.extended_smtp:
             syntaxerr += ' [SP <mail-parameters>]'
         if arg is None:
             yield from self.push(syntaxerr)
@@ -473,11 +478,11 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not address:
             yield from self.push(syntaxerr)
             return
-        if not self.extended_smtp and params:
+        if not self.session.extended_smtp and params:
             yield from self.push(syntaxerr)
             return
-        self.rcpt_options = params.upper().split()
-        params = self._getparams(self.rcpt_options)
+        rcpt_options = params.upper().split()
+        params = self._getparams(rcpt_options)
         if params is None:
             yield from self.push(syntaxerr)
             return
@@ -486,8 +491,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(
                 '555 RCPT TO parameters not recognized or not implemented')
             return
-        self.rcpttos.append(address)
-        log.info('recips: %s', self.rcpttos)
+        self.message.rcpttos.append(address)
+        self.message.rcpt_options.append(rcpt_options)
+        log.info('recip: %s', address)
         yield from self.push('250 OK')
 
     @asyncio.coroutine
@@ -506,10 +512,10 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_DATA(self, arg):
-        if not self.seen_greeting:
+        if not self.session.host_name:
             yield from self.push('503 Error: send HELO first')
             return
-        if not self.rcpttos:
+        if not self.message.rcpttos:
             yield from self.push('503 Error: need RCPT command')
             return
         if arg:
@@ -545,14 +551,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         received_data = EMPTYBYTES.join(data)
         if self._decode_data:
             received_data = received_data.decode('utf-8')
-        args = (self.peer, self.mailfrom, self.rcpttos, received_data)
-        kwargs = {}
-        if not self._decode_data:
-            kwargs = {
-                'mail_options': self.mail_options,
-                'rcpt_options': self.rcpt_options,
-                }
-        kwargs.update({'loop': self.loop})
+        self.message.received_data = received_data
+        args = (self.session, self.message)
+        kwargs = {'loop': self.loop}
         if asyncio.iscoroutinefunction(self.event_handler.process_message):
             status = yield from self.event_handler.process_message(
                 *args, **kwargs)
