@@ -10,7 +10,7 @@ from aiosmtpd.smtp import SMTP
 from contextlib import ExitStack
 from functools import partial
 from io import StringIO
-from unittest.mock import call, patch
+from unittest.mock import patch
 
 try:
     import pwd
