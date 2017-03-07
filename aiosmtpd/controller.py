@@ -8,10 +8,10 @@ from public import public
 
 @public
 class Controller:
-    def __init__(self, handler, loop=None, hostname='::0', port=8025):
+    def __init__(self, handler, loop=None, hostname=None, port=8025):
         self.handler = handler
         self.server = None
-        self.hostname = '::0' if hostname is None else hostname
+        self.hostname = '::1' if hostname is None else hostname
         self.port = port
         self.loop = asyncio.new_event_loop() if loop is None else loop
         self.thread = None
@@ -31,19 +31,11 @@ class Controller:
         """Allow subclasses to customize the handler/server creation."""
         return SMTP(self.handler)
 
-    def make_socket(self):
-        """Allow subclasses to customize socket creation."""
-        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-        return sock
-
     def _run(self, ready_event):
-        sock = self.make_socket()
-        sock.bind((self.hostname, self.port))
         asyncio.set_event_loop(self.loop)
         server = self.loop.run_until_complete(
-            self.loop.create_server(self.factory, sock=sock))
+            self.loop.create_server(
+                self.factory, host=self.hostname, port=self.port))
         self.loop.call_soon(ready_event.set)
         self.loop.run_forever()
         server.close()

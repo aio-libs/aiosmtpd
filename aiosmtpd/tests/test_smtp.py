@@ -35,7 +35,7 @@ class ReceivingHandler:
 
 
 class SizedController(Controller):
-    def __init__(self, handler, size, loop=None, hostname='::0', port=8025):
+    def __init__(self, handler, size, loop=None, hostname='::1', port=8025):
         self.size = size
         super().__init__(handler, loop, hostname, port)
 
