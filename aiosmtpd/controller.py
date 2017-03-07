@@ -16,7 +16,7 @@ class Controller:
         self.loop = asyncio.new_event_loop() if loop is None else loop
         self.thread = None
         # For exiting the loop.
-        self._rsock, self._wsock = socket.socketpair()
+        self._rsock, self._wsock = self.loop._socketpair()
         self.loop.add_reader(self._rsock, self._reader)
 
     def _reader(self):
