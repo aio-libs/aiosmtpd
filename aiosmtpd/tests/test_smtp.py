@@ -7,8 +7,9 @@ import unittest
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
+from contextlib import ExitStack
 from smtplib import SMTP, SMTPDataError, SMTPResponseException
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 CRLF = '\r\n'
 BCRLF = b'\r\n'
@@ -687,7 +688,12 @@ Testing
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
+        with ExitStack() as resources:
+            # Suppress logging to the console during the tests.  Depending on
+            # timing, the exception may or may not be logged.
+            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
+            client = resources.enter_context(
+                SMTP(controller.hostname, controller.port))
             code, response = client.helo('example.com')
         self.assertEqual(code, 500)
         self.assertEqual(response, b'Error: (ValueError) test')
