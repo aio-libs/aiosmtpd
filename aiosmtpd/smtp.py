@@ -59,9 +59,6 @@ class SMTP(asyncio.StreamReaderProtocol):
                     "True at the same time")
             decode_data = False
         self._decode_data = decode_data
-        self._set_rset_state()
-        self.seen_greeting = ''
-        self.extended_smtp = False
         self.command_size_limits.clear()
         if hostname:
             self.hostname = hostname
