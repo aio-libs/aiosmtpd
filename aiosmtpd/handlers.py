@@ -101,17 +101,17 @@ class Proxy:
             i += 1
         lines.insert(i, 'X-Peer: %s%s' % (session.peer[0], ending))
         data = EMPTYSTRING.join(lines)
-        refused = self._deliver(message.mailfrom, message.rcpttos, data)
+        refused = self._deliver(message.mail_from, message.rcpt_tos, data)
         # TBD: what to do with refused addresses?
         log.info('we got some refusals: %s', refused)
 
-    def _deliver(self, mailfrom, rcpttos, data):
+    def _deliver(self, mail_from, rcpt_tos, data):
         refused = {}
         try:
             s = smtplib.SMTP()
             s.connect(self._hostname, self._port)
             try:
-                refused = s.sendmail(mailfrom, rcpttos, data)
+                refused = s.sendmail(mail_from, rcpt_tos, data)
             finally:
                 s.quit()
         except smtplib.SMTPRecipientsRefused as e:
@@ -124,7 +124,7 @@ class Proxy:
             # exception code.
             errcode = getattr(e, 'smtp_code', -1)
             errmsg = getattr(e, 'smtp_error', 'ignore')
-            for r in rcpttos:
+            for r in rcpt_tos:
                 refused[r] = (errcode, errmsg)
         return refused
 
@@ -157,8 +157,8 @@ class Message:
               'Expected str or bytes, got {}'.format(type(data)))
             message = message_from_string(data, self.message_class)
         message['X-Peer'] = str(session.peer)
-        message['X-MailFrom'] = smtp_message.mailfrom
-        message['X-RcptTo'] = COMMASPACE.join(smtp_message.rcpttos)
+        message['X-MailFrom'] = smtp_message.mail_from
+        message['X-RcptTo'] = COMMASPACE.join(smtp_message.rcpt_tos)
 
         return message
 

@@ -3,7 +3,6 @@ import asyncio
 import logging
 import collections
 
-from .context import MessageContext, SessionContext
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
 from public import public
@@ -26,6 +25,23 @@ log = logging.getLogger('mail.log')
 NEWLINE = '\n'
 DATA_SIZE_DEFAULT = 33554432
 EMPTYBYTES = b''
+
+
+class Session:
+    peer = None
+    ssl = None
+    host_name = None
+    extended_smtp = False
+
+
+class Envelope:
+    mail_from = None
+    mail_options = None
+    received_data = None
+
+    def __init__(self):
+        self.rcpt_tos = []
+        self.rcpt_options = []
 
 
 @public
@@ -73,15 +89,15 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.require_starttls = tls_context and require_starttls
         self._tls_handshake_failed = False
         self._tls_protocol = None
-        self.session = None  # type: SessionContext
-        self.message = None  # type: MessageContext
+        self.session = None  # type: Session
+        self.message = None  # type: Envelope
         self.transport = None
 
-    def _create_session_context(self):
-        return SessionContext()
+    def _create_session(self):
+        return Session()
 
-    def _create_message_context(self):
-        return MessageContext()
+    def _create_envelope(self):
+        return Envelope()
 
     @property
     def max_command_size_limit(self):
@@ -93,7 +109,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def connection_made(self, transport):
         # Reset state due to rfc3207 part 4.2.
         self._set_rset_state()
-        self.session = self._create_session_context()
+        self.session = self._create_session()
         self.session.peer = transport.get_extra_info('peername')
         is_instance = (_has_ssl and
                        isinstance(transport, sslproto._SSLProtocolTransport))
@@ -134,7 +150,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
-        self.message = self._create_message_context()
+        self.message = self._create_envelope()
         self.require_SMTPUTF8 = False
 
     def _set_rset_state(self):
@@ -410,7 +426,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not self.session.extended_smtp and params:
             yield from self.push(syntaxerr)
             return
-        if self.message.mailfrom:
+        if self.message.mail_from:
             yield from self.push('503 Error: nested MAIL command')
             return
         mail_options = params.upper().split()
@@ -445,7 +461,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(
                 '555 MAIL FROM parameters not recognized or not implemented')
             return
-        self.message.mailfrom = address
+        self.message.mail_from = address
         self.message.mail_options = mail_options
         log.info('sender: %s', address)
         yield from self.push('250 OK')
@@ -456,7 +472,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push('503 Error: send HELO first')
             return
         log.debug('===> RCPT %s', arg)
-        if not self.message.mailfrom:
+        if not self.message.mail_from:
             yield from self.push('503 Error: need MAIL command')
             return
         syntaxerr = '501 Syntax: RCPT TO: <address>'
@@ -483,7 +499,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(
                 '555 RCPT TO parameters not recognized or not implemented')
             return
-        self.message.rcpttos.append(address)
+        self.message.rcpt_tos.append(address)
         self.message.rcpt_options.append(rcpt_options)
         log.info('recip: %s', address)
         yield from self.push('250 OK')
@@ -507,7 +523,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not self.session.host_name:
             yield from self.push('503 Error: send HELO first')
             return
-        if not self.message.rcpttos:
+        if not self.message.rcpt_tos:
             yield from self.push('503 Error: need RCPT command')
             return
         if arg:

@@ -64,7 +64,7 @@ class CustomIdentController(Controller):
 class ErroringHandler:
     error = None
 
-    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
+    def process_message(self, session, message, **kws):
         return '499 Could not accept the message'
 
     @asyncio.coroutine
