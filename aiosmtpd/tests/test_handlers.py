@@ -215,7 +215,7 @@ class TestAsyncMessage(unittest.TestCase):
 
         class MessageHandler(AsyncMessage):
             @asyncio.coroutine
-            def handle_message(handler_self, message, loop):
+            def handle_message(handler_self, message):
                 self.handled_message = message
 
         self.handler = MessageHandler()

@@ -28,18 +28,19 @@ EMPTYBYTES = b''
 
 
 class Session:
-    peer = None
-    ssl = None
-    host_name = None
-    extended_smtp = False
+    def __init__(self, loop):
+        self.peer = None
+        self.ssl = None
+        self.host_name = None
+        self.extended_smtp = False
+        self.loop = loop
 
 
 class Envelope:
-    mail_from = None
-    mail_options = None
-    received_data = None
-
     def __init__(self):
+        self.mail_from = None
+        self.mail_options = None
+        self.received_data = None
         self.rcpt_tos = []
         self.rcpt_options = []
 
@@ -89,12 +90,12 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.require_starttls = tls_context and require_starttls
         self._tls_handshake_failed = False
         self._tls_protocol = None
-        self.session = None  # type: Session
-        self.message = None  # type: Envelope
+        self.session = None
+        self.envelope = None
         self.transport = None
 
     def _create_session(self):
-        return Session()
+        return Session(self.loop)
 
     def _create_envelope(self):
         return Envelope()
@@ -150,7 +151,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
-        self.message = self._create_envelope()
+        self.envelope = self._create_envelope()
         self.require_SMTPUTF8 = False
 
     def _set_rset_state(self):
@@ -426,7 +427,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not self.session.extended_smtp and params:
             yield from self.push(syntaxerr)
             return
-        if self.message.mail_from:
+        if self.envelope.mail_from:
             yield from self.push('503 Error: nested MAIL command')
             return
         mail_options = params.upper().split()
@@ -461,8 +462,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(
                 '555 MAIL FROM parameters not recognized or not implemented')
             return
-        self.message.mail_from = address
-        self.message.mail_options = mail_options
+        self.envelope.mail_from = address
+        self.envelope.mail_options = mail_options
         log.info('sender: %s', address)
         yield from self.push('250 OK')
 
@@ -472,7 +473,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push('503 Error: send HELO first')
             return
         log.debug('===> RCPT %s', arg)
-        if not self.message.mail_from:
+        if not self.envelope.mail_from:
             yield from self.push('503 Error: need MAIL command')
             return
         syntaxerr = '501 Syntax: RCPT TO: <address>'
@@ -499,8 +500,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(
                 '555 RCPT TO parameters not recognized or not implemented')
             return
-        self.message.rcpt_tos.append(address)
-        self.message.rcpt_options.append(rcpt_options)
+        self.envelope.rcpt_tos.append(address)
+        self.envelope.rcpt_options.append(rcpt_options)
         log.info('recip: %s', address)
         yield from self.push('250 OK')
 
@@ -523,7 +524,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not self.session.host_name:
             yield from self.push('503 Error: send HELO first')
             return
-        if not self.message.rcpt_tos:
+        if not self.envelope.rcpt_tos:
             yield from self.push('503 Error: need RCPT command')
             return
         if arg:
@@ -559,14 +560,12 @@ class SMTP(asyncio.StreamReaderProtocol):
         received_data = EMPTYBYTES.join(data)
         if self._decode_data:
             received_data = received_data.decode('utf-8')
-        self.message.received_data = received_data
-        args = (self.session, self.message)
-        kwargs = {'loop': self.loop}
+        self.envelope.received_data = received_data
+        args = (self.session, self.envelope)
         if asyncio.iscoroutinefunction(self.event_handler.process_message):
-            status = yield from self.event_handler.process_message(
-                *args, **kwargs)
+            status = yield from self.event_handler.process_message(*args)
         else:
-            status = self.event_handler.process_message(*args, **kwargs)
+            status = self.event_handler.process_message(*args)
         self._set_post_data_state()
         if status:
             yield from self.push(status)
