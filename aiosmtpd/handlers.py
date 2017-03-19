@@ -79,7 +79,7 @@ class Debugging:
             add_separator = True
         if add_separator:
             print(file=self.stream)
-        self._print_message_content(session.peer, envelope.received_data)
+        self._print_message_content(session.peer, envelope.data)
         print('------------ END MESSAGE ------------', file=self.stream)
 
 
@@ -90,7 +90,7 @@ class Proxy:
         self._port = remote_port
 
     def process_message(self, session, envelope):
-        lines = envelope.received_data.splitlines(keepends=True)
+        lines = envelope.data.splitlines(keepends=True)
         # Look for the last header
         i = 0
         ending = CRLF
@@ -149,7 +149,7 @@ class Message:
     def prepare_message(self, session, envelope):
         # If the server was created with decode_data True, then data will be a
         # str, otherwise it will be bytes.
-        data = envelope.received_data
+        data = envelope.data
         if isinstance(data, bytes):
             message = message_from_bytes(data, self.message_class)
         else:
