@@ -40,7 +40,7 @@ class Envelope:
     def __init__(self):
         self.mail_from = None
         self.mail_options = None
-        self.data = None
+        self.content = None
         self.rcpt_tos = []
         self.rcpt_options = []
 
@@ -560,7 +560,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         received_data = EMPTYBYTES.join(data)
         if self._decode_data:
             received_data = received_data.decode('utf-8')
-        self.envelope.data = received_data
+        self.envelope.content = received_data
         args = (self.session, self.envelope)
         if asyncio.iscoroutinefunction(self.event_handler.process_message):
             status = yield from self.event_handler.process_message(*args)

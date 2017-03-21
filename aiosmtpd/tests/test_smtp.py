@@ -105,7 +105,7 @@ class TestProtocol(unittest.TestCase):
         except asyncio.CancelledError:
             pass
         assert len(handler.box) == 1
-        assert handler.box[0][1].data == data
+        assert handler.box[0][1].content == data
 
 
 class TestSMTP(unittest.TestCase):
@@ -672,7 +672,7 @@ Testing
             client.sendmail('anne@example.com', ['bart@example.com'], mail)
             self.assertEqual(len(handler.box), 1)
             mail = handler.box[0]
-            self.assertEqual(mail[1].data, 'Test\r\n.\r\nmail')
+            self.assertEqual(mail[1].content, 'Test\r\n.\r\nmail')
 
     def test_unexpected_errors(self):
         class ErrorSMTP(Server):
