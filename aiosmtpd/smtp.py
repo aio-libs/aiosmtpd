@@ -1,5 +1,6 @@
 import socket
 import asyncio
+import inspect
 import logging
 import collections
 
@@ -561,11 +562,25 @@ class SMTP(asyncio.StreamReaderProtocol):
         if self._decode_data:
             received_data = received_data.decode('utf-8')
         self.envelope.content = received_data
+        method = getattr(self.event_handler, 'handle_DATA', None)
         args = (self.session, self.envelope)
-        if asyncio.iscoroutinefunction(self.event_handler.process_message):
-            status = yield from self.event_handler.process_message(*args)
+        kwargs = {}
+        if method is None:
+            method = self.event_handler.process_message
+            args = (
+                self.session.peer,
+                self.envelope.mail_from,
+                self.envelope.rcpt_tos,
+                self.envelope.content)
+            if not self._decode_data:
+                kwargs = {
+                    'mail_options': self.envelope.mail_options,
+                    'rcpt_options': self.envelope.rcpt_options,
+                }
+        if asyncio.iscoroutinefunction(method):
+            status = yield from method(*args, **kwargs)
         else:
-            status = self.event_handler.process_message(*args)
+            status = method(*args, **kwargs)
         self._set_post_data_state()
         if status:
             yield from self.push(status)

@@ -31,7 +31,7 @@ class ReceivingHandler:
     def __init__(self):
         self.box = []
 
-    def process_message(self, *args, **kws):
+    def handle_DATA(self, *args, **kws):
         self.box.append(args)
 
 
@@ -64,12 +64,23 @@ class CustomIdentController(Controller):
 class ErroringHandler:
     error = None
 
-    def process_message(self, session, message, **kws):
+    def handle_DATA(self, session, envelope):
         return '499 Could not accept the message'
 
     @asyncio.coroutine
     def handle_exception(self, e):
         self.error = e
+
+
+class OldStyleHandler:
+    box = None
+
+    def __init__(self):
+        self.box = []
+
+    def process_message(self, *args, **kwargs):
+        self.box.append(args)
+
 
 
 class TestProtocol(unittest.TestCase):
@@ -698,6 +709,21 @@ Testing
         self.assertEqual(code, 500)
         self.assertEqual(response, b'Error: (ValueError) test')
         self.assertIsInstance(handler.error, ValueError)
+
+    def test_old_style_handler(self):
+        handler = OldStyleHandler()
+        controller = Controller(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = CRLF.join(['Test', '.', 'mail'])
+            client.sendmail('anne@example.com', ['bart@example.com'], mail)
+            self.assertEqual(len(handler.box), 1)
+            mail = handler.box[0]
+            self.assertEqual(mail[1], 'anne@example.com')
+            self.assertListEqual(mail[2], ['bart@example.com'])
+            self.assertEqual(mail[3], b'Test\r\n.\r\nmail')
 
 
 class TestCustomizations(unittest.TestCase):

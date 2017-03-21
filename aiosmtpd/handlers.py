@@ -64,7 +64,7 @@ class Debugging:
                 line = line.decode('utf-8', 'replace')
             print(line, file=self.stream)
 
-    def process_message(self, session, envelope):
+    def handle_DATA(self, session, envelope):
         print('---------- MESSAGE FOLLOWS ----------', file=self.stream)
         # Yes, actually test for truthiness since it's possible for either the
         # keywords to be missing, or for their values to be empty lists.
@@ -89,7 +89,7 @@ class Proxy:
         self._hostname = remote_hostname
         self._port = remote_port
 
-    def process_message(self, session, envelope):
+    def handle_DATA(self, session, envelope):
         lines = envelope.content.splitlines(keepends=True)
         # Look for the last header
         i = 0
@@ -162,7 +162,7 @@ class Message:
 
         return message
 
-    def process_message(self, session, envelope):
+    def handle_DATA(self, session, envelope):
         envelope = self.prepare_message(session, envelope)
         self.handle_message(envelope)
 
@@ -177,7 +177,7 @@ class AsyncMessage(Message):
         self.loop = loop or asyncio.get_event_loop()
 
     @asyncio.coroutine
-    def process_message(self, session, envelope):
+    def handle_DATA(self, session, envelope):
         message = self.prepare_message(session, envelope)
         yield from self.handle_message(message)
 
