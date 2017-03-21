@@ -6,6 +6,7 @@ import collections
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
 from public import public
+from warnings import warn
 
 
 try:
@@ -561,11 +562,19 @@ class SMTP(asyncio.StreamReaderProtocol):
         if self._decode_data:
             received_data = received_data.decode('utf-8')
         self.envelope.data = received_data
-        args = (self.session, self.envelope)
-        if asyncio.iscoroutinefunction(self.event_handler.process_message):
-            status = yield from self.event_handler.process_message(*args)
+        # Call the new API first if it's implemented.
+        if hasattr(self.event_handler, 'handle_DATA'):
+            args = (self.session, self.envelope)
+            status = yield from self.event_handler.handle_DATA(*args)
         else:
-            status = self.event_handler.process_message(*args)
+            warn('Use handler.handle_DATA instead of .process_message()',
+                 DeprecationWarning)
+            args = (self.session.peer, self.envelope.mail_from,
+                    self.envelope.rcpt_tos, self.envelope.data)
+            if asyncio.iscoroutinefunction(self.event_handler.process_message):
+                status = yield from self.event_handler.process_message(*args)
+            else:
+                status = self.event_handler.process_message(*args)
         self._set_post_data_state()
         if status:
             yield from self.push(status)

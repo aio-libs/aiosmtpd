@@ -15,6 +15,7 @@ from smtplib import SMTP, SMTPRecipientsRefused
 from tempfile import TemporaryDirectory
 from unittest.mock import call, patch
 
+
 CRLF = '\r\n'
 
 
@@ -459,3 +460,71 @@ Testing
                          {'bart@example.com': (-1, 'ignore')}),
                     ]
                 )
+
+
+class CapturingServer(Server):
+    def __init__(self, *args, **kws):
+        self.warnings = None
+        super().__init__(*args, **kws)
+
+    @asyncio.coroutine
+    def smtp_DATA(self, arg):
+        with patch('aiosmtpd.smtp.warn') as mock:
+            yield from super().smtp_DATA(arg)
+        self.warnings = mock.call_args_list
+
+
+class CapturingController(Controller):
+    def factory(self):
+        self.server = CapturingServer(self.handler)
+        return self.server
+
+
+class DeprecatedHandler:
+    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
+        pass
+
+
+class AsyncDeprecatedHandler:
+    @asyncio.coroutine
+    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
+        pass
+
+
+class TestDeprecation(unittest.TestCase):
+    # handler.process_message() is deprecated.
+    def test_deprecation(self):
+        controller = CapturingController(DeprecatedHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.sendmail('anne@example.com', ['bart@example.com'], """\
+From: Anne Person <anne@example.com>
+To: Bart Person <bart@example.com>
+Subject: A test
+
+Testing
+""")
+        self.assertEqual(len(controller.server.warnings), 1)
+        self.assertEqual(
+            controller.server.warnings[0],
+            call('Use handler.handle_DATA instead of .process_message()',
+                 DeprecationWarning))
+
+    def test_deprecation_async(self):
+        controller = CapturingController(AsyncDeprecatedHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.sendmail('anne@example.com', ['bart@example.com'], """\
+From: Anne Person <anne@example.com>
+To: Bart Person <bart@example.com>
+Subject: A test
+
+Testing
+""")
+        self.assertEqual(len(controller.server.warnings), 1)
+        self.assertEqual(
+            controller.server.warnings[0],
+            call('Use handler.handle_DATA instead of .process_message()',
+                 DeprecationWarning))

@@ -31,8 +31,9 @@ class ReceivingHandler:
     def __init__(self):
         self.box = []
 
-    def process_message(self, *args, **kws):
-        self.box.append(args)
+    @asyncio.coroutine
+    def handle_DATA(self, session, envelope):
+        self.box.append(envelope.data)
 
 
 class SizedController(Controller):
@@ -64,7 +65,8 @@ class CustomIdentController(Controller):
 class ErroringHandler:
     error = None
 
-    def process_message(self, session, message, **kws):
+    @asyncio.coroutine
+    def handle_DATA(self, session, envelope):
         return '499 Could not accept the message'
 
     @asyncio.coroutine
@@ -105,7 +107,7 @@ class TestProtocol(unittest.TestCase):
         except asyncio.CancelledError:
             pass
         assert len(handler.box) == 1
-        assert handler.box[0][1].data == data
+        assert handler.box[0] == data
 
 
 class TestSMTP(unittest.TestCase):
@@ -671,8 +673,7 @@ Testing
             mail = CRLF.join(['Test', '.', 'mail'])
             client.sendmail('anne@example.com', ['bart@example.com'], mail)
             self.assertEqual(len(handler.box), 1)
-            mail = handler.box[0]
-            self.assertEqual(mail[1].data, 'Test\r\n.\r\nmail')
+            self.assertEqual(handler.box[0], 'Test\r\n.\r\nmail')
 
     def test_unexpected_errors(self):
         class ErrorSMTP(Server):
