@@ -137,7 +137,7 @@ class Sink:
             parser.error('Sink handler does not accept arguments')
         return cls()
 
-    def process_message(self, session, envelope):
+    def handle_DATA(self, session, envelope):
         pass                                        # pragma: nocover
 
 
@@ -162,6 +162,7 @@ class Message:
 
         return message
 
+    @asyncio.coroutine
     def handle_DATA(self, session, envelope):
         envelope = self.prepare_message(session, envelope)
         self.handle_message(envelope)
