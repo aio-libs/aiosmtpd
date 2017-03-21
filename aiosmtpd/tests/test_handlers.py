@@ -46,6 +46,8 @@ Testing
         text = self.stream.getvalue()
         self.assertMultiLineEqual(text, """\
 ---------- MESSAGE FOLLOWS ----------
+mail options: ['SIZE=102']
+
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>
 Subject: A test
@@ -77,7 +79,6 @@ Subject: A test
 Testing
 """)
         text = self.stream.getvalue()
-        # This includes mail and rcpt options because decode_data=False.
         self.assertMultiLineEqual(text, """\
 ---------- MESSAGE FOLLOWS ----------
 mail options: ['SIZE=102']
@@ -214,7 +215,7 @@ class TestAsyncMessage(unittest.TestCase):
 
         class MessageHandler(AsyncMessage):
             @asyncio.coroutine
-            def handle_message(handler_self, message, loop):
+            def handle_message(handler_self, message):
                 self.handled_message = message
 
         self.handler = MessageHandler()
