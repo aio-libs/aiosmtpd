@@ -1,6 +1,5 @@
 import socket
 import asyncio
-import inspect
 import logging
 import collections
 
@@ -575,8 +574,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             if not self._decode_data:
                 kwargs = {
                     'mail_options': self.envelope.mail_options,
-                    'rcpt_options': self.envelope.rcpt_options,
-                }
+                    'rcpt_options': self.envelope.rcpt_options}
         if asyncio.iscoroutinefunction(method):
             status = yield from method(*args, **kwargs)
         else:

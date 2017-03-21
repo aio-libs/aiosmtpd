@@ -82,7 +82,6 @@ class OldStyleHandler:
         self.box.append(args)
 
 
-
 class TestProtocol(unittest.TestCase):
     def setUp(self):
         self.transport = Mock()
