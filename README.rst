@@ -76,10 +76,9 @@ test suite for Python 3.4, 3.5, and 3.6.  Once you've got that, run::
 
     $ tox
 
-After tox has built the virtual environments, you can run individual tests
-like this::
+Individual tests can be run like this::
 
-    $ .tox/py35/bin/python -m nose2 -vv -P <pattern>
+    $ tox -e py35-nocov -- -P <pattern>
 
 where *<pattern>* is a Python regular expression matching a test name.
 
