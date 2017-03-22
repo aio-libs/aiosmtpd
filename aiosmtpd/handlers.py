@@ -80,7 +80,7 @@ class Debugging:
             add_separator = True
         if add_separator:
             print(file=self.stream)
-        self._print_message_content(session.peer, envelope.data)
+        self._print_message_content(session.peer, envelope.content)
         print('------------ END MESSAGE ------------', file=self.stream)
 
 
@@ -92,7 +92,7 @@ class Proxy:
 
     @asyncio.coroutine
     def handle_DATA(self, session, envelope):
-        lines = envelope.data.splitlines(keepends=True)
+        lines = envelope.content.splitlines(keepends=True)
         # Look for the last header
         i = 0
         ending = CRLF
@@ -157,7 +157,7 @@ class Message:
     def prepare_message(self, session, envelope):
         # If the server was created with decode_data True, then data will be a
         # str, otherwise it will be bytes.
-        data = envelope.data
+        data = envelope.content
         if isinstance(data, bytes):
             message = message_from_bytes(data, self.message_class)
         else:
