@@ -33,7 +33,7 @@ class ReceivingHandler:
 
     @asyncio.coroutine
     def handle_DATA(self, session, envelope):
-        self.box.append(envelope.data)
+        self.box.append(envelope)
 
 
 class SizedController(Controller):
@@ -107,7 +107,7 @@ class TestProtocol(unittest.TestCase):
         except asyncio.CancelledError:
             pass
         assert len(handler.box) == 1
-        assert handler.box[0] == data
+        assert handler.box[0].data == data
 
 
 class TestSMTP(unittest.TestCase):
@@ -603,8 +603,8 @@ class TestSMTPWithController(unittest.TestCase):
             code, response = client.data("")
             self.assertEqual(code, 250)
             self.assertEqual(response, b'OK')
-        self.assertEqual(handler.box[0][2][0], recipient)
-        self.assertEqual(handler.box[0][1], sender)
+        self.assertEqual(handler.box[0].rcpt_tos[0], recipient)
+        self.assertEqual(handler.box[0].mail_from, sender)
 
     def test_mail_with_unrequited_smtputf8(self):
         controller = SMTPUTF8Controller(Sink())
@@ -691,7 +691,7 @@ Testing
             mail = CRLF.join(['Test', '.', 'mail'])
             client.sendmail('anne@example.com', ['bart@example.com'], mail)
             self.assertEqual(len(handler.box), 1)
-            self.assertEqual(handler.box[0], 'Test\r\n.\r\nmail')
+            self.assertEqual(handler.box[0].data, 'Test\r\n.\r\nmail')
 
     def test_unexpected_errors(self):
         class ErrorSMTP(Server):
@@ -736,10 +736,12 @@ Testing
             self.assertEqual(code, 250)
             client.data('Test mail')
             self.assertEqual(len(handler.box), 1)
-            mail = handler.box[0]
-            mail_from2 = mail[1].encode('utf-8', errors='surrogateescape')
+            envelope = handler.box[0]
+            mail_from2 = envelope.mail_from.encode(
+                'utf-8', errors='surrogateescape')
             self.assertEqual(mail_from2, mail_from)
-            mail_to2 = mail[2][0].encode('utf-8', errors='surrogateescape')
+            mail_to2 = envelope.rcpt_tos[0].encode(
+                'utf-8', errors='surrogateescape')
             self.assertEqual(mail_to2, mail_to)
 
 
