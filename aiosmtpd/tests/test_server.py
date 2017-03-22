@@ -38,3 +38,13 @@ class TestServer(unittest.TestCase):
         server = Server(Sink())
         server.command_size_limits['DATA'] = 1024
         self.assertEqual(server.max_command_size_limit, 1024)
+
+    def test_server_attribute(self):
+        controller = UTF8Controller(Sink())
+        self.assertIsNone(controller.server)
+        try:
+            controller.start()
+            self.assertIsNotNone(controller.server)
+        finally:
+            controller.stop()
+            self.assertIsNone(controller.server)

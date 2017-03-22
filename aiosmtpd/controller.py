@@ -13,6 +13,7 @@ class Controller:
         self.hostname = '::0' if hostname is None else hostname
         self.port = port
         self.loop = asyncio.new_event_loop() if loop is None else loop
+        self.server = None
         self.thread = None
         # For exiting the loop.
         self._rsock, self._wsock = socket.socketpair()
@@ -48,6 +49,7 @@ class Controller:
         self.server.close()
         self.loop.run_until_complete(self.server.wait_closed())
         self.loop.close()
+        self.server = None
 
     def start(self):
         assert self.thread is None, 'SMTP daemon already running'

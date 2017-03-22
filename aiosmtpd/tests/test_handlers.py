@@ -476,8 +476,8 @@ class CapturingServer(Server):
 
 class CapturingController(Controller):
     def factory(self):
-        self.server = CapturingServer(self.handler)
-        return self.server
+        self.smtpd = CapturingServer(self.handler)
+        return self.smtpd
 
 
 class DeprecatedHandler:
@@ -505,9 +505,9 @@ Subject: A test
 
 Testing
 """)
-        self.assertEqual(len(controller.server.warnings), 1)
+        self.assertEqual(len(controller.smtpd.warnings), 1)
         self.assertEqual(
-            controller.server.warnings[0],
+            controller.smtpd.warnings[0],
             call('Use handler.handle_DATA instead of .process_message()',
                  DeprecationWarning))
 
@@ -523,8 +523,8 @@ Subject: A test
 
 Testing
 """)
-        self.assertEqual(len(controller.server.warnings), 1)
+        self.assertEqual(len(controller.smtpd.warnings), 1)
         self.assertEqual(
-            controller.server.warnings[0],
+            controller.smtpd.warnings[0],
             call('Use handler.handle_DATA instead of .process_message()',
                  DeprecationWarning))
