@@ -9,7 +9,6 @@ from public import public
 class Controller:
     def __init__(self, handler, loop=None, hostname=None, port=8025):
         self.handler = handler
-        self.server = None
         self.hostname = '::1' if hostname is None else hostname
         self.port = port
         self.loop = asyncio.new_event_loop() if loop is None else loop
