@@ -26,7 +26,7 @@ SMTP connections in the separate thread.
     >>> controller = Controller(MessageHandler())
     >>> controller.start()
 
-The SMTP thread might run into errors during it's setup phase, to catch this
+The SMTP thread might run into errors during its setup phase; to catch this
 the main thread will timeout when waiting for the SMTP server to become ready.
 By default the timeout is set to 1 second but can be changed either by using
 the ``AIOSMTPD_CONTROLLER_TIMEOUT`` environment variable or by passing a
