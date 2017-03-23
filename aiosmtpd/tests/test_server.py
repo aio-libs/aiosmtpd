@@ -48,3 +48,13 @@ class TestServer(unittest.TestCase):
         self.addCleanup(s2.stop)
         s1.start()
         self.assertRaises(socket.error, s2.start)
+
+    def test_server_attribute(self):
+        controller = UTF8Controller(Sink())
+        self.assertIsNone(controller.server)
+        try:
+            controller.start()
+            self.assertIsNotNone(controller.server)
+        finally:
+            controller.stop()
+            self.assertIsNone(controller.server)

@@ -64,23 +64,23 @@ class Debugging:
                 line = line.decode('utf-8', 'replace')
             print(line, file=self.stream)
 
-    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
+    @asyncio.coroutine
+    def handle_DATA(self, session, envelope):
         print('---------- MESSAGE FOLLOWS ----------', file=self.stream)
         # Yes, actually test for truthiness since it's possible for either the
         # keywords to be missing, or for their values to be empty lists.
         add_separator = False
-        mail_options = kws.get('mail_options')
-        if mail_options:
-            print('mail options:', mail_options, file=self.stream)
+        if envelope.mail_options:
+            print('mail options:', envelope.mail_options, file=self.stream)
             add_separator = True
         # rcpt_options are not currently support by the SMTP class.
-        rcpt_options = kws.get('rcpt_options')
-        if rcpt_options:                            # pragma: nocover
+        rcpt_options = envelope.rcpt_options
+        if any(rcpt_options):                            # pragma: nocover
             print('rcpt options:', rcpt_options, file=self.stream)
             add_separator = True
         if add_separator:
             print(file=self.stream)
-        self._print_message_content(peer, data)
+        self._print_message_content(session.peer, envelope.content)
         print('------------ END MESSAGE ------------', file=self.stream)
 
 
@@ -90,8 +90,9 @@ class Proxy:
         self._hostname = remote_hostname
         self._port = remote_port
 
-    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
-        lines = data.splitlines(keepends=True)
+    @asyncio.coroutine
+    def handle_DATA(self, session, envelope):
+        lines = envelope.content.splitlines(keepends=True)
         # Look for the last header
         i = 0
         ending = CRLF
@@ -100,19 +101,19 @@ class Proxy:
                 ending = line
                 break
             i += 1
-        lines.insert(i, 'X-Peer: %s%s' % (peer[0], ending))
+        lines.insert(i, 'X-Peer: %s%s' % (session.peer[0], ending))
         data = EMPTYSTRING.join(lines)
-        refused = self._deliver(mailfrom, rcpttos, data)
+        refused = self._deliver(envelope.mail_from, envelope.rcpt_tos, data)
         # TBD: what to do with refused addresses?
         log.info('we got some refusals: %s', refused)
 
-    def _deliver(self, mailfrom, rcpttos, data):
+    def _deliver(self, mail_from, rcpt_tos, data):
         refused = {}
         try:
             s = smtplib.SMTP()
             s.connect(self._hostname, self._port)
             try:
-                refused = s.sendmail(mailfrom, rcpttos, data)
+                refused = s.sendmail(mail_from, rcpt_tos, data)
             finally:
                 s.quit()
         except smtplib.SMTPRecipientsRefused as e:
@@ -125,7 +126,7 @@ class Proxy:
             # exception code.
             errcode = getattr(e, 'smtp_code', -1)
             errmsg = getattr(e, 'smtp_error', 'ignore')
-            for r in rcpttos:
+            for r in rcpt_tos:
                 refused[r] = (errcode, errmsg)
         return refused
 
@@ -138,7 +139,8 @@ class Sink:
             parser.error('Sink handler does not accept arguments')
         return cls()
 
-    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
+    @asyncio.coroutine
+    def handle_DATA(self, session, envelope):
         pass                                        # pragma: nocover
 
 
@@ -147,24 +149,26 @@ class Message:
     def __init__(self, message_class=None):
         self.message_class = message_class
 
-    def prepare_message(self, peer, mailfrom, rcpttos, data, **kws):
+    @asyncio.coroutine
+    def handle_DATA(self, session, envelope):
+        envelope = self.prepare_message(session, envelope)
+        self.handle_message(envelope)
+
+    def prepare_message(self, session, envelope):
         # If the server was created with decode_data True, then data will be a
         # str, otherwise it will be bytes.
+        data = envelope.content
         if isinstance(data, bytes):
             message = message_from_bytes(data, self.message_class)
         else:
             assert isinstance(data, str), (
               'Expected str or bytes, got {}'.format(type(data)))
             message = message_from_string(data, self.message_class)
-        message['X-Peer'] = str(peer)
-        message['X-MailFrom'] = mailfrom
-        message['X-RcptTo'] = COMMASPACE.join(rcpttos)
+        message['X-Peer'] = str(session.peer)
+        message['X-MailFrom'] = envelope.mail_from
+        message['X-RcptTo'] = COMMASPACE.join(envelope.rcpt_tos)
 
         return message
-
-    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
-        message = self.prepare_message(peer, mailfrom, rcpttos, data, **kws)
-        self.handle_message(message)
 
     def handle_message(self, message):
         raise NotImplementedError                   # pragma: nocover
@@ -177,12 +181,12 @@ class AsyncMessage(Message):
         self.loop = loop or asyncio.get_event_loop()
 
     @asyncio.coroutine
-    def process_message(self, peer, mailfrom, rcpttos, data, *, loop, **kws):
-        message = self.prepare_message(peer, mailfrom, rcpttos, data, **kws)
-        yield from self.handle_message(message, loop=loop)
+    def handle_DATA(self, session, envelope):
+        message = self.prepare_message(session, envelope)
+        yield from self.handle_message(message)
 
     @asyncio.coroutine
-    def handle_message(self, message, *, loop):
+    def handle_message(self, message):
         raise NotImplementedError                   # pragma: nocover
 
 

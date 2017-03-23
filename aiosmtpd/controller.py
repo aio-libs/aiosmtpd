@@ -12,10 +12,10 @@ class Controller:
     def __init__(self, handler, loop=None, hostname='::0', port=8025,
                  ready_timeout=1.0):
         self.handler = handler
-        self.server = None
         self.hostname = '::0' if hostname is None else hostname
         self.port = port
         self.loop = asyncio.new_event_loop() if loop is None else loop
+        self.server = None
         self.thread = None
         self.thread_exception = None
         self.ready_timeout = os.getenv('AIOSMTPD_CONTROLLER_TIMEOUT',
@@ -51,13 +51,14 @@ class Controller:
             self.thread_exception = error
             return
         asyncio.set_event_loop(self.loop)
-        server = self.loop.run_until_complete(
+        self.server = self.loop.run_until_complete(
             self.loop.create_server(self.factory, sock=sock))
         self.loop.call_soon(ready_event.set)
         self.loop.run_forever()
-        server.close()
-        self.loop.run_until_complete(server.wait_closed())
+        self.server.close()
+        self.loop.run_until_complete(self.server.wait_closed())
         self.loop.close()
+        self.server = None
 
     def start(self):
         assert self.thread is None, 'SMTP daemon already running'
