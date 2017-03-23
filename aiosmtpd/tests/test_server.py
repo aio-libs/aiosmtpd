@@ -1,6 +1,7 @@
 """Test other aspects of the server implementation."""
 
 
+import socket
 import unittest
 
 from aiosmtpd.controller import Controller
@@ -38,6 +39,15 @@ class TestServer(unittest.TestCase):
         server = Server(Sink())
         server.command_size_limits['DATA'] = 1024
         self.assertEqual(server.max_command_size_limit, 1024)
+
+    def test_socket_error(self):
+        # Testing starting a server with a port already in use
+        s1 = UTF8Controller(Sink(), port=8025)
+        s2 = UTF8Controller(Sink(), port=8025)
+        self.addCleanup(s1.stop)
+        self.addCleanup(s2.stop)
+        s1.start()
+        self.assertRaises(socket.error, s2.start)
 
     def test_server_attribute(self):
         controller = UTF8Controller(Sink())
