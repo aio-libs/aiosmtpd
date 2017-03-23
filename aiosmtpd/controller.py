@@ -18,8 +18,8 @@ class Controller:
         self.server = None
         self.thread = None
         self.thread_exception = None
-        self.ready_timeout = os.getenv('AIOSMTPD_CONTROLLER_TIMEOUT',
-                                       ready_timeout)
+        self.ready_timeout = os.getenv(
+            'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
         # For exiting the loop.
         self._rsock, self._wsock = socket.socketpair()
         self.loop.add_reader(self._rsock, self._reader)
