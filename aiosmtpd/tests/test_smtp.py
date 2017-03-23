@@ -33,7 +33,7 @@ class ReceivingHandler:
 
     @asyncio.coroutine
     def handle_DATA(self, session, envelope):
-        self.box.append(envelope.data)
+        self.box.append(envelope.content)
 
 
 class SizedController(Controller):

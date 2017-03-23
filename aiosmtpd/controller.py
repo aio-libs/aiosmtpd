@@ -1,3 +1,5 @@
+import os
+import socket
 import asyncio
 import threading
 
@@ -7,12 +9,17 @@ from public import public
 
 @public
 class Controller:
-    def __init__(self, handler, loop=None, hostname=None, port=8025):
+    def __init__(self, handler, loop=None, hostname=None, port=8025,
+                 ready_timeout=1.0):
         self.handler = handler
         self.hostname = '::1' if hostname is None else hostname
         self.port = port
         self.loop = asyncio.new_event_loop() if loop is None else loop
+        self.server = None
         self.thread = None
+        self.thread_exception = None
+        self.ready_timeout = os.getenv(
+            'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
         # For exiting the loop.
         self._rsock, self._wsock = self.loop._socketpair()
         self.loop.add_reader(self._rsock, self._reader)
@@ -31,14 +38,19 @@ class Controller:
 
     def _run(self, ready_event):
         asyncio.set_event_loop(self.loop)
-        server = self.loop.run_until_complete(
-            self.loop.create_server(
-                self.factory, host=self.hostname, port=self.port))
+        try:
+            self.server = self.loop.run_until_complete(
+                self.loop.create_server(
+                    self.factory, host=self.hostname, port=self.port))
+        except socket.error as error:
+            self.thread_exception = error
+            return
         self.loop.call_soon(ready_event.set)
         self.loop.run_forever()
-        server.close()
-        self.loop.run_until_complete(server.wait_closed())
+        self.server.close()
+        self.loop.run_until_complete(self.server.wait_closed())
         self.loop.close()
+        self.server = None
 
     def start(self):
         assert self.thread is None, 'SMTP daemon already running'
@@ -47,7 +59,9 @@ class Controller:
         self.thread.daemon = True
         self.thread.start()
         # Wait a while until the server is responding.
-        ready_event.wait()
+        ready_event.wait(self.ready_timeout)
+        if self.thread_exception is not None:
+            raise self.thread_exception
 
     def stop(self):
         assert self.thread is not None, 'SMTP daemon not running'
