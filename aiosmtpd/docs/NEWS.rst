@@ -12,6 +12,9 @@
 * Use ``flufl.testing`` package for nose2 and flake8 plugins.
 * ``DATA`` method now respects original line endings, and passing size limits
   is now handled better.  Given by Konstantin Volkov.
+* Controller objects now have an optional timeout argument used to wait for
+  the server to become ready.  This can also be overridden with the
+  environment variable ``AIOSMTPD_CONTROLLER_TIMEOUT``.
 * Better Python 3.4 compatibility.
 
 1.0a4 (2016-11-29)

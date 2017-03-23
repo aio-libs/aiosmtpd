@@ -41,7 +41,7 @@ class Envelope:
     def __init__(self):
         self.mail_from = None
         self.mail_options = None
-        self.data = None
+        self.content = None
         self.rcpt_tos = []
         self.rcpt_options = []
 
@@ -567,7 +567,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         received_data = EMPTYBYTES.join(data)
         if self._decode_data:
             received_data = received_data.decode('utf-8')
-        self.envelope.data = received_data
+        self.envelope.content = received_data
         # Call the new API first if it's implemented.
         if hasattr(self.event_handler, 'handle_DATA'):
             args = (self.session, self.envelope)
@@ -576,7 +576,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             warn('Use handler.handle_DATA instead of .process_message()',
                  DeprecationWarning)
             args = (self.session.peer, self.envelope.mail_from,
-                    self.envelope.rcpt_tos, self.envelope.data)
+                    self.envelope.rcpt_tos, self.envelope.content)
             if asyncio.iscoroutinefunction(self.event_handler.process_message):
                 status = yield from self.event_handler.process_message(*args)
             else:
