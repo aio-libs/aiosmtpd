@@ -90,8 +90,11 @@ Contents
    :maxdepth: 2
 
    aiosmtpd/docs/intro
+   aiosmtpd/docs/smtp
+   aiosmtpd/docs/lmtp
    aiosmtpd/docs/controller
-   aiosmtpd/docs/mailbox
+   aiosmtpd/docs/handlers
+   aiosmtpd/docs/cli
    aiosmtpd/docs/NEWS
 
 
