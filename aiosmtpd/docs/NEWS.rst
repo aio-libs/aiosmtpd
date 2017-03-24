@@ -9,16 +9,17 @@
 * Added the ``STARTTLS`` extension.  Given by Konstantin Volkov.
 * Minor changes to the way the ``Debugging`` handler prints ``mail_options``
   and ``rcpt_options`` (although the latter is still not support in ``SMTP``).
-* Use ``flufl.testing`` package for nose2 and flake8 plugins.
 * ``DATA`` method now respects original line endings, and passing size limits
   is now handled better.  Given by Konstantin Volkov.
 * Controller objects now have an optional timeout argument used to wait for
   the server to become ready.  This can also be overridden with the
-  environment variable ``AIOSMTPD_CONTROLLER_TIMEOUT``.
+  environment variable ``AIOSMTPD_CONTROLLER_TIMEOUT``. (Closes #35)
 * Handlers can define a ``handle_tls_handshake()`` method, which takes a
   session object, and is called if SSL is enabled during the making of the
-  connection.
+  connection.  (Closes #48)
 * Better Python 3.4 compatibility.
+* Use ``flufl.testing`` package for nose2 and flake8 plugins.
+* The test suite has achieved 100% code coverage. (Closes #2)
 
 1.0a4 (2016-11-29)
 ==================

@@ -135,9 +135,14 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.transport = transport
             log.info('Peer: %s', repr(self.session.peer))
             # Process the client's requests.
-            self.connection_closed = False
+            self._connection_closed = False
             self._handler_coroutine = self.loop.create_task(
                 self._handle_client())
+
+    def connection_lost(self, exc):
+        super().connection_lost(exc)
+        self._writer.close()
+        self._connection_closed = True
 
     def _client_connected_cb(self, reader, writer):
         # This is redundant since we subclass StreamReaderProtocol, but I like
@@ -176,7 +181,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         log.info('handling connection')
         yield from self.push(
             '220 {} {}'.format(self.hostname, self.__ident__))
-        while not self.connection_closed:
+        while not self._connection_closed:          # pragma: no branch
             # XXX Put the line limit stuff into the StreamReader?
             line = yield from self._reader.readline()
             try:
@@ -318,13 +323,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         # Start handshake.
         self._tls_protocol.connection_made(socket_transport)
 
-    @asyncio.coroutine
-    def close(self):
-        # XXX this close is probably not quite right.
-        if self._writer:
-            self._writer.close()
-        self._connection_closed = True
-
     def _strip_command_keyword(self, keyword, arg):
         keylen = len(keyword)
         if arg[:keylen].upper() == keyword:
@@ -338,8 +336,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             address, rest = get_angle_addr(arg)
         else:
             address, rest = get_addr_spec(arg)
-        if not address:
-            return address, rest
         return address.addr_spec, rest
 
     def _getparams(self, params):
@@ -534,11 +530,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         data = []
         num_bytes = 0
         size_exceeded = False
-        while not self.connection_closed:
+        while not self._connection_closed:          # pragma: no branch
             line = yield from self._reader.readline()
             if line == b'.\r\n':
-                if data:
-                    data[-1] = data[-1].rstrip(b'\r\n')
+                data[-1] = data[-1].rstrip(b'\r\n')
                 break
             num_bytes += len(line)
             if (not size_exceeded and
