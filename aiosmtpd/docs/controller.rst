@@ -1,10 +1,13 @@
+.. _controller:
+
 =======================
  The testing framework
 =======================
 
-The SMTP server can be used in a testing framework via a controller which runs
-in a separate thread.  This allows the main thread to run the test driver, and
-information can be passed between the SMTP thread and the main thread.
+The SMTP server can be used in a testing framework via a *controller* which
+runs in a separate thread.  This allows the main thread to run the test
+driver, and information can be passed between the SMTP thread and the main
+thread.
 
 For example, say you wanted to pass message objects between the SMTP thread
 and the main thread.  Start by implementing a handler which derives from a

@@ -125,8 +125,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Why _extra is protected attribute?
             self.session.ssl = self._tls_protocol._extra
             if hasattr(self.event_handler, 'handle_tls_handshake'):
-                auth = self.event_handler.handle_tls_handshake(
-                    self.session.ssl)
+                auth = self.event_handler.handle_tls_handshake(self.session)
                 self._tls_handshake_failed = not auth
             else:
                 self._tls_handshake_failed = False
@@ -168,9 +167,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         yield from self._writer.drain()
 
     @asyncio.coroutine
-    def handle_exception(self, e):
+    def handle_exception(self, error):
         if hasattr(self.event_handler, 'handle_exception'):
-            yield from self.event_handler.handle_exception(e)
+            yield from self.event_handler.handle_exception(error)
 
     @asyncio.coroutine
     def _handle_client(self):

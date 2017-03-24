@@ -15,6 +15,9 @@
 * Controller objects now have an optional timeout argument used to wait for
   the server to become ready.  This can also be overridden with the
   environment variable ``AIOSMTPD_CONTROLLER_TIMEOUT``.
+* Handlers can define a ``handle_tls_handshake()`` method, which takes a
+  session object, and is called if SSL is enabled during the making of the
+  connection.
 * Better Python 3.4 compatibility.
 
 1.0a4 (2016-11-29)
