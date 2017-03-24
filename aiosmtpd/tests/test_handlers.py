@@ -385,6 +385,25 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(
             self.parser.message, 'Sink handler does not accept arguments')
 
+    def test_mailbox_cli_no_args(self):
+        self.assertRaises(SystemExit, Mailbox.from_cli, self.parser)
+        self.assertEqual(
+            self.parser.message,
+            'The directory for the maildir is required')
+
+    def test_mailbox_cli_too_many_args(self):
+        self.assertRaises(SystemExit, Mailbox.from_cli, self.parser,
+                          'foo', 'bar', 'baz')
+        self.assertEqual(
+            self.parser.message,
+            'Too many arguments for Mailbox handler')
+
+    def test_mailbox_cli(self):
+        with TemporaryDirectory() as tmpdir:
+            handler = Mailbox.from_cli(self.parser, tmpdir)
+            self.assertIsInstance(handler.mailbox, Maildir)
+            self.assertEqual(handler.mail_dir, tmpdir)
+
 
 class TestProxy(unittest.TestCase):
     def setUp(self):

@@ -193,6 +193,7 @@ class AsyncMessage(Message):
 class Mailbox(Message):
     def __init__(self, mail_dir, message_class=None):
         self.mailbox = mailbox.Maildir(mail_dir)
+        self.mail_dir = mail_dir
         super().__init__(message_class)
 
     def handle_message(self, message):
