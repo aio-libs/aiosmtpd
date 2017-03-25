@@ -63,7 +63,7 @@ class CustomIdentController(Controller):
         return server
 
 
-class ErroringHandler:
+class ErroringHandler(BaseHandler):
     error = None
 
     @asyncio.coroutine

@@ -164,7 +164,7 @@ class Message(BaseHandler):
         message['X-Peer'] = str(session.peer)
         message['X-MailFrom'] = envelope.mail_from.address
         message['X-RcptTo'] = COMMASPACE.join(
-            [rcpt.address for rcpt in envelope.rcpttos])
+            [rcpt.address for rcpt in envelope.rcpt_tos])
         return message
 
     @asyncio.coroutine

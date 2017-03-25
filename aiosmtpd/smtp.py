@@ -127,7 +127,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Why _extra is protected attribute?
             self.session.ssl = self._tls_protocol._extra
             if hasattr(self.event_handler, 'handle_tls_handshake'):
-                auth = self.event_handler.handle_tls_handshake(self.session)
+                auth = self.event_handler.handle_STARTTLS(self.session)
                 self._tls_handshake_failed = not auth
             else:
                 self._tls_handshake_failed = False
@@ -398,7 +398,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not address:
             yield from self.push('502 Could not VRFY %s' % arg)
             return
-        response = yield from self.event_handler.verify(address)
+        response = yield from self.event_handler.handle_VRFY(address)
         yield from self.push(response)
 
     @asyncio.coroutine
@@ -456,9 +456,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(
                 '555 MAIL FROM parameters not recognized or not implemented')
             return
-        self.envelope.mailfrom = yield from self.event_handler.mail_from(
+        self.envelope.mail_from = yield from self.event_handler.handle_MAIL(
             address, mail_options)
-        log.info('sender: %s', self.envelope.mailfrom)
+        log.info('sender: %s', self.envelope.mail_from)
         yield from self.push('250 OK')
 
     @asyncio.coroutine
@@ -494,7 +494,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(
                 '555 RCPT TO parameters not recognized or not implemented')
             return
-        rcpt = yield from self.event_handler.rcpt(address, self.rcpt_options)
+        rcpt = yield from self.event_handler.handle_RCPT(address, rcpt_options)
         self.envelope.rcpt_tos.append(rcpt)
         log.info('recip: %s', rcpt)
         yield from self.push('250 OK')

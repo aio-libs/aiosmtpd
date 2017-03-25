@@ -24,29 +24,25 @@ class SMTPAddress:
 
 class BaseHandler:
     @asyncio.coroutine
-    def process_message(self, peer, mailfrom, rcpttos, data):
+    def handle_DATA(self, session, envelope):
         """
         Proccess message send by DATA command
-        :param tuple peer: Peer hoat and port
-        :param mailfrom: Sender from mail_from handler
-        :param list rcpttos: Recipients from rcpt handler
-        :param data: Email body
+        :param Session session: Session information
+        :param Envelope envelope: Email envelope
         :return str: SMTP response string
         """
         return '250 OK'
 
-    def handle_tls_handshake(self, ssl_object, peercert, cipher):
+    def handle_STARTTLS(self, session):
         """
         Handle SMTP STARTTLS certificates handshake
-        :param ssl_object:
-        :param peercert:
-        :param cipher:
+        :param Session session: Session information
         :return bool: True if successful, False if failed.
         """
         return True
 
     @asyncio.coroutine
-    def mail_from(self, address, options):
+    def handle_MAIL(self, address, options):
         """
         Handle SMTP MAIL_FROM command
         :param str address: Sender email address
@@ -56,7 +52,7 @@ class BaseHandler:
         return SMTPAddress(address, options)
 
     @asyncio.coroutine
-    def rcpt(self, address, options):
+    def handle_RCPT(self, address, options):
         """
         Handle SMTP RCPT command
         :param str address: Recipient email address
@@ -66,7 +62,7 @@ class BaseHandler:
         return SMTPAddress(address, options)
 
     @asyncio.coroutine
-    def verify(self, address):
+    def handle_VRFY(self, address):
         """
         SMTP VRFY handler
         :param address:
