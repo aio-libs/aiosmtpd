@@ -10,20 +10,9 @@ from aiosmtpd.smtp import SMTP as Server
 from smtplib import SMTP
 
 
-class UTF8Controller(Controller):
-    def factory(self):
-        return Server(self.handler, enable_SMTPUTF8=True)
-
-
 class TestServer(unittest.TestCase):
-    def test_constructor_contraints(self):
-        # These two arguments cannot both be set.
-        self.assertRaises(ValueError, Server, Sink(),
-                          enable_SMTPUTF8=True,
-                          decode_data=True)
-
     def test_smtp_utf8(self):
-        controller = UTF8Controller(Sink())
+        controller = Controller(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -42,15 +31,15 @@ class TestServer(unittest.TestCase):
 
     def test_socket_error(self):
         # Testing starting a server with a port already in use
-        s1 = UTF8Controller(Sink(), port=8025)
-        s2 = UTF8Controller(Sink(), port=8025)
+        s1 = Controller(Sink(), port=8025)
+        s2 = Controller(Sink(), port=8025)
         self.addCleanup(s1.stop)
         self.addCleanup(s2.stop)
         s1.start()
         self.assertRaises(socket.error, s2.start)
 
     def test_server_attribute(self):
-        controller = UTF8Controller(Sink())
+        controller = Controller(Sink())
         self.assertIsNone(controller.server)
         try:
             controller.start()

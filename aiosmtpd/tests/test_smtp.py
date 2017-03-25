@@ -45,11 +45,6 @@ class SizedController(Controller):
         return Server(self.handler, data_size_limit=self.size)
 
 
-class SMTPUTF8Controller(Controller):
-    def factory(self):
-        return Server(self.handler, enable_SMTPUTF8=True)
-
-
 class CustomHostnameController(Controller):
     def factory(self):
         return Server(self.handler, hostname='custom.localhost')
@@ -181,7 +176,8 @@ class TestSMTP(unittest.TestCase):
             lines = response.splitlines()
             self.assertEqual(lines[0], bytes(socket.getfqdn(), 'utf-8'))
             self.assertEqual(lines[1], b'SIZE 33554432')
-            self.assertEqual(lines[2], b'HELP')
+            self.assertEqual(lines[2], b'SMTPUTF8')
+            self.assertEqual(lines[3], b'HELP')
 
     def test_ehlo_duplicate(self):
         with SMTP(*self.address) as client:
@@ -614,7 +610,7 @@ class TestSMTPWithController(unittest.TestCase):
 
     def test_mail_with_compatible_smtputf8(self):
         handler = ReceivingHandler()
-        controller = SMTPUTF8Controller(handler)
+        controller = Controller(handler)
         controller.start()
         self.addCleanup(controller.stop)
         recipient = 'bart\xCB@example.com'
@@ -640,7 +636,7 @@ class TestSMTPWithController(unittest.TestCase):
         self.assertEqual(handler.box[0].mail_from, sender)
 
     def test_mail_with_unrequited_smtputf8(self):
-        controller = SMTPUTF8Controller(Sink())
+        controller = Controller(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -650,7 +646,7 @@ class TestSMTPWithController(unittest.TestCase):
             self.assertEqual(response, b'OK')
 
     def test_mail_with_incompatible_smtputf8(self):
-        controller = SMTPUTF8Controller(Sink())
+        controller = Controller(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
