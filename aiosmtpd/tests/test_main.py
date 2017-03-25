@@ -183,9 +183,7 @@ class TestLoop(unittest.TestCase):
         self.assertEqual(positional[0].keywords, dict(
             data_size_limit=None,
             enable_SMTPUTF8=False))
-        keywords = list(keywords)
-        keywords.sort()
-        self.assertListEqual(keywords, ['host', 'port'])
+        self.assertListEqual(sorted(keywords), ['host', 'port'])
         # run_until_complete() was called once.  The argument isn't important.
         self.assertTrue(self.run_until_complete.called)
         # add_signal_handler() is called with two arguments.
