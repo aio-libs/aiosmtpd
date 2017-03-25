@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 import pkg_resources
 
@@ -26,6 +27,7 @@ class ReceivingHandler:
     def __init__(self):
         self.box = []
 
+    @asyncio.coroutine
     def handle_DATA(self, session, envelope):
         self.box.append(envelope)
 
