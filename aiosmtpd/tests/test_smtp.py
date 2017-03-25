@@ -37,9 +37,9 @@ class ReceivingHandler:
 
 
 class SizedController(Controller):
-    def __init__(self, handler, size, loop=None, hostname='::0', port=8025):
+    def __init__(self, handler, size):
         self.size = size
-        super().__init__(handler, loop, hostname, port)
+        super().__init__(handler)
 
     def factory(self):
         return Server(self.handler, data_size_limit=self.size)

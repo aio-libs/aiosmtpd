@@ -1,23 +1,23 @@
+import os
 import signal
-import socket
 import asyncio
 import logging
 import unittest
 
 from aiosmtpd.handlers import Debugging
-from aiosmtpd.main import main, parseargs, setup_sock
+from aiosmtpd.main import main, parseargs
 from aiosmtpd.smtp import SMTP
 from contextlib import ExitStack
 from functools import partial
 from io import StringIO
-from unittest.mock import call, patch
+from unittest.mock import patch
 
 try:
     import pwd
 except ImportError:
     pwd = None
 
-
+has_setuid = hasattr(os, 'setuid')
 log = logging.getLogger('mail.log')
 
 
@@ -83,6 +83,7 @@ class TestMain(unittest.TestCase):
                 stderr.getvalue(),
                 'Cannot import module "pwd"; try running with -n option.\n')
 
+    @unittest.skipUnless(has_setuid, 'setuid is unvailable')
     def test_n(self):
         with ExitStack() as resources:
             resources.enter_context(patch('aiosmtpd.main.pwd', None))
@@ -95,6 +96,7 @@ class TestMain(unittest.TestCase):
             # triggered in the setuid section.
             self.assertRaises(RuntimeError, main, ('-n',))
 
+    @unittest.skipUnless(has_setuid, 'setuid is unvailable')
     def test_nosetuid(self):
         with ExitStack() as resources:
             resources.enter_context(patch('aiosmtpd.main.pwd', None))
@@ -181,7 +183,7 @@ class TestLoop(unittest.TestCase):
         self.assertEqual(positional[0].keywords, dict(
             data_size_limit=None,
             enable_SMTPUTF8=False))
-        self.assertEqual(list(keywords), ['sock'])
+        self.assertEqual(sorted(keywords), ['host', 'port'])
         # run_until_complete() was called once.  The argument isn't important.
         self.assertTrue(self.run_until_complete.called)
         # add_signal_handler() is called with two arguments.
@@ -307,40 +309,3 @@ class TestParseArgs(unittest.TestCase):
             self.assertEqual(cm.exception.code, 2)
         usage_lines = stderr.getvalue().splitlines()
         self.assertEqual(usage_lines[-1][-24:], 'Invalid port number: foo')
-
-
-class TestSocket(unittest.TestCase):
-    # Usually the socket will be set up from socket.getaddrinfo() but if that
-    # raises socket.gaierror, then it tries to infer the IPv4/IPv6 type from
-    # the host name.
-    def setUp(self):
-        self._resources = ExitStack()
-        self.addCleanup(self._resources.close)
-        self._resources.enter_context(patch('aiosmtpd.main.socket.getaddrinfo',
-                                            side_effect=socket.gaierror))
-
-    def test_ipv4(self):
-        bind = self._resources.enter_context(patch('aiosmtpd.main.bind'))
-        mock_sock = setup_sock('host.example.com', 8025)
-        bind.assert_called_once_with(socket.AF_INET, socket.SOCK_STREAM, 0)
-        mock_sock.bind.assert_called_once_with(('host.example.com', 8025))
-
-    def test_ipv6(self):
-        bind = self._resources.enter_context(patch('aiosmtpd.main.bind'))
-        mock_sock = setup_sock('::1', 8025)
-        bind.assert_called_once_with(socket.AF_INET6, socket.SOCK_STREAM, 0)
-        mock_sock.bind.assert_called_once_with(('::1', 8025, 0, 0))
-
-    def test_bind_ipv4(self):
-        self._resources.enter_context(patch('aiosmtpd.main.socket.socket'))
-        mock_sock = setup_sock('host.example.com', 8025)
-        mock_sock.setsockopt.assert_called_once_with(
-            socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-
-    def test_bind_ipv6(self):
-        self._resources.enter_context(patch('aiosmtpd.main.socket.socket'))
-        mock_sock = setup_sock('::1', 8025)
-        self.assertEqual(mock_sock.setsockopt.call_args_list, [
-            call(socket.SOL_SOCKET, socket.SO_REUSEADDR, True),
-            call(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False),
-            ])

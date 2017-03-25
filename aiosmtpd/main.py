@@ -1,7 +1,6 @@
 import os
 import sys
 import signal
-import socket
 import asyncio
 import logging
 
@@ -131,10 +130,10 @@ def main(args=None):
     if args.debug > 2:
         loop.set_debug(enabled=True)
 
-    sock = setup_sock(args.host, args.port)
     log.info('Server listening on %s:%s', args.host, args.port)
 
-    server = loop.run_until_complete(loop.create_server(factory, sock=sock))
+    server = loop.run_until_complete(
+        loop.create_server(factory, host=args.host, port=args.port))
     loop.add_signal_handler(signal.SIGINT, loop.stop)
 
     log.info('Starting asyncio loop')
@@ -146,47 +145,6 @@ def main(args=None):
     log.info('Completed asyncio loop')
     loop.run_until_complete(server.wait_closed())
     loop.close()
-
-
-def setup_sock(host, port):
-    try:
-        # First try to determine the socket type.
-        info = socket.getaddrinfo(
-            host, port,
-            socket.AF_UNSPEC,
-            socket.SOCK_STREAM,
-            0,
-            socket.AI_PASSIVE,
-            )
-    except socket.gaierror:
-        # Infer the type from the host.
-        addr = host, port
-        if ':' in host:
-            addr += 0, 0
-            type_ = socket.AF_INET6
-        else:
-            type_ = socket.AF_INET
-        info_0 = type_, socket.SOCK_STREAM, 0, '', addr
-        info = info_0,
-
-    family, type, proto, canonname, addr = next(iter(info))
-    sock = bind(family, type, proto)
-    log = logging.getLogger('mail.log')
-    log.info('Binding to %s', addr)
-    sock.bind(addr)
-    return sock
-
-
-def bind(family, type, proto):
-    """Create (or recreate) the actual socket object."""
-    sock = socket.socket(family, type, proto)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-
-    # If listening on IPv6, activate dual-stack.
-    if family == socket.AF_INET6:
-        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-
-    return sock
 
 
 if __name__ == '__main__':                          # pragma: nocover
