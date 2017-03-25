@@ -597,21 +597,19 @@ class TestSMTPWithController(unittest.TestCase):
         sender = 'anne\xCB@example.com'
         with SMTP(controller.hostname, controller.port) as client:
             client.ehlo('example.com')
-            client.send(
-                bytes(
-                    'MAIL FROM: <' + sender + '> SMTPUTF8\r\n',
-                    encoding='utf-8'))
+            client.send(bytes(
+                'MAIL FROM: <' + sender + '> SMTPUTF8\r\n',
+                encoding='utf-8'))
             code, response = client.getreply()
             self.assertEqual(code, 250)
             self.assertEqual(response, b'OK')
-            client.send(
-                bytes(
-                    'RCPT TO: <' + recipient + '>\r\n',
-                    encoding='utf-8'))
+            client.send(bytes(
+                'RCPT TO: <' + recipient + '>\r\n',
+                encoding='utf-8'))
             code, response = client.getreply()
             self.assertEqual(code, 250)
             self.assertEqual(response, b'OK')
-            code, response = client.data("")
+            code, response = client.data('')
             self.assertEqual(code, 250)
             self.assertEqual(response, b'OK')
         self.assertEqual(handler.box[0].rcpt_tos[0], recipient)

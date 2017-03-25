@@ -41,6 +41,7 @@ class Envelope:
     def __init__(self):
         self.mail_from = None
         self.mail_options = None
+        self.smtp_utf8 = False
         self.content = None
         self.rcpt_tos = []
         self.rcpt_options = []
@@ -55,7 +56,6 @@ class SMTP(asyncio.StreamReaderProtocol):
     def __init__(self, handler,
                  *,
                  data_size_limit=DATA_SIZE_DEFAULT,
-                 enable_SMTPUTF8=False,
                  decode_data=False,
                  hostname=None,
                  tls_context=None,
@@ -69,13 +69,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             loop=self.loop)
         self.event_handler = handler
         self.data_size_limit = data_size_limit
-        self.enable_SMTPUTF8 = enable_SMTPUTF8
-        if enable_SMTPUTF8:
-            if decode_data:
-                raise ValueError(
-                    "decode_data and enable_SMTPUTF8 cannot be set to "
-                    "True at the same time")
-            decode_data = False
         self._decode_data = decode_data
         self.command_size_limits.clear()
         if hostname:
@@ -157,7 +150,6 @@ class SMTP(asyncio.StreamReaderProtocol):
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
         self.envelope = self._create_envelope()
-        self.require_SMTPUTF8 = False
 
     def _set_rset_state(self):
         """Reset all state variables except the greeting."""
@@ -165,8 +157,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def push(self, msg):
-        encoding = 'utf-8' if self.require_SMTPUTF8 else 'ascii'
-        response = bytes(msg + '\r\n', encoding=encoding)
+        response = bytes(msg + '\r\n', encoding='ascii')
         self._writer.write(response)
         log.debug(response)
         yield from self._writer.drain()
@@ -192,19 +183,22 @@ class SMTP(asyncio.StreamReaderProtocol):
                     yield from self.push('500 Error: bad syntax')
                     continue
                 i = line.find(b' ')
-                # keep data not decoded, decode only command name part as
-                # it can be only in ASCII encoding. Let commands decide
-                # what encoding to expect
+                # Decode to string only the command name part, which must be
+                # ASCII as per RFC.  If there is an argument, it is decoded to
+                # UTF-8/surrogateescape so that non-UTF-8 data can be
+                # re-encoded back to the original bytes when the SMTP command
+                # is handled.
                 if i < 0:
                     command = str(line.upper(), encoding='ascii')
                     arg = None
                 else:
                     command = str(line[:i].upper(), encoding='ascii')
-                    arg = line[i + 1:].strip()
-                    # Remote relay SMTP server can send us UTF-8 content
-                    # despite of was support declared or not.Some old servers
-                    # can send 8bit data, Use surrogates to be sure it can be
-                    # decoded to bytes back as-is.
+                    arg = line[i+1:].strip()
+                    # Remote SMTP servers can send us UTF-8 content despite
+                    # whether they've declared to do so or not.  Some old
+                    # servers can send 8-bit data.  Use surrogateescape so
+                    # that the fidelity of the decoding is preserved, and the
+                    # original bytes can be retrieved.
                     arg = str(arg, encoding='utf-8', errors='surrogateescape')
                 max_sz = (self.command_size_limits[command]
                           if self.session.extended_smtp
@@ -279,9 +273,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.command_size_limits['MAIL'] += 26
         if not self._decode_data:
             yield from self.push('250-8BITMIME')
-        if self.enable_SMTPUTF8:
-            yield from self.push('250-SMTPUTF8')
-            self.command_size_limits['MAIL'] += 10
+        yield from self.push('250-SMTPUTF8')
+        self.command_size_limits['MAIL'] += 10
         if (self.tls_context and
                 not self._tls_protocol and
                 _has_ssl):                        # pragma: nossl
@@ -445,11 +438,11 @@ class SMTP(asyncio.StreamReaderProtocol):
                 yield from self.push(
                     '501 Error: BODY can only be one of 7BIT, 8BITMIME')
                 return
-        if self.enable_SMTPUTF8:
-            smtputf8 = params.pop('SMTPUTF8', False)
-            if (smtputf8 is not True) and (smtputf8 is not False):
-                yield from self.push('501 Error: SMTPUTF8 takes no arguments')
-                return
+        smtputf8 = params.pop('SMTPUTF8', False)
+        if not isinstance(smtputf8, bool):
+            yield from self.push('501 Error: SMTPUTF8 takes no arguments')
+            return
+        self.envelope.smtp_utf8 = smtputf8
         size = params.pop('SIZE', None)
         if size:
             if isinstance(size, bool) or not size.isdigit():
@@ -560,7 +553,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                 data[i] = text[1:]
         received_data = EMPTYBYTES.join(data)
         if self._decode_data:
-            received_data = received_data.decode('utf-8')
+            received_data = received_data.decode(
+                'utf-8', errors='surrogateescape')
         self.envelope.content = received_data
         # Call the new API first if it's implemented.
         if hasattr(self.event_handler, 'handle_DATA'):
