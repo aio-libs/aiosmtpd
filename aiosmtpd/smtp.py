@@ -46,6 +46,14 @@ class Envelope:
         self.rcpt_options = []
 
 
+class SMTPException(Exception):
+
+    def __init__(self, code, message):
+        super(SMTPException, self).__init__(code, message)
+        self.code = code
+        self.message = message
+
+
 @public
 class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
@@ -222,6 +230,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                         '500 Error: command "%s" not recognized' % command)
                     continue
                 yield from method(arg)
+            except SMTPException as error:
+                yield from self.push('{} {}'.format(error.code, error.message))
             except Exception as error:
                 yield from self.push('500 Error: ({}) {}'.format(
                     error.__class__.__name__, str(error)))
@@ -232,12 +242,10 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def smtp_HELO(self, hostname):
         if not hostname:
-            yield from self.push('501 Syntax: HELO hostname')
-            return
+            raise SMTPException(501, 'Syntax: HELO hostname')
         # See issue #21783 for a discussion of this behavior.
         if self.session.host_name:
-            yield from self.push('503 Duplicate HELO/EHLO')
-            return
+            raise SMTPException(503, 'Duplicate HELO/EHLO')
         self._set_rset_state()
         self.session.host_name = hostname
         self.session.extended_smtp = False
@@ -256,12 +264,10 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def smtp_EHLO(self, arg):
         if not arg:
-            yield from self.push('501 Syntax: EHLO hostname')
-            return
+            raise SMTPException(501, 'Syntax: EHLO hostname')
         # See issue #21783 for a discussion of this behavior.
         if self.session.host_name:
-            yield from self.push('503 Duplicate HELO/EHLO')
-            return
+            raise SMTPException(503, 'Duplicate HELO/EHLO')
         self._set_rset_state()
         self.session.host_name = arg
         self.session.extended_smtp = True
@@ -284,28 +290,24 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def smtp_NOOP(self, arg):
         if arg:
-            yield from self.push('501 Syntax: NOOP')
-        else:
-            yield from self.push('250 OK')
+            raise SMTPException(501, 'Syntax: NOOP')
+        yield from self.push('250 OK')
 
     @asyncio.coroutine
     def smtp_QUIT(self, arg):
         if arg:
-            yield from self.push('501 Syntax: QUIT')
-        else:
-            yield from self.push('221 Bye')
-            self._handler_coroutine.cancel()
-            self.transport.close()
+            raise SMTPException(501, 'Syntax: QUIT')
+        yield from self.push('221 Bye')
+        self._handler_coroutine.cancel()
+        self.transport.close()
 
     @asyncio.coroutine
     def smtp_STARTTLS(self, arg):                   # pragma: nossl
         log.info('===> STARTTLS')
         if arg:
-            yield from self.push('501 Syntax: STARTTLS')
-            return
+            raise SMTPException(501, 'Syntax: STARTTLS')
         if not (self.tls_context and _has_ssl):
-            yield from self.push('454 TLS not available')
-            return
+            raise SMTPException(454, 'TLS not available')
         yield from self.push('220 Ready to start TLS')
         # Create SSL layer.
         self._tls_protocol = sslproto.SSLProtocol(
@@ -406,58 +408,47 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def smtp_MAIL(self, arg):
         if not self.session.host_name:
-            yield from self.push('503 Error: send HELO first')
-            return
+            raise SMTPException(503, 'Error: send HELO first')
         log.debug('===> MAIL %s', arg)
-        syntaxerr = '501 Syntax: MAIL FROM: <address>'
+        syntaxerr = 'Syntax: MAIL FROM: <address>'
         if self.session.extended_smtp:
             syntaxerr += ' [SP <mail-parameters>]'
         if arg is None:
-            yield from self.push(syntaxerr)
-            return
+            raise SMTPException(501, syntaxerr)
         arg = self._strip_command_keyword('FROM:', arg)
         address, params = self._getaddr(arg)
         if not address:
-            yield from self.push(syntaxerr)
-            return
+            raise SMTPException(501, syntaxerr)
         if not self.session.extended_smtp and params:
-            yield from self.push(syntaxerr)
-            return
+            raise SMTPException(501, syntaxerr)
         if self.envelope.mail_from:
-            yield from self.push('503 Error: nested MAIL command')
-            return
+            raise SMTPException(503, 'Error: nested MAIL command')
         mail_options = params.upper().split()
         params = self._getparams(mail_options)
         if params is None:
-            yield from self.push(syntaxerr)
-            return
+            raise SMTPException(501, syntaxerr)
         if not self._decode_data:
             body = params.pop('BODY', '7BIT')
             if body not in ['7BIT', '8BITMIME']:
-                yield from self.push(
-                    '501 Error: BODY can only be one of 7BIT, 8BITMIME')
-                return
+                raise SMTPException(
+                    501, 'Error: BODY can only be one of 7BIT, 8BITMIME')
         if self.enable_SMTPUTF8:
             smtputf8 = params.pop('SMTPUTF8', False)
             if smtputf8 is True:
                 self.require_SMTPUTF8 = True
             elif smtputf8 is not False:
-                yield from self.push('501 Error: SMTPUTF8 takes no arguments')
-                return
+                raise SMTPException(501, 'Error: SMTPUTF8 takes no arguments')
         size = params.pop('SIZE', None)
         if size:
             if isinstance(size, bool) or not size.isdigit():
-                yield from self.push(syntaxerr)
-                return
+                raise SMTPException(501, syntaxerr)
             elif self.data_size_limit and int(size) > self.data_size_limit:
-                yield from self.push(
-                    '552 Error: message size exceeds fixed maximum message '
+                raise SMTPException(
+                    552, 'Error: message size exceeds fixed maximum message '
                     'size')
-                return
         if len(params.keys()) > 0:
-            yield from self.push(
-                '555 MAIL FROM parameters not recognized or not implemented')
-            return
+            raise SMTPException(
+                555, 'MAIL FROM parameters not recognized or not implemented')
         self.envelope.mail_from = address
         self.envelope.mail_options = mail_options
         log.info('sender: %s', address)
@@ -466,36 +457,29 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def smtp_RCPT(self, arg):
         if not self.session.host_name:
-            yield from self.push('503 Error: send HELO first')
-            return
+            raise SMTPException(503, 'Error: send HELO first')
         log.debug('===> RCPT %s', arg)
         if not self.envelope.mail_from:
-            yield from self.push('503 Error: need MAIL command')
-            return
-        syntaxerr = '501 Syntax: RCPT TO: <address>'
+            raise SMTPException(503, 'Error: need MAIL command')
+        syntaxerr = 'Syntax: RCPT TO: <address>'
         if self.session.extended_smtp:
             syntaxerr += ' [SP <mail-parameters>]'
         if arg is None:
-            yield from self.push(syntaxerr)
-            return
+            raise SMTPException(501, syntaxerr)
         arg = self._strip_command_keyword('TO:', arg)
         address, params = self._getaddr(arg)
         if not address:
-            yield from self.push(syntaxerr)
-            return
+            raise SMTPException(501, syntaxerr)
         if not self.session.extended_smtp and params:
-            yield from self.push(syntaxerr)
-            return
+            raise SMTPException(501, syntaxerr)
         rcpt_options = params.upper().split()
         params = self._getparams(rcpt_options)
         if params is None:
-            yield from self.push(syntaxerr)
-            return
+            raise SMTPException(501, syntaxerr)
         # XXX currently there are no options we recognize.
         if len(params) > 0:
-            yield from self.push(
-                '555 RCPT TO parameters not recognized or not implemented')
-            return
+            raise SMTPException(
+                555, 'RCPT TO parameters not recognized or not implemented')
         self.envelope.rcpt_tos.append(address)
         self.envelope.rcpt_options.append(rcpt_options)
         log.info('recip: %s', address)
@@ -509,8 +493,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def smtp_RSET(self, arg):
         if arg:
-            yield from self.push('501 Syntax: RSET')
-            return
+            raise SMTPException(501, 'Syntax: RSET')
         self._set_rset_state()
         yield from self.rset_hook()
         yield from self.push('250 OK')
@@ -518,14 +501,11 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def smtp_DATA(self, arg):
         if not self.session.host_name:
-            yield from self.push('503 Error: send HELO first')
-            return
+            raise SMTPException(503, 'Error: send HELO first')
         if not self.envelope.rcpt_tos:
-            yield from self.push('503 Error: need RCPT command')
-            return
+            raise SMTPException(503, 'Error: need RCPT command')
         if arg:
-            yield from self.push('501 Syntax: DATA')
-            return
+            raise SMTPException(501, 'Syntax: DATA')
         yield from self.push('354 End data with <CR><LF>.<CR><LF>')
         data = []
         num_bytes = 0
@@ -570,10 +550,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             else:
                 status = self.event_handler.process_message(*args)
         self._set_post_data_state()
-        if status:
-            yield from self.push(status)
-        else:
-            yield from self.push('250 OK')
+        yield from self.push(status or '250 OK')
 
     # Commands that have not been implemented
     @asyncio.coroutine
