@@ -14,11 +14,12 @@ except ImportError:                                          # pragma: nocover
 
 @public
 class Controller:
-    def __init__(self, handler, loop=None, hostname=None, port=8025,
-                 ready_timeout=1.0):
+    def __init__(self, handler, loop=None, hostname=None, port=8025, *,
+                 ready_timeout=1.0, enable_SMTPUTF8=True):
         self.handler = handler
         self.hostname = '::1' if hostname is None else hostname
         self.port = port
+        self.enable_SMTPUTF8 = enable_SMTPUTF8
         self.loop = asyncio.new_event_loop() if loop is None else loop
         self.server = None
         self.thread = None
@@ -39,7 +40,7 @@ class Controller:
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
-        return SMTP(self.handler)
+        return SMTP(self.handler, enable_SMTPUTF8=self.enable_SMTPUTF8)
 
     def _run(self, ready_event):
         asyncio.set_event_loop(self.loop)

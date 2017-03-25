@@ -17,9 +17,14 @@
   and ``rcpt_options`` (although the latter is still not support in ``SMTP``).
 * ``DATA`` method now respects original line endings, and passing size limits
   is now handled better.  Given by Konstantin Volkov.
-* Controller objects now have an optional timeout argument used to wait for
-  the server to become ready.  This can also be overridden with the
-  environment variable ``AIOSMTPD_CONTROLLER_TIMEOUT``. (Closes #35)
+* The ``Controller`` class has two new optional keyword arguments.
+  - ``ready_timeout`` specifies a timeout in seconds that can be used to limit
+    the amount of time it waits for the server to become ready.  This can also
+    be overridden with the environment variable
+    ``AIOSMTPD_CONTROLLER_TIMEOUT``. (Closes #35)
+  - ``enable_SMTPUTF8`` is passed through to the ``SMTP`` constructor in the
+    default factory.  If you override ``Controller.factory()`` you can pass
+    ``self.enable_SMTPUTF8`` yourself.
 * Handlers can define a ``handle_tls_handshake()`` method, which takes a
   session object, and is called if SSL is enabled during the making of the
   connection.  (Closes #48)

@@ -73,3 +73,32 @@ The server is guaranteed to be stopped.
     Traceback (most recent call last):
     ...
     ConnectionRefusedError: ...
+
+
+Enable SMTPUTF8
+===============
+
+It's very common to want to enable the ``SMTPUTF8`` ESMTP option, therefore
+this is the default for the ``Controller`` constructor.  For backward
+compatibility reasons, this is *not* the default for the ``SMTP`` class
+though.  If you want to disable this in the ``Controller``, you can pass this
+argument into the constructor::
+
+    >>> from aiosmtpd.handlers import Sink
+    >>> controller = Controller(Sink(), enable_SMTPUTF8=False)
+    >>> controller.start()
+
+    >>> client = SMTP(controller.hostname, controller.port)
+    >>> code, message = client.ehlo('me')
+    >>> code
+    250
+
+The EHLO response does not include the ``SMTPUTF8`` ESMTP option.  We have to
+skip the server host name line, since that's variable.
+
+    >>> lines = message.decode('utf-8').splitlines()
+    >>> for line in lines[1:]:
+    ...     print(line)
+    SIZE 33554432
+    8BITMIME
+    HELP
