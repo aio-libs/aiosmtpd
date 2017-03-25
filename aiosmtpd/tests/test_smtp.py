@@ -86,12 +86,9 @@ class ErrorController(Controller):
 
 
 class TestProtocol(unittest.TestCase):
-    def write(self, data):
-        self.responses.append(data)
-
     def setUp(self):
         self.transport = Mock()
-        self.transport.write = self.write
+        self.transport.write = self._write
         self.responses = []
         self._old_loop = asyncio.get_event_loop()
         self.loop = asyncio.new_event_loop()
@@ -100,6 +97,9 @@ class TestProtocol(unittest.TestCase):
     def tearDown(self):
         self.loop.close()
         asyncio.set_event_loop(self._old_loop)
+
+    def _write(self, data):
+        self.responses.append(data)
 
     def _get_protocol(self, *args, **kwargs):
         protocol = Server(*args, loop=self.loop, **kwargs)
