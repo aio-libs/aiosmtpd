@@ -161,7 +161,7 @@ The following hooks are currently defined:
 ``handle_RSET(server, session, envelope)``
     Called during ``RSET``.
 
-``handle_DATA(session, envelope)``
+``handle_DATA(server, session, envelope)``
     Called during ``DATA`` after the entire message (`"SMTP content"
     <https://tools.ietf.org/html/rfc5321#section-2.3.9>`_ as described in
     RFC 5321) has been received.  The content is available on the ``envelope``
@@ -175,14 +175,14 @@ The following hooks are currently defined:
     ``envelope.content`` will be the UTF-8 decoded string of the original
     content.
 
-In addition to the SMTP command hooks, the following hooks can also be
-implemented by handlers.  They have a different signature and don't need to
-return any status.  Both methods are called synchronously.
-
-``handle_tls_handshake(session)``
+``handle_STARTTLS(server, session, envelope)``
     If implemented, and if SSL is supported, this handler method gets called
     during the TLS handshake phase of ``connection_made()``.  It should return
     a boolean which specifies whether the handshake failed or not.
+
+In addition to the SMTP command hooks, the following hook can also be
+implemented by handlers.  It has a different signature and doesn't need to
+return any status.  This method is called synchronously.
 
 ``handle_exception(error)``
     If implemented, this method is called when any error occurs during the

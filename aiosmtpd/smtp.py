@@ -127,8 +127,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Do SSL certificate checking as rfc3207 part 4.1 says.
             # Why _extra is protected attribute?
             self.session.ssl = self._tls_protocol._extra
-            if hasattr(self.event_handler, 'handle_tls_handshake'):
-                auth = self.event_handler.handle_tls_handshake(self.session)
+            if hasattr(self.event_handler, 'handle_STARTTLS'):
+                auth = self.event_handler.handle_STARTTLS(self.session)
                 self._tls_handshake_failed = not auth
             else:
                 self._tls_handshake_failed = False
