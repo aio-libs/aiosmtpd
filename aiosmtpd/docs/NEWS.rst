@@ -17,6 +17,7 @@
 * Handlers can define a ``handle_tls_handshake()`` method, which takes a
   session object, and is called if SSL is enabled during the making of the
   connection.  (Closes #48)
+* Better Windows compatibility.
 * Better Python 3.4 compatibility.
 * Use ``flufl.testing`` package for nose2 and flake8 plugins.
 * The test suite has achieved 100% code coverage. (Closes #2)
