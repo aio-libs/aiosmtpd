@@ -8,8 +8,8 @@ from public import public
 
 try:
     from socket import socketpair
-except ImportError:
-    from asyncio.windows_utils import socketpair  # pragma: nocover
+except ImportError:                                          # pragma: nocover
+    from asyncio.windows_utils import socketpair
 
 
 @public
