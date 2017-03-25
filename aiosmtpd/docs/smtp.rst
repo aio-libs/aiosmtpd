@@ -108,7 +108,7 @@ Handlers can implement a few hooks that get called during the ``SMTP`` dialog,
 or in exceptional cases.  More hooks may be added in the future, but for now
 the following handler hooks are defined:
 
-``handle_tls_handshake(session)``
+``handle_STARTTLS(session)``
     (*optional*, *synchronous*) If implemented, and if SSL is supported, this
     handler method gets called during the TLS handshake phase of
     ``connection_made()``.  It should return a boolean which specifies whether
