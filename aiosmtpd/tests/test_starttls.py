@@ -24,13 +24,11 @@ class Controller(BaseController):
 
 
 class ReceivingHandler:
-    box = None
+    def __init__(self):
+        self.box = []
 
-    @asyncio.coroutine
-    def process_message(self, *args, **kws):
-        if not self.box:
-            self.box = []
-        self.box.append(args)
+    def handle_DATA(self, session, envelope):
+        self.box.append(envelope)
 
 
 def get_tls_context():
@@ -61,7 +59,7 @@ class TLSController(Controller):
 
 class HandshakeFailingHandler:
     @staticmethod
-    def handle_tls_handshake(session):
+    def handle_STARTTLS(session):
         return False
 
 
