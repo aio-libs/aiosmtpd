@@ -17,8 +17,7 @@ try:
 except ImportError:
     pwd = None
 
-set_uid = getattr(os, 'setuid', None)
-
+has_setuid = hasattr(os, 'setuid')
 log = logging.getLogger('mail.log')
 
 
@@ -84,7 +83,7 @@ class TestMain(unittest.TestCase):
                 stderr.getvalue(),
                 'Cannot import module "pwd"; try running with -n option.\n')
 
-    @unittest.skipIf(set_uid is None, 'setuid is unvailable')
+    @unittest.skipUnless(has_setuid, 'setuid is unvailable')
     def test_n(self):
         with ExitStack() as resources:
             resources.enter_context(patch('aiosmtpd.main.pwd', None))
@@ -97,7 +96,7 @@ class TestMain(unittest.TestCase):
             # triggered in the setuid section.
             self.assertRaises(RuntimeError, main, ('-n',))
 
-    @unittest.skipIf(set_uid is None, 'setuid is unvailable')
+    @unittest.skipUnless(has_setuid, 'setuid is unvailable')
     def test_nosetuid(self):
         with ExitStack() as resources:
             resources.enter_context(patch('aiosmtpd.main.pwd', None))
