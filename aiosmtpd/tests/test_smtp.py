@@ -4,6 +4,7 @@ import socket
 import asyncio
 import unittest
 
+from aiosmtpd.base_handler import BaseHandler
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
@@ -25,7 +26,7 @@ class NoDecodeController(Controller):
         return Server(self.handler, decode_data=False)
 
 
-class ReceivingHandler:
+class ReceivingHandler(BaseHandler):
     box = None
 
     def __init__(self):
@@ -62,7 +63,7 @@ class CustomIdentController(Controller):
         return server
 
 
-class ErroringHandler:
+class ErroringHandler(BaseHandler):
     error = None
 
     @asyncio.coroutine
@@ -147,7 +148,7 @@ class TestProtocol(unittest.TestCase):
 
 class TestSMTP(unittest.TestCase):
     def setUp(self):
-        controller = UTF8Controller(Sink)
+        controller = UTF8Controller(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
@@ -748,7 +749,7 @@ Testing
 
 class TestCustomizations(unittest.TestCase):
     def test_custom_hostname(self):
-        controller = CustomHostnameController(Sink)
+        controller = CustomHostnameController(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -757,7 +758,7 @@ class TestCustomizations(unittest.TestCase):
             self.assertEqual(response, bytes('custom.localhost', 'utf-8'))
 
     def test_custom_greeting(self):
-        controller = CustomIdentController(Sink)
+        controller = CustomIdentController(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP() as client:
@@ -767,7 +768,7 @@ class TestCustomizations(unittest.TestCase):
             self.assertEqual(msg[-22:], b'Identifying SMTP v2112')
 
     def test_default_greeting(self):
-        controller = Controller(Sink)
+        controller = Controller(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP() as client:
@@ -777,7 +778,7 @@ class TestCustomizations(unittest.TestCase):
             self.assertEqual(msg[-len(GREETING):], bytes(GREETING, 'utf-8'))
 
     def test_mail_invalid_body_param(self):
-        controller = NoDecodeController(Sink)
+        controller = NoDecodeController(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP() as client:

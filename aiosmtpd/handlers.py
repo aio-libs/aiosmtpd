@@ -12,6 +12,7 @@ import logging
 import mailbox
 import smtplib
 
+from .base_handler import BaseHandler
 from email import message_from_bytes, message_from_string
 from email.feedparser import NLCRE
 from public import public
@@ -30,8 +31,9 @@ def _format_peer(peer):
 
 
 @public
-class Debugging:
+class Debugging(BaseHandler):
     def __init__(self, stream=None):
+        super(Debugging, self).__init__()
         self.stream = sys.stdout if stream is None else stream
 
     @classmethod
@@ -70,14 +72,15 @@ class Debugging:
         # Yes, actually test for truthiness since it's possible for either the
         # keywords to be missing, or for their values to be empty lists.
         add_separator = False
-        if envelope.mail_options:
-            print('mail options:', envelope.mail_options, file=self.stream)
+        options = envelope.mail_from.options
+        if options:
+            print('mail options:', options, file=self.stream)
             add_separator = True
         # rcpt_options are not currently support by the SMTP class.
-        rcpt_options = envelope.rcpt_options
-        if any(rcpt_options):                            # pragma: nocover
-            print('rcpt options:', rcpt_options, file=self.stream)
-            add_separator = True
+        for rcpt in envelope.rcpt_tos:
+            if rcpt.options:
+                print('rcpt options:', rcpt.options, file=self.stream)
+                add_separator = True
         if add_separator:
             print(file=self.stream)
         self._print_message_content(session.peer, envelope.content)
@@ -85,7 +88,7 @@ class Debugging:
 
 
 @public
-class Proxy:
+class Proxy(BaseHandler):
     def __init__(self, remote_hostname, remote_port):
         self._hostname = remote_hostname
         self._port = remote_port
@@ -103,7 +106,9 @@ class Proxy:
             i += 1
         lines.insert(i, 'X-Peer: %s%s' % (session.peer[0], ending))
         data = EMPTYSTRING.join(lines)
-        refused = self._deliver(envelope.mail_from, envelope.rcpt_tos, data)
+        rcpts = [rcpt.address for rcpt in envelope.rcpt_tos]
+
+        refused = self._deliver(envelope.mail_from.address, rcpts, data)
         # TBD: what to do with refused addresses?
         log.info('we got some refusals: %s', refused)
 
@@ -132,27 +137,19 @@ class Proxy:
 
 
 @public
-class Sink:
-    @classmethod
-    def from_cli(cls, parser, *args):
-        if len(args) > 0:
-            parser.error('Sink handler does not accept arguments')
-        return cls()
-
-    @asyncio.coroutine
-    def handle_DATA(self, session, envelope):
-        pass                                        # pragma: nocover
+class Sink(BaseHandler):
+    pass
 
 
 @public
-class Message:
+class Message(BaseHandler):
     def __init__(self, message_class=None):
         self.message_class = message_class
 
     @asyncio.coroutine
     def handle_DATA(self, session, envelope):
         envelope = self.prepare_message(session, envelope)
-        self.handle_message(envelope)
+        yield from self.handle_message(envelope)
 
     def prepare_message(self, session, envelope):
         # If the server was created with decode_data True, then data will be a
@@ -165,24 +162,10 @@ class Message:
               'Expected str or bytes, got {}'.format(type(data)))
             message = message_from_string(data, self.message_class)
         message['X-Peer'] = str(session.peer)
-        message['X-MailFrom'] = envelope.mail_from
-        message['X-RcptTo'] = COMMASPACE.join(envelope.rcpt_tos)
+        message['X-MailFrom'] = envelope.mail_from.address
+        message['X-RcptTo'] = COMMASPACE.join(
+            [rcpt.address for rcpt in envelope.rcpt_tos])
         return message
-
-    def handle_message(self, message):
-        raise NotImplementedError                   # pragma: nocover
-
-
-@public
-class AsyncMessage(Message):
-    def __init__(self, message_class=None, *, loop=None):
-        super().__init__(message_class)
-        self.loop = loop or asyncio.get_event_loop()
-
-    @asyncio.coroutine
-    def handle_DATA(self, session, envelope):
-        message = self.prepare_message(session, envelope)
-        yield from self.handle_message(message)
 
     @asyncio.coroutine
     def handle_message(self, message):
@@ -196,6 +179,7 @@ class Mailbox(Message):
         self.mail_dir = mail_dir
         super().__init__(message_class)
 
+    @asyncio.coroutine
     def handle_message(self, message):
         self.mailbox.add(message)
 

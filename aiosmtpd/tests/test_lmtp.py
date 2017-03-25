@@ -16,7 +16,7 @@ class LMTPController(Controller):
 
 class TestLMTP(unittest.TestCase):
     def setUp(self):
-        controller = LMTPController(Sink)
+        controller = LMTPController(Sink())
         controller.start()
         self.address = (controller.hostname, controller.port)
         self.addCleanup(controller.stop)

@@ -3,6 +3,7 @@ import socket
 import asyncio
 import threading
 
+from aiosmtpd.base_handler import BaseHandler
 from aiosmtpd.smtp import SMTP
 from public import public
 
@@ -16,6 +17,7 @@ except ImportError:                                          # pragma: nocover
 class Controller:
     def __init__(self, handler, loop=None, hostname=None, port=8025,
                  ready_timeout=1.0):
+        assert isinstance(handler, BaseHandler)
         self.handler = handler
         self.hostname = '::1' if hostname is None else hostname
         self.port = port
