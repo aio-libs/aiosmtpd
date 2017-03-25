@@ -167,7 +167,6 @@ class Message:
         message['X-Peer'] = str(session.peer)
         message['X-MailFrom'] = envelope.mail_from
         message['X-RcptTo'] = COMMASPACE.join(envelope.rcpt_tos)
-
         return message
 
     def handle_message(self, message):
@@ -194,6 +193,7 @@ class AsyncMessage(Message):
 class Mailbox(Message):
     def __init__(self, mail_dir, message_class=None):
         self.mailbox = mailbox.Maildir(mail_dir)
+        self.mail_dir = mail_dir
         super().__init__(message_class)
 
     def handle_message(self, message):
@@ -201,3 +201,11 @@ class Mailbox(Message):
 
     def reset(self):
         self.mailbox.clear()
+
+    @classmethod
+    def from_cli(cls, parser, *args):
+        if len(args) < 1:
+            parser.error('The directory for the maildir is required')
+        elif len(args) > 1:
+            parser.error('Too many arguments for Mailbox handler')
+        return cls(args[0])

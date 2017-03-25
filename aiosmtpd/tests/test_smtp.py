@@ -70,8 +70,19 @@ class ErroringHandler:
         return '499 Could not accept the message'
 
     @asyncio.coroutine
-    def handle_exception(self, e):
-        self.error = e
+    def handle_exception(self, error):
+        self.error = error
+
+
+class ErrorSMTP(Server):
+    @asyncio.coroutine
+    def smtp_HELO(self, hostname):
+        raise ValueError('test')
+
+
+class ErrorController(Controller):
+    def factory(self):
+        return ErrorSMTP(self.handler)
 
 
 class TestProtocol(unittest.TestCase):
@@ -694,15 +705,6 @@ Testing
             self.assertEqual(handler.box[0].content, 'Test\r\n.\r\nmail')
 
     def test_unexpected_errors(self):
-        class ErrorSMTP(Server):
-            @asyncio.coroutine
-            def smtp_HELO(self, hostname):
-                raise ValueError('test')
-
-        class ErrorController(Controller):
-            def factory(self):
-                return ErrorSMTP(self.handler)
-
         handler = ErroringHandler()
         controller = ErrorController(handler)
         controller.start()
@@ -717,6 +719,25 @@ Testing
         self.assertEqual(code, 500)
         self.assertEqual(response, b'Error: (ValueError) test')
         self.assertIsInstance(handler.error, ValueError)
+
+    def test_unexpected_errors_unhandled(self):
+        handler = Sink()
+        handler.error = None
+        controller = ErrorController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with ExitStack() as resources:
+            # Suppress logging to the console during the tests.  Depending on
+            # timing, the exception may or may not be logged.
+            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
+            client = resources.enter_context(
+                SMTP(controller.hostname, controller.port))
+            code, response = client.helo('example.com')
+        self.assertEqual(code, 500)
+        self.assertEqual(response, b'Error: (ValueError) test')
+        # handler.error did not change because the handler does not have a
+        # handle_exception() method.
+        self.assertIsNone(handler.error)
 
     def test_bad_encodings(self):
         handler = ReceivingHandler()
