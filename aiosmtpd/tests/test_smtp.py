@@ -88,6 +88,8 @@ class ErrorController(Controller):
 class TestProtocol(unittest.TestCase):
     def setUp(self):
         self.transport = Mock()
+        self.transport.write = self._write
+        self.responses = []
         self._old_loop = asyncio.get_event_loop()
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
@@ -95,6 +97,9 @@ class TestProtocol(unittest.TestCase):
     def tearDown(self):
         self.loop.close()
         asyncio.set_event_loop(self._old_loop)
+
+    def _write(self, data):
+        self.responses.append(data)
 
     def _get_protocol(self, *args, **kwargs):
         protocol = Server(*args, loop=self.loop, **kwargs)
@@ -117,8 +122,27 @@ class TestProtocol(unittest.TestCase):
             self.loop.run_until_complete(protocol._handler_coroutine)
         except asyncio.CancelledError:
             pass
-        assert len(handler.box) == 1
-        assert handler.box[0].content == data
+        self.assertEqual(len(handler.box), 1)
+        self.assertEqual(handler.box[0].content, data)
+
+    def test_empty_email(self):
+        handler = ReceivingHandler()
+        protocol = self._get_protocol(handler)
+        protocol.data_received(BCRLF.join([
+            b'HELO example.org',
+            b'MAIL FROM: <anne@example.com>',
+            b'RCPT TO: <anne@example.com>',
+            b'DATA',
+            b'.',
+            b'QUIT\r\n'
+            ]))
+        try:
+            self.loop.run_until_complete(protocol._handler_coroutine)
+        except asyncio.CancelledError:
+            pass
+        self.assertEqual(self.responses[5], b'250 OK\r\n')
+        self.assertEqual(len(handler.box), 1)
+        self.assertEqual(handler.box[0].content, b'')
 
 
 class TestSMTP(unittest.TestCase):
