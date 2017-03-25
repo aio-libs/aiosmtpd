@@ -1,10 +1,13 @@
+.. _controller:
+
 =======================
  The testing framework
 =======================
 
-The SMTP server can be used in a testing framework via a controller which runs
-in a separate thread.  This allows the main thread to run the test driver, and
-information can be passed between the SMTP thread and the main thread.
+The SMTP server can be used in a testing framework via a *controller* which
+runs in a separate thread.  This allows the main thread to run the test
+driver, and information can be passed between the SMTP thread and the main
+thread.
 
 For example, say you wanted to pass message objects between the SMTP thread
 and the main thread.  Start by implementing a handler which derives from a
@@ -27,6 +30,12 @@ SMTP connections in the separate thread.
     >>> from aiosmtpd.controller import Controller
     >>> controller = Controller(MessageHandler())
     >>> controller.start()
+
+The SMTP thread might run into errors during its setup phase; to catch this
+the main thread will timeout when waiting for the SMTP server to become ready.
+By default the timeout is set to 1 second but can be changed either by using
+the ``AIOSMTPD_CONTROLLER_TIMEOUT`` environment variable or by passing a
+different ``ready_timeout`` duration to the Controller's constructor.
 
 Connect to the server...
 

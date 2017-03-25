@@ -62,7 +62,7 @@ class TLSController(Controller):
 
 class HandshakeFailingHandler(BaseHandler):
     @staticmethod
-    def handle_tls_handshake(*args):
+    def handle_tls_handshake(session):
         return False
 
 

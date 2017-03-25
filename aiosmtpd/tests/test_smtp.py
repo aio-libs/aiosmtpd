@@ -8,8 +8,9 @@ from aiosmtpd.base_handler import BaseHandler
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
+from contextlib import ExitStack
 from smtplib import SMTP, SMTPDataError, SMTPResponseException
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 CRLF = '\r\n'
 BCRLF = b'\r\n'
@@ -32,8 +33,8 @@ class ReceivingHandler(BaseHandler):
         self.box = []
 
     @asyncio.coroutine
-    def process_message(self, *args, **kws):
-        self.box.append(args)
+    def handle_DATA(self, session, envelope):
+        self.box.append(envelope.content)
 
 
 class SizedController(Controller):
@@ -62,21 +63,34 @@ class CustomIdentController(Controller):
         return server
 
 
-class ErroringHandler(BaseHandler):
+class ErroringHandler:
     error = None
 
     @asyncio.coroutine
-    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
+    def handle_DATA(self, session, envelope):
         return '499 Could not accept the message'
 
     @asyncio.coroutine
-    def handle_exception(self, e):
-        self.error = e
+    def handle_exception(self, error):
+        self.error = error
+
+
+class ErrorSMTP(Server):
+    @asyncio.coroutine
+    def smtp_HELO(self, hostname):
+        raise ValueError('test')
+
+
+class ErrorController(Controller):
+    def factory(self):
+        return ErrorSMTP(self.handler)
 
 
 class TestProtocol(unittest.TestCase):
     def setUp(self):
         self.transport = Mock()
+        self.transport.write = self._write
+        self.responses = []
         self._old_loop = asyncio.get_event_loop()
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
@@ -84,6 +98,9 @@ class TestProtocol(unittest.TestCase):
     def tearDown(self):
         self.loop.close()
         asyncio.set_event_loop(self._old_loop)
+
+    def _write(self, data):
+        self.responses.append(data)
 
     def _get_protocol(self, *args, **kwargs):
         protocol = Server(*args, loop=self.loop, **kwargs)
@@ -106,8 +123,27 @@ class TestProtocol(unittest.TestCase):
             self.loop.run_until_complete(protocol._handler_coroutine)
         except asyncio.CancelledError:
             pass
-        assert len(handler.box) == 1
-        assert handler.box[0][3] == data
+        self.assertEqual(len(handler.box), 1)
+        self.assertEqual(handler.box[0], data)
+
+    def test_empty_email(self):
+        handler = ReceivingHandler()
+        protocol = self._get_protocol(handler)
+        protocol.data_received(BCRLF.join([
+            b'HELO example.org',
+            b'MAIL FROM: <anne@example.com>',
+            b'RCPT TO: <anne@example.com>',
+            b'DATA',
+            b'.',
+            b'QUIT\r\n'
+            ]))
+        try:
+            self.loop.run_until_complete(protocol._handler_coroutine)
+        except asyncio.CancelledError:
+            pass
+        self.assertEqual(self.responses[5], b'250 OK\r\n')
+        self.assertEqual(len(handler.box), 1)
+        self.assertEqual(handler.box[0], b'')
 
 
 class TestSMTP(unittest.TestCase):
@@ -673,28 +709,42 @@ Testing
             mail = CRLF.join(['Test', '.', 'mail'])
             client.sendmail('anne@example.com', ['bart@example.com'], mail)
             self.assertEqual(len(handler.box), 1)
-            mail = handler.box[0]
-            self.assertEqual(mail[3], 'Test\r\n.\r\nmail')
+            self.assertEqual(handler.box[0], 'Test\r\n.\r\nmail')
 
     def test_unexpected_errors(self):
-        class ErrorSMTP(Server):
-            @asyncio.coroutine
-            def smtp_HELO(self, hostname):
-                raise ValueError('test')
-
-        class ErrorController(Controller):
-            def factory(self):
-                return ErrorSMTP(self.handler)
-
         handler = ErroringHandler()
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
+        with ExitStack() as resources:
+            # Suppress logging to the console during the tests.  Depending on
+            # timing, the exception may or may not be logged.
+            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
+            client = resources.enter_context(
+                SMTP(controller.hostname, controller.port))
             code, response = client.helo('example.com')
         self.assertEqual(code, 500)
         self.assertEqual(response, b'Error: (ValueError) test')
         self.assertIsInstance(handler.error, ValueError)
+
+    def test_unexpected_errors_unhandled(self):
+        handler = Sink()
+        handler.error = None
+        controller = ErrorController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with ExitStack() as resources:
+            # Suppress logging to the console during the tests.  Depending on
+            # timing, the exception may or may not be logged.
+            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
+            client = resources.enter_context(
+                SMTP(controller.hostname, controller.port))
+            code, response = client.helo('example.com')
+        self.assertEqual(code, 500)
+        self.assertEqual(response, b'Error: (ValueError) test')
+        # handler.error did not change because the handler does not have a
+        # handle_exception() method.
+        self.assertIsNone(handler.error)
 
 
 class TestCustomizations(unittest.TestCase):

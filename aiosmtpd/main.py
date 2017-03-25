@@ -20,10 +20,15 @@ except ImportError:                                         # pragma: nocover
 DEFAULT_HOST = 'localhost'
 DEFAULT_PORT = 8025
 
+# Make the program name a little nicer, especially when `python3 -m aiosmtpd`
+# is used.
+PROGRAM = 'smtpd' if '__main__.py' in sys.argv[0] else sys.argv[0]
+
 
 def parseargs(args=None):
     parser = ArgumentParser(
-        description='An RFC 5321 SMTP server with extensions')
+        prog=PROGRAM,
+        description='An RFC 5321 SMTP server with extensions.')
     parser.add_argument(
         '-n', '--nosetuid',
         dest='setuid', default=True, action='store_false',
