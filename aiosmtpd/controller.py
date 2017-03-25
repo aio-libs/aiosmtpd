@@ -6,6 +6,11 @@ import threading
 from aiosmtpd.smtp import SMTP
 from public import public
 
+try:
+    from socket import socketpair
+except ImportError:
+    from asyncio.windows_utils import socketpair  # pragma: nocover
+
 
 @public
 class Controller:
@@ -21,7 +26,7 @@ class Controller:
         self.ready_timeout = os.getenv(
             'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
         # For exiting the loop.
-        self._rsock, self._wsock = self.loop._socketpair()
+        self._rsock, self._wsock = socketpair()
         self.loop.add_reader(self._rsock, self._reader)
 
     def _reader(self):
