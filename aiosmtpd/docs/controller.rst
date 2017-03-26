@@ -102,3 +102,5 @@ skip the server host name line, since that's variable.
     SIZE 33554432
     8BITMIME
     HELP
+
+    >>> controller.stop()
