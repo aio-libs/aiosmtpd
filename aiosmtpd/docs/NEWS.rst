@@ -12,6 +12,7 @@
 * ``DATA`` method now respects original line endings, and passing size limits
   is now handled better.  Given by Konstantin Volkov.
 * The ``Controller`` class has two new optional keyword arguments.
+
   - ``ready_timeout`` specifies a timeout in seconds that can be used to limit
     the amount of time it waits for the server to become ready.  This can also
     be overridden with the environment variable
