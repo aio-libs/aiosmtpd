@@ -91,6 +91,26 @@ class Proxy:
         self._port = remote_port
 
     @asyncio.coroutine
+    def handle_MAIL(self, envelope, address, options):
+        envelope.client = s = smtplib.SMTP()
+        s.connect(self._hostname, self._port)
+        s.ehlo_or_helo_if_needed()
+        code, resp = s.mail(address, options)
+        if code == 250:
+            envelope.mail_from = address
+            envelope.mail_options = options
+        return '%s %s'.format(code, resp)
+
+    @asyncio.coroutine
+    def handle_RCPT(self, envelope, address, options):
+        s = envelope.client
+        code, resp = s.rcpt(address, options)
+        if code in (250, 251):
+            envelope.rcpt_tos += address
+            envelope.rcpt_options += options
+        return '%s %s'.format(code, resp)
+
+    @asyncio.coroutine
     def handle_DATA(self, session, envelope):
         lines = envelope.content.splitlines(keepends=True)
         # Look for the last header
@@ -103,33 +123,14 @@ class Proxy:
             i += 1
         lines.insert(i, 'X-Peer: %s%s' % (session.peer[0], ending))
         data = EMPTYSTRING.join(lines)
-        refused = self._deliver(envelope.mail_from, envelope.rcpt_tos, data)
-        # TBD: what to do with refused addresses?
-        log.info('we got some refusals: %s', refused)
+        code, resp = envelope.client(data)
+        return '%s %s'.format(code, resp)
 
-    def _deliver(self, mail_from, rcpt_tos, data):
-        refused = {}
-        try:
-            s = smtplib.SMTP()
-            s.connect(self._hostname, self._port)
-            try:
-                refused = s.sendmail(mail_from, rcpt_tos, data)
-            finally:
-                s.quit()
-        except smtplib.SMTPRecipientsRefused as e:
-            log.info('got SMTPRecipientsRefused')
-            refused = e.recipients
-        except (OSError, smtplib.SMTPException) as e:
-            log.exception('got', e.__class__)
-            # All recipients were refused.  If the exception had an associated
-            # error code, use it.  Otherwise, fake it with a non-triggering
-            # exception code.
-            errcode = getattr(e, 'smtp_code', -1)
-            errmsg = getattr(e, 'smtp_error', 'ignore')
-            for r in rcpt_tos:
-                refused[r] = (errcode, errmsg)
-        return refused
-
+    def handle_RSET(self, session, envelope):
+        s = getattr(envelope, 'client', None)
+        if s:
+            s.quit()
+            envelope.client = None
 
 @public
 class Sink:
