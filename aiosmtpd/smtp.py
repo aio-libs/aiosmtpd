@@ -152,6 +152,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def eof_received(self):
         self._handler_coroutine.cancel()
+        self._set_rset_state()
         return super().eof_received()
 
     def _set_post_data_state(self):
@@ -161,6 +162,8 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def _set_rset_state(self):
         """Reset all state variables except the greeting."""
+        if hasattr(self.event_handler, 'handle_RSET'):
+            self.event_handler.handle_RSET(self.session, self.envelope)
         self._set_post_data_state()
 
     @asyncio.coroutine
@@ -458,10 +461,15 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(
                 '555 MAIL FROM parameters not recognized or not implemented')
             return
-        self.envelope.mail_from = address
-        self.envelope.mail_options = mail_options
+        if hasattr(self.event_handler, 'handle_MAIL'):
+            status = yield from self.event_handler.handle_MAIL(
+                self.envelope, address, mail_options)
+        else:
+            self.envelope.mail_from = address
+            self.envelope.mail_options = mail_options
+            status = '250 OK'
         log.info('sender: %s', address)
-        yield from self.push('250 OK')
+        yield from self.push(status)
 
     @asyncio.coroutine
     def smtp_RCPT(self, arg):
@@ -496,10 +504,15 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(
                 '555 RCPT TO parameters not recognized or not implemented')
             return
-        self.envelope.rcpt_tos.append(address)
-        self.envelope.rcpt_options.append(rcpt_options)
+        if hasattr(self.event_handler, 'handle_RCPT'):
+            status = yield from self.event_handler.handle_MAIL(
+                self.envelope, address, rcpt_options)
+        else:
+            self.envelope.rcpt_tos.append(address)
+            self.envelope.rcpt_options.append(rcpt_options)
+            status = '250 OK'
         log.info('recip: %s', address)
-        yield from self.push('250 OK')
+        yield from self.push(status)
 
     @asyncio.coroutine
     def rset_hook(self):
