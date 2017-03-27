@@ -23,9 +23,9 @@ __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
 
-NEWLINE = '\n'
 DATA_SIZE_DEFAULT = 33554432
 EMPTYBYTES = b''
+NEWLINE = '\n'
 
 
 class Session:
@@ -164,9 +164,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._set_post_data_state()
 
     @asyncio.coroutine
-    def push(self, msg):
+    def push(self, status):
         response = bytes(
-            msg + '\r\n', 'utf-8' if self.require_SMTPUTF8 else 'ascii')
+            status + '\r\n', 'utf-8' if self.require_SMTPUTF8 else 'ascii')
         self._writer.write(response)
         log.debug(response)
         yield from self._writer.drain()
@@ -175,6 +175,13 @@ class SMTP(asyncio.StreamReaderProtocol):
     def handle_exception(self, error):
         if hasattr(self.event_handler, 'handle_exception'):
             yield from self.event_handler.handle_exception(error)
+
+    @asyncio.coroutine
+    def _call_handler_hook(self, command):
+        hook = getattr(self.event_handler, 'handle_' + command, None)
+        if hook is not None:
+            status = yield from hook(self.session, self.envelope)
+            return status
 
     @asyncio.coroutine
     def _handle_client(self):
@@ -217,7 +224,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                         '530 Must issue a STARTTLS command first')
                     continue
                 method = getattr(self, 'smtp_' + command, None)
-                if not method:
+                if method is None:
                     yield from self.push(
                         '500 Error: command "%s" not recognized' % command)
                     continue
@@ -499,7 +506,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.envelope.rcpt_tos.append(address)
         self.envelope.rcpt_options.append(rcpt_options)
         log.info('recip: %s', address)
-        yield from self.push('250 OK')
+        status = yield from self._call_handler_hook('RCPT')
+        yield from self.push('250 OK' if status is None else status)
 
     @asyncio.coroutine
     def rset_hook(self):
@@ -559,22 +567,23 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.envelope.content = received_data
         # Call the new API first if it's implemented.
         if hasattr(self.event_handler, 'handle_DATA'):
-            args = (self.session, self.envelope)
-            status = yield from self.event_handler.handle_DATA(*args)
+            status = yield from self._call_handler_hook('DATA')
         else:
-            warn('Use handler.handle_DATA instead of .process_message()',
-                 DeprecationWarning)
-            args = (self.session.peer, self.envelope.mail_from,
-                    self.envelope.rcpt_tos, self.envelope.content)
-            if asyncio.iscoroutinefunction(self.event_handler.process_message):
-                status = yield from self.event_handler.process_message(*args)
-            else:
-                status = self.event_handler.process_message(*args)
+            # Backward compatibility.
+            status = None
+            if hasattr(self.event_handler, 'process_message'):
+                warn('Use handler.handle_DATA() instead of .process_message()',
+                     DeprecationWarning)
+                args = (self.session.peer, self.envelope.mail_from,
+                        self.envelope.rcpt_tos, self.envelope.content)
+                if asyncio.iscoroutinefunction(
+                        self.event_handler.process_message):
+                    status = yield from self.event_handler.process_message(
+                        *args)
+                else:
+                    status = self.event_handler.process_message(*args)
         self._set_post_data_state()
-        if status:
-            yield from self.push(status)
-        else:
-            yield from self.push('250 OK')
+        yield from self.push('250 OK' if status is None else status)
 
     # Commands that have not been implemented
     @asyncio.coroutine

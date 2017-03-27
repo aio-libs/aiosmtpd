@@ -11,7 +11,7 @@ from contextlib import ExitStack
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
-from smtplib import SMTP, SMTPRecipientsRefused
+from smtplib import SMTP, SMTPDataError, SMTPRecipientsRefused
 from tempfile import TemporaryDirectory
 from unittest.mock import call, patch
 
@@ -481,6 +481,73 @@ Testing
                 )
 
 
+class RCPTHandler:
+    @asyncio.coroutine
+    def handle_RCPT(self, session, envelope):
+        if envelope.rcpt_tos[-1] == 'bart@example.com':
+            return '550 Rejected'
+
+
+class DATAHandler:
+    @asyncio.coroutine
+    def handle_DATA(self, session, envelope):
+        return '599 Not today'
+
+
+class NoHooksHandler:
+    pass
+
+
+class TestHooks(unittest.TestCase):
+    def test_rcpt_hook(self):
+        controller = Controller(RCPTHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            with self.assertRaises(SMTPRecipientsRefused) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], """\
+From: anne@example.com
+To: bart@example.com
+Subject: Test
+
+""")
+            self.assertEqual(cm.exception.recipients, {
+                'bart@example.com': (550, b'Rejected'),
+                })
+
+    def test_data_hook(self):
+        controller = Controller(DATAHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            with self.assertRaises(SMTPDataError) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], """\
+From: anne@example.com
+To: bart@example.com
+Subject: Test
+
+Yikes
+""")
+            self.assertEqual(cm.exception.smtp_code, 599)
+            self.assertEqual(cm.exception.smtp_error, b'Not today')
+
+    def test_no_hooks(self):
+        controller = Controller(NoHooksHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('me')
+            client.mail('anne@example.com')
+            client.rcpt(['bart@example.com'])
+            code, response = client.data("""\
+From: anne@example.com
+To: bart@example.com
+Subject: Test
+
+""")
+            self.assertEqual(code, 250)
+
+
 class CapturingServer(Server):
     def __init__(self, *args, **kws):
         self.warnings = None
@@ -527,7 +594,7 @@ Testing
         self.assertEqual(len(controller.smtpd.warnings), 1)
         self.assertEqual(
             controller.smtpd.warnings[0],
-            call('Use handler.handle_DATA instead of .process_message()',
+            call('Use handler.handle_DATA() instead of .process_message()',
                  DeprecationWarning))
 
     def test_deprecation_async(self):
@@ -545,5 +612,5 @@ Testing
         self.assertEqual(len(controller.smtpd.warnings), 1)
         self.assertEqual(
             controller.smtpd.warnings[0],
-            call('Use handler.handle_DATA instead of .process_message()',
+            call('Use handler.handle_DATA() instead of .process_message()',
                  DeprecationWarning))
