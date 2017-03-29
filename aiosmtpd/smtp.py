@@ -111,6 +111,16 @@ class SMTP(asyncio.StreamReaderProtocol):
         except ValueError:
             return self.command_size_limit
 
+    def get_command_size_limit(self, command):
+        """Get the maximum length of a command line for the given command.
+
+        SMTP specifies that an implementation MUST be able to receive
+        command lines of at least 512 bytes.
+        """
+        if not self.session.extended_smtp:
+            return self.command_size_limit
+        return self.command_size_limits[command]
+
     def connection_made(self, transport):
         # Reset state due to rfc3207 part 4.2.
         self._set_rset_state()
@@ -209,9 +219,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 else:
                     command = line[:i].upper()
                     arg = line[i+1:].strip()
-                max_sz = (self.command_size_limits[command]
-                          if self.session.extended_smtp
-                          else self.command_size_limit)
+                max_sz = self.get_command_size_limit(command)
                 if len(line) > max_sz:
                     yield from self.push('500 Error: line too long')
                     continue
