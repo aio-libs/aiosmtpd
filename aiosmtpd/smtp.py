@@ -52,8 +52,6 @@ class Envelope:
 @public
 class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
-    _command_size_limits = collections.defaultdict(
-        lambda x=command_size_limit: x)
 
     def __init__(self, handler,
                  *,
@@ -80,7 +78,6 @@ class SMTP(asyncio.StreamReaderProtocol):
                     "True at the same time")
             decode_data = False
         self._decode_data = decode_data
-        self._command_size_limits.clear()
         if hostname:
             self.hostname = hostname
         else:
@@ -104,12 +101,38 @@ class SMTP(asyncio.StreamReaderProtocol):
     def _create_envelope(self):
         return Envelope()
 
+    def get_esmtp_command_size_limits(self):
+        """Compute limits of command lines according to ESMTP extensions.
+
+        Returns a defaultdict mapping command words to the maximum total length
+        of a command line starting with that command word.
+        """
+        default = self.command_size_limit
+        limits = collections.defaultdict(lambda: default)
+        if self.data_size_limit:
+            # RFC 1870: "Increase MAIL FROM size limit by 26 bytes to
+            # accomodate the possible addition of the SIZE keyword and value"
+            limits['MAIL'] += 26
+        if self.enable_SMTPUTF8:
+            # RFC 6531: "Increase MAIL FROM size limit by 10 bytes to
+            # accomodate the possible addition of the SMTPUTF8 parameter"
+            limits['MAIL'] += 10
+        return limits
+
     @property
     def max_command_size_limit(self):
+        """Get the maximum length of a command line, including the CRLF.
+
+        This is used to limit the amount of data read from the client,
+        so it should be the largest value returned by get_command_size_limit.
+        """
+        if not self.session.extended_smtp:
+            return self.command_size_limit
+        assert self._command_size_limits is not None
         try:
             return max(self._command_size_limits.values())
         except ValueError:
-            return self.command_size_limit
+            return self._command_size_limits.default_factory()
 
     def get_command_size_limit(self, command):
         """Get the maximum length of a command line for the given command.
@@ -119,6 +142,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         """
         if not self.session.extended_smtp:
             return self.command_size_limit
+        assert self._command_size_limits is not None
         return self._command_size_limits[command]
 
     def connection_made(self, transport):
@@ -259,6 +283,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         self._set_rset_state()
         self.session.extended_smtp = False
+        self._command_size_limits = None
         status = yield from self._call_handler_hook('HELO', hostname)
         if status is MISSING:
             self.session.host_name = hostname
@@ -277,15 +302,14 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         self._set_rset_state()
         self.session.extended_smtp = True
+        self._command_size_limits = self.get_esmtp_command_size_limits()
         yield from self.push('250-%s' % self.hostname)
         if self.data_size_limit:
             yield from self.push('250-SIZE %s' % self.data_size_limit)
-            self._command_size_limits['MAIL'] += 26
         if not self._decode_data:
             yield from self.push('250-8BITMIME')
         if self.enable_SMTPUTF8:
             yield from self.push('250-SMTPUTF8')
-            self._command_size_limits['MAIL'] += 10
         if (self.tls_context and
                 not self._tls_protocol and
                 _has_ssl):                        # pragma: nossl
