@@ -32,7 +32,7 @@ class ReceivingHandler:
         self.box = []
 
     @asyncio.coroutine
-    def handle_DATA(self, session, envelope):
+    def handle_DATA(self, server, session, envelope):
         self.box.append(envelope.content)
 
 
@@ -66,7 +66,7 @@ class ErroringHandler:
     error = None
 
     @asyncio.coroutine
-    def handle_DATA(self, session, envelope):
+    def handle_DATA(self, server, session, envelope):
         return '499 Could not accept the message'
 
     @asyncio.coroutine

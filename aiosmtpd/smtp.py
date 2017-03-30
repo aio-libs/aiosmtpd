@@ -40,7 +40,7 @@ class Session:
 class Envelope:
     def __init__(self):
         self.mail_from = None
-        self.mail_options = None
+        self.mail_options = []
         self.content = None
         self.rcpt_tos = []
         self.rcpt_options = []
@@ -177,11 +177,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.event_handler.handle_exception(error)
 
     @asyncio.coroutine
-    def _call_handler_hook(self, command):
+    def _call_handler_hook(self, command, *args):
         hook = getattr(self.event_handler, 'handle_' + command, None)
-        if hook is not None:
-            status = yield from hook(self.session, self.envelope)
-            return status
+        if hook is None:
+            return None
+        status = yield from hook(self, self.session, self.envelope, *args)
+        return status
 
     @asyncio.coroutine
     def _handle_client(self):
@@ -246,31 +247,25 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push('503 Duplicate HELO/EHLO')
             return
         self._set_rset_state()
-        self.session.host_name = hostname
         self.session.extended_smtp = False
-        yield from self.push('250 %s' % self.hostname)
+        status = yield from self._call_handler_hook('HELO', hostname)
+        if status is None:
+            self.session.host_name = hostname
+            status = '250 {}'.format(self.hostname)
+        yield from self.push(status)
 
     @asyncio.coroutine
-    def ehlo_hook(self):
-        """Allow subclasses to extend EHLO responses.
-
-        This hook is called just before the final, non-continuing
-        `250 HELP` response.  Subclasses can add additional `250-<cmd>`
-        responses for custom behavior.
-        """
-        pass
-
     @asyncio.coroutine
-    def smtp_EHLO(self, arg):
-        if not arg:
+    def smtp_EHLO(self, hostname):
+        if not hostname:
             yield from self.push('501 Syntax: EHLO hostname')
             return
-        # See issue #21783 for a discussion of this behavior.
+        # See https://bugs.python.org/issue21783 for a discussion of this
+        # behavior.
         if self.session.host_name:
             yield from self.push('503 Duplicate HELO/EHLO')
             return
         self._set_rset_state()
-        self.session.host_name = arg
         self.session.extended_smtp = True
         yield from self.push('250-%s' % self.hostname)
         if self.data_size_limit:
@@ -285,22 +280,31 @@ class SMTP(asyncio.StreamReaderProtocol):
                 not self._tls_protocol and
                 _has_ssl):                        # pragma: nossl
             yield from self.push('250-STARTTLS')
-        yield from self.ehlo_hook()
-        yield from self.push('250 HELP')
+        if hasattr(self, 'ehlo_hook'):
+            warn('Use handler.handle_EHLO() instead of .ehlo_hook()',
+                 DeprecationWarning)
+            yield from self.ehlo_hook()
+        status = yield from self._call_handler_hook('EHLO', hostname)
+        if status is None:
+            self.session.host_name = hostname
+            status = '250 HELP'
+        yield from self.push(status)
 
     @asyncio.coroutine
     def smtp_NOOP(self, arg):
         if arg:
             yield from self.push('501 Syntax: NOOP')
         else:
-            yield from self.push('250 OK')
+            status = yield from self._call_handler_hook('NOOP')
+            yield from self.push('250 OK' if status is None else status)
 
     @asyncio.coroutine
     def smtp_QUIT(self, arg):
         if arg:
             yield from self.push('501 Syntax: QUIT')
         else:
-            yield from self.push('221 Bye')
+            status = yield from self._call_handler_hook('QUIT')
+            yield from self.push('221 Bye' if status is None else status)
             self._handler_coroutine.cancel()
             self.transport.close()
 
@@ -401,12 +405,14 @@ class SMTP(asyncio.StreamReaderProtocol):
                 address, params = self._getaddr(arg)
             except HeaderParseError:
                 address = None
-            if address:
+            if address is None:
+                yield from self.push('502 Could not VRFY %s' % arg)
+            else:
+                status = yield from self._call_handler_hook('VRFY', address)
                 yield from self.push(
                     '252 Cannot VRFY user, but will accept message '
-                    'and attempt delivery')
-            else:
-                yield from self.push('502 Could not VRFY %s' % arg)
+                    'and attempt delivery'
+                    if status is None else status)
         else:
             yield from self.push('501 Syntax: VRFY <address>')
 
@@ -461,14 +467,18 @@ class SMTP(asyncio.StreamReaderProtocol):
                     '552 Error: message size exceeds fixed maximum message '
                     'size')
                 return
-        if len(params.keys()) > 0:
+        if len(params) > 0:
             yield from self.push(
                 '555 MAIL FROM parameters not recognized or not implemented')
             return
-        self.envelope.mail_from = address
-        self.envelope.mail_options = mail_options
+        status = yield from self._call_handler_hook(
+            'MAIL', address, mail_options)
+        if status is None:
+            self.envelope.mail_from = address
+            self.envelope.mail_options.extend(mail_options)
+            status = '250 OK'
         log.info('sender: %s', address)
-        yield from self.push('250 OK')
+        yield from self.push(status)
 
     @asyncio.coroutine
     def smtp_RCPT(self, arg):
@@ -503,16 +513,14 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(
                 '555 RCPT TO parameters not recognized or not implemented')
             return
-        self.envelope.rcpt_tos.append(address)
-        self.envelope.rcpt_options.append(rcpt_options)
+        status = yield from self._call_handler_hook(
+            'RCPT', address, rcpt_options)
+        if status is None:
+            self.envelope.rcpt_tos.append(address)
+            self.envelope.rcpt_options.extend(rcpt_options)
+            status = '250 OK'
         log.info('recip: %s', address)
-        status = yield from self._call_handler_hook('RCPT')
-        yield from self.push('250 OK' if status is None else status)
-
-    @asyncio.coroutine
-    def rset_hook(self):
-        """Allow subclasses to hook into the RSET command."""
-        pass
+        yield from self.push(status)
 
     @asyncio.coroutine
     def smtp_RSET(self, arg):
@@ -520,8 +528,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push('501 Syntax: RSET')
             return
         self._set_rset_state()
-        yield from self.rset_hook()
-        yield from self.push('250 OK')
+        if hasattr(self, 'rset_hook'):
+            warn('Use handler.handle_RSET() instead of .rset_hook()',
+                 DeprecationWarning)
+            yield from self.rset_hook()
+        status = yield from self._call_handler_hook('RSET')
+        yield from self.push('250 OK' if status is None else status)
 
     @asyncio.coroutine
     def smtp_DATA(self, arg):
@@ -585,7 +597,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._set_post_data_state()
         yield from self.push('250 OK' if status is None else status)
 
-    # Commands that have not been implemented
+    # Commands that have not been implemented.
     @asyncio.coroutine
     def smtp_EXPN(self, arg):
         yield from self.push('502 EXPN not implemented')

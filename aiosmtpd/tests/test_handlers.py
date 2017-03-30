@@ -481,16 +481,37 @@ Testing
                 )
 
 
+class HELOHandler:
+    @asyncio.coroutine
+    def handle_HELO(self, server, session, envelope, hostname):
+        return '250 geddy.example.com'
+
+
+class EHLOHandler:
+    @asyncio.coroutine
+    def handle_EHLO(self, server, session, envelope, hostname):
+        return '250 alex.example.com'
+
+
+class MAILHandler:
+    @asyncio.coroutine
+    def handle_MAIL(self, server, session, envelope, address, options):
+        envelope.mail_options.extend(options)
+        return '250 Yeah, sure'
+
+
 class RCPTHandler:
     @asyncio.coroutine
-    def handle_RCPT(self, session, envelope):
-        if envelope.rcpt_tos[-1] == 'bart@example.com':
+    def handle_RCPT(self, server, session, envelope, address, options):
+        envelope.rcpt_options.extend(options)
+        if address == 'bart@example.com':
             return '550 Rejected'
+        return '250 OK'
 
 
 class DATAHandler:
     @asyncio.coroutine
-    def handle_DATA(self, session, envelope):
+    def handle_DATA(self, server, session, envelope):
         return '599 Not today'
 
 
@@ -514,6 +535,35 @@ Subject: Test
             self.assertEqual(cm.exception.recipients, {
                 'bart@example.com': (550, b'Rejected'),
                 })
+
+    def test_helo_hook(self):
+        controller = Controller(HELOHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            code, response = client.helo('me')
+        self.assertEqual(code, 250)
+        self.assertEqual(response, b'geddy.example.com')
+
+    def test_ehlo_hook(self):
+        controller = Controller(EHLOHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            code, response = client.ehlo('me')
+        self.assertEqual(code, 250)
+        lines = response.decode('utf-8').splitlines()
+        self.assertEqual(lines[-1], 'alex.example.com')
+
+    def test_mail_hook(self):
+        controller = Controller(MAILHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('me')
+            code, response = client.mail('anne@example.com')
+        self.assertEqual(code, 250)
+        self.assertEqual(response, b'Yeah, sure')
 
     def test_data_hook(self):
         controller = Controller(DATAHandler())
@@ -577,6 +627,38 @@ class AsyncDeprecatedHandler:
         pass
 
 
+class DeprecatedHookServer(Server):
+    def __init__(self, *args, **kws):
+        self.warnings = None
+        super().__init__(*args, **kws)
+
+    @asyncio.coroutine
+    def smtp_EHLO(self, arg):
+        with patch('aiosmtpd.smtp.warn') as mock:
+            yield from super().smtp_EHLO(arg)
+        self.warnings = mock.call_args_list
+
+    @asyncio.coroutine
+    def smtp_RSET(self, arg):
+        with patch('aiosmtpd.smtp.warn') as mock:
+            yield from super().smtp_RSET(arg)
+        self.warnings = mock.call_args_list
+
+    @asyncio.coroutine
+    def ehlo_hook(self):
+        pass
+
+    @asyncio.coroutine
+    def rset_hook(self):
+        pass
+
+
+class DeprecatedHookController(Controller):
+    def factory(self):
+        self.smtpd = DeprecatedHookServer(self.handler)
+        return self.smtpd
+
+
 class TestDeprecation(unittest.TestCase):
     # handler.process_message() is deprecated.
     def test_deprecation(self):
@@ -613,4 +695,28 @@ Testing
         self.assertEqual(
             controller.smtpd.warnings[0],
             call('Use handler.handle_DATA() instead of .process_message()',
+                 DeprecationWarning))
+
+    def test_ehlo_hook_deprecation(self):
+        controller = DeprecatedHookController(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.ehlo('example.com')
+        self.assertEqual(len(controller.smtpd.warnings), 1)
+        self.assertEqual(
+            controller.smtpd.warnings[0],
+            call('Use handler.handle_EHLO() instead of .ehlo_hook()',
+                 DeprecationWarning))
+
+    def test_rset_hook_deprecation(self):
+        controller = DeprecatedHookController(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.rset()
+        self.assertEqual(len(controller.smtpd.warnings), 1)
+        self.assertEqual(
+            controller.smtpd.warnings[0],
+            call('Use handler.handle_RSET() instead of .rset_hook()',
                  DeprecationWarning))
