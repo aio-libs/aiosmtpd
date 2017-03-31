@@ -34,6 +34,7 @@ class ReceivingHandler:
     @asyncio.coroutine
     def handle_DATA(self, server, session, envelope):
         self.box.append(envelope.content)
+        return '250 OK'
 
 
 class SizedController(Controller):

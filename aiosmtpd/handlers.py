@@ -82,6 +82,7 @@ class Debugging:
             print(file=self.stream)
         self._print_message_content(session.peer, envelope.content)
         print('------------ END MESSAGE ------------', file=self.stream)
+        return '250 OK'
 
 
 @public
@@ -106,6 +107,7 @@ class Proxy:
         refused = self._deliver(envelope.mail_from, envelope.rcpt_tos, data)
         # TBD: what to do with refused addresses?
         log.info('we got some refusals: %s', refused)
+        return '250 OK'
 
     def _deliver(self, mail_from, rcpt_tos, data):
         refused = {}
@@ -180,6 +182,7 @@ class AsyncMessage(Message):
     def handle_DATA(self, server, session, envelope):
         message = self.prepare_message(session, envelope)
         yield from self.handle_message(message)
+        return '250 OK'
 
     @asyncio.coroutine
     def handle_message(self, message):

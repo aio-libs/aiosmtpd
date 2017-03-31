@@ -26,8 +26,10 @@ log = logging.getLogger('mail.log')
 DATA_SIZE_DEFAULT = 33554432
 EMPTYBYTES = b''
 NEWLINE = '\n'
+MISSING = object()
 
 
+@public
 class Session:
     def __init__(self, loop):
         self.peer = None
@@ -37,6 +39,7 @@ class Session:
         self.loop = loop
 
 
+@public
 class Envelope:
     def __init__(self):
         self.mail_from = None
@@ -180,7 +183,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def _call_handler_hook(self, command, *args):
         hook = getattr(self.event_handler, 'handle_' + command, None)
         if hook is None:
-            return None
+            return MISSING
         status = yield from hook(self, self.session, self.envelope, *args)
         return status
 
@@ -249,7 +252,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._set_rset_state()
         self.session.extended_smtp = False
         status = yield from self._call_handler_hook('HELO', hostname)
-        if status is None:
+        if status is MISSING:
             self.session.host_name = hostname
             status = '250 {}'.format(self.hostname)
         yield from self.push(status)
@@ -284,7 +287,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  DeprecationWarning)
             yield from self.ehlo_hook()
         status = yield from self._call_handler_hook('EHLO', hostname)
-        if status is None:
+        if status is MISSING:
             self.session.host_name = hostname
             status = '250 HELP'
         yield from self.push(status)
@@ -295,7 +298,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push('501 Syntax: NOOP')
         else:
             status = yield from self._call_handler_hook('NOOP')
-            yield from self.push('250 OK' if status is None else status)
+            yield from self.push('250 OK' if status is MISSING else status)
 
     @asyncio.coroutine
     def smtp_QUIT(self, arg):
@@ -303,7 +306,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push('501 Syntax: QUIT')
         else:
             status = yield from self._call_handler_hook('QUIT')
-            yield from self.push('221 Bye' if status is None else status)
+            yield from self.push('221 Bye' if status is MISSING else status)
             self._handler_coroutine.cancel()
             self.transport.close()
 
@@ -411,7 +414,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 yield from self.push(
                     '252 Cannot VRFY user, but will accept message '
                     'and attempt delivery'
-                    if status is None else status)
+                    if status is MISSING else status)
         else:
             yield from self.push('501 Syntax: VRFY <address>')
 
@@ -472,7 +475,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         status = yield from self._call_handler_hook(
             'MAIL', address, mail_options)
-        if status is None:
+        if status is MISSING:
             self.envelope.mail_from = address
             self.envelope.mail_options.extend(mail_options)
             status = '250 OK'
@@ -514,7 +517,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         status = yield from self._call_handler_hook(
             'RCPT', address, rcpt_options)
-        if status is None:
+        if status is MISSING:
             self.envelope.rcpt_tos.append(address)
             self.envelope.rcpt_options.extend(rcpt_options)
             status = '250 OK'
@@ -532,7 +535,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  DeprecationWarning)
             yield from self.rset_hook()
         status = yield from self._call_handler_hook('RSET')
-        yield from self.push('250 OK' if status is None else status)
+        yield from self.push('250 OK' if status is MISSING else status)
 
     @asyncio.coroutine
     def smtp_DATA(self, arg):
@@ -581,7 +584,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             status = yield from self._call_handler_hook('DATA')
         else:
             # Backward compatibility.
-            status = None
+            status = MISSING
             if hasattr(self.event_handler, 'process_message'):
                 warn('Use handler.handle_DATA() instead of .process_message()',
                      DeprecationWarning)
@@ -593,8 +596,13 @@ class SMTP(asyncio.StreamReaderProtocol):
                         *args)
                 else:
                     status = self.event_handler.process_message(*args)
+                # The deprecated API can return None which means, return the
+                # default status.  Don't worry about coverage for this case as
+                # it's a deprecated API that will go away after 1.0.
+                if status is None:                  # pragma: nocover
+                    status = MISSING
         self._set_post_data_state()
-        yield from self.push('250 OK' if status is None else status)
+        yield from self.push('250 OK' if status is MISSING else status)
 
     # Commands that have not been implemented.
     @asyncio.coroutine
