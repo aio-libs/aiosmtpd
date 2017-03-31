@@ -255,7 +255,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         yield from self.push(status)
 
     @asyncio.coroutine
-    @asyncio.coroutine
     def smtp_EHLO(self, hostname):
         if not hostname:
             yield from self.push('501 Syntax: EHLO hostname')
