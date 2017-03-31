@@ -162,28 +162,24 @@ The following hooks are currently defined:
 
 ``handle_DATA(session, envelope)``
     Called during ``DATA`` after most processing of the data has occurred.
-    Hooks can inspect the converted 
+    Hooks can inspect or change the converted data by looking at
+    ``envelope.content``.
 
-    This method is called on the handler so that
-    it can process the incoming ``DATA`` bytes.  The ``session`` and
-    ``envelope`` arguments are described below.  It returns the status string
-    to pass back to the client.  If status is not given (e.g. it is None),
-    then the string ``"250 OK"`` is used as the status.
+In addition to the SMTP command hooks, the following hooks can also be
+implemented by handlers.  They have a different signature and don't need to
+return any status.  Both methods are called synchronously.
 
 ``handle_tls_handshake(session)``
-    (*optional*, *synchronous*) If implemented, and if SSL is supported, this
-    handler method gets called during the TLS handshake phase of
-    ``connection_made()``.  It should return a boolean which specifies whether
-    the handshake failed or not.  ``session`` is an instance of the Session_
-    object.
+    If implemented, and if SSL is supported, this handler method gets called
+    during the TLS handshake phase of ``connection_made()``.  It should return
+    a boolean which specifies whether the handshake failed or not.
 
 ``handle_exception(error)``
-    (*optional*, *synchronous*) If implemented, this method is called when any
-    error occurs during the handling of a connection (e.g. if an
-    ``smtp_COMMAND()`` command raises an exception).  The exception object is
-    passed in.  Note that as part of the ``SMTP`` dialog, if an exception
-    occurs, a 500 code will be returned to the client.
-
+    If implemented, this method is called when any error occurs during the
+    handling of a connection (e.g. if an ``smtp_<command>()`` method raises an
+    exception).  The exception object is passed in.  Note that as part of the
+    ``SMTP`` dialog, if an exception occurs, a 500 code will be returned to
+    the client.
 
 
 .. _sessions_and_envelopes:
