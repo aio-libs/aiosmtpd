@@ -506,6 +506,7 @@ class RCPTHandler:
         envelope.rcpt_options.extend(options)
         if address == 'bart@example.com':
             return '550 Rejected'
+        envelope.rcpt_tos.append(address)
         return '250 OK'
 
 
