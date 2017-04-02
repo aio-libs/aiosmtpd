@@ -7,6 +7,7 @@ from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
 from public import public
 from warnings import warn
+from concurrent.futures import CancelledError
 
 
 try:
@@ -183,7 +184,14 @@ class SMTP(asyncio.StreamReaderProtocol):
             '220 {} {}'.format(self.hostname, self.__ident__))
         while not self._connection_closed:          # pragma: no branch
             # XXX Put the line limit stuff into the StreamReader?
-            line = yield from self._reader.readline()
+            try:
+                # connection may be closed
+                line = yield from self._reader.readline()
+            except CancelledError as ex:
+                # so close connection and return
+                self.connection_lost(ex)
+                return
+
             try:
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.decode('utf-8').rstrip('\r\n')
@@ -531,7 +539,14 @@ class SMTP(asyncio.StreamReaderProtocol):
         num_bytes = 0
         size_exceeded = False
         while not self._connection_closed:          # pragma: no branch
-            line = yield from self._reader.readline()
+            try:
+                # connection may be closed
+                line = yield from self._reader.readline()
+            except CancelledError as ex:
+                # so close connection and return
+                self.connection_lost(ex)
+                return
+
             if line == b'.\r\n':
                 if data:
                     data[-1] = data[-1].rstrip(b'\r\n')
