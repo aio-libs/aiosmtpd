@@ -177,7 +177,11 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def handle_exception(self, error):
         if hasattr(self.event_handler, 'handle_exception'):
-            yield from self.event_handler.handle_exception(error)
+            try:
+                status = yield from self.event_handler.handle_exception(error)
+                return status
+            except Exception:
+                log.exception('Exception in handle_exception')
 
     @asyncio.coroutine
     def _call_handler_hook(self, command, *args):
@@ -234,10 +238,12 @@ class SMTP(asyncio.StreamReaderProtocol):
                     continue
                 yield from method(arg)
             except Exception as error:
-                yield from self.push('500 Error: ({}) {}'.format(
-                    error.__class__.__name__, str(error)))
+                status = yield from self.handle_exception(error)
+                if status is None:
+                    status = '500 Error: ({}) {}'.format(
+                        error.__class__.__name__, str(error))
+                yield from self.push(status)
                 log.exception('SMTP session exception')
-                yield from self.handle_exception(error)
 
     # SMTP and ESMTP commands
     @asyncio.coroutine
