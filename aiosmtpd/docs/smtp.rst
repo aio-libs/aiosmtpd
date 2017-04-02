@@ -107,11 +107,12 @@ override to provide additional responses.
 Handler hooks
 =============
 
-Handlers can implement a hooks that get called during the ``SMTP`` dialog, or
-in exceptional cases.  These *handler hooks* are all called asynchronously and
-they *must* return a status string, since the default statuses are *not*
-returned when a hook is defined.  Individual handlers may have additional
-responsibilities to replace default behavior, as described below.
+Handlers can implement hooks that get called during the SMTP dialog, or in
+exceptional cases.  These *handler hooks* are all called asynchronously and
+they *must* return a status string, such as ``'250 OK'``.  All handler hooks
+are optional and certain default behaviors are carried out by the ``SMTP``
+class when a hook is omitted, but when handler hooks are defined, they may
+have additional responsibilities, as described below.
 
 All handler hooks take at least three arguments, the ``SMTP`` server instance,
 :ref:`a session instance, and an envelope instance <sessions_and_envelopes>`.
@@ -120,16 +121,16 @@ Some methods take additional arguments.
 The following hooks are currently defined:
 
 ``handle_HELO(server, session, envelope, hostname)``
-    Called during ``HELO``, the ``hostname`` argument is the host name given
+    Called during ``HELO``.  The ``hostname`` argument is the host name given
     by the client in the ``HELO`` command.  If implemented, this hook must
     also set the ``session.host_name`` attribute.
 
 ``handle_EHLO(server, session, envelope, hostname)``
-    Called during ``EHLO``, the ``hostname`` argument is the host name given
+    Called during ``EHLO``.  The ``hostname`` argument is the host name given
     by the client in the ``EHLO`` command.  If implemented, this hook must
     also set the ``session.host_name`` attribute.  This hook may push
     additional ``250-<command>`` responses to the client by yielding from
-    ``server.push(status)``.
+    ``server.push(status)`` before returning ``250 OK`` as the final response.
 
 ``handle_NOOP(server, session, envelope)``
     Called during ``NOOP``.
@@ -138,11 +139,11 @@ The following hooks are currently defined:
     Called during ``QUIT``.
 
 ``handle_VRFY(server, session, envelope, address)``
-    Called during ``VRFY``, the ``address`` argument is the parsed email
+    Called during ``VRFY``.  The ``address`` argument is the parsed email
     address given by the client in the ``VRFY`` command.
 
 ``handle_MAIL(server, session, envelope, address, mail_options)``
-    Called during ``MAIL FROM``, the ``address`` argument is the parsed email
+    Called during ``MAIL FROM``.  The ``address`` argument is the parsed email
     address given by the client in the ``MAIL FROM`` command, and
     ``mail_options`` are any additional ESMTP mail options providing by the
     client.  If implemented, this hook must also set the
@@ -150,7 +151,7 @@ The following hooks are currently defined:
     ``envelope.mail_options`` (which is always a Python list).
 
 ``handle_RCPT(server, session, envelope, address, rcpt_options)``
-    Called during ``RCPT TO``, the ``address`` argument is the parsed email
+    Called during ``RCPT TO``.  The ``address`` argument is the parsed email
     address given by the client in the ``RCPT TO`` command, and
     ``rcpt_options`` are any additional ESMTP recipient options providing by
     the client.  If implemented, this hook should append the address to
@@ -161,9 +162,9 @@ The following hooks are currently defined:
     Called during ``RSET``.
 
 ``handle_DATA(session, envelope)``
-    Called during ``DATA`` after most processing of the data has occurred.
-    Hooks can inspect or change the converted data by looking at
-    ``envelope.content``.
+    Called during ``DATA`` after the entire message ("SMTP content" as
+    described in RFC 5321) has been received.  Hooks can inspect or change the
+    converted data by looking at ``envelope.content``.
 
 In addition to the SMTP command hooks, the following hooks can also be
 implemented by handlers.  They have a different signature and don't need to
