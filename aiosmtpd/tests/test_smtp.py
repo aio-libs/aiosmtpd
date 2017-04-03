@@ -45,6 +45,11 @@ class SizedController(Controller):
         return Server(self.handler, data_size_limit=self.size)
 
 
+class StrictASCIIController(Controller):
+    def factory(self):
+        return Server(self.handler, enable_SMTPUTF8=False)
+
+
 class CustomHostnameController(Controller):
     def factory(self):
         return Server(self.handler, hostname='custom.localhost')
@@ -827,3 +832,34 @@ class TestCustomizations(unittest.TestCase):
             self.assertEqual(
                 response,
                 b'Error: BODY can only be one of 7BIT, 8BITMIME')
+
+
+class TestStrictASCII(unittest.TestCase):
+    def setUp(self):
+        controller = StrictASCIIController(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_ehlo(self):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            lines = response.splitlines()
+            self.assertNotIn(b'SMTPUTF8', lines)
+
+    def test_bad_encoded_param(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            client.send(b'MAIL FROM: <anne\xFF@example.com>\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 500)
+            self.assertIn(b'Error: (UnicodeDecodeError)', response)
+
+    def test_mail_param(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd(
+                'MAIL FROM: <anne@example.com> SMTPUTF8')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Error: SMTPUTF8 disabled')

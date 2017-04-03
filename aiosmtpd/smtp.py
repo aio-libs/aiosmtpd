@@ -56,6 +56,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def __init__(self, handler,
                  *,
                  data_size_limit=DATA_SIZE_DEFAULT,
+                 enable_SMTPUTF8=True,
                  decode_data=False,
                  hostname=None,
                  tls_context=None,
@@ -69,6 +70,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             loop=self.loop)
         self.event_handler = handler
         self.data_size_limit = data_size_limit
+        self.enable_SMTPUTF8 = enable_SMTPUTF8
         self._decode_data = decode_data
         self.command_size_limits.clear()
         if hostname:
@@ -199,7 +201,11 @@ class SMTP(asyncio.StreamReaderProtocol):
                     # servers can send 8-bit data.  Use surrogateescape so
                     # that the fidelity of the decoding is preserved, and the
                     # original bytes can be retrieved.
-                    arg = str(arg, encoding='utf-8', errors='surrogateescape')
+                    if self.enable_SMTPUTF8:
+                        arg = str(
+                            arg, encoding='utf-8', errors='surrogateescape')
+                    else:
+                        arg = str(arg, encoding='ascii', errors='strict')
                 max_sz = (self.command_size_limits[command]
                           if self.session.extended_smtp
                           else self.command_size_limit)
@@ -273,7 +279,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.command_size_limits['MAIL'] += 26
         if not self._decode_data:
             yield from self.push('250-8BITMIME')
-        yield from self.push('250-SMTPUTF8')
+        if self.enable_SMTPUTF8:
+            yield from self.push('250-SMTPUTF8')
         self.command_size_limits['MAIL'] += 10
         if (self.tls_context and
                 not self._tls_protocol and
@@ -441,6 +448,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         smtputf8 = params.pop('SMTPUTF8', False)
         if not isinstance(smtputf8, bool):
             yield from self.push('501 Error: SMTPUTF8 takes no arguments')
+            return
+        if smtputf8 and not self.enable_SMTPUTF8:
+            yield from self.push('501 Error: SMTPUTF8 disabled')
             return
         self.envelope.smtp_utf8 = smtputf8
         size = params.pop('SIZE', None)
