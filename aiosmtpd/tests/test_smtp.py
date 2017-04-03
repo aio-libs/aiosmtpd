@@ -75,6 +75,16 @@ class ErroringHandler:
         self.error = error
 
 
+class ErroringHandlerCustomResponse:
+    error = None
+
+    @asyncio.coroutine
+    def handle_exception(self, error):
+        self.error = error
+        return '451 Temporary error: ({}) {}'.format(
+            error.__class__.__name__, str(error))
+
+
 class ErrorSMTP(Server):
     @asyncio.coroutine
     def smtp_HELO(self, hostname):
@@ -745,6 +755,22 @@ Testing
         # handler.error did not change because the handler does not have a
         # handle_exception() method.
         self.assertIsNone(handler.error)
+
+    def test_unexpected_errors_custom_response(self):
+        handler = ErroringHandlerCustomResponse()
+        controller = ErrorController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with ExitStack() as resources:
+            # Suppress logging to the console during the tests.  Depending on
+            # timing, the exception may or may not be logged.
+            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
+            client = resources.enter_context(
+                SMTP(controller.hostname, controller.port))
+            code, response = client.helo('example.com')
+        self.assertEqual(code, 451)
+        self.assertEqual(response, b'Temporary error: (ValueError) test')
+        self.assertIsInstance(handler.error, ValueError)
 
 
 class TestCustomizations(unittest.TestCase):
