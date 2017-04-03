@@ -15,7 +15,7 @@ CRLF = '\r\n'
 BCRLF = b'\r\n'
 
 
-class UTF8Controller(Controller):
+class DecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True)
 
@@ -37,9 +37,9 @@ class ReceivingHandler:
 
 
 class SizedController(Controller):
-    def __init__(self, handler, size, loop=None, hostname='::0', port=8025):
+    def __init__(self, handler, size):
         self.size = size
-        super().__init__(handler, loop, hostname, port)
+        super().__init__(handler)
 
     def factory(self):
         return Server(self.handler, data_size_limit=self.size)
@@ -142,7 +142,7 @@ class TestProtocol(unittest.TestCase):
 
 class TestSMTP(unittest.TestCase):
     def setUp(self):
-        controller = UTF8Controller(Sink)
+        controller = DecodingController(Sink)
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
@@ -712,7 +712,7 @@ Testing
 
     def test_dots_escaped(self):
         handler = ReceivingHandler()
-        controller = UTF8Controller(handler)
+        controller = DecodingController(handler)
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -759,7 +759,7 @@ Testing
 
     def test_bad_encodings(self):
         handler = ReceivingHandler()
-        controller = UTF8Controller(handler)
+        controller = DecodingController(handler)
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:

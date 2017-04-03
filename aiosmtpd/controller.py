@@ -6,14 +6,20 @@ import threading
 from aiosmtpd.smtp import SMTP
 from public import public
 
+try:
+    from socket import socketpair
+except ImportError:                                          # pragma: nocover
+    from asyncio.windows_utils import socketpair
+
 
 @public
 class Controller:
-    def __init__(self, handler, loop=None, hostname='::0', port=8025,
-                 ready_timeout=1.0):
+    def __init__(self, handler, loop=None, hostname=None, port=8025, *,
+                 ready_timeout=1.0, enable_SMTPUTF8=True):
         self.handler = handler
-        self.hostname = '::0' if hostname is None else hostname
+        self.hostname = '::1' if hostname is None else hostname
         self.port = port
+        self.enable_SMTPUTF8 = enable_SMTPUTF8
         self.loop = asyncio.new_event_loop() if loop is None else loop
         self.server = None
         self.thread = None
@@ -21,7 +27,7 @@ class Controller:
         self.ready_timeout = os.getenv(
             'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
         # For exiting the loop.
-        self._rsock, self._wsock = socket.socketpair()
+        self._rsock, self._wsock = socketpair()
         self.loop.add_reader(self._rsock, self._reader)
 
     def _reader(self):
@@ -34,25 +40,17 @@ class Controller:
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
-        return SMTP(self.handler)
-
-    def make_socket(self):
-        """Allow subclasses to customize socket creation."""
-        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-        return sock
+        return SMTP(self.handler, enable_SMTPUTF8=self.enable_SMTPUTF8)
 
     def _run(self, ready_event):
+        asyncio.set_event_loop(self.loop)
         try:
-            sock = self.make_socket()
-            sock.bind((self.hostname, self.port))
+            self.server = self.loop.run_until_complete(
+                self.loop.create_server(
+                    self.factory, host=self.hostname, port=self.port))
         except socket.error as error:
             self.thread_exception = error
             return
-        asyncio.set_event_loop(self.loop)
-        self.server = self.loop.run_until_complete(
-            self.loop.create_server(self.factory, sock=sock))
         self.loop.call_soon(ready_event.set)
         self.loop.run_forever()
         self.server.close()
