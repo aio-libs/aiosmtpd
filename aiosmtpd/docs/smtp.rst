@@ -162,9 +162,18 @@ The following hooks are currently defined:
     Called during ``RSET``.
 
 ``handle_DATA(session, envelope)``
-    Called during ``DATA`` after the entire message ("SMTP content" as
-    described in RFC 5321) has been received.  Hooks can inspect or change the
-    converted data by looking at ``envelope.content``.
+    Called during ``DATA`` after the entire message (`"SMTP content"
+    <https://tools.ietf.org/html/rfc5321#section-2.3.9>`_ as described in
+    RFC 5321) has been received.  The content is available on the ``envelope``
+    object, but the values are dependent on whether the ``SMTP`` class was
+    instantiated with ``decode_data=False`` (the default) or
+    ``decode_data=True``.  In the former case, both ``envelope.content`` and
+    ``envelope.original_content`` will be the content bytes (normalized
+    according to the transparency rules in `RFC 5321, $4.5.2
+    <https://tools.ietf.org/html/rfc5321#section-4.5.2>`_).  In the latter
+    case, ``envelope.original_content`` will be the normalized bytes, but
+    ``envelope.content`` will be the UTF-8 decoded string of the original
+    content.
 
 In addition to the SMTP command hooks, the following hooks can also be
 implemented by handlers.  They have a different signature and don't need to

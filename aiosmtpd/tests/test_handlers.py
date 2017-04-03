@@ -4,8 +4,7 @@ import asyncio
 import unittest
 
 from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import (
-    AsyncMessage, Debugging, Mailbox, Message, Proxy, Sink)
+from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
 from aiosmtpd.smtp import SMTP as Server
 from contextlib import ExitStack
 from io import StringIO
@@ -152,22 +151,25 @@ Testing
 """.format(peer))
 
 
+class DataHandler:
+    def __init__(self):
+        self.content = None
+        self.original_content = None
+
+    @asyncio.coroutine
+    def handle_DATA(self, server, session, envelope):
+        self.content = envelope.content
+        self.original_content = envelope.original_content
+        return '250 OK'
+
+
 class TestMessage(unittest.TestCase):
-    def setUp(self):
-        self.handled_message = None
-
-        class MessageHandler(Message):
-            def handle_message(handler_self, message):
-                self.handled_message = message
-
-        self.handler = MessageHandler()
-
     def test_message(self):
-        # In this test, the message data comes in as bytes.
-        controller = Controller(self.handler)
+        # In this test, the message content comes in as a bytes.
+        handler = DataHandler()
+        controller = Controller(handler)
         controller.start()
         self.addCleanup(controller.stop)
-
         with SMTP(controller.hostname, controller.port) as client:
             client.sendmail('anne@example.com', ['bart@example.com'], """\
 From: Anne Person <anne@example.com>
@@ -177,22 +179,17 @@ Message-ID: <ant>
 
 Testing
 """)
-        self.assertEqual(self.handled_message['subject'], 'A test')
-        self.assertEqual(self.handled_message['message-id'], '<ant>')
-        self.assertIsNotNone(self.handled_message['X-Peer'])
-        self.assertEqual(
-            self.handled_message['X-MailFrom'], 'anne@example.com')
-        self.assertEqual(self.handled_message['X-RcptTo'], 'bart@example.com')
+        # The content is not converted, so it's bytes.
+        self.assertEqual(handler.content, handler.original_content)
+        self.assertIsInstance(handler.content, bytes)
+        self.assertIsInstance(handler.original_content, bytes)
 
     def test_message_decoded(self):
-        # With a server that decodes the data, the messages come in as
-        # strings.  There's no difference in the message seen by the
-        # handler's handle_message() method, but internally this gives full
-        # coverage.
-        controller = UTF8Controller(self.handler)
+        # In this test, the message content comes in as a string.
+        handler = DataHandler()
+        controller = UTF8Controller(handler)
         controller.start()
         self.addCleanup(controller.stop)
-
         with SMTP(controller.hostname, controller.port) as client:
             client.sendmail('anne@example.com', ['bart@example.com'], """\
 From: Anne Person <anne@example.com>
@@ -202,12 +199,9 @@ Message-ID: <ant>
 
 Testing
 """)
-        self.assertEqual(self.handled_message['subject'], 'A test')
-        self.assertEqual(self.handled_message['message-id'], '<ant>')
-        self.assertIsNotNone(self.handled_message['X-Peer'])
-        self.assertEqual(
-            self.handled_message['X-MailFrom'], 'anne@example.com')
-        self.assertEqual(self.handled_message['X-RcptTo'], 'bart@example.com')
+        self.assertNotEqual(handler.content, handler.original_content)
+        self.assertIsInstance(handler.content, str)
+        self.assertIsInstance(handler.original_content, bytes)
 
 
 class TestAsyncMessage(unittest.TestCase):

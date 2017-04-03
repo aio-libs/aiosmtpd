@@ -575,10 +575,11 @@ class SMTP(asyncio.StreamReaderProtocol):
             text = data[i]
             if text and text[:1] == b'.':
                 data[i] = text[1:]
-        received_data = EMPTYBYTES.join(data)
+        content = original_content = EMPTYBYTES.join(data)
         if self._decode_data:
-            received_data = received_data.decode('utf-8')
-        self.envelope.content = received_data
+            content = original_content.decode('utf-8')
+        self.envelope.content = content
+        self.envelope.original_content = original_content
         # Call the new API first if it's implemented.
         if hasattr(self.event_handler, 'handle_DATA'):
             status = yield from self._call_handler_hook('DATA')
