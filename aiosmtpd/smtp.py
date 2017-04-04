@@ -586,7 +586,11 @@ class SMTP(asyncio.StreamReaderProtocol):
                 data[i] = text[1:]
         content = original_content = EMPTYBYTES.join(data)
         if self._decode_data:
-            content = original_content.decode('utf-8', errors='surrogateescape')
+            if self.enable_SMTPUTF8:
+                content = original_content.decode(
+                    'utf-8', errors='surrogateescape')
+            else:
+                content = original_content.decode('ascii', errors='strict')
         self.envelope.content = content
         self.envelope.original_content = original_content
         # Call the new API first if it's implemented.

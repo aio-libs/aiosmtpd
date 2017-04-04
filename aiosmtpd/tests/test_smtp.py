@@ -48,7 +48,7 @@ class SizedController(Controller):
 
 class StrictASCIIController(Controller):
     def factory(self):
-        return Server(self.handler, enable_SMTPUTF8=False)
+        return Server(self.handler, enable_SMTPUTF8=False, decode_data=True)
 
 
 class CustomHostnameController(Controller):
@@ -864,3 +864,19 @@ class TestStrictASCII(unittest.TestCase):
                 'MAIL FROM: <anne@example.com> SMTPUTF8')
             self.assertEqual(code, 501)
             self.assertEqual(response, b'Error: SMTPUTF8 disabled')
+
+    def test_data(self):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            with self.assertRaises(SMTPDataError) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], b"""\
+From: anne@example.com
+To: bart@example.com
+Subject: A test
+
+Testing\xFF
+""")
+            self.assertEqual(cm.exception.smtp_code, 500)
+            self.assertIn(b'Error: (UnicodeDecodeError)',
+                          cm.exception.smtp_error)
