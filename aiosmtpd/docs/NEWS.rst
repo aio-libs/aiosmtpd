@@ -4,8 +4,11 @@
 
 1.0a5 (201X-XX-XX)
 ==================
-* Deprecate handler `process_message()` methods.  Use the new asynchronous
-  `handle_DATA()` methods, which take a session and an envelope object.
+* A new handler hook API has been added which provides more flexibility but
+  requires more responsibility (e.g. hooks must return a string status).
+  Deprecate ``SMTP.ehlo_hook()`` and ``SMTP.rset_hook()``.
+* Deprecate handler ``process_message()`` methods.  Use the new asynchronous
+  ``handle_DATA()`` methods, which take a session and an envelope object.
 * Added the ``STARTTLS`` extension.  Given by Konstantin Volkov.
 * Minor changes to the way the ``Debugging`` handler prints ``mail_options``
   and ``rcpt_options`` (although the latter is still not support in ``SMTP``).

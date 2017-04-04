@@ -65,7 +65,7 @@ class Debugging:
             print(line, file=self.stream)
 
     @asyncio.coroutine
-    def handle_DATA(self, session, envelope):
+    def handle_DATA(self, server, session, envelope):
         print('---------- MESSAGE FOLLOWS ----------', file=self.stream)
         # Yes, actually test for truthiness since it's possible for either the
         # keywords to be missing, or for their values to be empty lists.
@@ -82,6 +82,7 @@ class Debugging:
             print(file=self.stream)
         self._print_message_content(session.peer, envelope.content)
         print('------------ END MESSAGE ------------', file=self.stream)
+        return '250 OK'
 
 
 @public
@@ -91,7 +92,7 @@ class Proxy:
         self._port = remote_port
 
     @asyncio.coroutine
-    def handle_DATA(self, session, envelope):
+    def handle_DATA(self, server, session, envelope):
         lines = envelope.content.splitlines(keepends=True)
         # Look for the last header
         i = 0
@@ -106,6 +107,7 @@ class Proxy:
         refused = self._deliver(envelope.mail_from, envelope.rcpt_tos, data)
         # TBD: what to do with refused addresses?
         log.info('we got some refusals: %s', refused)
+        return '250 OK'
 
     def _deliver(self, mail_from, rcpt_tos, data):
         refused = {}
@@ -139,10 +141,6 @@ class Sink:
             parser.error('Sink handler does not accept arguments')
         return cls()
 
-    @asyncio.coroutine
-    def handle_DATA(self, session, envelope):
-        pass                                        # pragma: nocover
-
 
 @public
 class Message:
@@ -150,9 +148,10 @@ class Message:
         self.message_class = message_class
 
     @asyncio.coroutine
-    def handle_DATA(self, session, envelope):
+    def handle_DATA(self, server, session, envelope):
         envelope = self.prepare_message(session, envelope)
         self.handle_message(envelope)
+        return '250 OK'
 
     def prepare_message(self, session, envelope):
         # If the server was created with decode_data True, then data will be a
@@ -180,9 +179,10 @@ class AsyncMessage(Message):
         self.loop = loop or asyncio.get_event_loop()
 
     @asyncio.coroutine
-    def handle_DATA(self, session, envelope):
+    def handle_DATA(self, server, session, envelope):
         message = self.prepare_message(session, envelope)
         yield from self.handle_message(message)
+        return '250 OK'
 
     @asyncio.coroutine
     def handle_message(self, message):
