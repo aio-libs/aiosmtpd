@@ -18,7 +18,7 @@ else:                                               # pragma: nocover
     _has_ssl = sslproto and hasattr(ssl, 'MemoryBIO')
 
 
-__version__ = '1.0a5'
+__version__ = '1.0a5+'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 

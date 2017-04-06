@@ -2,6 +2,9 @@
  NEWS for aiosmtpd
 ===================
 
+1.0a6 (20XX-XX-XX)
+==================
+
 1.0a5 (2017-04-06)
 ==================
 * A new handler hook API has been added which provides more flexibility but
