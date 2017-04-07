@@ -4,6 +4,7 @@
 
 1.0a6 (20XX-XX-XX)
 ==================
+* The connection peer is displayed in all INFO level logging.
 
 1.0a5 (2017-04-06)
 ==================
