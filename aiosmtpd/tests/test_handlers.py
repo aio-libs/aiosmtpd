@@ -187,7 +187,7 @@ Testing
     def test_message_decoded(self):
         # In this test, the message content comes in as a string.
         handler = DataHandler()
-        controller = Controller(handler)
+        controller = DecodingController(handler)
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
