@@ -21,9 +21,8 @@
 * Controller objects now have an optional timeout argument used to wait for
   the server to become ready.  This can also be overridden with the
   environment variable ``AIOSMTPD_CONTROLLER_TIMEOUT``. (Closes #35)
-* Handlers can define a ``handle_STARTTLS()`` method, which takes a
-  session object, and is called if SSL is enabled during the making of the
-  connection.  (Closes #48)
+* Handlers can define a ``handle_STARTTLS()`` method which is called if SSL is
+  enabled during the making of the connection. (Closes #48)
 * Better Windows compatibility.
 * Better Python 3.4 compatibility.
 * Use ``flufl.testing`` package for nose2 and flake8 plugins.

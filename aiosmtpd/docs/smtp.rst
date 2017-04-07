@@ -175,14 +175,14 @@ The following hooks are currently defined:
     ``envelope.content`` will be the UTF-8 decoded string of the original
     content.
 
-``handle_STARTTLS(server, session, envelope)``
-    If implemented, and if SSL is supported, this handler method gets called
-    during the TLS handshake phase of ``connection_made()``.  It should return
-    a boolean which specifies whether the handshake failed or not.
+In addition to the SMTP command hooks, the following hooks can also be
+implemented by handlers.  These have a different APIs, and are called
+synchronously.
 
-In addition to the SMTP command hooks, the following hook can also be
-implemented by handlers.  It has a different signature and doesn't need to
-return any status.  This method is called synchronously.
+``handle_STARTTLS(server, session, envelope)``
+    If implemented, and if SSL is supported, this method gets called
+    during the TLS handshake phase of ``connection_made()``.  It should return
+    True if the handshake succeeded, and False otherwise.
 
 ``handle_exception(error)``
     If implemented, this method is called when any error occurs during the
