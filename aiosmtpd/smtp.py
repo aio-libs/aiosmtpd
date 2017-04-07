@@ -92,7 +92,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.tls_context.check_hostname = False
             self.tls_context.verify_mode = ssl.CERT_NONE
         self.require_starttls = tls_context and require_starttls
-        self._tls_handshake_failed = False
+        self._tls_handshake_okay = True
         self._tls_protocol = None
         self.session = None
         self.envelope = None
@@ -103,6 +103,14 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def _create_envelope(self):
         return Envelope()
+
+    @asyncio.coroutine
+    def _call_handler_hook(self, command, *args):
+        hook = getattr(self.event_handler, 'handle_' + command, None)
+        if hook is None:
+            return MISSING
+        status = yield from hook(self, self.session, self.envelope, *args)
+        return status
 
     @property
     def max_command_size_limit(self):
@@ -127,11 +135,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Do SSL certificate checking as rfc3207 part 4.1 says.
             # Why _extra is protected attribute?
             self.session.ssl = self._tls_protocol._extra
-            if hasattr(self.event_handler, 'handle_tls_handshake'):
-                auth = self.event_handler.handle_tls_handshake(self.session)
-                self._tls_handshake_failed = not auth
+            handler = getattr(self.event_handler, 'handle_STARTTLS', None)
+            if handler is None:
+                self._tls_handshake_okay = True
             else:
-                self._tls_handshake_failed = False
+                self._tls_handshake_okay = handler(
+                    self, self.session, self.envelope)
             self._over_ssl = True
         else:
             super().connection_made(transport)
@@ -182,14 +191,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.event_handler.handle_exception(error)
 
     @asyncio.coroutine
-    def _call_handler_hook(self, command, *args):
-        hook = getattr(self.event_handler, 'handle_' + command, None)
-        if hook is None:
-            return MISSING
-        status = yield from hook(self, self.session, self.envelope, *args)
-        return status
-
-    @asyncio.coroutine
     def _handle_client(self):
         log.info('%r handling connection', self.session.peer)
         yield from self.push(
@@ -217,7 +218,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 if len(line) > max_sz:
                     yield from self.push('500 Error: line too long')
                     continue
-                if (self._tls_handshake_failed
+                if (not self._tls_handshake_okay
                         and command != 'QUIT'):             # pragma: nossl
                     yield from self.push(
                         '554 Command refused due to lack of security')
