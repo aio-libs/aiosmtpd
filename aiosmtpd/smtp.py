@@ -2,6 +2,7 @@ import socket
 import asyncio
 import logging
 import collections
+
 from base64 import b64decode
 
 from email._header_value_parser import get_addr_spec, get_angle_addr
@@ -73,7 +74,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  hostname=None,
                  tls_context=None,
                  require_starttls=False,
-                 auth_method=lambda loggin, password: False,
+                 auth_method=lambda login, password: False,
                  auth_required=False,
                  loop=None):
         self.__ident__ = __ident__
@@ -86,22 +87,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.data_size_limit = data_size_limit
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self._decode_data = decode_data
-        if decode_data:
-            self._emptystring = ''
-            self._linesep = '\r\n'
-            self._dotsep = '.'
-            self._newline = NEWLINE
-        else:
-            self._emptystring = b''
-            self._linesep = b'\r\n'
-            self._dotsep = ord(b'.')
-            self._newline = b'\n'
         self.auth_method = auth_method
-        self._set_rset_state()
-        self.seen_greeting = ''
         self.authenticated = False
         self.auth_required = auth_required
-        self.extended_smtp = False
         self.command_size_limits.clear()
         if hostname:
             self.hostname = hostname
@@ -354,6 +342,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  DeprecationWarning)
             yield from self.ehlo_hook()
         status = yield from self._call_handler_hook('EHLO', hostname)
+        yield from self.push('250-AUTH PLAIN')
         if status is MISSING:
             self.session.host_name = hostname
             status = '250 HELP'
@@ -404,18 +393,18 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._tls_protocol.connection_made(socket_transport)
 
     def smtp_AUTH(self, arg):
-        if not self.seen_greeting:
+        if not self.session.host_name:
             yield from self.push('503 Error: send HELO first')
+            return
+        if self.authenticated:
+            yield from self.push('503 Already authenticated')
+            return
+        if not arg:
+            yield from self.push('500 Not enough value')
             return
         args = arg.split(' ')
         if len(args) > 2:
             yield from self.push('500 Too many values')
-            return
-        if len(args) == 0:
-            yield from self.push('500 Not enough value')
-            return
-        if self.autheticated:
-            yield from self.push('503 Already authenticated')
             return
         method = args[0]
         if method != 'PLAIN':
@@ -426,13 +415,13 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push('334')  # your turn, send me login/password
             line = yield from self._reader.readline()
             blob = line.strip()
-            if blob == '*':
+            if blob.decode() == '*':
                 yield from self.push("501 Auth aborted")
                 return
         else:
-            blob = args[1]
+            blob = args[1].encode()
         log.debug('login/password %s', blob)
-        if blob == '=':
+        if blob == b'=':
             login = None
             password = None
         else:
@@ -452,13 +441,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         else:
             yield from self.push('535 5.7.8 Authentication credentials '
                                  'invalid')
-
-    @asyncio.coroutine
-    def close(self):
-        # XXX this close is probably not quite right.
-        if self._writer:
-            self._writer.close()
-        self._connection_closed = True
 
     def _strip_command_keyword(self, keyword, arg):
         keylen = len(keyword)
