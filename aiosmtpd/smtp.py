@@ -74,7 +74,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  hostname=None,
                  tls_context=None,
                  require_starttls=False,
-                 auth_method=lambda login, password: False,
+                 auth_method=lambda login, password: False,  # pragma: nocover
                  auth_required=False,
                  loop=None):
         self.__ident__ = __ident__
