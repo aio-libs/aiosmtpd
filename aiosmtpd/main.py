@@ -69,10 +69,6 @@ def parseargs(args=None):
         'classargs', metavar='CLASSARGS',
         nargs='*', default=(),
         help="""Additional arguments passed to the handler CLASS.""")
-    parser.add_argument(
-        '-a', '--auth_required',
-        default=False, action='store_true',
-        help="""Requires Authentication.""")
     args = parser.parse_args(args)
     # Find the handler class.
     path, dot, name = args.classpath.rpartition('.')
@@ -121,8 +117,7 @@ def main(args=None):
 
     factory = partial(
         SMTP, args.handler,
-        data_size_limit=args.size, enable_SMTPUTF8=args.smtputf8,
-        auth_required=args.auth_required)
+        data_size_limit=args.size, enable_SMTPUTF8=args.smtputf8)
 
     logging.basicConfig(level=logging.ERROR)
     log = logging.getLogger('mail.log')
