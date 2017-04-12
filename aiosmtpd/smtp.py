@@ -394,7 +394,10 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def smtp_AUTH(self, arg):
         if not self.session.host_name:
-            yield from self.push('503 Error: send HELO first')
+            yield from self.push('503 Error: send EHLO first')
+            return
+        if not self.session.extended_smtp:
+            yield from self.push("500 Error: command 'AUTH' not recognized")
             return
         if self.authenticated:
             yield from self.push('503 Already authenticated')
@@ -412,7 +415,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         blob = None
         if len(args) == 1:
-            yield from self.push('334')  # your turn, send me login/password
+            yield from self.push('334 ')  # your turn, send me login/password
             line = yield from self._reader.readline()
             blob = line.strip()
             if blob.decode() == '*':
@@ -428,7 +431,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             try:
                 loginpassword = b64decode(blob, validate=True)
             except Exception:
-                yield from self.push("501 5.5.2 Can't decode base64")
+                yield from self.push("501 Can't decode base64")
                 return
             try:
                 _, login, password = loginpassword.split(b"\x00")
@@ -437,10 +440,9 @@ class SMTP(asyncio.StreamReaderProtocol):
                 return
         if self.auth_method(login, password):
             self.authenticated = True
-            yield from self.push('235 2.7.0 Authentication successful')
+            yield from self.push('235 Authentication successful')
         else:
-            yield from self.push('535 5.7.8 Authentication credentials '
-                                 'invalid')
+            yield from self.push('535 Authentication credentials invalid')
 
     def _strip_command_keyword(self, keyword, arg):
         keylen = len(keyword)
@@ -472,7 +474,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def smtp_HELP(self, arg):
         if self.auth_required and not self.authenticated:
             log.info('Authentication required')
-            yield from self.push('530 5.7.0  Authentication required')
+            yield from self.push('530 Authentication required')
             return
         if arg:
             extended = ' [SP <mail-parameters>]'
@@ -516,7 +518,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def smtp_VRFY(self, arg):
         if self.auth_required and not self.authenticated:
             log.info('Authentication required')
-            yield from self.push('530 5.7.0  Authentication required')
+            yield from self.push('530 Authentication required')
             return
         if arg:
             try:
@@ -541,7 +543,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         if self.auth_required and not self.authenticated:
             log.info('Authentication required')
-            yield from self.push('530 5.7.0  Authentication required')
+            yield from self.push('530 Authentication required')
             return
         log.debug('===> MAIL %s', arg)
         syntaxerr = '501 Syntax: MAIL FROM: <address>'
@@ -610,7 +612,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         if self.auth_required and not self.authenticated:
             log.info('Authentication required')
-            yield from self.push('530 5.7.0  Authentication required')
+            yield from self.push('530 Authentication required')
             return
         log.debug('===> RCPT %s', arg)
         if not self.envelope.mail_from:
@@ -669,7 +671,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         if self.auth_required and not self.authenticated:
             log.info('Authentication required')
-            yield from self.push('530 5.7.0  Authentication required')
+            yield from self.push('530 Authentication required')
             return
         if not self.envelope.rcpt_tos:
             yield from self.push('503 Error: need RCPT command')
