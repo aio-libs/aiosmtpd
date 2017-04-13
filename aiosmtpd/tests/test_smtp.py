@@ -28,7 +28,7 @@ def authenticator(login, password):
 class DecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
-                      auth_method=authenticator)
+                      auth_require_tls=False, auth_method=authenticator)
 
 
 class NoDecodeController(Controller):
@@ -39,7 +39,8 @@ class NoDecodeController(Controller):
 class RequiredAuthDecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True, enable_SMTPUTF8=True
-                      auth_method=authenticator, auth_required=True)
+                      auth_require_tls=False, auth_method=authenticator,
+                      auth_required=True)
 
 
 class ReceivingHandler:

@@ -23,6 +23,11 @@ class DecodingController(Controller):
         return Server(self.handler, decode_data=True)
 
 
+class AUTHDecodingController(Controller):
+    def factory(self):
+        return Server(self.handler, decode_data=True, auth_require_tls=False)
+
+
 class DataHandler:
     def __init__(self):
         self.content = None
@@ -546,6 +551,13 @@ class DATAHandler:
         return '599 Not today'
 
 
+class AUTHHandler:
+    @asyncio.coroutine
+    def handle_AUTH(self, server, session, envelope, args):
+        server.authenticates = True
+        return '235 Authentication successful'
+
+
 class NoHooksHandler:
     pass
 
@@ -611,6 +623,16 @@ Yikes
 """)
             self.assertEqual(cm.exception.smtp_code, 599)
             self.assertEqual(cm.exception.smtp_error, b'Not today')
+
+    def test_auth_hook(self):
+        controller = AUTHDecodingController(AUTHHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.ehlo('me')
+            code, response = client.login("test", "test")
+        self.assertEqual(code, 235)
+        self.assertEqual(response, b'Authentication successful')
 
     def test_no_hooks(self):
         controller = Controller(NoHooksHandler())

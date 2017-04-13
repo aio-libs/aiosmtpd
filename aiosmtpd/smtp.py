@@ -74,6 +74,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  hostname=None,
                  tls_context=None,
                  require_starttls=False,
+                 auth_require_tls=True,
                  auth_method=lambda login, password: False,  # pragma: nocover
                  auth_required=False,
                  loop=None):
@@ -87,6 +88,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.data_size_limit = data_size_limit
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self._decode_data = decode_data
+        self.auth_require_tls = auth_require_tls
         self.auth_method = auth_method
         self.authenticated = False
         self.auth_required = auth_required
@@ -396,7 +398,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not self.session.host_name:
             yield from self.push('503 Error: send EHLO first')
             return
-        if not self.session.extended_smtp:
+        if (not self.session.extended_smtp or
+                (self.auth_require_tls and not self._tls_protocol)):
             yield from self.push("500 Error: command 'AUTH' not recognized")
             return
         if self.authenticated:
@@ -409,40 +412,43 @@ class SMTP(asyncio.StreamReaderProtocol):
         if len(args) > 2:
             yield from self.push('500 Too many values')
             return
-        method = args[0]
-        if method != 'PLAIN':
-            yield from self.push('500 PLAIN method or die')
-            return
-        blob = None
-        if len(args) == 1:
-            yield from self.push('334 ')  # your turn, send me login/password
-            line = yield from self._reader.readline()
-            blob = line.strip()
-            if blob.decode() == '*':
-                yield from self.push("501 Auth aborted")
+        status = yield from self._call_handler_hook('AUTH', args)
+        if status is MISSING:
+            method = args[0]
+            if method != 'PLAIN':
+                yield from self.push('500 PLAIN method or die')
                 return
-        else:
-            blob = args[1].encode()
-        log.debug('login/password %s', blob)
-        if blob == b'=':
-            login = None
-            password = None
-        else:
-            try:
-                loginpassword = b64decode(blob, validate=True)
-            except Exception:
-                yield from self.push("501 Can't decode base64")
-                return
-            try:
-                _, login, password = loginpassword.split(b"\x00")
-            except ValueError:  # not enough args
-                yield from self.push("500 Can't split auth value")
-                return
-        if self.auth_method(login, password):
-            self.authenticated = True
-            yield from self.push('235 Authentication successful')
-        else:
-            yield from self.push('535 Authentication credentials invalid')
+            blob = None
+            if len(args) == 1:
+                yield from self.push('334 ')  # wait client login/password
+                line = yield from self._reader.readline()
+                blob = line.strip()
+                if blob.decode() == '*':
+                    yield from self.push("501 Auth aborted")
+                    return
+            else:
+                blob = args[1].encode()
+            log.debug('login/password %s', blob)
+            if blob == b'=':
+                login = None
+                password = None
+            else:
+                try:
+                    loginpassword = b64decode(blob, validate=True)
+                except Exception:
+                    yield from self.push("501 Can't decode base64")
+                    return
+                try:
+                    _, login, password = loginpassword.split(b"\x00")
+                except ValueError:  # not enough args
+                    yield from self.push("500 Can't split auth value")
+                    return
+            if self.auth_method(login, password):
+                self.authenticated = True
+                status = '235 Authentication successful'
+            else:
+                status = '535 Authentication credentials invalid'
+        yield from self.push(status)
 
     def _strip_command_keyword(self, keyword, arg):
         keylen = len(keyword)
