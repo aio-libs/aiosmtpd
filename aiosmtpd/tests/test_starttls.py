@@ -239,6 +239,7 @@ class TestRequireTLSAUTH(unittest.TestCase):
             self.assertEqual(code, 500)
             self.assertEqual(response, b"Error: command 'AUTH' not recognized")
 
+    @unittest.skipIf(not _has_ssl, 'SSL and Python 3.5 required')
     def test_auth_tls(self):
         with SMTP(*self.address) as client:
             client.starttls()
