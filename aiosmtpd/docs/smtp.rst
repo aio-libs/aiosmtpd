@@ -184,6 +184,14 @@ synchronously.
     during the TLS handshake phase of ``connection_made()``.  It should return
     True if the handshake succeeded, and False otherwise.
 
+``handle_AUTH(server, session, envelope, args)``
+    Called during ``AUTH``. The ``args`` argument is a list of the client's
+    provided arguments to the ``AUTH`` command (the first element being the
+    ``AUTH`` method). For now the ``SMTP`` class advertise only ``PLAIN`` method
+    as ``AUTH`` supported method (in ``HELP`` command) so this handler hook 
+    *should* return a ``500`` error if ``handle_help`` is not implemented in
+    handler.
+
 ``handle_exception(error)``
     If implemented, this method is called when any error occurs during the
     handling of a connection (e.g. if an ``smtp_<command>()`` method raises an
