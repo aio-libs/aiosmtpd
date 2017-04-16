@@ -17,7 +17,7 @@ BCRLF = b'\r\n'
 
 class DecodingController(Controller):
     def factory(self):
-        return Server(self.handler, decode_data=True)
+        return Server(self.handler, decode_data=True, enable_SMTPUTF8=True)
 
 
 class NoDecodeController(Controller):

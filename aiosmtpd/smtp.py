@@ -59,7 +59,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def __init__(self, handler,
                  *,
                  data_size_limit=DATA_SIZE_DEFAULT,
-                 enable_SMTPUTF8=True,
+                 enable_SMTPUTF8=False,
                  decode_data=False,
                  hostname=None,
                  tls_context=None,
@@ -173,7 +173,8 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def push(self, status):
-        response = bytes(status + '\r\n', encoding='ascii')
+        response = bytes(
+            status + '\r\n', 'utf-8' if self.enable_SMTPUTF8 else 'ascii')
         self._writer.write(response)
         log.debug(response)
         yield from self._writer.drain()
@@ -205,10 +206,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # re-encoded back to the original bytes when the SMTP command
                 # is handled.
                 if i < 0:
-                    command = str(line.upper(), encoding='ascii')
+                    command = line.upper().decode(encoding='ascii')
                     arg = None
                 else:
-                    command = str(line[:i].upper(), encoding='ascii')
+                    command = line[:i].upper().decode(encoding='ascii')
                     arg = line[i+1:].strip()
                     # Remote SMTP servers can send us UTF-8 content despite
                     # whether they've declared to do so or not.  Some old
