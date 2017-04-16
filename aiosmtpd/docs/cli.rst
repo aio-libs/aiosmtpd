@@ -22,7 +22,7 @@ greeting::
     Trying 127.0.0.1...
     Connected to localhost.
     Escape character is '^]'.
-    220 subdivisions Python SMTP 1.0a4+
+    220 subdivisions Python SMTP ...
     QUIT
     221 Bye
     Connection closed by foreign host.

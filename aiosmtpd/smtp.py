@@ -18,7 +18,7 @@ else:                                               # pragma: nocover
     _has_ssl = sslproto and hasattr(ssl, 'MemoryBIO')
 
 
-__version__ = '1.0a4+'
+__version__ = '1.0a5+'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
@@ -87,7 +87,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.tls_context.check_hostname = False
             self.tls_context.verify_mode = ssl.CERT_NONE
         self.require_starttls = tls_context and require_starttls
-        self._tls_handshake_failed = False
+        self._tls_handshake_okay = True
         self._tls_protocol = None
         self.session = None
         self.envelope = None
@@ -98,6 +98,14 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def _create_envelope(self):
         return Envelope()
+
+    @asyncio.coroutine
+    def _call_handler_hook(self, command, *args):
+        hook = getattr(self.event_handler, 'handle_' + command, None)
+        if hook is None:
+            return MISSING
+        status = yield from hook(self, self.session, self.envelope, *args)
+        return status
 
     @property
     def max_command_size_limit(self):
@@ -122,22 +130,24 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Do SSL certificate checking as rfc3207 part 4.1 says.
             # Why _extra is protected attribute?
             self.session.ssl = self._tls_protocol._extra
-            if hasattr(self.event_handler, 'handle_tls_handshake'):
-                auth = self.event_handler.handle_tls_handshake(self.session)
-                self._tls_handshake_failed = not auth
+            handler = getattr(self.event_handler, 'handle_STARTTLS', None)
+            if handler is None:
+                self._tls_handshake_okay = True
             else:
-                self._tls_handshake_failed = False
+                self._tls_handshake_okay = handler(
+                    self, self.session, self.envelope)
             self._over_ssl = True
         else:
             super().connection_made(transport)
             self.transport = transport
-            log.info('Peer: %s', repr(self.session.peer))
+            log.info('Peer: %r', self.session.peer)
             # Process the client's requests.
             self._connection_closed = False
             self._handler_coroutine = self.loop.create_task(
                 self._handle_client())
 
     def connection_lost(self, exc):
+        log.info('%r connection lost', self.session.peer)
         super().connection_lost(exc)
         self._writer.close()
         self._connection_closed = True
@@ -149,6 +159,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._writer = writer
 
     def eof_received(self):
+        log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
         return super().eof_received()
 
@@ -173,16 +184,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.event_handler.handle_exception(error)
 
     @asyncio.coroutine
-    def _call_handler_hook(self, command, *args):
-        hook = getattr(self.event_handler, 'handle_' + command, None)
-        if hook is None:
-            return MISSING
-        status = yield from hook(self, self.session, self.envelope, *args)
-        return status
-
-    @asyncio.coroutine
     def _handle_client(self):
-        log.info('handling connection')
+        log.info('%r handling connection', self.session.peer)
         yield from self.push(
             '220 {} {}'.format(self.hostname, self.__ident__))
         while not self._connection_closed:          # pragma: no branch
@@ -191,7 +194,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             try:
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.rstrip(b'\r\n')
-                log.info('Data: %r', line)
+                log.info('%r Data: %s', self.session.peer, line)
                 if not line:
                     yield from self.push('500 Error: bad syntax')
                     continue
@@ -223,7 +226,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 if len(line) > max_sz:
                     yield from self.push('500 Error: line too long')
                     continue
-                if (self._tls_handshake_failed
+                if (not self._tls_handshake_okay
                         and command != 'QUIT'):             # pragma: nossl
                     yield from self.push(
                         '554 Command refused due to lack of security')
@@ -320,7 +323,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_STARTTLS(self, arg):                   # pragma: nossl
-        log.info('===> STARTTLS')
+        log.info('%r STARTTLS', self.session.peer)
         if arg:
             yield from self.push('501 Syntax: STARTTLS')
             return
@@ -488,7 +491,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.envelope.mail_from = address
             self.envelope.mail_options.extend(mail_options)
             status = '250 OK'
-        log.info('sender: %s', address)
+        log.info('%r sender: %s', self.session.peer, address)
         yield from self.push(status)
 
     @asyncio.coroutine
@@ -530,7 +533,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.envelope.rcpt_tos.append(address)
             self.envelope.rcpt_options.extend(rcpt_options)
             status = '250 OK'
-        log.info('recip: %s', address)
+        log.info('%r recip: %s', self.session.peer, address)
         yield from self.push(status)
 
     @asyncio.coroutine

@@ -2,7 +2,11 @@
  NEWS for aiosmtpd
 ===================
 
-1.0a5 (201X-XX-XX)
+1.0a6 (20XX-XX-XX)
+==================
+* The connection peer is displayed in all INFO level logging.
+
+1.0a5 (2017-04-06)
 ==================
 * A new handler hook API has been added which provides more flexibility but
   requires more responsibility (e.g. hooks must return a string status).
@@ -23,7 +27,7 @@
   - ``enable_SMTPUTF8`` is passed through to the ``SMTP`` constructor in the
     default factory.  If you override ``Controller.factory()`` you can pass
     ``self.enable_SMTPUTF8`` yourself.
-* Handlers can define a ``handle_tls_handshake()`` method, which takes a
+* Handlers can define a ``handle_STARTTLS()`` method, which takes a
   session object, and is called if SSL is enabled during the making of the
   connection.  (Closes #48)
 * Better Windows compatibility.
