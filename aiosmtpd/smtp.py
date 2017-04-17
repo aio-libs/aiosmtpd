@@ -443,11 +443,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(syntaxerr)
             return
         arg = self._strip_command_keyword('FROM:', arg)
-        try:
-            address, params = self._getaddr(arg)
-        except IndexError:
-            yield from self.push(syntaxerr)
-            return
+        address, params = self._getaddr(arg)
         if not address:
             yield from self.push(syntaxerr)
             return
@@ -515,11 +511,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(syntaxerr)
             return
         arg = self._strip_command_keyword('TO:', arg)
-        try:
-            address, params = self._getaddr(arg)
-        except IndexError:
-            yield from self.push(syntaxerr)
-            return
+        address, params = self._getaddr(arg)
         if not address:
             yield from self.push(syntaxerr)
             return
