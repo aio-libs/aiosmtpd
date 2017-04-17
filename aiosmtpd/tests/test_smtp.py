@@ -471,6 +471,13 @@ class TestSMTP(unittest.TestCase):
                 response,
                 b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')
 
+    def test_mail_fail_parse_email(self):
+        with SMTP(*self.address) as client:
+            client.helo('example.com')
+            code, response = client.docmd('MAIL FROM: <""@example.com>')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
+
     def test_rcpt_no_helo(self):
         with SMTP(*self.address) as client:
             code, response = client.docmd('RCPT TO: <anne@example.com>')
@@ -555,6 +562,18 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(
                 response,
                 b'RCPT TO parameters not recognized or not implemented')
+
+    def test_rcpt_fail_parse_email(self):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT TO: <""@example.com>')
+            self.assertEqual(code, 501)
+            self.assertEqual(
+                response,
+                b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
 
     def test_rset(self):
         with SMTP(*self.address) as client:
