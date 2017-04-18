@@ -31,22 +31,25 @@ MISSING = object()
 
 @public
 class Session:
-    def __init__(self, loop):
+    def __init__(self, protocol, loop):
         self.peer = None
         self.ssl = None
         self.host_name = None
         self.extended_smtp = False
         self.loop = loop
+        self.envelope = None
+        self.protocol = protocol
 
 
 @public
 class Envelope:
-    def __init__(self):
+    def __init__(self, session):
         self.mail_from = None
         self.mail_options = []
         self.content = None
         self.rcpt_tos = []
         self.rcpt_options = []
+        self.session = session
 
 
 @public
@@ -99,17 +102,17 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.transport = None
 
     def _create_session(self):
-        return Session(self.loop)
+        return Session(self, self.loop)
 
     def _create_envelope(self):
-        return Envelope()
+        return Envelope(self.session)
 
     @asyncio.coroutine
     def _call_handler_hook(self, command, *args):
         hook = getattr(self.event_handler, 'handle_' + command, None)
         if hook is None:
             return MISSING
-        status = yield from hook(self, self.session, self.envelope, *args)
+        status = yield from hook(self.envelope, *args)
         return status
 
     @property
@@ -121,9 +124,9 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def connection_made(self, transport):
         # Reset state due to rfc3207 part 4.2.
-        self._set_rset_state()
         self.session = self._create_session()
         self.session.peer = transport.get_extra_info('peername')
+        self._set_rset_state()
         is_instance = (_has_ssl and
                        isinstance(transport, sslproto._SSLProtocolTransport))
         if self.transport is not None and is_instance:   # pragma: nossl
@@ -139,8 +142,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             if handler is None:
                 self._tls_handshake_okay = True
             else:
-                self._tls_handshake_okay = handler(
-                    self, self.session, self.envelope)
+                self._tls_handshake_okay = handler(self.session)
             self._over_ssl = True
         else:
             super().connection_made(transport)
@@ -171,6 +173,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
         self.envelope = self._create_envelope()
+        self.session.envelope = self.envelope
         self.require_SMTPUTF8 = False
 
     def _set_rset_state(self):
