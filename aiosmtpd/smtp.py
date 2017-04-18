@@ -81,6 +81,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             decode_data = False
         self._decode_data = decode_data
         self.command_size_limits.clear()
+        self.supported_commands = ['EHLO', 'HELO', 'MAIL', 'RCPT', 'DATA',
+                                   'RSET', 'NOOP', 'QUIT', 'VRFY']
         if hostname:
             self.hostname = hostname
         else:
@@ -89,6 +91,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if tls_context:
             # Through rfc3207 part 4.1 certificate checking is part of SMTP
             # protocol, not SSL layer.
+            self.supported_commands.append('STARTTLS')
             self.tls_context.check_hostname = False
             self.tls_context.verify_mode = ssl.CERT_NONE
         self.require_starttls = tls_context and require_starttls
@@ -245,6 +248,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     # SMTP and ESMTP commands
     @asyncio.coroutine
     def smtp_HELO(self, hostname):
+        """ Syntax: HELO hostname """
         if not hostname:
             yield from self.push('501 Syntax: HELO hostname')
             return
@@ -262,6 +266,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_EHLO(self, hostname):
+        """ Syntax: EHLO hostname """
         if not hostname:
             yield from self.push('501 Syntax: EHLO hostname')
             return
@@ -297,6 +302,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_NOOP(self, arg):
+        """ Syntax: NOOP """
         if arg:
             yield from self.push('501 Syntax: NOOP')
         else:
@@ -305,6 +311,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_QUIT(self, arg):
+        """ Syntax: QUIT """
         if arg:
             yield from self.push('501 Syntax: QUIT')
         else:
@@ -365,46 +372,41 @@ class SMTP(asyncio.StreamReaderProtocol):
             result[param] = value if eq else True
         return result
 
+    def help_hook(self, arg):
+        extended = ' [SP <mail-parameters>]'
+        if arg == 'MAIL':
+            msg = '250 Syntax: MAIL FROM: <address>'
+            if self.session.extended_smtp:
+                msg += extended
+            return msg
+        elif arg == 'RCPT':
+            msg = '250 Syntax: RCPT TO: <address>'
+            if self.session.extended_smtp:
+                msg += extended
+            return msg
+
     @asyncio.coroutine
     def smtp_HELP(self, arg):
         if arg:
-            extended = ' [SP <mail-parameters>]'
             lc_arg = arg.upper()
-            if lc_arg == 'EHLO':
-                yield from self.push('250 Syntax: EHLO hostname')
-            elif lc_arg == 'HELO':
-                yield from self.push('250 Syntax: HELO hostname')
-            elif lc_arg == 'MAIL':
-                msg = '250 Syntax: MAIL FROM: <address>'
-                if self.session.extended_smtp:
-                    msg += extended
+            method = getattr(self, 'smtp_' + lc_arg, None)
+            if method and method.__doc__:
+                yield from self.push('250 ' + method.__doc__.strip())
+                return
+            msg = self.help_hook(lc_arg)
+            if msg:
                 yield from self.push(msg)
-            elif lc_arg == 'RCPT':
-                msg = '250 Syntax: RCPT TO: <address>'
-                if self.session.extended_smtp:
-                    msg += extended
-                yield from self.push(msg)
-            elif lc_arg == 'DATA':
-                yield from self.push('250 Syntax: DATA')
-            elif lc_arg == 'RSET':
-                yield from self.push('250 Syntax: RSET')
-            elif lc_arg == 'NOOP':
-                yield from self.push('250 Syntax: NOOP')
-            elif lc_arg == 'QUIT':
-                yield from self.push('250 Syntax: QUIT')
-            elif lc_arg == 'VRFY':
-                yield from self.push('250 Syntax: VRFY <address>')
-            else:
-                yield from self.push(
-                    '501 Supported commands: EHLO HELO MAIL RCPT '
-                    'DATA RSET NOOP QUIT VRFY')
+                return
+            yield from self.push('501 Supported commands: {}'.format(
+                ' '.join(self.supported_commands)))
         else:
             yield from self.push(
-                '250 Supported commands: EHLO HELO MAIL RCPT DATA '
-                'RSET NOOP QUIT VRFY')
+                '250 Supported commands: {}'.format(
+                    ' '.join(self.supported_commands)))
 
     @asyncio.coroutine
     def smtp_VRFY(self, arg):
+        """ Syntax: VRFY <address> """
         if arg:
             try:
                 address, params = self._getaddr(arg)
@@ -529,6 +531,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_RSET(self, arg):
+        """ Syntax: RSET """
         if arg:
             yield from self.push('501 Syntax: RSET')
             return
@@ -542,6 +545,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_DATA(self, arg):
+        """ Syntax: DATA """
         if not self.session.host_name:
             yield from self.push('503 Error: send HELO first')
             return
