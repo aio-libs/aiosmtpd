@@ -95,6 +95,20 @@ class ErroringErrorHandler:
         raise ValueError('ErroringErrorHandler test')
 
 
+class UndescribableError(Exception):
+    def __str__(self):
+        raise Exception()
+
+
+class UndescribableErrorHandler:
+    error = None
+
+    @asyncio.coroutine
+    def handle_exception(self, error):
+        self.error = error
+        raise UndescribableError()
+
+
 class ErrorSMTP(Server):
     @asyncio.coroutine
     def smtp_HELO(self, hostname):
@@ -798,6 +812,20 @@ Testing
         self.assertEqual(response,
                          b'Error: (ValueError) ErroringErrorHandler test')
         self.assertIsInstance(handler.error, ValueError)
+
+    def test_exception_handler_undescribable(self):
+        handler = UndescribableErrorHandler()
+        controller = ErrorController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with ExitStack() as resources:
+            # Suppress logging to the console during the tests.  Depending on
+            # timing, the exception may or may not be logged.
+            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
+            client = resources.enter_context(
+                SMTP(controller.hostname, controller.port))
+            code, response = client.helo('example.com')
+        # TODO
 
 
 class TestCustomizations(unittest.TestCase):
