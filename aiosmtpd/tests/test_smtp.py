@@ -73,6 +73,7 @@ class ErroringHandler:
     @asyncio.coroutine
     def handle_exception(self, error):
         self.error = error
+        return '500 ErroringHandler handling error'
 
 
 class ErroringHandlerCustomResponse:
@@ -743,7 +744,7 @@ Testing
                 SMTP(controller.hostname, controller.port))
             code, response = client.helo('example.com')
         self.assertEqual(code, 500)
-        self.assertEqual(response, b'Error: (ValueError) test')
+        self.assertEqual(response, b'ErroringHandler handling error')
         self.assertIsInstance(handler.error, ValueError)
 
     def test_unexpected_errors_unhandled(self):
