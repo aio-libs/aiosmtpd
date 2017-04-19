@@ -92,7 +92,7 @@ class ErroringErrorHandler:
     @asyncio.coroutine
     def handle_exception(self, error):
         self.error = error
-        raise ValueError('exception handler failed to handle exception')
+        raise ValueError('ErroringErrorHandler test')
 
 
 class ErrorSMTP(Server):
@@ -795,7 +795,8 @@ Testing
                 SMTP(controller.hostname, controller.port))
             code, response = client.helo('example.com')
         self.assertEqual(code, 500)
-        self.assertEqual(response, b'Error: (ValueError) test')
+        self.assertEqual(response,
+                         b'Error: (ValueError) ErroringErrorHandler test')
         self.assertIsInstance(handler.error, ValueError)
 
 
