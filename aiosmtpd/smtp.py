@@ -244,9 +244,12 @@ class SMTP(asyncio.StreamReaderProtocol):
                     status = yield from self.handle_exception(error)
                     yield from self.push(status)
                 except Exception as error:
-                    log.exception('Exception in handle_exception')
-                    status = '500 Error: ({}) {}'.format(
-                        error.__class__.__name__, str(error))
+                    try:
+                        log.exception('Exception in handle_exception')
+                        status = '500 Error: ({}) {}'.format(
+                            error.__class__.__name__, str(error))
+                    except Exception:
+                        status = '500 Error: Cannot describe error'
                     yield from self.push(status)
 
     # SMTP and ESMTP commands

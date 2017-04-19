@@ -825,7 +825,9 @@ Testing
             client = resources.enter_context(
                 SMTP(controller.hostname, controller.port))
             code, response = client.helo('example.com')
-        # TODO
+        self.assertEqual(code, 500)
+        self.assertEqual(response, b'Error: Cannot describe error')
+        self.assertIsInstance(handler.error, ValueError)
 
 
 class TestCustomizations(unittest.TestCase):
