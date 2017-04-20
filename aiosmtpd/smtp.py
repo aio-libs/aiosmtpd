@@ -193,7 +193,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         log.info('%r handling connection', self.session.peer)
         yield from self.push(
             '220 {} {}'.format(self.hostname, self.__ident__))
-        while self.transport:          # pragma: no branch
+        while self.transport is not None:          # pragma: no branch
             # XXX Put the line limit stuff into the StreamReader?
             line = yield from self._reader.readline()
             try:
