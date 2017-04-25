@@ -18,7 +18,7 @@ from unittest.mock import call, patch
 CRLF = '\r\n'
 
 
-class UTF8Controller(Controller):
+class DecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True)
 
@@ -27,7 +27,7 @@ class TestDebugging(unittest.TestCase):
     def setUp(self):
         self.stream = StringIO()
         handler = Debugging(self.stream)
-        controller = UTF8Controller(handler)
+        controller = DecodingController(handler)
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
@@ -187,7 +187,7 @@ Testing
     def test_message_decoded(self):
         # In this test, the message content comes in as a string.
         handler = DataHandler()
-        controller = UTF8Controller(handler)
+        controller = DecodingController(handler)
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -241,7 +241,7 @@ Testing
         # strings.  There's no difference in the message seen by the
         # handler's handle_message() method, but internally this gives full
         # coverage.
-        controller = UTF8Controller(self.handler)
+        controller = DecodingController(self.handler)
         controller.start()
         self.addCleanup(controller.stop)
 
@@ -403,7 +403,7 @@ class TestProxy(unittest.TestCase):
     def setUp(self):
         self.stream = StringIO()
         handler = Proxy('localhost', 9025)
-        controller = UTF8Controller(handler)
+        controller = DecodingController(handler)
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
