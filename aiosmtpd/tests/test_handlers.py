@@ -432,6 +432,8 @@ Testing
                 'X-Peer: ::1',
                 '',
                 'Testing'])
+            # Proxy works with bytes
+            msg = msg.encode('ascii')
             mock().sendmail.assert_called_once_with(
                 'anne@example.com', ['bart@example.com'], msg)
             mock().quit.assert_called_once_with()
