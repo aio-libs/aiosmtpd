@@ -796,13 +796,15 @@ class TestCustomizations(unittest.TestCase):
 
 class TestClientCrash(unittest.TestCase):
     # GH#62 - if the client crashes during the SMTP dialog we want to make
-    # sure we don't get a traceback in the middle of _handle_client().
-    def test_connection_reset_during_DATA(self):
-        controller = Controller(Sink())
+    # sure we don't get tracebacks where we call readline().
+    def setUp(self):
+        controller = Controller(Sink)
         controller.start()
         self.addCleanup(controller.stop)
-        with SMTP() as client:
-            client.connect(controller.hostname, controller.port)
+        self.address = (controller.hostname, controller.port)
+
+    def test_connection_reset_during_DATA(self):
+        with SMTP(*self.address) as client:
             client.helo('example.com')
             client.docmd('MAIL FROM: <anne@example.com>')
             client.docmd('RCPT TO: <bart@example.com>')
@@ -817,11 +819,7 @@ class TestClientCrash(unittest.TestCase):
             self.assertRaises(SMTPServerDisconnected, client.noop)
 
     def test_connection_reset_during_command(self):
-        controller = Controller(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP() as client:
-            client.connect(controller.hostname, controller.port)
+        with SMTP(*self.address) as client:
             client.helo('example.com')
             # Start sending a command but reset the connection before that
             # completes, i.e. before the \r\n
@@ -833,11 +831,7 @@ class TestClientCrash(unittest.TestCase):
             self.assertRaises(SMTPServerDisconnected, client.noop)
 
     def test_connection_EOF_during_DATA(self):
-        controller = Controller(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP() as client:
-            client.connect(controller.hostname, controller.port)
+        with SMTP(*self.address) as client:
             client.helo('example.com')
             client.docmd('MAIL FROM: <anne@example.com>')
             client.docmd('RCPT TO: <bart@example.com>')
@@ -852,11 +846,7 @@ class TestClientCrash(unittest.TestCase):
             self.assertRaises(SMTPServerDisconnected, client.noop)
 
     def test_connection_EOF_during_command(self):
-        controller = Controller(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP() as client:
-            client.connect(controller.hostname, controller.port)
+        with SMTP(*self.address) as client:
             client.helo('example.com')
             # Send part of the command, but do not include the CRLF.  Then
             # reset the connection in the middle of the command.
@@ -866,3 +856,23 @@ class TestClientCrash(unittest.TestCase):
             # command from here will give us an exception.  In GH#62, the
             # server just hung.
             self.assertRaises(SMTPServerDisconnected, client.noop)
+
+    def test_close_in_command(self):
+        with SMTP(*self.address) as client:
+            # Don't include the CRLF.
+            client.send('FOO')
+            client.close()
+
+    def test_close_in_data(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT TO: <bart@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('DATA')
+            self.assertEqual(code, 354)
+            # Don't include the CRLF.
+            client.send('FOO')
+            client.close()
