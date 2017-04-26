@@ -98,7 +98,7 @@ class Proxy:
             content = envelope.original_content
         else:
             content = envelope.content
-        lines = envelope.content.splitlines(keepends=True)
+        lines = content.splitlines(keepends=True)
         # Look for the last header
         i = 0
         ending = bCRLF
