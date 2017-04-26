@@ -7,8 +7,10 @@ import unittest
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
+from aiosmtpd.testing.helpers import reset_connection
 from contextlib import ExitStack
-from smtplib import SMTP, SMTPDataError, SMTPResponseException
+from smtplib import (
+    SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected)
 from unittest.mock import Mock, patch
 
 CRLF = '\r\n'
@@ -790,3 +792,77 @@ class TestCustomizations(unittest.TestCase):
             self.assertEqual(
                 response,
                 b'Error: BODY can only be one of 7BIT, 8BITMIME')
+
+
+class TestClientCrash(unittest.TestCase):
+    # GH#62 - if the client crashes during the SMTP dialog we want to make
+    # sure we don't get a traceback in the middle of _handle_client().
+    def test_connection_reset_during_DATA(self):
+        controller = Controller(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP() as client:
+            client.connect(controller.hostname, controller.port)
+            client.helo('example.com')
+            client.docmd('MAIL FROM: <anne@example.com>')
+            client.docmd('RCPT TO: <bart@example.com>')
+            client.docmd('DATA')
+            # Start sending the DATA but reset the connection before that
+            # completes, i.e. before the .\r\n
+            client.send(b'From: <anne@example.com>')
+            reset_connection(client)
+            # The connection should be disconnected, so trying to do another
+            # command from here will give us an exception.  In GH#62, the
+            # server just hung.
+            self.assertRaises(SMTPServerDisconnected, client.noop)
+
+    def test_connection_reset_during_command(self):
+        controller = Controller(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP() as client:
+            client.connect(controller.hostname, controller.port)
+            client.helo('example.com')
+            # Start sending a command but reset the connection before that
+            # completes, i.e. before the \r\n
+            client.send('MAIL FROM: <anne')
+            reset_connection(client)
+            # The connection should be disconnected, so trying to do another
+            # command from here will give us an exception.  In GH#62, the
+            # server just hung.
+            self.assertRaises(SMTPServerDisconnected, client.noop)
+
+    def test_connection_EOF_during_DATA(self):
+        controller = Controller(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP() as client:
+            client.connect(controller.hostname, controller.port)
+            client.helo('example.com')
+            client.docmd('MAIL FROM: <anne@example.com>')
+            client.docmd('RCPT TO: <bart@example.com>')
+            client.docmd('DATA')
+            # Start sending the DATA but send an EOF before that completes,
+            # i.e. before the .\r\n
+            client.send(b'From: <anne@example.com>\0x4')
+            reset_connection(client)
+            # The connection should be disconnected, so trying to do another
+            # command from here will give us an exception.  In GH#62, the
+            # server just hung.
+            self.assertRaises(SMTPServerDisconnected, client.noop)
+
+    def test_connection_EOF_during_command(self):
+        controller = Controller(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP() as client:
+            client.connect(controller.hostname, controller.port)
+            client.helo('example.com')
+            # Send part of the command, but do not include the CRLF.  Then
+            # reset the connection in the middle of the command.
+            client.send(b'MAIL FROM: <anne\x04')
+            reset_connection(client)
+            # The connection should be disconnected, so trying to do another
+            # command from here will give us an exception.  In GH#62, the
+            # server just hung.
+            self.assertRaises(SMTPServerDisconnected, client.noop)
