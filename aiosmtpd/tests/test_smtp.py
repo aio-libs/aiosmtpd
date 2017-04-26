@@ -830,33 +830,6 @@ class TestClientCrash(unittest.TestCase):
             # server just hung.
             self.assertRaises(SMTPServerDisconnected, client.noop)
 
-    def test_connection_EOF_during_DATA(self):
-        with SMTP(*self.address) as client:
-            client.helo('example.com')
-            client.docmd('MAIL FROM: <anne@example.com>')
-            client.docmd('RCPT TO: <bart@example.com>')
-            client.docmd('DATA')
-            # Start sending the DATA but send an EOF before that completes,
-            # i.e. before the .\r\n
-            client.send(b'From: <anne@example.com>\0x4')
-            reset_connection(client)
-            # The connection should be disconnected, so trying to do another
-            # command from here will give us an exception.  In GH#62, the
-            # server just hung.
-            self.assertRaises(SMTPServerDisconnected, client.noop)
-
-    def test_connection_EOF_during_command(self):
-        with SMTP(*self.address) as client:
-            client.helo('example.com')
-            # Send part of the command, but do not include the CRLF.  Then
-            # reset the connection in the middle of the command.
-            client.send(b'MAIL FROM: <anne\x04')
-            reset_connection(client)
-            # The connection should be disconnected, so trying to do another
-            # command from here will give us an exception.  In GH#62, the
-            # server just hung.
-            self.assertRaises(SMTPServerDisconnected, client.noop)
-
     def test_close_in_command(self):
         with SMTP(*self.address) as client:
             # Don't include the CRLF.
