@@ -7,8 +7,10 @@ import unittest
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
+from aiosmtpd.testing.helpers import reset_connection
 from contextlib import ExitStack
-from smtplib import SMTP, SMTPDataError, SMTPResponseException
+from smtplib import (
+    SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected)
 from unittest.mock import Mock, patch
 
 CRLF = '\r\n'
@@ -790,3 +792,60 @@ class TestCustomizations(unittest.TestCase):
             self.assertEqual(
                 response,
                 b'Error: BODY can only be one of 7BIT, 8BITMIME')
+
+
+class TestClientCrash(unittest.TestCase):
+    # GH#62 - if the client crashes during the SMTP dialog we want to make
+    # sure we don't get tracebacks where we call readline().
+    def setUp(self):
+        controller = Controller(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_connection_reset_during_DATA(self):
+        with SMTP(*self.address) as client:
+            client.helo('example.com')
+            client.docmd('MAIL FROM: <anne@example.com>')
+            client.docmd('RCPT TO: <bart@example.com>')
+            client.docmd('DATA')
+            # Start sending the DATA but reset the connection before that
+            # completes, i.e. before the .\r\n
+            client.send(b'From: <anne@example.com>')
+            reset_connection(client)
+            # The connection should be disconnected, so trying to do another
+            # command from here will give us an exception.  In GH#62, the
+            # server just hung.
+            self.assertRaises(SMTPServerDisconnected, client.noop)
+
+    def test_connection_reset_during_command(self):
+        with SMTP(*self.address) as client:
+            client.helo('example.com')
+            # Start sending a command but reset the connection before that
+            # completes, i.e. before the \r\n
+            client.send('MAIL FROM: <anne')
+            reset_connection(client)
+            # The connection should be disconnected, so trying to do another
+            # command from here will give us an exception.  In GH#62, the
+            # server just hung.
+            self.assertRaises(SMTPServerDisconnected, client.noop)
+
+    def test_close_in_command(self):
+        with SMTP(*self.address) as client:
+            # Don't include the CRLF.
+            client.send('FOO')
+            client.close()
+
+    def test_close_in_data(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT TO: <bart@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('DATA')
+            self.assertEqual(code, 354)
+            # Don't include the CRLF.
+            client.send('FOO')
+            client.close()
