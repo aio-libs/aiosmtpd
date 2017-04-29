@@ -6,6 +6,7 @@ Pass in an instance of one of these classes, or derive your own, to provide
 your own handling of messages.  Implement only the methods you care about.
 """
 
+import re
 import sys
 import asyncio
 import logging
@@ -13,13 +14,13 @@ import mailbox
 import smtplib
 
 from email import message_from_bytes, message_from_string
-from email.feedparser import NLCRE
 from public import public
 
 
-EMPTYSTRING = ''
+bEMPTYSTRING = b''
 COMMASPACE = ', '
-CRLF = '\r\n'
+bCRLF = b'\r\n'
+bNLCRE = re.compile(br'\r\n|\r|\n')
 log = logging.getLogger('mail.debug')
 
 
@@ -93,17 +94,22 @@ class Proxy:
 
     @asyncio.coroutine
     def handle_DATA(self, server, session, envelope):
-        lines = envelope.content.splitlines(keepends=True)
+        if isinstance(envelope.content, str):
+            content = envelope.original_content
+        else:
+            content = envelope.content
+        lines = content.splitlines(keepends=True)
         # Look for the last header
         i = 0
-        ending = CRLF
+        ending = bCRLF
         for line in lines:                          # pragma: nobranch
-            if NLCRE.match(line):
+            if bNLCRE.match(line):
                 ending = line
                 break
             i += 1
-        lines.insert(i, 'X-Peer: %s%s' % (session.peer[0], ending))
-        data = EMPTYSTRING.join(lines)
+        peer = session.peer[0].encode('ascii')
+        lines.insert(i, b'X-Peer: %s%s' % (peer, ending))
+        data = bEMPTYSTRING.join(lines)
         refused = self._deliver(envelope.mail_from, envelope.rcpt_tos, data)
         # TBD: what to do with refused addresses?
         log.info('we got some refusals: %s', refused)
