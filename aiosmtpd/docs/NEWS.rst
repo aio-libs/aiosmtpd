@@ -4,6 +4,11 @@
 
 1.0a6 (20XX-XX-XX)
 ==================
+* The connection peer is displayed in all INFO level logging.
+* When running the test suite, you can include a ``-E`` option after the
+  ``--`` separator to boost the debugging output.
+* The main SMTP readline loops are now more robust against connection resets
+  and mid-read EOFs.  (Closes #62)
 
 1.0a5 (2017-04-06)
 ==================

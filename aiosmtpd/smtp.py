@@ -49,6 +49,13 @@ class Envelope:
         self.rcpt_options = []
 
 
+# This is here to enable debugging output when the -E option is given to the
+# unit test suite.  In that case, this function is mocked to set the debug
+# level on the loop (as if PYTHONASYNCIODEBUG=1 were set).
+def make_loop():
+    return asyncio.get_event_loop()
+
+
 @public
 class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
@@ -65,7 +72,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  require_starttls=False,
                  loop=None):
         self.__ident__ = __ident__
-        self.loop = loop if loop else asyncio.get_event_loop()
+        self.loop = loop if loop else make_loop()
         super().__init__(
             asyncio.StreamReader(loop=self.loop),
             client_connected_cb=self._client_connected_cb,
@@ -92,7 +99,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.tls_context.check_hostname = False
             self.tls_context.verify_mode = ssl.CERT_NONE
         self.require_starttls = tls_context and require_starttls
-        self._tls_handshake_failed = False
+        self._tls_handshake_okay = True
         self._tls_protocol = None
         self.session = None
         self.envelope = None
@@ -103,6 +110,14 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def _create_envelope(self):
         return Envelope()
+
+    @asyncio.coroutine
+    def _call_handler_hook(self, command, *args):
+        hook = getattr(self.event_handler, 'handle_' + command, None)
+        if hook is None:
+            return MISSING
+        status = yield from hook(self, self.session, self.envelope, *args)
+        return status
 
     @property
     def max_command_size_limit(self):
@@ -127,23 +142,25 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Do SSL certificate checking as rfc3207 part 4.1 says.
             # Why _extra is protected attribute?
             self.session.ssl = self._tls_protocol._extra
-            if hasattr(self.event_handler, 'handle_tls_handshake'):
-                auth = self.event_handler.handle_tls_handshake(self.session)
-                self._tls_handshake_failed = not auth
+            handler = getattr(self.event_handler, 'handle_STARTTLS', None)
+            if handler is None:
+                self._tls_handshake_okay = True
             else:
-                self._tls_handshake_failed = False
+                self._tls_handshake_okay = handler(
+                    self, self.session, self.envelope)
             self._over_ssl = True
         else:
             super().connection_made(transport)
             self.transport = transport
-            log.info('Peer: %s', repr(self.session.peer))
+            log.info('Peer: %r', self.session.peer)
             # Process the client's requests.
             self._connection_closed = False
             self._handler_coroutine = self.loop.create_task(
                 self._handle_client())
 
-    def connection_lost(self, exc):
-        super().connection_lost(exc)
+    def connection_lost(self, error):
+        log.info('%r connection lost', self.session.peer)
+        super().connection_lost(error)
         self._writer.close()
         self._connection_closed = True
 
@@ -154,8 +171,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._writer = writer
 
     def eof_received(self):
+        log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
-        return super().eof_received()
+        if not self._connection_closed:             # pragma: nopy34
+            return super().eof_received()
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
@@ -180,25 +199,24 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.event_handler.handle_exception(error)
 
     @asyncio.coroutine
-    def _call_handler_hook(self, command, *args):
-        hook = getattr(self.event_handler, 'handle_' + command, None)
-        if hook is None:
-            return MISSING
-        status = yield from hook(self, self.session, self.envelope, *args)
-        return status
-
-    @asyncio.coroutine
     def _handle_client(self):
-        log.info('handling connection')
+        log.info('%r handling connection', self.session.peer)
         yield from self.push(
             '220 {} {}'.format(self.hostname, self.__ident__))
         while not self._connection_closed:          # pragma: no branch
             # XXX Put the line limit stuff into the StreamReader?
-            line = yield from self._reader.readline()
+            try:
+                line = yield from self._reader.readline()
+                log.debug('_handle_client readline: %s', line)
+            except (ConnectionResetError, asyncio.CancelledError) as error:
+                # The connection got reset during the DATA command.
+                log.info('Connection lost during _handle_client()')
+                self.connection_lost(error)
+                return
             try:
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.decode('utf-8').rstrip('\r\n')
-                log.info('Data: %r', line)
+                log.info('%r Data: %s', self.session.peer, line)
                 if not line:
                     yield from self.push('500 Error: bad syntax')
                     continue
@@ -215,7 +233,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 if len(line) > max_sz:
                     yield from self.push('500 Error: line too long')
                     continue
-                if (self._tls_handshake_failed
+                if (not self._tls_handshake_okay
                         and command != 'QUIT'):             # pragma: nossl
                     yield from self.push(
                         '554 Command refused due to lack of security')
@@ -312,7 +330,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_STARTTLS(self, arg):                   # pragma: nossl
-        log.info('===> STARTTLS')
+        log.info('%r STARTTLS', self.session.peer)
         if arg:
             yield from self.push('501 Syntax: STARTTLS')
             return
@@ -479,7 +497,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.envelope.mail_from = address
             self.envelope.mail_options.extend(mail_options)
             status = '250 OK'
-        log.info('sender: %s', address)
+        log.info('%r sender: %s', self.session.peer, address)
         yield from self.push(status)
 
     @asyncio.coroutine
@@ -521,7 +539,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.envelope.rcpt_tos.append(address)
             self.envelope.rcpt_options.extend(rcpt_options)
             status = '250 OK'
-        log.info('recip: %s', address)
+        log.info('%r recip: %s', self.session.peer, address)
         yield from self.push(status)
 
     @asyncio.coroutine
@@ -553,7 +571,14 @@ class SMTP(asyncio.StreamReaderProtocol):
         num_bytes = 0
         size_exceeded = False
         while not self._connection_closed:          # pragma: no branch
-            line = yield from self._reader.readline()
+            try:
+                line = yield from self._reader.readline()
+                log.debug('DATA readline: %s', line)
+            except (ConnectionResetError, asyncio.CancelledError) as error:
+                # The connection got reset during the DATA command.
+                log.info('Connection lost during DATA')
+                self.connection_lost(error)
+                return
             if line == b'.\r\n':
                 if data:
                     data[-1] = data[-1].rstrip(b'\r\n')
