@@ -17,7 +17,7 @@ CRLF = '\r\n'
 BCRLF = b'\r\n'
 
 
-class UTF8Controller(Controller):
+class DecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True)
 
@@ -46,11 +46,6 @@ class SizedController(Controller):
 
     def factory(self):
         return Server(self.handler, data_size_limit=self.size)
-
-
-class SMTPUTF8Controller(Controller):
-    def factory(self):
-        return Server(self.handler, enable_SMTPUTF8=True)
 
 
 class CustomHostnameController(Controller):
@@ -150,7 +145,7 @@ class TestProtocol(unittest.TestCase):
 
 class TestSMTP(unittest.TestCase):
     def setUp(self):
-        controller = UTF8Controller(Sink)
+        controller = DecodingController(Sink)
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
@@ -616,7 +611,7 @@ class TestSMTPWithController(unittest.TestCase):
                 b'Error: message size exceeds fixed maximum message size')
 
     def test_mail_with_compatible_smtputf8(self):
-        controller = SMTPUTF8Controller(Sink())
+        controller = Controller(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -627,7 +622,7 @@ class TestSMTPWithController(unittest.TestCase):
             self.assertEqual(response, b'OK')
 
     def test_mail_with_unrequited_smtputf8(self):
-        controller = SMTPUTF8Controller(Sink())
+        controller = Controller(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -637,7 +632,7 @@ class TestSMTPWithController(unittest.TestCase):
             self.assertEqual(response, b'OK')
 
     def test_mail_with_incompatible_smtputf8(self):
-        controller = SMTPUTF8Controller(Sink())
+        controller = Controller(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -703,7 +698,7 @@ Testing
 
     def test_dots_escaped(self):
         handler = ReceivingHandler()
-        controller = UTF8Controller(handler)
+        controller = DecodingController(handler)
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
