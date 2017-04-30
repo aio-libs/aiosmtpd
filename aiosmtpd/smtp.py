@@ -49,6 +49,13 @@ class Envelope:
         self.rcpt_options = []
 
 
+# This is here to enable debugging output when the -E option is given to the
+# unit test suite.  In that case, this function is mocked to set the debug
+# level on the loop (as if PYTHONASYNCIODEBUG=1 were set).
+def make_loop():
+    return asyncio.get_event_loop()
+
+
 @public
 class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
@@ -65,7 +72,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  require_starttls=False,
                  loop=None):
         self.__ident__ = __ident__
-        self.loop = loop if loop else asyncio.get_event_loop()
+        self.loop = loop if loop else make_loop()
         super().__init__(
             asyncio.StreamReader(loop=self.loop),
             client_connected_cb=self._client_connected_cb,
@@ -149,9 +156,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._handler_coroutine = self.loop.create_task(
                 self._handle_client())
 
-    def connection_lost(self, exc):
+    def connection_lost(self, error):
         log.info('%r connection lost', self.session.peer)
-        super().connection_lost(exc)
+        super().connection_lost(error)
         self._writer.close()
         self.transport = None
 
@@ -164,7 +171,8 @@ class SMTP(asyncio.StreamReaderProtocol):
     def eof_received(self):
         log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
-        return super().eof_received()
+        if not self._connection_closed:             # pragma: nopy34
+            return super().eof_received()
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
@@ -195,7 +203,14 @@ class SMTP(asyncio.StreamReaderProtocol):
             '220 {} {}'.format(self.hostname, self.__ident__))
         while self.transport is not None:          # pragma: no branch
             # XXX Put the line limit stuff into the StreamReader?
-            line = yield from self._reader.readline()
+            try:
+                line = yield from self._reader.readline()
+                log.debug('_handle_client readline: %s', line)
+            except (ConnectionResetError, asyncio.CancelledError) as error:
+                # The connection got reset during the DATA command.
+                log.info('Connection lost during _handle_client()')
+                self.connection_lost(error)
+                return
             try:
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.decode('utf-8').rstrip('\r\n')
@@ -554,7 +569,14 @@ class SMTP(asyncio.StreamReaderProtocol):
         num_bytes = 0
         size_exceeded = False
         while self.transport:          # pragma: no branch
-            line = yield from self._reader.readline()
+            try:
+                line = yield from self._reader.readline()
+                log.debug('DATA readline: %s', line)
+            except (ConnectionResetError, asyncio.CancelledError) as error:
+                # The connection got reset during the DATA command.
+                log.info('Connection lost during DATA')
+                self.connection_lost(error)
+                return
             if line == b'.\r\n':
                 if data:
                     data[-1] = data[-1].rstrip(b'\r\n')

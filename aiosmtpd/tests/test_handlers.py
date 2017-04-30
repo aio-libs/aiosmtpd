@@ -18,16 +18,28 @@ from unittest.mock import call, patch
 CRLF = '\r\n'
 
 
-class UTF8Controller(Controller):
+class DecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True)
+
+
+class DataHandler:
+    def __init__(self):
+        self.content = None
+        self.original_content = None
+
+    @asyncio.coroutine
+    def handle_DATA(self, server, session, envelope):
+        self.content = envelope.content
+        self.original_content = envelope.original_content
+        return '250 OK'
 
 
 class TestDebugging(unittest.TestCase):
     def setUp(self):
         self.stream = StringIO()
         handler = Debugging(self.stream)
-        controller = UTF8Controller(handler)
+        controller = DecodingController(handler)
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
@@ -151,18 +163,6 @@ Testing
 """.format(peer))
 
 
-class DataHandler:
-    def __init__(self):
-        self.content = None
-        self.original_content = None
-
-    @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
-        self.content = envelope.content
-        self.original_content = envelope.original_content
-        return '250 OK'
-
-
 class TestMessage(unittest.TestCase):
     def test_message(self):
         # In this test, the message content comes in as a bytes.
@@ -187,7 +187,7 @@ Testing
     def test_message_decoded(self):
         # In this test, the message content comes in as a string.
         handler = DataHandler()
-        controller = UTF8Controller(handler)
+        controller = DecodingController(handler)
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -241,7 +241,7 @@ Testing
         # strings.  There's no difference in the message seen by the
         # handler's handle_message() method, but internally this gives full
         # coverage.
-        controller = UTF8Controller(self.handler)
+        controller = DecodingController(self.handler)
         controller.start()
         self.addCleanup(controller.stop)
 
@@ -401,40 +401,76 @@ class TestCLI(unittest.TestCase):
 
 class TestProxy(unittest.TestCase):
     def setUp(self):
-        self.stream = StringIO()
-        handler = Proxy('localhost', 9025)
-        controller = UTF8Controller(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
-        self.message = """\
+        # There are two controllers and two SMTPd's running here.  The
+        # "upstream" one listens on port 9025 and is connected to a "data
+        # handler" which captures the messages it receives.  The second -and
+        # the one under test here- listens on port 9024 and proxies to the one
+        # on port 9025.  Because we need to set the decode_data flag
+        # differently for each different test, the controller of the proxy is
+        # created in the individual tests, not in the setup.
+        self.upstream = DataHandler()
+        upstream_controller = Controller(self.upstream, port=9025)
+        upstream_controller.start()
+        self.addCleanup(upstream_controller.stop)
+        self.proxy = Proxy(upstream_controller.hostname, 9025)
+        self.source = """\
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>
 Subject: A test
 
 Testing
 """
+        # The upstream SMTPd will always receive the content as bytes
+        # delimited with CRLF.
+        self.expected = CRLF.join([
+            'From: Anne Person <anne@example.com>',
+            'To: Bart Person <bart@example.com>',
+            'Subject: A test',
+            'X-Peer: ::1',
+            '',
+            'Testing']).encode('ascii')
 
-    def test_deliver(self):
+    def test_deliver_bytes(self):
         with ExitStack() as resources:
-            mock = resources.enter_context(
-                patch('aiosmtpd.handlers.smtplib.SMTP'))
-            client = resources.enter_context(SMTP(*self.address))
+            controller = Controller(self.proxy, port=9024)
+            controller.start()
+            resources.callback(controller.stop)
+            client = resources.enter_context(
+                SMTP(*(controller.hostname, controller.port)))
             client.sendmail(
-                'anne@example.com', ['bart@example.com'], self.message)
+                'anne@example.com', ['bart@example.com'], self.source)
             client.quit()
-            mock().connect.assert_called_once_with('localhost', 9025)
-            # SMTP always fixes eols, so it must be always CRLF as delimiter
-            msg = CRLF.join([
-                'From: Anne Person <anne@example.com>',
-                'To: Bart Person <bart@example.com>',
-                'Subject: A test',
-                'X-Peer: ::1',
-                '',
-                'Testing'])
-            mock().sendmail.assert_called_once_with(
-                'anne@example.com', ['bart@example.com'], msg)
-            mock().quit.assert_called_once_with()
+        self.assertEqual(self.upstream.content, self.expected)
+        self.assertEqual(self.upstream.original_content, self.expected)
+
+    def test_deliver_str(self):
+        with ExitStack() as resources:
+            controller = DecodingController(self.proxy, port=9024)
+            controller.start()
+            resources.callback(controller.stop)
+            client = resources.enter_context(
+                SMTP(*(controller.hostname, controller.port)))
+            client.sendmail(
+                'anne@example.com', ['bart@example.com'], self.source)
+            client.quit()
+        self.assertEqual(self.upstream.content, self.expected)
+        self.assertEqual(self.upstream.original_content, self.expected)
+
+
+class TestProxyMocked(unittest.TestCase):
+    def setUp(self):
+        handler = Proxy('localhost', 9025)
+        controller = DecodingController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+        self.source = """\
+From: Anne Person <anne@example.com>
+To: Bart Person <bart@example.com>
+Subject: A test
+
+Testing
+"""
 
     def test_recipients_refused(self):
         with ExitStack() as resources:
@@ -446,7 +482,7 @@ Testing
                 })
             client = resources.enter_context(SMTP(*self.address))
             client.sendmail(
-                'anne@example.com', ['bart@example.com'], self.message)
+                'anne@example.com', ['bart@example.com'], self.source)
             client.quit()
             # The log contains information about what happened in the proxy.
             self.assertEqual(
@@ -464,7 +500,7 @@ Testing
             mock().sendmail.side_effect = OSError
             client = resources.enter_context(SMTP(*self.address))
             client.sendmail(
-                'anne@example.com', ['bart@example.com'], self.message)
+                'anne@example.com', ['bart@example.com'], self.source)
             client.quit()
             # The log contains information about what happened in the proxy.
             self.assertEqual(
