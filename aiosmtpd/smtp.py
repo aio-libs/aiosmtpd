@@ -171,7 +171,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def eof_received(self):
         log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
-        if self.transport is not None:             # pragma: nopy34
+        if self.transport is not None:                        # pragma: nopy34
             return super().eof_received()
 
     def _set_post_data_state(self):
@@ -201,7 +201,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         log.info('%r handling connection', self.session.peer)
         yield from self.push(
             '220 {} {}'.format(self.hostname, self.__ident__))
-        while self.transport is not None:          # pragma: no branch
+        while self.transport is not None:                  # pragma: no branch
             # XXX Put the line limit stuff into the StreamReader?
             try:
                 line = yield from self._reader.readline()
@@ -568,7 +568,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         data = []
         num_bytes = 0
         size_exceeded = False
-        while self.transport is not None:          # pragma: no branch
+        while self.transport is not None:                  # pragma: no branch
             try:
                 line = yield from self._reader.readline()
                 log.debug('DATA readline: %s', line)
