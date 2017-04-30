@@ -17,10 +17,10 @@ from email import message_from_bytes, message_from_string
 from public import public
 
 
-bEMPTYSTRING = b''
+EMPTYBYTES = b''
 COMMASPACE = ', '
-bCRLF = b'\r\n'
-bNLCRE = re.compile(br'\r\n|\r|\n')
+CRLF = b'\r\n'
+NLCRE = re.compile(br'\r\n|\r|\n')
 log = logging.getLogger('mail.debug')
 
 
@@ -101,15 +101,15 @@ class Proxy:
         lines = content.splitlines(keepends=True)
         # Look for the last header
         i = 0
-        ending = bCRLF
+        ending = CRLF
         for line in lines:                          # pragma: nobranch
-            if bNLCRE.match(line):
+            if NLCRE.match(line):
                 ending = line
                 break
             i += 1
         peer = session.peer[0].encode('ascii')
         lines.insert(i, b'X-Peer: %s%s' % (peer, ending))
-        data = bEMPTYSTRING.join(lines)
+        data = EMPTYBYTES.join(lines)
         refused = self._deliver(envelope.mail_from, envelope.rcpt_tos, data)
         # TBD: what to do with refused addresses?
         log.info('we got some refusals: %s', refused)
