@@ -568,7 +568,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         data = []
         num_bytes = 0
         size_exceeded = False
-        while self.transport:          # pragma: no branch
+        while self.transport is not None:          # pragma: no branch
             try:
                 line = yield from self._reader.readline()
                 log.debug('DATA readline: %s', line)
