@@ -104,6 +104,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.session = None
         self.envelope = None
         self.transport = None
+        self._handler_coroutine = None
 
     def _create_session(self):
         return Session(self.loop)
@@ -138,7 +139,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._reader._transport = transport
             self._writer._transport = transport
             self.transport = transport
-            self.seen_greeting = ''
             # Do SSL certificate checking as rfc3207 part 4.1 says.
             # Why _extra is protected attribute?
             self.session.ssl = self._tls_protocol._extra
@@ -148,13 +148,11 @@ class SMTP(asyncio.StreamReaderProtocol):
             else:
                 self._tls_handshake_okay = handler(
                     self, self.session, self.envelope)
-            self._over_ssl = True
         else:
             super().connection_made(transport)
             self.transport = transport
             log.info('Peer: %r', self.session.peer)
             # Process the client's requests.
-            self._connection_closed = False
             self._handler_coroutine = self.loop.create_task(
                 self._handle_client())
 
@@ -162,7 +160,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         log.info('%r connection lost', self.session.peer)
         super().connection_lost(error)
         self._writer.close()
-        self._connection_closed = True
+        self.transport = None
 
     def _client_connected_cb(self, reader, writer):
         # This is redundant since we subclass StreamReaderProtocol, but I like
@@ -173,7 +171,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def eof_received(self):
         log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
-        if not self._connection_closed:             # pragma: nopy34
+        if self.transport is not None:             # pragma: nopy34
             return super().eof_received()
 
     def _set_post_data_state(self):
@@ -203,7 +201,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         log.info('%r handling connection', self.session.peer)
         yield from self.push(
             '220 {} {}'.format(self.hostname, self.__ident__))
-        while not self._connection_closed:          # pragma: no branch
+        while self.transport is not None:          # pragma: no branch
             # XXX Put the line limit stuff into the StreamReader?
             try:
                 line = yield from self._reader.readline()
@@ -570,7 +568,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         data = []
         num_bytes = 0
         size_exceeded = False
-        while not self._connection_closed:          # pragma: no branch
+        while self.transport is not None:          # pragma: no branch
             try:
                 line = yield from self._reader.readline()
                 log.debug('DATA readline: %s', line)
