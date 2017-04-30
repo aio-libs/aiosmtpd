@@ -108,7 +108,8 @@ class Proxy:
                 break
             i += 1
         peer = session.peer[0].encode('ascii')
-        lines.insert(i, b'X-Peer: %s%s' % (peer, ending))
+        # XXX Python 3.4 does not support %-interpolation for bytes objects.
+        lines.insert(i, b'X-Peer: ' + peer + ending)
         data = EMPTYBYTES.join(lines)
         refused = self._deliver(envelope.mail_from, envelope.rcpt_tos, data)
         # TBD: what to do with refused addresses?
