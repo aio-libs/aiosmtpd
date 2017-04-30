@@ -9,6 +9,8 @@
   ``--`` separator to boost the debugging output.
 * The main SMTP readline loops are now more robust against connection resets
   and mid-read EOFs.  (Closes #62)
+* ``Proxy`` handlers work with ``SMTP`` servers regardless of the value of the
+  ``decode_data`` argument.
 
 1.0a5 (2017-04-06)
 ==================
