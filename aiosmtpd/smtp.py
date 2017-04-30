@@ -171,7 +171,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def eof_received(self):
         log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
-        if not self._connection_closed:             # pragma: nopy34
+        if self.transport is not None:             # pragma: nopy34
             return super().eof_received()
 
     def _set_post_data_state(self):
