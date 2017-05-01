@@ -37,7 +37,6 @@ class Session:
         self.host_name = None
         self.extended_smtp = False
         self.loop = loop
-        self.envelope = None
         self.protocol = protocol
 
 
@@ -179,7 +178,6 @@ class SMTP(asyncio.StreamReaderProtocol):
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
         self.envelope = self._create_envelope()
-        self.session.envelope = self.envelope
         self.require_SMTPUTF8 = False
 
     def _set_rset_state(self):
