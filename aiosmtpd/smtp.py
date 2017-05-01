@@ -50,6 +50,13 @@ class Envelope:
         self.rcpt_options = []
 
 
+# This is here to enable debugging output when the -E option is given to the
+# unit test suite.  In that case, this function is mocked to set the debug
+# level on the loop (as if PYTHONASYNCIODEBUG=1 were set).
+def make_loop():
+    return asyncio.get_event_loop()
+
+
 @public
 class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
@@ -66,7 +73,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  require_starttls=False,
                  loop=None):
         self.__ident__ = __ident__
-        self.loop = loop if loop else asyncio.get_event_loop()
+        self.loop = loop if loop else make_loop()
         super().__init__(
             asyncio.StreamReader(loop=self.loop),
             client_connected_cb=self._client_connected_cb,
@@ -92,6 +99,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.session = None
         self.envelope = None
         self.transport = None
+        self._handler_coroutine = None
 
     def _create_session(self):
         return Session(self.loop)
@@ -126,7 +134,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._reader._transport = transport
             self._writer._transport = transport
             self.transport = transport
-            self.seen_greeting = ''
             # Do SSL certificate checking as rfc3207 part 4.1 says.
             # Why _extra is protected attribute?
             self.session.ssl = self._tls_protocol._extra
@@ -136,21 +143,19 @@ class SMTP(asyncio.StreamReaderProtocol):
             else:
                 self._tls_handshake_okay = handler(
                     self, self.session, self.envelope)
-            self._over_ssl = True
         else:
             super().connection_made(transport)
             self.transport = transport
             log.info('Peer: %r', self.session.peer)
             # Process the client's requests.
-            self._connection_closed = False
             self._handler_coroutine = self.loop.create_task(
                 self._handle_client())
 
-    def connection_lost(self, exc):
+    def connection_lost(self, error):
         log.info('%r connection lost', self.session.peer)
-        super().connection_lost(exc)
+        super().connection_lost(error)
         self._writer.close()
-        self._connection_closed = True
+        self.transport = None
 
     def _client_connected_cb(self, reader, writer):
         # This is redundant since we subclass StreamReaderProtocol, but I like
@@ -161,7 +166,8 @@ class SMTP(asyncio.StreamReaderProtocol):
     def eof_received(self):
         log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
-        return super().eof_received()
+        if self.transport is not None:                        # pragma: nopy34
+            return super().eof_received()
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
@@ -189,9 +195,16 @@ class SMTP(asyncio.StreamReaderProtocol):
         log.info('%r handling connection', self.session.peer)
         yield from self.push(
             '220 {} {}'.format(self.hostname, self.__ident__))
-        while not self._connection_closed:          # pragma: no branch
+        while self.transport is not None:                  # pragma: no branch
             # XXX Put the line limit stuff into the StreamReader?
-            line = yield from self._reader.readline()
+            try:
+                line = yield from self._reader.readline()
+                log.debug('_handle_client readline: %s', line)
+            except (ConnectionResetError, asyncio.CancelledError) as error:
+                # The connection got reset during the DATA command.
+                log.info('Connection lost during _handle_client()')
+                self.connection_lost(error)
+                return
             try:
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.rstrip(b'\r\n')
@@ -565,8 +578,15 @@ class SMTP(asyncio.StreamReaderProtocol):
         data = []
         num_bytes = 0
         size_exceeded = False
-        while not self._connection_closed:          # pragma: no branch
-            line = yield from self._reader.readline()
+        while self.transport is not None:                  # pragma: no branch
+            try:
+                line = yield from self._reader.readline()
+                log.debug('DATA readline: %s', line)
+            except (ConnectionResetError, asyncio.CancelledError) as error:
+                # The connection got reset during the DATA command.
+                log.info('Connection lost during DATA')
+                self.connection_lost(error)
+                return
             if line == b'.\r\n':
                 if data:
                     data[-1] = data[-1].rstrip(b'\r\n')

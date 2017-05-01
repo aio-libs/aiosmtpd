@@ -5,6 +5,12 @@
 1.0a6 (20XX-XX-XX)
 ==================
 * The connection peer is displayed in all INFO level logging.
+* When running the test suite, you can include a ``-E`` option after the
+  ``--`` separator to boost the debugging output.
+* The main SMTP readline loops are now more robust against connection resets
+  and mid-read EOFs.  (Closes #62)
+* ``Proxy`` handlers work with ``SMTP`` servers regardless of the value of the
+  ``decode_data`` argument.
 
 1.0a5 (2017-04-06)
 ==================
@@ -27,7 +33,7 @@
   - ``enable_SMTPUTF8`` is passed through to the ``SMTP`` constructor in the
     default factory.  If you override ``Controller.factory()`` you can pass
     ``self.enable_SMTPUTF8`` yourself.
-* Handlers can define a ``handle_STARTTLS()`` method, which takes a
+* Handlers can define a ``handle_tls_handshake()`` method, which takes a
   session object, and is called if SSL is enabled during the making of the
   connection.  (Closes #48)
 * Better Windows compatibility.
