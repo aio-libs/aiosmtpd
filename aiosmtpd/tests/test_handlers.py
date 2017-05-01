@@ -29,7 +29,7 @@ class DataHandler:
         self.original_content = None
 
     @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    def handle_DATA(self, envelope):
         self.content = envelope.content
         self.original_content = envelope.original_content
         return '250 OK'
