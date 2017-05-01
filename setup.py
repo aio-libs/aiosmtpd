@@ -33,5 +33,6 @@ Python 3.""",
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Topic :: Communications :: Email :: Mail Transport Agents',
+        'Framework :: AsyncIO',
         ],
     )

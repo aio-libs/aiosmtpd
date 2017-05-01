@@ -7,15 +7,17 @@ import unittest
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
+from aiosmtpd.testing.helpers import reset_connection
 from contextlib import ExitStack
-from smtplib import SMTP, SMTPDataError, SMTPResponseException
+from smtplib import (
+    SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected)
 from unittest.mock import Mock, patch
 
 CRLF = '\r\n'
 BCRLF = b'\r\n'
 
 
-class UTF8Controller(Controller):
+class DecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True)
 
@@ -44,11 +46,6 @@ class SizedController(Controller):
 
     def factory(self):
         return Server(self.handler, data_size_limit=self.size)
-
-
-class SMTPUTF8Controller(Controller):
-    def factory(self):
-        return Server(self.handler, enable_SMTPUTF8=True)
 
 
 class CustomHostnameController(Controller):
@@ -148,7 +145,7 @@ class TestProtocol(unittest.TestCase):
 
 class TestSMTP(unittest.TestCase):
     def setUp(self):
-        controller = UTF8Controller(Sink)
+        controller = DecodingController(Sink)
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
@@ -614,7 +611,7 @@ class TestSMTPWithController(unittest.TestCase):
                 b'Error: message size exceeds fixed maximum message size')
 
     def test_mail_with_compatible_smtputf8(self):
-        controller = SMTPUTF8Controller(Sink())
+        controller = Controller(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -625,7 +622,7 @@ class TestSMTPWithController(unittest.TestCase):
             self.assertEqual(response, b'OK')
 
     def test_mail_with_unrequited_smtputf8(self):
-        controller = SMTPUTF8Controller(Sink())
+        controller = Controller(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -635,7 +632,7 @@ class TestSMTPWithController(unittest.TestCase):
             self.assertEqual(response, b'OK')
 
     def test_mail_with_incompatible_smtputf8(self):
-        controller = SMTPUTF8Controller(Sink())
+        controller = Controller(Sink())
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -701,7 +698,7 @@ Testing
 
     def test_dots_escaped(self):
         handler = ReceivingHandler()
-        controller = UTF8Controller(handler)
+        controller = DecodingController(handler)
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
@@ -790,3 +787,60 @@ class TestCustomizations(unittest.TestCase):
             self.assertEqual(
                 response,
                 b'Error: BODY can only be one of 7BIT, 8BITMIME')
+
+
+class TestClientCrash(unittest.TestCase):
+    # GH#62 - if the client crashes during the SMTP dialog we want to make
+    # sure we don't get tracebacks where we call readline().
+    def setUp(self):
+        controller = Controller(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_connection_reset_during_DATA(self):
+        with SMTP(*self.address) as client:
+            client.helo('example.com')
+            client.docmd('MAIL FROM: <anne@example.com>')
+            client.docmd('RCPT TO: <bart@example.com>')
+            client.docmd('DATA')
+            # Start sending the DATA but reset the connection before that
+            # completes, i.e. before the .\r\n
+            client.send(b'From: <anne@example.com>')
+            reset_connection(client)
+            # The connection should be disconnected, so trying to do another
+            # command from here will give us an exception.  In GH#62, the
+            # server just hung.
+            self.assertRaises(SMTPServerDisconnected, client.noop)
+
+    def test_connection_reset_during_command(self):
+        with SMTP(*self.address) as client:
+            client.helo('example.com')
+            # Start sending a command but reset the connection before that
+            # completes, i.e. before the \r\n
+            client.send('MAIL FROM: <anne')
+            reset_connection(client)
+            # The connection should be disconnected, so trying to do another
+            # command from here will give us an exception.  In GH#62, the
+            # server just hung.
+            self.assertRaises(SMTPServerDisconnected, client.noop)
+
+    def test_close_in_command(self):
+        with SMTP(*self.address) as client:
+            # Don't include the CRLF.
+            client.send('FOO')
+            client.close()
+
+    def test_close_in_data(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT TO: <bart@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('DATA')
+            self.assertEqual(code, 354)
+            # Don't include the CRLF.
+            client.send('FOO')
+            client.close()
