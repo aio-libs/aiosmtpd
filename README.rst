@@ -98,9 +98,9 @@ Contents
    :maxdepth: 2
 
    aiosmtpd/docs/intro
+   aiosmtpd/docs/controller
    aiosmtpd/docs/smtp
    aiosmtpd/docs/lmtp
-   aiosmtpd/docs/controller
    aiosmtpd/docs/handlers
    aiosmtpd/docs/NEWS
 
