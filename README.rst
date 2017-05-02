@@ -82,6 +82,14 @@ Individual tests can be run like this::
 
 where *<pattern>* is a Python regular expression matching a test name.
 
+You can also add the ``-E`` option to boost debugging output, e.g.::
+
+    $ tox -e py35-nocov -- -E
+
+and these options can be combined::
+
+    $ tox -e py35-nocov -- -P test_connection_reset_during_DATA -E
+
 
 Contents
 ========
