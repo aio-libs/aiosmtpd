@@ -1,10 +1,13 @@
+=================
+ Getting started
+=================
+
 .. _cli:
 
-====================
- Command line usage
-====================
+Command line usage
+==================
 
-This package also provides a main entry point which can be used to run the
+This package provides a main entry point which can be used to run the
 server on the command line.  There are two ways to run the server, depending
 on how the package has been installed.
 
@@ -37,7 +40,7 @@ equivalent to the above ``python3`` invocation::
 
 
 Options
-=======
+-------
 
 Optional arguments include:
 
@@ -78,9 +81,8 @@ as supported by the handler class's ``from_cli()`` class method, if provided.
 
 .. _controller:
 
-=======================
- The testing framework
-=======================
+Programmatic usage
+==================
 
 The SMTP server can be used in a testing framework via a *controller* which
 runs in a separate thread.  This allows the main thread to run the test
@@ -154,7 +156,7 @@ The server is guaranteed to be stopped.
 
 
 Enable SMTPUTF8
-===============
+---------------
 
 It's very common to want to enable the ``SMTPUTF8`` ESMTP option, therefore
 this is the default for the ``Controller`` constructor.  For backward
