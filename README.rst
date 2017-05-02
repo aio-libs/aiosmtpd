@@ -104,7 +104,6 @@ Contents
    aiosmtpd/docs/lmtp
    aiosmtpd/docs/controller
    aiosmtpd/docs/handlers
-   aiosmtpd/docs/cli
    aiosmtpd/docs/NEWS
 
 
