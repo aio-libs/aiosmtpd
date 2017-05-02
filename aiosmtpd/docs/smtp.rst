@@ -20,32 +20,25 @@ While behavior for common SMTP commands can be specified using :ref:`handlers
 <handlers>`, more complex behavior such as adding custom SMTP commands requires
 subclassing the ``SMTP`` class.
 
-For example, let's say you wanted to add a new method called ``PING`` and you
-wanted to count how many times the ``RSET`` command was called.  All methods
-implementing ``SMTP`` commands are prefixed with ``smtp_``.  Here's how you
-could implement these use cases::
+For example, let's say you wanted to add a new SMTP command called ``PING``.
+All methods implementing ``SMTP`` commands are prefixed with ``smtp_``.  Here's
+how you could implement this use case::
 
+    >>> import asyncio
     >>> from aiosmtpd.smtp import SMTP as Server
     >>> class MyServer(Server):
+    ...     @asyncio.coroutine
     ...     def smtp_PING(self, arg):
-    ...         yield from self.push('259 OK')
-    ...
-    ...     def smtp_RSET(self, arg):
-    ...         self.event_handler.rset_calls += 1
-    ...         yield from super().smtp_RSET(arg)
+    ...         yield from self.push('259 Pong')
 
 Now let's run this server in a controller::
 
     >>> from aiosmtpd.handlers import Sink
-    >>> class Counter(Sink):
-    ...     def __init__(self):
-    ...         self.rset_calls = 0
-
     >>> class MyController(Controller):
     ...     def factory(self):
     ...         return MyServer(self.handler)
 
-    >>> controller = MyController(Counter())
+    >>> controller = MyController(Sink())
     >>> controller.start()
     >>> # Arrange for the controller to be stopped at the end of this doctest.
     >>> ignore = resources.callback(controller.stop)
@@ -62,20 +55,7 @@ command, we have to use the lower level interface to talk to it.
     >>> code
     259
     >>> message
-    b'OK'
-
-Now we can call ``RSET`` a few times and watch as the handler's counter gets
-incremented.
-
-    >>> code, message = client.rset()
-    >>> controller.handler.rset_calls
-    1
-    >>> code, message = client.rset()
-    >>> controller.handler.rset_calls
-    2
-    >>> code, message = client.rset()
-    >>> controller.handler.rset_calls
-    3
+    b'Pong'
 
 
 Server hooks
