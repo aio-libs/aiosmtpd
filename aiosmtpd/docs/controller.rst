@@ -155,6 +155,14 @@ The server is guaranteed to be stopped.
     ConnectionRefusedError: ...
 
 
+The aiosmtpd library contains :ref:`base handler classes <handlers>` that may
+be used to quickly gain common functionality such as parsing the incoming mail
+data into an instance of ``email.message.Message``.
+
+For a full overview of the methods that handler classes may implement,
+see :ref:`Handler hooks <hooks>`.
+
+
 Enable SMTPUTF8
 ---------------
 
