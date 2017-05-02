@@ -132,11 +132,11 @@ class SMTP(asyncio.StreamReaderProtocol):
     def connection_made(self, transport):
         # Reset state due to rfc3207 part 4.2.
         self.session = self._create_session()
+        self._set_rset_state()
         self.session.peer = transport.get_extra_info('peername')
         is_instance = (_has_ssl and
                        isinstance(transport, sslproto._SSLProtocolTransport))
         if self.transport is not None and is_instance:   # pragma: nossl
-            self._set_rset_state()
             # It is STARTTLS connection over normal connection.
             self._reader._transport = transport
             self._writer._transport = transport
@@ -199,7 +199,6 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def _handle_client(self):
-        self._set_rset_state()
         log.info('%r handling connection', self.session.peer)
         yield from self.push(
             '220 {} {}'.format(self.hostname, self.__ident__))
