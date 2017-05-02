@@ -9,7 +9,7 @@ from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
 from contextlib import ExitStack
 from smtplib import SMTP, SMTPDataError, SMTPResponseException
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, PropertyMock
 
 CRLF = '\r\n'
 BCRLF = b'\r\n'
@@ -434,7 +434,9 @@ class TestSMTP(unittest.TestCase):
                 response,
                 b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')
 
-    def test_mail_fail_parse_email(self):
+    @patch('email._header_value_parser.AngleAddr.addr_spec',
+           side_effect=IndexError, new_callable=PropertyMock)
+    def test_mail_fail_parse_email(self, addr_spec):
         with SMTP(*self.address) as client:
             client.helo('example.com')
             code, response = client.docmd('MAIL FROM: <""@example.com>')
