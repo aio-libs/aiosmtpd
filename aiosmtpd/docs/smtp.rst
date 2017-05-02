@@ -16,9 +16,9 @@ The ``SMTP`` class is itself a subclass of StreamReaderProtocol_.
 Subclassing
 ===========
 
-The ``SMTP`` class is designed for derivation.  You can add new ``SMTP``
-methods or override existing semantics, and you can provide a *handler*
-instance to react to certain events during the ``SMTP`` dialog.
+While behavior for common SMTP commands can be specified using :ref:`handlers
+<handlers>`, more complex behavior such as adding custom SMTP commands requires
+subclassing the ``SMTP`` class.
 
 For example, let's say you wanted to add a new method called ``PING`` and you
 wanted to count how many times the ``RSET`` command was called.  All methods
