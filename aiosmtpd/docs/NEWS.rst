@@ -11,6 +11,8 @@
   and mid-read EOFs.  (Closes #62)
 * ``Proxy`` handlers work with ``SMTP`` servers regardless of the value of the
   ``decode_data`` argument.
+* The command line script is now installed as ``aiosmtpd`` instead of
+  ``smtpd``.
 
 1.0a5 (2017-04-06)
 ==================
