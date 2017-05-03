@@ -24,7 +24,7 @@ Python 3.""",
         'atpublic',
         ],
     entry_points={
-        'console_scripts': ['smtpd = aiosmtpd.main:main'],
+        'console_scripts': ['aiosmtpd = aiosmtpd.main:main'],
         },
     classifiers=[
         'License :: OSI Approved',
