@@ -914,7 +914,7 @@ class TestStrictASCII(unittest.TestCase):
             client.send(b'MAIL FROM: <anne\xFF@example.com>\r\n')
             code, response = client.getreply()
             self.assertEqual(code, 500)
-            self.assertIn(b'Error: (UnicodeDecodeError)', response)
+            self.assertIn(b'Error: strict ASCII mode', response)
 
     def test_mail_param(self):
         with SMTP(*self.address) as client:
@@ -937,5 +937,4 @@ Subject: A test
 Testing\xFF
 """)
             self.assertEqual(cm.exception.smtp_code, 500)
-            self.assertIn(b'Error: (UnicodeDecodeError)',
-                          cm.exception.smtp_error)
+            self.assertIn(b'Error: strict ASCII mode', cm.exception.smtp_error)

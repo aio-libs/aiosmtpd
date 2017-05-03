@@ -233,7 +233,17 @@ class SMTP(asyncio.StreamReaderProtocol):
                         arg = str(
                             arg, encoding='utf-8', errors='surrogateescape')
                     else:
-                        arg = str(arg, encoding='ascii', errors='strict')
+                        try:
+                            arg = str(arg, encoding='ascii', errors='strict')
+                        except UnicodeDecodeError:
+                            # This happens if enable_SMTPUTF8 is false, meaning
+                            # that the server explicitly does not want to
+                            # accept non-ASCII, but the client ignores that and
+                            # sends non-ASCII anyway.
+                            yield from self.push(
+                                '500 Error: strict ASCII mode')
+                            # Should we yield from self.handle_exception()?
+                            continue
                 max_sz = (self.command_size_limits[command]
                           if self.session.extended_smtp
                           else self.command_size_limit)
@@ -614,7 +624,14 @@ class SMTP(asyncio.StreamReaderProtocol):
                 content = original_content.decode(
                     'utf-8', errors='surrogateescape')
             else:
-                content = original_content.decode('ascii', errors='strict')
+                try:
+                    content = original_content.decode('ascii', errors='strict')
+                except UnicodeDecodeError:
+                    # This happens if enable_smtputf8 is false, meaning that
+                    # the server explicitly does not want to accept non-ascii,
+                    # but the client ignores that and sends non-ascii anyway.
+                    yield from self.push('500 Error: strict ASCII mode')
+                    return
         self.envelope.content = content
         self.envelope.original_content = original_content
         # Call the new API first if it's implemented.
