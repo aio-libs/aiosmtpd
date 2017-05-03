@@ -29,7 +29,7 @@ class DataHandler:
         self.original_content = None
 
     @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    def handle_DATA(self, envelope):
         self.content = envelope.content
         self.original_content = envelope.original_content
         return '250 OK'
@@ -513,26 +513,26 @@ Testing
 
 class HELOHandler:
     @asyncio.coroutine
-    def handle_HELO(self, server, session, envelope, hostname):
+    def handle_HELO(self, envelope, hostname):
         return '250 geddy.example.com'
 
 
 class EHLOHandler:
     @asyncio.coroutine
-    def handle_EHLO(self, server, session, envelope, hostname):
+    def handle_EHLO(self, envelope, hostname):
         return '250 alex.example.com'
 
 
 class MAILHandler:
     @asyncio.coroutine
-    def handle_MAIL(self, server, session, envelope, address, options):
+    def handle_MAIL(self, envelope, address, options):
         envelope.mail_options.extend(options)
         return '250 Yeah, sure'
 
 
 class RCPTHandler:
     @asyncio.coroutine
-    def handle_RCPT(self, server, session, envelope, address, options):
+    def handle_RCPT(self, envelope, address, options):
         envelope.rcpt_options.extend(options)
         if address == 'bart@example.com':
             return '550 Rejected'
@@ -542,7 +542,7 @@ class RCPTHandler:
 
 class DATAHandler:
     @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    def handle_DATA(self, envelope):
         return '599 Not today'
 
 

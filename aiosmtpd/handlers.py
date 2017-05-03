@@ -66,7 +66,7 @@ class Debugging:
             print(line, file=self.stream)
 
     @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    def handle_DATA(self, envelope):
         print('---------- MESSAGE FOLLOWS ----------', file=self.stream)
         # Yes, actually test for truthiness since it's possible for either the
         # keywords to be missing, or for their values to be empty lists.
@@ -81,7 +81,7 @@ class Debugging:
             add_separator = True
         if add_separator:
             print(file=self.stream)
-        self._print_message_content(session.peer, envelope.content)
+        self._print_message_content(envelope.session.peer, envelope.content)
         print('------------ END MESSAGE ------------', file=self.stream)
         return '250 OK'
 
@@ -93,7 +93,7 @@ class Proxy:
         self._port = remote_port
 
     @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    def handle_DATA(self, envelope):
         if isinstance(envelope.content, str):
             content = envelope.original_content
         else:
@@ -107,7 +107,7 @@ class Proxy:
                 ending = line
                 break
             i += 1
-        peer = session.peer[0].encode('ascii')
+        peer = envelope.session.peer[0].encode('ascii')
         # XXX Python 3.4 does not support %-interpolation for bytes objects.
         lines.insert(i, b'X-Peer: ' + peer + ending)
         data = EMPTYBYTES.join(lines)
@@ -155,12 +155,12 @@ class Message:
         self.message_class = message_class
 
     @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
-        envelope = self.prepare_message(session, envelope)
+    def handle_DATA(self, envelope):
+        envelope = self.prepare_message(envelope)
         self.handle_message(envelope)
         return '250 OK'
 
-    def prepare_message(self, session, envelope):
+    def prepare_message(self, envelope):
         # If the server was created with decode_data True, then data will be a
         # str, otherwise it will be bytes.
         data = envelope.content
@@ -170,7 +170,7 @@ class Message:
             assert isinstance(data, str), (
               'Expected str or bytes, got {}'.format(type(data)))
             message = message_from_string(data, self.message_class)
-        message['X-Peer'] = str(session.peer)
+        message['X-Peer'] = str(envelope.session.peer)
         message['X-MailFrom'] = envelope.mail_from
         message['X-RcptTo'] = COMMASPACE.join(envelope.rcpt_tos)
         return message
@@ -186,8 +186,8 @@ class AsyncMessage(Message):
         self.loop = loop or asyncio.get_event_loop()
 
     @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
-        message = self.prepare_message(session, envelope)
+    def handle_DATA(self, envelope):
+        message = self.prepare_message(envelope)
         yield from self.handle_message(message)
         return '250 OK'
 

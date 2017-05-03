@@ -120,29 +120,29 @@ Some methods take additional arguments.
 
 The following hooks are currently defined:
 
-``handle_HELO(server, session, envelope, hostname)``
+``handle_HELO(server, envelope, hostname)``
     Called during ``HELO``.  The ``hostname`` argument is the host name given
     by the client in the ``HELO`` command.  If implemented, this hook must
-    also set the ``session.host_name`` attribute.
+    also set the ``envelope.session.host_name`` attribute.
 
-``handle_EHLO(server, session, envelope, hostname)``
+``handle_EHLO(server, envelope, hostname)``
     Called during ``EHLO``.  The ``hostname`` argument is the host name given
     by the client in the ``EHLO`` command.  If implemented, this hook must
-    also set the ``session.host_name`` attribute.  This hook may push
+    also set the ``envelope.session.host_name`` attribute.  This hook may push
     additional ``250-<command>`` responses to the client by yielding from
     ``server.push(status)`` before returning ``250 OK`` as the final response.
 
-``handle_NOOP(server, session, envelope)``
+``handle_NOOP(server, envelope)``
     Called during ``NOOP``.
 
-``handle_QUIT(server, session, envelope)``
+``handle_QUIT(server, envelope)``
     Called during ``QUIT``.
 
-``handle_VRFY(server, session, envelope, address)``
+``handle_VRFY(server, envelope, address)``
     Called during ``VRFY``.  The ``address`` argument is the parsed email
     address given by the client in the ``VRFY`` command.
 
-``handle_MAIL(server, session, envelope, address, mail_options)``
+``handle_MAIL(server, envelope, address, mail_options)``
     Called during ``MAIL FROM``.  The ``address`` argument is the parsed email
     address given by the client in the ``MAIL FROM`` command, and
     ``mail_options`` are any additional ESMTP mail options providing by the
@@ -150,7 +150,7 @@ The following hooks are currently defined:
     ``envelope.mail_from`` attribute and it may extend
     ``envelope.mail_options`` (which is always a Python list).
 
-``handle_RCPT(server, session, envelope, address, rcpt_options)``
+``handle_RCPT(server, envelope, address, rcpt_options)``
     Called during ``RCPT TO``.  The ``address`` argument is the parsed email
     address given by the client in the ``RCPT TO`` command, and
     ``rcpt_options`` are any additional ESMTP recipient options providing by
@@ -158,10 +158,10 @@ The following hooks are currently defined:
     ``envelope.rcpt_tos`` and may extend ``envelope.rcpt_options`` (both of
     which are always Python lists).
 
-``handle_RSET(server, session, envelope)``
+``handle_RSET(server, envelope)``
     Called during ``RSET``.
 
-``handle_DATA(server, session, envelope)``
+``handle_DATA(server, envelope)``
     Called during ``DATA`` after the entire message (`"SMTP content"
     <https://tools.ietf.org/html/rfc5321#section-2.3.9>`_ as described in
     RFC 5321) has been received.  The content is available on the ``envelope``
@@ -179,7 +179,7 @@ In addition to the SMTP command hooks, the following hooks can also be
 implemented by handlers.  These have a different APIs, and are called
 synchronously.
 
-``handle_STARTTLS(server, session, envelope)``
+``handle_STARTTLS(server, session)``
     If implemented, and if SSL is supported, this method gets called
     during the TLS handshake phase of ``connection_made()``.  It should return
     True if the handshake succeeded, and False otherwise.
@@ -266,6 +266,9 @@ Envelope
     Defaulting to the empty list, this attribute will contain the list of any
     recipient options provided by the client, such as those passed in by `the
     smtplib client`_.
+
+``session``
+    Link to Session instance.
 
 
 .. _peername: https://docs.python.org/3/library/asyncio-protocol.html?highlight=peername#asyncio.BaseTransport.get_extra_info
