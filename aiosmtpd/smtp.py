@@ -280,7 +280,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                     yield from self.push(status)
                 except Exception as error:
                     try:
-                        log.exception('Exception in handle_exception')
+                        log.exception('Exception in handle_exception()')
                         status = '500 Error: ({}) {}'.format(
                             error.__class__.__name__, str(error))
                     except Exception:
