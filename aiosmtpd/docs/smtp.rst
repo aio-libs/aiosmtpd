@@ -187,9 +187,10 @@ synchronously.
 ``handle_exception(error)``
     If implemented, this method is called when any error occurs during the
     handling of a connection (e.g. if an ``smtp_<command>()`` method raises an
-    exception).  The exception object is passed in.  Note that as part of the
-    ``SMTP`` dialog, if an exception occurs, a 500 code will be returned to
-    the client.
+    exception).  The exception object is passed in.  This method *must* return
+    a status string, such as ``'542 Internal server error'``.  If the method
+    returns None or raises an exception, an exception will be logged, and a 500
+    code will be returned to the client.
 
 
 .. _sessions_and_envelopes:
