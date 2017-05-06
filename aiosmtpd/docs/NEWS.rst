@@ -13,6 +13,12 @@
   ``decode_data`` argument.
 * The command line script is now installed as ``aiosmtpd`` instead of
   ``smtpd``.
+* The ``SMTP`` class now does a better job of handling Unicode, when the
+  client does not claim to support ``SMTPUTF8`` but sends non-ASCII anyway.
+  The server forces ASCII-only handling when ``enable_SMTPUTF8=False`` (the
+  default) is passed to the constructor.  The command line arguments
+  ``decode_data=True`` and ``enable_SMTPUTF8=True`` are no longer mutually
+  exclusive.
 
 1.0a5 (2017-04-06)
 ==================
