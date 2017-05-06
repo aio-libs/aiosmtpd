@@ -18,7 +18,7 @@ else:                                               # pragma: nocover
     _has_ssl = sslproto and hasattr(ssl, 'MemoryBIO')
 
 
-__version__ = '1.0a4+'
+__version__ = '1.0a5+'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
@@ -44,9 +44,17 @@ class Envelope:
     def __init__(self):
         self.mail_from = None
         self.mail_options = []
+        self.smtp_utf8 = False
         self.content = None
         self.rcpt_tos = []
         self.rcpt_options = []
+
+
+# This is here to enable debugging output when the -E option is given to the
+# unit test suite.  In that case, this function is mocked to set the debug
+# level on the loop (as if PYTHONASYNCIODEBUG=1 were set).
+def make_loop():
+    return asyncio.get_event_loop()
 
 
 @public
@@ -65,7 +73,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  require_starttls=False,
                  loop=None):
         self.__ident__ = __ident__
-        self.loop = loop if loop else asyncio.get_event_loop()
+        self.loop = loop if loop else make_loop()
         super().__init__(
             asyncio.StreamReader(loop=self.loop),
             client_connected_cb=self._client_connected_cb,
@@ -73,12 +81,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.event_handler = handler
         self.data_size_limit = data_size_limit
         self.enable_SMTPUTF8 = enable_SMTPUTF8
-        if enable_SMTPUTF8:
-            if decode_data:
-                raise ValueError(
-                    "decode_data and enable_SMTPUTF8 cannot be set to "
-                    "True at the same time")
-            decode_data = False
         self._decode_data = decode_data
         self.command_size_limits.clear()
         if hostname:
@@ -92,17 +94,26 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.tls_context.check_hostname = False
             self.tls_context.verify_mode = ssl.CERT_NONE
         self.require_starttls = tls_context and require_starttls
-        self._tls_handshake_failed = False
+        self._tls_handshake_okay = True
         self._tls_protocol = None
         self.session = None
         self.envelope = None
         self.transport = None
+        self._handler_coroutine = None
 
     def _create_session(self):
         return Session(self.loop)
 
     def _create_envelope(self):
         return Envelope()
+
+    @asyncio.coroutine
+    def _call_handler_hook(self, command, *args):
+        hook = getattr(self.event_handler, 'handle_' + command, None)
+        if hook is None:
+            return MISSING
+        status = yield from hook(self, self.session, self.envelope, *args)
+        return status
 
     @property
     def max_command_size_limit(self):
@@ -123,29 +134,28 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._reader._transport = transport
             self._writer._transport = transport
             self.transport = transport
-            self.seen_greeting = ''
             # Do SSL certificate checking as rfc3207 part 4.1 says.
             # Why _extra is protected attribute?
             self.session.ssl = self._tls_protocol._extra
-            if hasattr(self.event_handler, 'handle_tls_handshake'):
-                auth = self.event_handler.handle_tls_handshake(self.session)
-                self._tls_handshake_failed = not auth
+            handler = getattr(self.event_handler, 'handle_STARTTLS', None)
+            if handler is None:
+                self._tls_handshake_okay = True
             else:
-                self._tls_handshake_failed = False
-            self._over_ssl = True
+                self._tls_handshake_okay = handler(
+                    self, self.session, self.envelope)
         else:
             super().connection_made(transport)
             self.transport = transport
-            log.info('Peer: %s', repr(self.session.peer))
+            log.info('Peer: %r', self.session.peer)
             # Process the client's requests.
-            self._connection_closed = False
             self._handler_coroutine = self.loop.create_task(
                 self._handle_client())
 
-    def connection_lost(self, exc):
-        super().connection_lost(exc)
+    def connection_lost(self, error):
+        log.info('%r connection lost', self.session.peer)
+        super().connection_lost(error)
         self._writer.close()
-        self._connection_closed = True
+        self.transport = None
 
     def _client_connected_cb(self, reader, writer):
         # This is redundant since we subclass StreamReaderProtocol, but I like
@@ -154,13 +164,14 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._writer = writer
 
     def eof_received(self):
+        log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
-        return super().eof_received()
+        if self.transport is not None:                        # pragma: nopy34
+            return super().eof_received()
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
         self.envelope = self._create_envelope()
-        self.require_SMTPUTF8 = False
 
     def _set_rset_state(self):
         """Reset all state variables except the greeting."""
@@ -169,7 +180,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     @asyncio.coroutine
     def push(self, status):
         response = bytes(
-            status + '\r\n', 'utf-8' if self.require_SMTPUTF8 else 'ascii')
+            status + '\r\n', 'utf-8' if self.enable_SMTPUTF8 else 'ascii')
         self._writer.write(response)
         log.debug(response)
         yield from self._writer.drain()
@@ -186,42 +197,66 @@ class SMTP(asyncio.StreamReaderProtocol):
             return status
 
     @asyncio.coroutine
-    def _call_handler_hook(self, command, *args):
-        hook = getattr(self.event_handler, 'handle_' + command, None)
-        if hook is None:
-            return MISSING
-        status = yield from hook(self, self.session, self.envelope, *args)
-        return status
-
-    @asyncio.coroutine
     def _handle_client(self):
-        log.info('handling connection')
+        log.info('%r handling connection', self.session.peer)
         yield from self.push(
             '220 {} {}'.format(self.hostname, self.__ident__))
-        while not self._connection_closed:          # pragma: no branch
+        while self.transport is not None:                  # pragma: no branch
             # XXX Put the line limit stuff into the StreamReader?
-            line = yield from self._reader.readline()
+            try:
+                line = yield from self._reader.readline()
+                log.debug('_handle_client readline: %s', line)
+            except (ConnectionResetError, asyncio.CancelledError) as error:
+                # The connection got reset during the DATA command.
+                log.info('Connection lost during _handle_client()')
+                self.connection_lost(error)
+                return
             try:
                 # XXX this rstrip may not completely preserve old behavior.
-                line = line.decode('utf-8').rstrip('\r\n')
-                log.info('Data: %r', line)
+                line = line.rstrip(b'\r\n')
+                log.info('%r Data: %s', self.session.peer, line)
                 if not line:
                     yield from self.push('500 Error: bad syntax')
                     continue
-                i = line.find(' ')
+                i = line.find(b' ')
+                # Decode to string only the command name part, which must be
+                # ASCII as per RFC.  If there is an argument, it is decoded to
+                # UTF-8/surrogateescape so that non-UTF-8 data can be
+                # re-encoded back to the original bytes when the SMTP command
+                # is handled.
                 if i < 0:
-                    command = line.upper()
+                    command = line.upper().decode(encoding='ascii')
                     arg = None
                 else:
-                    command = line[:i].upper()
+                    command = line[:i].upper().decode(encoding='ascii')
                     arg = line[i+1:].strip()
+                    # Remote SMTP servers can send us UTF-8 content despite
+                    # whether they've declared to do so or not.  Some old
+                    # servers can send 8-bit data.  Use surrogateescape so
+                    # that the fidelity of the decoding is preserved, and the
+                    # original bytes can be retrieved.
+                    if self.enable_SMTPUTF8:
+                        arg = str(
+                            arg, encoding='utf-8', errors='surrogateescape')
+                    else:
+                        try:
+                            arg = str(arg, encoding='ascii', errors='strict')
+                        except UnicodeDecodeError:
+                            # This happens if enable_SMTPUTF8 is false, meaning
+                            # that the server explicitly does not want to
+                            # accept non-ASCII, but the client ignores that and
+                            # sends non-ASCII anyway.
+                            yield from self.push(
+                                '500 Error: strict ASCII mode')
+                            # Should we yield from self.handle_exception()?
+                            continue
                 max_sz = (self.command_size_limits[command]
                           if self.session.extended_smtp
                           else self.command_size_limit)
                 if len(line) > max_sz:
                     yield from self.push('500 Error: line too long')
                     continue
-                if (self._tls_handshake_failed
+                if (not self._tls_handshake_okay
                         and command != 'QUIT'):             # pragma: nossl
                     yield from self.push(
                         '554 Command refused due to lack of security')
@@ -325,7 +360,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @asyncio.coroutine
     def smtp_STARTTLS(self, arg):                   # pragma: nossl
-        log.info('===> STARTTLS')
+        log.info('%r STARTTLS', self.session.peer)
         if arg:
             yield from self.push('501 Syntax: STARTTLS')
             return
@@ -465,13 +500,14 @@ class SMTP(asyncio.StreamReaderProtocol):
                 yield from self.push(
                     '501 Error: BODY can only be one of 7BIT, 8BITMIME')
                 return
-        if self.enable_SMTPUTF8:
-            smtputf8 = params.pop('SMTPUTF8', False)
-            if smtputf8 is True:
-                self.require_SMTPUTF8 = True
-            elif smtputf8 is not False:
-                yield from self.push('501 Error: SMTPUTF8 takes no arguments')
-                return
+        smtputf8 = params.pop('SMTPUTF8', False)
+        if not isinstance(smtputf8, bool):
+            yield from self.push('501 Error: SMTPUTF8 takes no arguments')
+            return
+        if smtputf8 and not self.enable_SMTPUTF8:
+            yield from self.push('501 Error: SMTPUTF8 disabled')
+            return
+        self.envelope.smtp_utf8 = smtputf8
         size = params.pop('SIZE', None)
         if size:
             if isinstance(size, bool) or not size.isdigit():
@@ -492,7 +528,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.envelope.mail_from = address
             self.envelope.mail_options.extend(mail_options)
             status = '250 OK'
-        log.info('sender: %s', address)
+        log.info('%r sender: %s', self.session.peer, address)
         yield from self.push(status)
 
     @asyncio.coroutine
@@ -534,7 +570,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.envelope.rcpt_tos.append(address)
             self.envelope.rcpt_options.extend(rcpt_options)
             status = '250 OK'
-        log.info('recip: %s', address)
+        log.info('%r recip: %s', self.session.peer, address)
         yield from self.push(status)
 
     @asyncio.coroutine
@@ -565,8 +601,15 @@ class SMTP(asyncio.StreamReaderProtocol):
         data = []
         num_bytes = 0
         size_exceeded = False
-        while not self._connection_closed:          # pragma: no branch
-            line = yield from self._reader.readline()
+        while self.transport is not None:                  # pragma: no branch
+            try:
+                line = yield from self._reader.readline()
+                log.debug('DATA readline: %s', line)
+            except (ConnectionResetError, asyncio.CancelledError) as error:
+                # The connection got reset during the DATA command.
+                log.info('Connection lost during DATA')
+                self.connection_lost(error)
+                return
             if line == b'.\r\n':
                 if data:
                     data[-1] = data[-1].rstrip(b'\r\n')
@@ -590,7 +633,18 @@ class SMTP(asyncio.StreamReaderProtocol):
                 data[i] = text[1:]
         content = original_content = EMPTYBYTES.join(data)
         if self._decode_data:
-            content = original_content.decode('utf-8')
+            if self.enable_SMTPUTF8:
+                content = original_content.decode(
+                    'utf-8', errors='surrogateescape')
+            else:
+                try:
+                    content = original_content.decode('ascii', errors='strict')
+                except UnicodeDecodeError:
+                    # This happens if enable_smtputf8 is false, meaning that
+                    # the server explicitly does not want to accept non-ascii,
+                    # but the client ignores that and sends non-ascii anyway.
+                    yield from self.push('500 Error: strict ASCII mode')
+                    return
         self.envelope.content = content
         self.envelope.original_content = original_content
         # Call the new API first if it's implemented.

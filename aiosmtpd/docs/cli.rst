@@ -22,7 +22,7 @@ greeting::
     Trying 127.0.0.1...
     Connected to localhost.
     Escape character is '^]'.
-    220 subdivisions Python SMTP 1.0a4+
+    220 subdivisions Python SMTP ...
     QUIT
     221 Bye
     Connection closed by foreign host.
@@ -30,10 +30,10 @@ greeting::
 Of course, you could use Python's smtplib_ module, or any other SMTP client to
 talk to the server.  Just hit control-C at the server to stop it.
 
-The entry point may also be installed as the ``smtpd`` command, so this is
+The entry point may also be installed as the ``aiosmtpd`` command, so this is
 equivalent to the above ``python3`` invocation::
 
-    $ smtpd -n
+    $ aiosmtpd -n
 
 
 Options

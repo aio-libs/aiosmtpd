@@ -2,7 +2,19 @@
  NEWS for aiosmtpd
 ===================
 
-1.0a5 (201X-XX-XX)
+1.0a6 (20XX-XX-XX)
+==================
+* The connection peer is displayed in all INFO level logging.
+* When running the test suite, you can include a ``-E`` option after the
+  ``--`` separator to boost the debugging output.
+* The main SMTP readline loops are now more robust against connection resets
+  and mid-read EOFs.  (Closes #62)
+* ``Proxy`` handlers work with ``SMTP`` servers regardless of the value of the
+  ``decode_data`` argument.
+* The command line script is now installed as ``aiosmtpd`` instead of
+  ``smtpd``.
+
+1.0a5 (2017-04-06)
 ==================
 * A new handler hook API has been added which provides more flexibility but
   requires more responsibility (e.g. hooks must return a string status).
@@ -14,9 +26,15 @@
   and ``rcpt_options`` (although the latter is still not support in ``SMTP``).
 * ``DATA`` method now respects original line endings, and passing size limits
   is now handled better.  Given by Konstantin Volkov.
-* Controller objects now have an optional timeout argument used to wait for
-  the server to become ready.  This can also be overridden with the
-  environment variable ``AIOSMTPD_CONTROLLER_TIMEOUT``. (Closes #35)
+* The ``Controller`` class has two new optional keyword arguments.
+
+  - ``ready_timeout`` specifies a timeout in seconds that can be used to limit
+    the amount of time it waits for the server to become ready.  This can also
+    be overridden with the environment variable
+    ``AIOSMTPD_CONTROLLER_TIMEOUT``. (Closes #35)
+  - ``enable_SMTPUTF8`` is passed through to the ``SMTP`` constructor in the
+    default factory.  If you override ``Controller.factory()`` you can pass
+    ``self.enable_SMTPUTF8`` yourself.
 * Handlers can define a ``handle_tls_handshake()`` method, which takes a
   session object, and is called if SSL is enabled during the making of the
   connection.  (Closes #48)
