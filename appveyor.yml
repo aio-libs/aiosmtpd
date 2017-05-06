@@ -1,0 +1,29 @@
+environment:
+  PYTHONASYNCIODEBUG: "1"
+
+  matrix:
+
+    # For Python versions available on Appveyor, see
+    # http://www.appveyor.com/docs/installed-software#python
+
+    - PYTHON: "C:\\Python34"
+      INTERP: "py34"
+    - PYTHON: "C:\\Python35"
+      INTERP: "py35"
+    - PYTHON: "C:\\Python34-x64"
+      INTERP: "py34"
+      DISTUTILS_USE_SDK: "1"
+    - PYTHON: "C:\\Python35-x64"
+      INTERP: "py35"
+    - PYTHON: "C:\\Python36-x64"
+      INTERP: "py36"
+
+install:
+  - "%PYTHON%\\python.exe -m pip install tox"
+  - "%PYTHON%\\python.exe setup.py egg_info"
+  - "%PYTHON%\\python.exe -m pip install -r aiosmtpd.egg-info/requires.txt"
+
+build: off
+
+test_script:
+  - "%PYTHON%\\python.exe -m tox -e %INTERP%-nocov,%INTERP%-cov,qa,docs"
