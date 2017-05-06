@@ -1,5 +1,6 @@
 environment:
   PYTHONASYNCIODEBUG: "1"
+  PLATFORM: "mswin"
 
   matrix:
 
