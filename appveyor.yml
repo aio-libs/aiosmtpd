@@ -26,4 +26,4 @@ install:
 build: off
 
 test_script:
-  - "%PYTHON%\\python.exe -m tox -e %INTERP%-nocov,%INTERP%-cov,qa,docs"
+  - "%PYTHON%\\python.exe -m tox -e %INTERP%-nocov,%INTERP%-cov"
