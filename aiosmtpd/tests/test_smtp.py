@@ -19,7 +19,7 @@ BCRLF = b'\r\n'
 
 class DecodingController(Controller):
     def factory(self):
-        return Server(self.handler, decode_data=True)
+        return Server(self.handler, decode_data=True, enable_SMTPUTF8=True)
 
 
 class NoDecodeController(Controller):
@@ -35,7 +35,7 @@ class ReceivingHandler:
 
     @asyncio.coroutine
     def handle_DATA(self, server, session, envelope):
-        self.box.append(envelope.content)
+        self.box.append(envelope)
         return '250 OK'
 
 
@@ -46,6 +46,11 @@ class SizedController(Controller):
 
     def factory(self):
         return Server(self.handler, data_size_limit=self.size)
+
+
+class StrictASCIIController(Controller):
+    def factory(self):
+        return Server(self.handler, enable_SMTPUTF8=False, decode_data=True)
 
 
 class CustomHostnameController(Controller):
@@ -121,7 +126,7 @@ class TestProtocol(unittest.TestCase):
         except asyncio.CancelledError:
             pass
         self.assertEqual(len(handler.box), 1)
-        self.assertEqual(handler.box[0], data)
+        self.assertEqual(handler.box[0].content, data)
 
     def test_empty_email(self):
         handler = ReceivingHandler()
@@ -140,7 +145,7 @@ class TestProtocol(unittest.TestCase):
             pass
         self.assertEqual(self.responses[5], b'250 OK\r\n')
         self.assertEqual(len(handler.box), 1)
-        self.assertEqual(handler.box[0], b'')
+        self.assertEqual(handler.box[0].content, b'')
 
 
 class TestSMTP(unittest.TestCase):
@@ -179,7 +184,8 @@ class TestSMTP(unittest.TestCase):
             lines = response.splitlines()
             self.assertEqual(lines[0], bytes(socket.getfqdn(), 'utf-8'))
             self.assertEqual(lines[1], b'SIZE 33554432')
-            self.assertEqual(lines[2], b'HELP')
+            self.assertEqual(lines[2], b'SMTPUTF8')
+            self.assertEqual(lines[3], b'HELP')
 
     def test_ehlo_duplicate(self):
         with SMTP(*self.address) as client:
@@ -611,15 +617,31 @@ class TestSMTPWithController(unittest.TestCase):
                 b'Error: message size exceeds fixed maximum message size')
 
     def test_mail_with_compatible_smtputf8(self):
-        controller = Controller(Sink())
+        handler = ReceivingHandler()
+        controller = Controller(handler)
         controller.start()
         self.addCleanup(controller.stop)
+        recipient = 'bart\xCB@example.com'
+        sender = 'anne\xCB@example.com'
         with SMTP(controller.hostname, controller.port) as client:
             client.ehlo('example.com')
-            code, response = client.docmd(
-                'MAIL FROM: <anne@example.com> SMTPUTF8')
+            client.send(bytes(
+                'MAIL FROM: <' + sender + '> SMTPUTF8\r\n',
+                encoding='utf-8'))
+            code, response = client.getreply()
             self.assertEqual(code, 250)
             self.assertEqual(response, b'OK')
+            client.send(bytes(
+                'RCPT TO: <' + recipient + '>\r\n',
+                encoding='utf-8'))
+            code, response = client.getreply()
+            self.assertEqual(code, 250)
+            self.assertEqual(response, b'OK')
+            code, response = client.data('')
+            self.assertEqual(code, 250)
+            self.assertEqual(response, b'OK')
+        self.assertEqual(handler.box[0].rcpt_tos[0], recipient)
+        self.assertEqual(handler.box[0].mail_from, sender)
 
     def test_mail_with_unrequited_smtputf8(self):
         controller = Controller(Sink())
@@ -706,7 +728,7 @@ Testing
             mail = CRLF.join(['Test', '.', 'mail'])
             client.sendmail('anne@example.com', ['bart@example.com'], mail)
             self.assertEqual(len(handler.box), 1)
-            self.assertEqual(handler.box[0], 'Test\r\n.\r\nmail')
+            self.assertEqual(handler.box[0].content, 'Test\r\n.\r\nmail')
 
     def test_unexpected_errors(self):
         handler = ErroringHandler()
@@ -742,6 +764,32 @@ Testing
         # handler.error did not change because the handler does not have a
         # handle_exception() method.
         self.assertIsNone(handler.error)
+
+    def test_bad_encodings(self):
+        handler = ReceivingHandler()
+        controller = DecodingController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail_from = b'anne\xFF@example.com'
+            mail_to = b'bart\xFF@example.com'
+            client.ehlo('test')
+            client.send(b'MAIL FROM:' + mail_from + b'\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 250)
+            client.send(b'RCPT TO:' + mail_to + b'\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 250)
+            client.data('Test mail')
+            self.assertEqual(len(handler.box), 1)
+            envelope = handler.box[0]
+            mail_from2 = envelope.mail_from.encode(
+                'utf-8', errors='surrogateescape')
+            self.assertEqual(mail_from2, mail_from)
+            mail_to2 = envelope.rcpt_tos[0].encode(
+                'utf-8', errors='surrogateescape')
+            self.assertEqual(mail_to2, mail_to)
 
 
 class TestCustomizations(unittest.TestCase):
@@ -844,3 +892,49 @@ class TestClientCrash(unittest.TestCase):
             # Don't include the CRLF.
             client.send('FOO')
             client.close()
+
+
+class TestStrictASCII(unittest.TestCase):
+    def setUp(self):
+        controller = StrictASCIIController(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_ehlo(self):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            lines = response.splitlines()
+            self.assertNotIn(b'SMTPUTF8', lines)
+
+    def test_bad_encoded_param(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            client.send(b'MAIL FROM: <anne\xFF@example.com>\r\n')
+            code, response = client.getreply()
+            self.assertEqual(code, 500)
+            self.assertIn(b'Error: strict ASCII mode', response)
+
+    def test_mail_param(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd(
+                'MAIL FROM: <anne@example.com> SMTPUTF8')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Error: SMTPUTF8 disabled')
+
+    def test_data(self):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            with self.assertRaises(SMTPDataError) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], b"""\
+From: anne@example.com
+To: bart@example.com
+Subject: A test
+
+Testing\xFF
+""")
+            self.assertEqual(cm.exception.smtp_code, 500)
+            self.assertIn(b'Error: strict ASCII mode', cm.exception.smtp_error)

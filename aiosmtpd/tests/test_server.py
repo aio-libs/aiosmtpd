@@ -11,12 +11,6 @@ from smtplib import SMTP
 
 
 class TestServer(unittest.TestCase):
-    def test_constructor_contraints(self):
-        # These two arguments cannot both be set.
-        self.assertRaises(ValueError, Server, Sink(),
-                          enable_SMTPUTF8=True,
-                          decode_data=True)
-
     def test_smtp_utf8(self):
         controller = Controller(Sink())
         controller.start()
