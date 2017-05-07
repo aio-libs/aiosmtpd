@@ -102,7 +102,7 @@ def parseargs(args=None):
 def main(args=None):
     parser, args = parseargs(args=args)
 
-    if args.setuid:
+    if args.setuid:  # pragma: nomswin
         if pwd is None:
             print('Cannot import module "pwd"; try running with -n option.',
                   file=sys.stderr)
