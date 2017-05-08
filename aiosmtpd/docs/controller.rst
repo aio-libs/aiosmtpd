@@ -59,9 +59,10 @@ Optional arguments include:
     which case, use this flag).
 
 ``-c CLASSPATH``, ``--class CLASSPATH``
-    Use the given class, as a Python dotted import path, as the handler class
-    for SMTP events.  This class can process received messages and do other
-    actions during the SMTP dialog.  Uses a debugging handler by default.
+    Use the given class, as a Python dotted import path, as the :ref:`handler
+    class <handlers>` for SMTP events.  This class can process received
+    messages and do other actions during the SMTP dialog.  Uses a debugging
+    handler by default.
 
 ``-s SIZE``, ``--size SIZE``
     Restrict the total size of the incoming message to ``SIZE`` number of
