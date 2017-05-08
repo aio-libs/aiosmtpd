@@ -259,6 +259,11 @@ Envelope
     then this attribute will contain the UTF-8 decoded string, otherwise it
     will contain the raw bytes.
 
+``original_content``
+    Defaulting to None, this attribute will contain the contents of the
+    message as provided by the ``DATA`` command.  Unlike the ``content``
+    attribute, this attribute will always contain the raw bytes.
+
 ``rcpt_tos``
     Defaulting to the empty list, this attribute will contain a list of the
     email addresses provided in the ``RCPT TO`` command.
