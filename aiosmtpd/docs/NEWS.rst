@@ -2,7 +2,7 @@
  NEWS for aiosmtpd
 ===================
 
-1.0a6 (20XX-XX-XX)
+1.0b1 (2017-05-07)
 ==================
 * The connection peer is displayed in all INFO level logging.
 * When running the test suite, you can include a ``-E`` option after the
