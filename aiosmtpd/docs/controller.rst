@@ -2,6 +2,12 @@
  Getting started
 =================
 
+Start out by running the SMTP server from the command line to ensure that
+aiosmtpd has been installed correctly. If you want the SMTP server to do
+interesting things instead of just printing incoming mail to the console, you
+need to write a bit of Python code to specify how incoming mail should be
+handled.
+
 .. _cli:
 
 Command line usage
@@ -84,29 +90,36 @@ as supported by the handler class's ``from_cli()`` class method, if provided.
 Programmatic usage
 ==================
 
-The SMTP server can be used in a testing framework via a *controller* which
-runs in a separate thread.  This allows the main thread to run the test
-driver, and information can be passed between the SMTP thread and the main
-thread.
+Custom behavior for the SMTP server is specified via a *handler* which is
+invoked by aiosmtpd when a new message is available.
 
-For example, say you wanted to pass message objects between the SMTP thread
-and the main thread.  Start by implementing a handler which derives from a
-base handler that processes the incoming message data into an email Message
-object.
+For example, say you want to receive email for ``example.com`` and print
+incoming mail data to the console.  Start by implementing a handler as follows::
 
-    >>> from aiosmtpd.handlers import Message
-    >>> handled_message = None
-    >>> class MessageHandler(Message):
-    ...     def handle_message(self, message):
-    ...         global handled_message
-    ...         handled_message = message
+    >>> import asyncio
+    >>> class ExampleHandler:
+    ...     @asyncio.coroutine
+    ...     def handle_RCPT(self, server, session, envelope, address, rcpt_options):
+    ...         if not address.endswith('@example.com'):
+    ...             return '550 not relaying to that domain'
+    ...         envelope.rcpt_tos.append(address)
+    ...         return '250 OK'
+    ...
+    ...     @asyncio.coroutine
+    ...     def handle_DATA(self, server, session, envelope):
+    ...         print('Message from %s' % envelope.mail_from)
+    ...         print('Message for %s' % envelope.rcpt_tos)
+    ...         print('Message data:\n')
+    ...         print(envelope.content.decode('utf8', errors='replace'))
+    ...         print('End of message')
+    ...         return '250 Message accepted for delivery'
 
-Now create a controller instance, passing in the handler, which gets called
-when a new message is available.  Start the controller, which begins accepting
-SMTP connections in the separate thread.
+The SMTP server can be started using a *controller* which runs the SMTP server
+in a separate thread with a dedicated event loop.  Pass the above handler to a
+controller instance and start it::
 
     >>> from aiosmtpd.controller import Controller
-    >>> controller = Controller(MessageHandler())
+    >>> controller = Controller(ExampleHandler())
     >>> controller.start()
 
 The SMTP thread might run into errors during its setup phase; to catch this
@@ -115,11 +128,12 @@ By default the timeout is set to 1 second but can be changed either by using
 the ``AIOSMTPD_CONTROLLER_TIMEOUT`` environment variable or by passing a
 different ``ready_timeout`` duration to the Controller's constructor.
 
-Connect to the server...
+Connect to the server and send a message, which then gets printed by
+``ExampleHandler``.
 
     >>> from smtplib import SMTP
     >>> client = SMTP(controller.hostname, controller.port)
-    >>> client.sendmail('aperson@example.com', ['bperson@example.com'], """\
+    >>> r = client.sendmail('aperson@example.com', ['bperson@example.com'], """\
     ... From: Anne Person <anne@example.com>
     ... To: Bart Person <bart@example.com>
     ... Subject: A test
@@ -127,20 +141,33 @@ Connect to the server...
     ...
     ... Hi Bart, this is Anne.
     ... """)
-    {}
-
-The message was received, and we can print it.
-
-    >>> print(handled_message)
+    Message from aperson@example.com
+    Message for ['bperson@example.com']
+    Message data:
+    <BLANKLINE>
     From: Anne Person <anne@example.com>
     To: Bart Person <bart@example.com>
     Subject: A test
     Message-ID: <ant>
-    X-Peer: ...
-    X-MailFrom: aperson@example.com
-    X-RcptTo: bperson@example.com
     <BLANKLINE>
     Hi Bart, this is Anne.
+    <BLANKLINE>
+    End of message
+
+If we try to send a message to a recipient not inside ``example.com``,
+it is rejected by ``ExampleHandler.handle_RCPT()``::
+
+    >>> r = client.sendmail('aperson@example.com', ['cperson@example.net'], """\
+    ... From: Anne Person <anne@example.com>
+    ... To: Chris Person <chris@example.net>
+    ... Subject: Another test
+    ... Message-ID: <another>
+    ...
+    ... Hi Chris, this is Anne.
+    ... """)
+    Traceback (most recent call last):
+    ...
+    smtplib.SMTPRecipientsRefused: {'cperson@example.net': (550, b'not relaying to that domain')}
 
 When you're done with the SMTP server, stop it via the controller.
 
@@ -162,6 +189,9 @@ data into an instance of ``email.message.Message``.
 For a full overview of the methods that handler classes may implement,
 see :ref:`Handler hooks <hooks>`.
 
+In order to extend the protocol by e.g. adding support for custom SMTP
+commands, see :ref:`The SMTP class <smtp>`.
+
 
 Enable SMTPUTF8
 ---------------
@@ -181,10 +211,10 @@ argument into the constructor::
     >>> code
     250
 
-The EHLO response does not include the ``SMTPUTF8`` ESMTP option.  We have to
-skip the server host name line, since that's variable.
+The EHLO response does not include the ``SMTPUTF8`` ESMTP option.
 
     >>> lines = message.decode('utf-8').splitlines()
+    >>> # Don't print the server host name line, since that's variable.
     >>> for line in lines[1:]:
     ...     print(line)
     SIZE 33554432
