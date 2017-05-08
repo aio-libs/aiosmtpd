@@ -18,7 +18,7 @@ obvious that an asyncio-based version of the SMTP and related protocols are
 needed for Python 3.  This project brings together several highly experienced
 Python developers collaborating on this reimplementation.
 
-This package provides such a implementation of both the SMTP and LMTP
+This package provides such an implementation of both the SMTP and LMTP
 protocols.
 
 
