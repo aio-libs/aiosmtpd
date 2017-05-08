@@ -19,6 +19,7 @@
   default) is passed to the constructor.  The command line arguments
   ``decode_data=True`` and ``enable_SMTPUTF8=True`` are no longer mutually
   exclusive.
+* Officially support Windows.  (Closes #76)
 
 1.0a5 (2017-04-06)
 ==================
