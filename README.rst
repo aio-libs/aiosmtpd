@@ -13,7 +13,7 @@ difficult APIs to work with, understand, extend, and fix.
 
 With the introduction of the
 `asyncio <https://docs.python.org/3/library/asyncio.html>`__ module in Python
-3.4, a much better way of doing asynchronous IO is now available.  It seems
+3.4, a much better way of doing asynchronous I/O is now available.  It seems
 obvious that an asyncio-based version of the SMTP and related protocols are
 needed for Python 3.  This project brings together several highly experienced
 Python developers collaborating on this reimplementation.
@@ -27,8 +27,8 @@ Requirements
 
 You need at least Python 3.4 to use this library.  Python 3.3 might work if
 you install the standalone `asyncio <https://pypi.python.org/pypi/asyncio>`__
-library, but this combination is untested.  Python 3.5 or newer is required
-for SSL support.
+library, but this combination is untested and unsupported.  Python 3.5 or
+newer is required for SSL support.  Both Windows and *nix are supported.
 
 
 License
