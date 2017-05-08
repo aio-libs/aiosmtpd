@@ -46,6 +46,7 @@ class Envelope:
         self.mail_options = []
         self.smtp_utf8 = False
         self.content = None
+        self.original_content = None
         self.rcpt_tos = []
         self.rcpt_options = []
 
