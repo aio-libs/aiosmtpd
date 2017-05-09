@@ -101,6 +101,7 @@ skip the server host name line, since that's variable.
     ...     print(line)
     SIZE 33554432
     8BITMIME
+    AUTH PLAIN
     HELP
 
     >>> controller.stop()

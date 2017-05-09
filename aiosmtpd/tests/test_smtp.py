@@ -38,7 +38,7 @@ class NoDecodeController(Controller):
 
 class RequiredAuthDecodingController(Controller):
     def factory(self):
-        return Server(self.handler, decode_data=True, enable_SMTPUTF8=True
+        return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
                       auth_require_tls=False, auth_method=authenticator,
                       auth_required=True)
 
@@ -235,8 +235,8 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(lines[0], bytes(socket.getfqdn(), 'utf-8'))
             self.assertEqual(lines[1], b'SIZE 33554432')
             self.assertEqual(lines[2], b'SMTPUTF8')
-            self.assertEqual(lines[2], b'AUTH PLAIN')
-            self.assertEqual(lines[3], b'HELP')
+            self.assertEqual(lines[3], b'AUTH PLAIN')
+            self.assertEqual(lines[4], b'HELP')
 
     def test_ehlo_duplicate(self):
         with SMTP(*self.address) as client:

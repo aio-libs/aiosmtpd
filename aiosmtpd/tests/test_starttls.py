@@ -59,7 +59,7 @@ class TLSController(Controller):
             tls_context=get_tls_context())
 
 
-class RequireTLSAuthUTF8Controller(Controller):
+class RequireTLSAuthDecodingController(Controller):
     def factory(self):
         return SMTPProtocol(
             self.handler,
@@ -227,7 +227,7 @@ class TestRequireTLS(unittest.TestCase):
 
 class TestRequireTLSAUTH(unittest.TestCase):
     def setUp(self):
-        controller = RequireTLSAuthUTF8Controller(Sink)
+        controller = RequireTLSAuthDecodingController(Sink)
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
