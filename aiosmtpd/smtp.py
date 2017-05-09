@@ -130,7 +130,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.session.peer = transport.get_extra_info('peername')
         is_instance = (_has_ssl and
                        isinstance(transport, sslproto._SSLProtocolTransport))
-        if self.transport is not None and is_instance:   # pragma: nossl
+        if self.transport is not None and is_instance:   # pragma: nopy34
             # It is STARTTLS connection over normal connection.
             self._reader._transport = transport
             self._writer._transport = transport
@@ -201,7 +201,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         log.info('%r handling connection', self.session.peer)
         yield from self.push(
             '220 {} {}'.format(self.hostname, self.__ident__))
-        while self.transport is not None:                  # pragma: no branch
+        while self.transport is not None:
             # XXX Put the line limit stuff into the StreamReader?
             try:
                 line = yield from self._reader.readline()
@@ -257,7 +257,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                     yield from self.push('500 Error: line too long')
                     continue
                 if (not self._tls_handshake_okay
-                        and command != 'QUIT'):             # pragma: nossl
+                        and command != 'QUIT'):             # pragma: nopy34
                     yield from self.push(
                         '554 Command refused due to lack of security')
                     continue
@@ -328,7 +328,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.command_size_limits['MAIL'] += 10
         if (self.tls_context and
                 not self._tls_protocol and
-                _has_ssl):                        # pragma: nossl
+                _has_ssl):                        # pragma: nopy34
             yield from self.push('250-STARTTLS')
         if hasattr(self, 'ehlo_hook'):
             warn('Use handler.handle_EHLO() instead of .ehlo_hook()',
@@ -359,7 +359,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.transport.close()
 
     @asyncio.coroutine
-    def smtp_STARTTLS(self, arg):                   # pragma: nossl
+    def smtp_STARTTLS(self, arg):                   # pragma: nopy34
         log.info('%r STARTTLS', self.session.peer)
         if arg:
             yield from self.push('501 Syntax: STARTTLS')
@@ -601,7 +601,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         data = []
         num_bytes = 0
         size_exceeded = False
-        while self.transport is not None:                  # pragma: no branch
+        while self.transport is not None:           # pragma: nobranch
             try:
                 line = yield from self._reader.readline()
                 log.debug('DATA readline: %s', line)
