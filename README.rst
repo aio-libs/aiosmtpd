@@ -47,8 +47,10 @@ As of 2016-07-14, aiosmtpd has been put under the `aio-libs
 * Report bugs at: https://github.com/aio-libs/aiosmtpd/issues
 * Git clone: https://github.com/aio-libs/aiosmtpd.git
 * Documentation: http://aiosmtpd.readthedocs.io/
+* StackOverflow: https://stackoverflow.com/questions/tagged/aiosmtpd
 
 The best way to contact the developers is through the GitHub links above.
+You can also request help by submitting a question on StackOverflow.
 
 
 Building
