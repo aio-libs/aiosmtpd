@@ -105,6 +105,7 @@ Contents
    aiosmtpd/docs/controller
    aiosmtpd/docs/handlers
    aiosmtpd/docs/cli
+   aiosmtpd/docs/smtpd
    aiosmtpd/docs/NEWS
 
 
