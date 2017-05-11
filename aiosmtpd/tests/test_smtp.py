@@ -471,6 +471,7 @@ class TestSMTP(unittest.TestCase):
                 response,
                 b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')
 
+    # Test the workaround http://bugs.python.org/issue27931
     @patch('email._header_value_parser.AngleAddr.addr_spec',
            side_effect=IndexError, new_callable=PropertyMock)
     def test_mail_fail_parse_email(self, addr_spec):
@@ -501,6 +502,16 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('MAIL FROM: <anne@example.com>')
             self.assertEqual(code, 250)
             code, response = client.docmd('RCPT')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: RCPT TO: <address>')
+
+    def test_rcpt_no_to(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT <anne@example.com')
             self.assertEqual(code, 501)
             self.assertEqual(response, b'Syntax: RCPT TO: <address>')
 
@@ -565,6 +576,7 @@ class TestSMTP(unittest.TestCase):
                 response,
                 b'RCPT TO parameters not recognized or not implemented')
 
+    # Test the workaround http://bugs.python.org/issue27931
     @patch('email._header_value_parser.AngleAddr.addr_spec',
            new_callable=PropertyMock)
     def test_rcpt_fail_parse_email(self, addr_spec):

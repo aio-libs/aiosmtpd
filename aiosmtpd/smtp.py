@@ -388,7 +388,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         keylen = len(keyword)
         if arg[:keylen].upper() == keyword:
             return arg[keylen:].strip()
-        return ''
+        return None
 
     def _getaddr(self, arg):
         if not arg:
@@ -400,7 +400,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         try:
             address = address.addr_spec
         except IndexError:
-            # workaround for http://bugs.python.org/issue27931
+            # Workaround http://bugs.python.org/issue27931
             address = None
         return address, rest
 
@@ -484,11 +484,11 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(syntaxerr)
             return
         arg = self._strip_command_keyword('FROM:', arg)
-        address, params = self._getaddr(arg)
-        if address is None:
+        if arg is None:
             yield from self.push(syntaxerr)
             return
-        if not address:
+        address, params = self._getaddr(arg)
+        if address is None:
             yield from self.push(syntaxerr)
             return
         if not self.session.extended_smtp and params:
@@ -555,6 +555,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             yield from self.push(syntaxerr)
             return
         arg = self._strip_command_keyword('TO:', arg)
+        if arg is None:
+            yield from self.push(syntaxerr)
+            return
         address, params = self._getaddr(arg)
         if address is None:
             yield from self.push(syntaxerr)
