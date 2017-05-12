@@ -1,4 +1,4 @@
-.. _smtpd:
+.. _migrating:
 
 ==================================
  Migrating from smtpd to aiosmtpd
