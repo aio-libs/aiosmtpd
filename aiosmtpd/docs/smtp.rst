@@ -178,8 +178,8 @@ SMTP API
       The method that subclasses and handlers should use to return statuses to
       SMTP clients.  This is a coroutine.  *status* can be a bytes object, but
       for convenience it is more likely to be a string.  If it's a string, it
-      must be ASCII, unless *enable_SMTPUTF8* is True in which case it must be
-      UTF-8.
+      must be ASCII, unless *enable_SMTPUTF8* is True in which case it will be
+      encoded as UTF-8.
 
    .. method:: smtp_<COMMAND>(arg)
 
