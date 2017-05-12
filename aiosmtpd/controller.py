@@ -22,8 +22,8 @@ class Controller:
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self.loop = asyncio.new_event_loop() if loop is None else loop
         self.server = None
-        self.thread = None
-        self.thread_exception = None
+        self._thread = None
+        self._thread_exception = None
         self.ready_timeout = os.getenv(
             'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
         # For exiting the loop.
@@ -49,7 +49,7 @@ class Controller:
                 self.loop.create_server(
                     self.factory, host=self.hostname, port=self.port))
         except socket.error as error:
-            self.thread_exception = error
+            self._thread_exception = error
             return
         self.loop.call_soon(ready_event.set)
         self.loop.run_forever()
@@ -59,17 +59,17 @@ class Controller:
         self.server = None
 
     def start(self):
-        assert self.thread is None, 'SMTP daemon already running'
+        assert self._thread is None, 'SMTP daemon already running'
         ready_event = threading.Event()
-        self.thread = threading.Thread(target=self._run, args=(ready_event,))
-        self.thread.daemon = True
-        self.thread.start()
+        self._thread = threading.Thread(target=self._run, args=(ready_event,))
+        self._thread.daemon = True
+        self._thread.start()
         # Wait a while until the server is responding.
         ready_event.wait(self.ready_timeout)
-        if self.thread_exception is not None:
-            raise self.thread_exception
+        if self._thread_exception is not None:
+            raise self._thread_exception
 
     def stop(self):
-        assert self.thread is not None, 'SMTP daemon not running'
+        assert self._thread is not None, 'SMTP daemon not running'
         self._wsock.send(b'x')
-        self.thread.join()
+        self._thread.join()
