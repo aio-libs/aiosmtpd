@@ -87,7 +87,7 @@ The following hooks are currently defined:
     instantiated with ``decode_data=False`` (the default) or
     ``decode_data=True``.  In the former case, both ``envelope.content`` and
     ``envelope.original_content`` will be the content bytes (normalized
-    according to the transparency rules in `RFC 5321, $4.5.2
+    according to the transparency rules in `RFC 5321, §4.5.2
     <https://tools.ietf.org/html/rfc5321#section-4.5.2>`_).  In the latter
     case, ``envelope.original_content`` will be the normalized bytes, but
     ``envelope.content`` will be the UTF-8 decoded string of the original
