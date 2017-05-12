@@ -9,6 +9,9 @@ on `smtpd <https://docs.python.org/3/library/smtpd.html>`__ to aiosmtpd.
 
 Consider the following subclass of ``smtpd.SMTPServer``::
 
+    import smtpd
+    import asyncore
+
     class CustomSMTPServer(smtpd.SMTPServer):
         def process_message(self, peer, mail_from, rcpt_tos, data):
             # Process message data...
@@ -21,6 +24,9 @@ Consider the following subclass of ``smtpd.SMTPServer``::
 
 To switch this application to using ``aiosmtpd``, implement a handler with
 the ``handle_DATA()`` method::
+
+    import asyncio
+    import aiosmtpd.controller
 
     class CustomHandler:
         @asyncio.coroutine
