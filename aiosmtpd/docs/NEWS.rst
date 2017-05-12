@@ -2,6 +2,10 @@
  NEWS for aiosmtpd
 ===================
 
+1.0rc1 (2017-05-12)
+===================
+* Improved documentation.
+
 1.0b1 (2017-05-07)
 ==================
 * The connection peer is displayed in all INFO level logging.
