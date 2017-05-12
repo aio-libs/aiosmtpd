@@ -127,7 +127,7 @@ The following built-in handlers can be imported from ``aiosmtpd.handlers``:
   port as positional arguments.  This class cannot be used on the command
   line.
 
-* ``Sink`` - this class just consumes and discards messages.  It's essentiall
+* ``Sink`` - this class just consumes and discards messages.  It's essentially
   the "no op" handler.  It can be used on the command line, but accepts no
   positional arguments.
 

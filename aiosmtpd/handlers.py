@@ -129,7 +129,7 @@ class Proxy:
             log.info('got SMTPRecipientsRefused')
             refused = e.recipients
         except (OSError, smtplib.SMTPException) as e:
-            log.exception('got', e.__class__)
+            log.exception('got %s', e.__class__)
             # All recipients were refused.  If the exception had an associated
             # error code, use it.  Otherwise, fake it with a non-triggering
             # exception code.
