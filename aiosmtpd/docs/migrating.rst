@@ -23,7 +23,8 @@ To switch this application to using ``aiosmtpd``, implement a handler with
 the ``handle_DATA()`` method::
 
     class CustomHandler:
-        async def handle_DATA(self, server, session, envelope):
+        @asyncio.coroutine
+        def handle_DATA(self, server, session, envelope):
             peer = session.peer
             mail_from = envelope.mail_from
             rcpt_tos = envelope.rcpt_tos
@@ -46,7 +47,7 @@ Important differences to note:
 * Unlike ``process_message()`` in smtpd, ``handle_DATA()`` **must** return
   an SMTP response code for the sender such as ``"250 OK"``.
 * ``handle_DATA()`` must be a coroutine function, which means it must be
-  declared with ``async def`` (or ``@asyncio.coroutine`` for compatibility
-  with Python 3.4).
+  declared with ``@asyncio.coroutine`` (or ``async def`` if compatibility
+  with Python 3.4 is not needed).
 * ``controller.start()`` runs the SMTP server in a separate thread and can be
   stopped again by calling ``controller.stop()``.
