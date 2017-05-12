@@ -1,101 +1,32 @@
-=================
- Getting started
-=================
-
-Start out by running the SMTP server from the command line to ensure that
-aiosmtpd has been installed correctly. If you want the SMTP server to do
-interesting things instead of just printing incoming mail to the console, you
-need to write a bit of Python code to specify how incoming mail should be
-handled.
-
-.. _cli:
-
-Command line usage
-==================
-
-This package provides a main entry point which can be used to run the
-server on the command line.  There are two ways to run the server, depending
-on how the package has been installed.
-
-You can run the server by passing it to Python directly::
-
-    $ python3 -m aiosmtpd -n
-
-This starts a server on localhost, port 8025 without setting the uid to
-'nobody' (i.e. because you aren't running it as root).  Once you've done that,
-you can connect directly to the server using your favorite command line
-protocol tool.  Type the ``QUIT`` command at the server once you see the
-greeting::
-
-    % telnet localhost 8025
-    Trying 127.0.0.1...
-    Connected to localhost.
-    Escape character is '^]'.
-    220 subdivisions Python SMTP ...
-    QUIT
-    221 Bye
-    Connection closed by foreign host.
-
-Of course, you could use Python's smtplib_ module, or any other SMTP client to
-talk to the server.  Just hit control-C at the server to stop it.
-
-The entry point may also be installed as the ``aiosmtpd`` command, so this is
-equivalent to the above ``python3`` invocation::
-
-    $ aiosmtpd -n
-
-
-Options
--------
-
-Optional arguments include:
-
-``-h``, ``--help``
-    Show this help message and exit.
-
-``-n``, ``--nosetuid``
-    This program generally tries to setuid ``nobody``, unless this flag is
-    set.  The setuid call will fail if this program is not run as root (in
-    which case, use this flag).
-
-``-c CLASSPATH``, ``--class CLASSPATH``
-    Use the given class, as a Python dotted import path, as the :ref:`handler
-    class <handlers>` for SMTP events.  This class can process received
-    messages and do other actions during the SMTP dialog.  Uses a debugging
-    handler by default.
-
-``-s SIZE``, ``--size SIZE``
-    Restrict the total size of the incoming message to ``SIZE`` number of
-    bytes via the RFC 1870 ``SIZE`` extension.  Defaults to 33554432 bytes.
-
-``-u``, ``--smtputf8``
-    Enable the SMTPUTF8 extension and behave as an RFC 6531 SMTP proxy.
-
-``-d``, ``--debug``
-    Increase debugging output.
-
-``-l [HOST:PORT]``, ``--listen [HOST:PORT]``
-    Optional host and port to listen on.  If the PORT part is not given, then
-    port 8025 is used.  If only :PORT is given, then localhost is used for the
-    hostname.  If neither are given, localhost:8025 is used.
-
-Optional positional arguments provide additional arguments to the handler
-class constructor named in the ``--class`` option.  Provide as many of these
-as supported by the handler class's ``from_cli()`` class method, if provided.
-
-
-.. _smtplib: https://docs.python.org/3/library/smtplib.html
-
 .. _controller:
 
-Programmatic usage
-==================
+====================
+ Programmatic usage
+====================
 
-Custom behavior for the SMTP server is specified via a *handler* which is
-invoked by aiosmtpd when a new message is available.
+If you already have an `asyncio event loop`_, you can `create a server`_ using
+the ``SMTP`` class as the *protocol factory*, and then run the loop forever.
+If you need to pass arguments to the ``SMTP`` constructor, use
+`functools.partial()`_ or write your own wrapper function.  You might also
+want to add a signal handler so that the loop can be stopped, say when you hit
+control-C.
 
-For example, say you want to receive email for ``example.com`` and print
-incoming mail data to the console.  Start by implementing a handler as follows::
+It's probably easier to use a *controller* which runs the SMTP server in a
+separate thread with a dedicated event loop.  The controller provides useful
+and reliable *start* and *stop* semantics so that the foreground thread
+doesn't block.  Among other use cases, this makes it convenient to spin up an
+SMTP server for unit tests.
+
+In both cases, you need to pass a :ref:`handler <handlers>` to the ``SMTP``
+constructor.  Handlers respond to events that you care about during the SMTP
+dialog.
+
+
+Using the controller
+====================
+
+Say you want to receive email for ``example.com`` and print incoming mail data
+to the console.  Start by implementing a handler as follows::
 
     >>> import asyncio
     >>> class ExampleHandler:
@@ -115,9 +46,8 @@ incoming mail data to the console.  Start by implementing a handler as follows::
     ...         print('End of message')
     ...         return '250 Message accepted for delivery'
 
-The SMTP server can be started using a *controller* which runs the SMTP server
-in a separate thread with a dedicated event loop.  Pass the above handler to a
-controller instance and start it::
+Pass an instance of your ``ExampleHandler`` class to the ``Controller``, and
+then start it::
 
     >>> from aiosmtpd.controller import Controller
     >>> controller = Controller(ExampleHandler())
@@ -130,11 +60,11 @@ the ``AIOSMTPD_CONTROLLER_TIMEOUT`` environment variable or by passing a
 different ``ready_timeout`` duration to the Controller's constructor.
 
 Connect to the server and send a message, which then gets printed by
-``ExampleHandler``.
+``ExampleHandler``::
 
-    >>> from smtplib import SMTP
-    >>> client = SMTP(controller.hostname, controller.port)
-    >>> r = client.sendmail('aperson@example.com', ['bperson@example.com'], """\
+    >>> from smtplib import SMTP as Client
+    >>> client = Client(controller.hostname, controller.port)
+    >>> client.sendmail('aperson@example.com', ['bperson@example.com'], """\
     ... From: Anne Person <anne@example.com>
     ... To: Bart Person <bart@example.com>
     ... Subject: A test
@@ -155,10 +85,22 @@ Connect to the server and send a message, which then gets printed by
     <BLANKLINE>
     End of message
 
-If we try to send a message to a recipient not inside ``example.com``,
-it is rejected by ``ExampleHandler.handle_RCPT()``::
+You'll notice that at the end of the ``DATA`` command, your handler's
+``handle_DATA()`` method was called.  The sender, recipients, and message
+contents were taken from the envelope, and printed at the console.  The
+handler methods also returns a successful status message.
 
-    >>> r = client.sendmail('aperson@example.com', ['cperson@example.net'], """\
+The ``ExampleHandler`` class also implements a ``handle_RCPT()`` method.  This
+gets called after the ``RCPT TO`` command is sanity checked.  The method
+ensures that all recipients are local to the ``@example.com`` domain,
+returning an error status if not.  It is the handler's responsibility to add
+valid recipients to the ``rcpt_tos`` attribute of the envelope and to return a
+successful status.
+
+Thus, if we try to send a message to a recipient not inside ``example.com``,
+it is rejected::
+
+    >>> client.sendmail('aperson@example.com', ['cperson@example.net'], """\
     ... From: Anne Person <anne@example.com>
     ... To: Chris Person <chris@example.net>
     ... Subject: Another test
@@ -176,26 +118,19 @@ When you're done with the SMTP server, stop it via the controller.
 
 The server is guaranteed to be stopped.
 
-    >>> import socket
     >>> client.connect(controller.hostname, controller.port)
     Traceback (most recent call last):
     ...
     ConnectionRefusedError: ...
 
-
-The aiosmtpd library contains :ref:`base handler classes <handlers>` that may
-be used to quickly gain common functionality such as parsing the incoming mail
-data into an instance of ``email.message.Message``.
-
-For a full overview of the methods that handler classes may implement,
-see :ref:`Handler hooks <hooks>`.
-
-In order to extend the protocol by e.g. adding support for custom SMTP
-commands, see :ref:`The SMTP class <smtp>`.
+There are a number of built-in :ref:`handler classes <handlers>` that you can
+use to do some common tasks, and it's easy to write your own handler.  For a
+full overview of the methods that handler classes may implement, see the
+section on :ref:`handler hooks <hooks>`.
 
 
-Enable SMTPUTF8
----------------
+Enabling SMTPUTF8
+=================
 
 It's very common to want to enable the ``SMTPUTF8`` ESMTP option, therefore
 this is the default for the ``Controller`` constructor.  For backward
@@ -223,3 +158,79 @@ The EHLO response does not include the ``SMTPUTF8`` ESMTP option.
     HELP
 
     >>> controller.stop()
+
+
+Controller API
+==============
+
+.. class:: Controller(handler, loop=None, hostname=None, port=8025, *, ready_timeout=1.0, enable_SMTPUTF8=True)
+
+   *handler* is an instance of a :ref:`handler <handlers>` class.
+
+   *loop* is the asyncio event loop to use.  If not given,
+   :meth:`asyncio.new_event_loop()` is called to create the event loop.
+
+   *hostname* and *port* are passed directly to your loop's
+   :meth:`AbstractEventLoop.create_server` method.
+
+   *ready_timeout* is float number of seconds that the controller will wait in
+   :meth:`Controller.start` for the subthread to start its server.  You can
+   also set the :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` environment variable to
+   a float number of seconds, which takes precedence over the *ready_timeout*
+   argument value.
+
+   *enable_SMTPUTF8* is a flag which is passed directly to the same named
+   argument to the ``SMTP`` constructor.  When True, the ESMTP ``SMTPUTF8``
+   option is returned to the client in response to ``EHLO``, and UTF-8 content
+   is accepted.
+
+   .. attribute:: handler
+
+      The instance of the event *handler* passed to the constructor.
+
+   .. attribute:: loop
+
+      The event loop being used.  This will either be the given *loop*
+      argument, or the new event loop that was created.
+
+   .. attribute:: hostname
+                  port
+
+      The values of the *hostname* and *port* arguments.
+
+   .. attribute:: ready_timeout
+
+      The timeout value used to wait for the server to start.  This will
+      either be the float value converted from the
+      :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` environment variable, or the
+      *ready_timeout* argument.
+
+   .. attribute:: server
+
+      This is the server instance returned by
+      :meth:`AbstractEventLoop.create_server` after the server has started.
+
+   .. method:: start()
+
+      Start the server in the subthread.  The subthread is always a daemon
+      thread (i.e. we always set ``thread.daemon=True``.  Exceptions can be
+      raised if the server does not start within the *ready_timeout*, or if
+      any other exception occurs in while creating the server.
+
+   .. method:: stop()
+
+      Stop the server and the event loop, and cancel all tasks.
+
+   .. method:: factory()
+
+      You can override this method to create custom instances of the ``SMTP``
+      class being controlled.  By default, this creates an ``SMTP`` instance,
+      passing in your handler and setting the ``enable_SMTPUTF8`` flag.
+      Examples of why you would want to override this method include creating
+      an ``LMTP`` server instance instead, or passing in a different set of
+      arguments to the ``SMTP`` constructor.
+
+
+.. _`asyncio event loop`: https://docs.python.org/3/library/asyncio-eventloop.html
+.. _`create a server`: https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.AbstractEventLoop.create_server
+.. _`functools.partial()`: https://docs.python.org/3/library/functools.html#functools.partial

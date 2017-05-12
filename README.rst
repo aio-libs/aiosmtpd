@@ -100,6 +100,8 @@ Contents
    :maxdepth: 2
 
    aiosmtpd/docs/intro
+   aiosmtpd/docs/concepts
+   aiosmtpd/docs/cli
    aiosmtpd/docs/controller
    aiosmtpd/docs/smtp
    aiosmtpd/docs/lmtp
