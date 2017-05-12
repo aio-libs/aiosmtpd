@@ -49,7 +49,8 @@ The following hooks are currently defined:
     by the client in the ``EHLO`` command.  If implemented, this hook must
     also set the ``session.host_name`` attribute.  This hook may push
     additional ``250-<command>`` responses to the client by yielding from
-    ``server.push(status)`` before returning ``250 OK`` as the final response.
+    ``server.push(status)`` before returning ``250 HELP`` as the final
+    response.
 
 ``handle_NOOP(server, session, envelope)``
     Called during ``NOOP``.
