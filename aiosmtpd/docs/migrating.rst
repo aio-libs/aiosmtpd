@@ -5,7 +5,7 @@
 ==================================
 
 aiosmtpd is designed to make it easy to migrate an existing application based
-on smtpd to aiosmtpd.
+on `smtpd <https://docs.python.org/3/library/smtpd.html>`__ to aiosmtpd.
 
 Consider the following subclass of ``smtpd.SMTPServer``::
 
