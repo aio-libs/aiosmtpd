@@ -64,7 +64,7 @@ Connect to the server and send a message, which then gets printed by
 
     >>> from smtplib import SMTP as Client
     >>> client = Client(controller.hostname, controller.port)
-    >>> client.sendmail('aperson@example.com', ['bperson@example.com'], """\
+    >>> r = client.sendmail('a@example.com', ['b@example.com'], """\
     ... From: Anne Person <anne@example.com>
     ... To: Bart Person <bart@example.com>
     ... Subject: A test
@@ -72,8 +72,8 @@ Connect to the server and send a message, which then gets printed by
     ...
     ... Hi Bart, this is Anne.
     ... """)
-    Message from aperson@example.com
-    Message for ['bperson@example.com']
+    Message from a@example.com
+    Message for ['b@example.com']
     Message data:
     <BLANKLINE>
     From: Anne Person <anne@example.com>
@@ -142,7 +142,7 @@ argument into the constructor::
     >>> controller = Controller(Sink(), enable_SMTPUTF8=False)
     >>> controller.start()
 
-    >>> client = SMTP(controller.hostname, controller.port)
+    >>> client = Client(controller.hostname, controller.port)
     >>> code, message = client.ehlo('me')
     >>> code
     250
