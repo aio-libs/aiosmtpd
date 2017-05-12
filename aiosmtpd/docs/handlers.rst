@@ -41,7 +41,8 @@ The following hooks are currently defined:
 ``handle_HELO(server, session, envelope, hostname)``
     Called during ``HELO``.  The ``hostname`` argument is the host name given
     by the client in the ``HELO`` command.  If implemented, this hook must
-    also set the ``session.host_name`` attribute.
+    also set the ``session.host_name`` attribute before returning
+    ``'250 {}'.format(server.hostname)`` as the status.
 
 ``handle_EHLO(server, session, envelope, hostname)``
     Called during ``EHLO``.  The ``hostname`` argument is the host name given
