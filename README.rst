@@ -106,6 +106,7 @@ Contents
    aiosmtpd/docs/smtp
    aiosmtpd/docs/lmtp
    aiosmtpd/docs/handlers
+   aiosmtpd/docs/migrating
    aiosmtpd/docs/NEWS
 
 
