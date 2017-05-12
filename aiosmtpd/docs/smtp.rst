@@ -7,7 +7,7 @@
 At the heart of this module is the ``SMTP`` class.  This class implements the
 `RFC 5321 <http://www.faqs.org/rfcs/rfc5321.html>`_ Simple Mail Transport
 Protocol.  Often you won't run an ``SMTP`` instance directly, but instead will
-use a :ref:`controller <controller>` instance to run the server in a subthead.
+use a :ref:`controller <controller>` instance to run the server in a subthread.
 
     >>> from aiosmtpd.controller import Controller
 
