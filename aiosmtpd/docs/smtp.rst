@@ -7,7 +7,7 @@
 At the heart of this module is the ``SMTP`` class.  This class implements the
 `RFC 5321 <http://www.faqs.org/rfcs/rfc5321.html>`_ Simple Mail Transport
 Protocol.  Often you won't run an ``SMTP`` instance directly, but instead will
-use a :ref:`controller <controller>` instance to run the server in a subthead.
+use a :ref:`controller <controller>` instance to run the server in a subthread.
 
     >>> from aiosmtpd.controller import Controller
 
@@ -178,8 +178,8 @@ SMTP API
       The method that subclasses and handlers should use to return statuses to
       SMTP clients.  This is a coroutine.  *status* can be a bytes object, but
       for convenience it is more likely to be a string.  If it's a string, it
-      must be ASCII, unless *enable_SMTPUTF8* is True in which case it must be
-      UTF-8.
+      must be ASCII, unless *enable_SMTPUTF8* is True in which case it will be
+      encoded as UTF-8.
 
    .. method:: smtp_<COMMAND>(arg)
 
