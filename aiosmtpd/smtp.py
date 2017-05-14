@@ -31,7 +31,8 @@ MISSING = object()
 
 @public
 class Session:
-    def __init__(self, loop):
+    def __init__(self, protocol, loop):
+        self.protocol = protocol
         self.peer = None
         self.ssl = None
         self.host_name = None
@@ -103,7 +104,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._handler_coroutine = None
 
     def _create_session(self):
-        return Session(self.loop)
+        return Session(self, self.loop)
 
     def _create_envelope(self):
         return Envelope()
@@ -113,7 +114,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         hook = getattr(self.event_handler, 'handle_' + command, None)
         if hook is None:
             return MISSING
-        status = yield from hook(self, self.session, self.envelope, *args)
+        status = yield from hook(self.session, self.envelope, *args)
         return status
 
     @property
@@ -142,8 +143,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             if handler is None:
                 self._tls_handshake_okay = True
             else:
-                self._tls_handshake_okay = handler(
-                    self, self.session, self.envelope)
+                self._tls_handshake_okay = handler(self.session, self.envelope)
         else:
             super().connection_made(transport)
             self.transport = transport

@@ -66,7 +66,7 @@ class Debugging:
             print(line, file=self.stream)
 
     @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    def handle_DATA(self, session, envelope):
         print('---------- MESSAGE FOLLOWS ----------', file=self.stream)
         # Yes, actually test for truthiness since it's possible for either the
         # keywords to be missing, or for their values to be empty lists.
@@ -93,7 +93,7 @@ class Proxy:
         self._port = remote_port
 
     @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    def handle_DATA(self, session, envelope):
         if isinstance(envelope.content, str):
             content = envelope.original_content
         else:
@@ -155,7 +155,7 @@ class Message:
         self.message_class = message_class
 
     @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    def handle_DATA(self, session, envelope):
         envelope = self.prepare_message(session, envelope)
         self.handle_message(envelope)
         return '250 OK'
@@ -186,7 +186,7 @@ class AsyncMessage(Message):
         self.loop = loop or asyncio.get_event_loop()
 
     @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    def handle_DATA(self, session, envelope):
         message = self.prepare_message(session, envelope)
         yield from self.handle_message(message)
         return '250 OK'
