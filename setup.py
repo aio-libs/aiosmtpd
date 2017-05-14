@@ -24,7 +24,7 @@ Python 3.""",
         'atpublic',
         ],
     entry_points={
-        'console_scripts': ['smtpd = aiosmtpd.main:main'],
+        'console_scripts': ['aiosmtpd = aiosmtpd.main:main'],
         },
     classifiers=[
         'License :: OSI Approved',
@@ -33,5 +33,6 @@ Python 3.""",
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Topic :: Communications :: Email :: Mail Transport Agents',
+        'Framework :: AsyncIO',
         ],
     )

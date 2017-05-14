@@ -8,8 +8,8 @@ based implementation of a server for
 Simple Mail Transfer Protocol (SMTP) and
 `RFC 2033 <http://www.faqs.org/rfcs/rfc2033.html>`__ -
 Local Mail Transfer Protocol (LMTP).  It is derived from
-`Python 3.5's smtpd.py <https://hg.python.org/cpython/file/3.5/Lib/smtpd.py>`__
-standard library module.  It provides both a command line interface and an API
+`Python 3's smtpd.py <https://hg.python.org/cpython/file/3.5/Lib/smtpd.py>`__
+standard library module, and provides both a command line interface and an API
 for use in testing applications that send email.
 
 Inspiration for this library comes from several other packages:

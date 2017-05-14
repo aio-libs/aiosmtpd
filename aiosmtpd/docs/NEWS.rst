@@ -2,9 +2,28 @@
  NEWS for aiosmtpd
 ===================
 
-1.0a6 (20XX-XX-XX)
+1.0rc1 (2017-05-12)
+===================
+* Improved documentation.
+
+1.0b1 (2017-05-07)
 ==================
 * The connection peer is displayed in all INFO level logging.
+* When running the test suite, you can include a ``-E`` option after the
+  ``--`` separator to boost the debugging output.
+* The main SMTP readline loops are now more robust against connection resets
+  and mid-read EOFs.  (Closes #62)
+* ``Proxy`` handlers work with ``SMTP`` servers regardless of the value of the
+  ``decode_data`` argument.
+* The command line script is now installed as ``aiosmtpd`` instead of
+  ``smtpd``.
+* The ``SMTP`` class now does a better job of handling Unicode, when the
+  client does not claim to support ``SMTPUTF8`` but sends non-ASCII anyway.
+  The server forces ASCII-only handling when ``enable_SMTPUTF8=False`` (the
+  default) is passed to the constructor.  The command line arguments
+  ``decode_data=True`` and ``enable_SMTPUTF8=True`` are no longer mutually
+  exclusive.
+* Officially support Windows.  (Closes #76)
 
 1.0a5 (2017-04-06)
 ==================
@@ -18,11 +37,18 @@
   and ``rcpt_options`` (although the latter is still not support in ``SMTP``).
 * ``DATA`` method now respects original line endings, and passing size limits
   is now handled better.  Given by Konstantin Volkov.
-* Controller objects now have an optional timeout argument used to wait for
-  the server to become ready.  This can also be overridden with the
-  environment variable ``AIOSMTPD_CONTROLLER_TIMEOUT``. (Closes #35)
-* Handlers can define a ``handle_STARTTLS()`` method which is called if SSL is
-  enabled during the making of the connection. (Closes #48)
+* The ``Controller`` class has two new optional keyword arguments.
+
+  - ``ready_timeout`` specifies a timeout in seconds that can be used to limit
+    the amount of time it waits for the server to become ready.  This can also
+    be overridden with the environment variable
+    ``AIOSMTPD_CONTROLLER_TIMEOUT``. (Closes #35)
+  - ``enable_SMTPUTF8`` is passed through to the ``SMTP`` constructor in the
+    default factory.  If you override ``Controller.factory()`` you can pass
+    ``self.enable_SMTPUTF8`` yourself.
+* Handlers can define a ``handle_tls_handshake()`` method, which takes a
+  session object, and is called if SSL is enabled during the making of the
+  connection.  (Closes #48)
 * Better Windows compatibility.
 * Better Python 3.4 compatibility.
 * Use ``flufl.testing`` package for nose2 and flake8 plugins.

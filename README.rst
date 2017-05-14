@@ -13,12 +13,12 @@ difficult APIs to work with, understand, extend, and fix.
 
 With the introduction of the
 `asyncio <https://docs.python.org/3/library/asyncio.html>`__ module in Python
-3.4, a much better way of doing asynchronous IO is now available.  It seems
+3.4, a much better way of doing asynchronous I/O is now available.  It seems
 obvious that an asyncio-based version of the SMTP and related protocols are
 needed for Python 3.  This project brings together several highly experienced
 Python developers collaborating on this reimplementation.
 
-This package provides such a implementation of both the SMTP and LMTP
+This package provides such an implementation of both the SMTP and LMTP
 protocols.
 
 
@@ -27,8 +27,8 @@ Requirements
 
 You need at least Python 3.4 to use this library.  Python 3.3 might work if
 you install the standalone `asyncio <https://pypi.python.org/pypi/asyncio>`__
-library, but this combination is untested.  Python 3.5 or newer is required
-for SSL support.
+library, but this combination is untested and unsupported.  Python 3.5 or
+newer is required for SSL support.  Both Windows and \*nix are supported.
 
 
 License
@@ -47,8 +47,10 @@ As of 2016-07-14, aiosmtpd has been put under the `aio-libs
 * Report bugs at: https://github.com/aio-libs/aiosmtpd/issues
 * Git clone: https://github.com/aio-libs/aiosmtpd.git
 * Documentation: http://aiosmtpd.readthedocs.io/
+* StackOverflow: https://stackoverflow.com/questions/tagged/aiosmtpd
 
 The best way to contact the developers is through the GitHub links above.
+You can also request help by submitting a question on StackOverflow.
 
 
 Building
@@ -82,6 +84,14 @@ Individual tests can be run like this::
 
 where *<pattern>* is a Python regular expression matching a test name.
 
+You can also add the ``-E`` option to boost debugging output, e.g.::
+
+    $ tox -e py35-nocov -- -E
+
+and these options can be combined::
+
+    $ tox -e py35-nocov -- -P test_connection_reset_during_DATA -E
+
 
 Contents
 ========
@@ -90,11 +100,13 @@ Contents
    :maxdepth: 2
 
    aiosmtpd/docs/intro
+   aiosmtpd/docs/concepts
+   aiosmtpd/docs/cli
+   aiosmtpd/docs/controller
    aiosmtpd/docs/smtp
    aiosmtpd/docs/lmtp
-   aiosmtpd/docs/controller
    aiosmtpd/docs/handlers
-   aiosmtpd/docs/cli
+   aiosmtpd/docs/migrating
    aiosmtpd/docs/NEWS
 
 
