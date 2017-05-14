@@ -58,10 +58,11 @@ def make_loop():
     return asyncio.get_event_loop()
 
 
-def syntax(text, extended=None):
+def syntax(text, extended=None, when=None):
     def decorator(f):
         f._smtp_syntax = text
         f._smtp_syntax_extended = extended
+        f._smtp_syntax_when = when
         return f
     return decorator
 
@@ -92,8 +93,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self._decode_data = decode_data
         self.command_size_limits.clear()
-        self.supported_commands = ['EHLO', 'HELO', 'MAIL', 'RCPT', 'DATA',
-                                   'RSET', 'NOOP', 'QUIT', 'VRFY']
         if hostname:
             self.hostname = hostname
         else:
@@ -102,7 +101,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         if tls_context:
             # Through rfc3207 part 4.1 certificate checking is part of SMTP
             # protocol, not SSL layer.
-            self.supported_commands.append('STARTTLS')
             self.tls_context.check_hostname = False
             self.tls_context.verify_mode = ssl.CERT_NONE
         self.require_starttls = tls_context and require_starttls
@@ -374,7 +372,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.transport.close()
 
     @asyncio.coroutine
-    @syntax('STARTTLS')
+    @syntax('STARTTLS', when='tls_context')
     def smtp_STARTTLS(self, arg):                   # pragma: nopy34
         log.info('%r STARTTLS', self.session.peer)
         if arg:
@@ -431,23 +429,36 @@ class SMTP(asyncio.StreamReaderProtocol):
             result[param] = value if eq else True
         return result
 
+    def _syntax_available(self, method):
+        if not getattr(method, '_smtp_syntax', None):
+            return False
+        if method._smtp_syntax_when:
+            return bool(getattr(self, method._smtp_syntax_when))
+        return True
+
     @asyncio.coroutine
     def smtp_HELP(self, arg):
+        code = 250
         if arg:
             lc_arg = arg.upper()
             method = getattr(self, 'smtp_' + lc_arg, None)
-            if method and method._smtp_syntax:
+            if method and self._syntax_available(method):
                 help_str = method._smtp_syntax
                 if self.session.extended_smtp and method._smtp_syntax_extended:
                     help_str += method._smtp_syntax_extended
                 yield from self.push('250 Syntax: ' + help_str)
                 return
-            yield from self.push('501 Supported commands: {}'.format(
-                ' '.join(self.supported_commands)))
-        else:
-            yield from self.push(
-                '250 Supported commands: {}'.format(
-                    ' '.join(self.supported_commands)))
+            code = 501
+        commands = []
+        for name in dir(self):
+            if not name.startswith('smtp_'):
+                continue
+            method = getattr(self, name)
+            if self._syntax_available(method):
+                commands.append(name.lstrip('smtp_'))
+        commands.sort()
+        yield from self.push(
+            '{} Supported commands: {}'.format(code, ' '.join(commands)))
 
     @asyncio.coroutine
     @syntax('VRFY <address>')
