@@ -1,4 +1,3 @@
-import asyncio
 import unittest
 import pkg_resources
 
@@ -27,8 +26,7 @@ class ReceivingHandler:
     def __init__(self):
         self.box = []
 
-    @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope):
         self.box.append(envelope)
         return '250 OK'
 
@@ -65,7 +63,7 @@ class HandshakeFailingHandler:
 
 
 class TestStartTLS(unittest.TestCase):
-    @unittest.skipIf(not _has_ssl, 'SSL and Python 3.5 required')
+    @unittest.skipIf(not _has_ssl, 'SSL required')
     def test_starttls(self):
         handler = ReceivingHandler()
         controller = TLSController(handler)
@@ -83,7 +81,7 @@ class TestStartTLS(unittest.TestCase):
                 'rcpt1@example.com')
         self.assertEqual(len(handler.box), 1)
 
-    @unittest.skipIf(not _has_ssl, 'SSL and Python 3.5 required')
+    @unittest.skipIf(not _has_ssl, 'SSL required')
     def test_failed_handshake(self):
         controller = TLSController(HandshakeFailingHandler())
         controller.start()
@@ -129,7 +127,7 @@ class TestStartTLS(unittest.TestCase):
             self.assertEqual(code, 501)
 
 
-@unittest.skipIf(not _has_ssl, 'SSL and Python 3.5 required')
+@unittest.skipIf(not _has_ssl, 'SSL required')
 class TestTLSForgetsSessionData(unittest.TestCase):
     def setUp(self):
         controller = TLSController(Sink)

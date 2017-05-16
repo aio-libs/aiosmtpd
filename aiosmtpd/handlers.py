@@ -65,8 +65,7 @@ class Debugging:
                 line = line.decode('utf-8', 'replace')
             print(line, file=self.stream)
 
-    @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope):
         print('---------- MESSAGE FOLLOWS ----------', file=self.stream)
         # Yes, actually test for truthiness since it's possible for either the
         # keywords to be missing, or for their values to be empty lists.
@@ -92,8 +91,7 @@ class Proxy:
         self._hostname = remote_hostname
         self._port = remote_port
 
-    @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope):
         if isinstance(envelope.content, str):
             content = envelope.original_content
         else:
@@ -154,8 +152,7 @@ class Message:
     def __init__(self, message_class=None):
         self.message_class = message_class
 
-    @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope):
         envelope = self.prepare_message(session, envelope)
         self.handle_message(envelope)
         return '250 OK'
@@ -185,14 +182,12 @@ class AsyncMessage(Message):
         super().__init__(message_class)
         self.loop = loop or asyncio.get_event_loop()
 
-    @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope):
         message = self.prepare_message(session, envelope)
-        yield from self.handle_message(message)
+        await self.handle_message(message)
         return '250 OK'
 
-    @asyncio.coroutine
-    def handle_message(self, message):
+    async def handle_message(self, message):
         raise NotImplementedError                   # pragma: nocover
 
 
