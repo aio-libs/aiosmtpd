@@ -129,9 +129,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._set_rset_state()
         self.session = self._create_session()
         self.session.peer = transport.get_extra_info('peername')
-        is_instance = (_has_ssl and
-                       isinstance(transport, sslproto._SSLProtocolTransport))
-        if self.transport is not None and is_instance:   # pragma: nopy34
+        seen_starttls = (_has_ssl and self._original_transport is not None)
+        if self.transport is not None and seen_starttls:      # pragma: nopy34
             # It is STARTTLS connection over normal connection.
             self._reader._transport = transport
             self._writer._transport = transport
