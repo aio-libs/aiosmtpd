@@ -18,7 +18,7 @@ else:                                               # pragma: nocover
     _has_ssl = sslproto and hasattr(ssl, 'MemoryBIO')
 
 
-__version__ = '1.0'
+__version__ = '2.0a1'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
@@ -255,8 +255,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                         '554 Command refused due to lack of security')
                     continue
                 if (self.require_starttls
-                        and (not self._tls_protocol)
-                        and (command not in ['EHLO', 'STARTTLS', 'QUIT'])):
+                        and not self._tls_protocol
+                        and command not in ['EHLO', 'STARTTLS', 'QUIT']):
                     # RFC3207 part 4
                     await self.push('530 Must issue a STARTTLS command first')
                     continue

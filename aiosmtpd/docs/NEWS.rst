@@ -2,6 +2,10 @@
  NEWS for aiosmtpd
 ===================
 
+2.0 (201X-XX-XX)
+================
+* Drop support for Python 3.4.
+
 1.0 (2017-05-15)
 ================
 * Release.
