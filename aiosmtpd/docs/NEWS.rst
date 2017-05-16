@@ -2,6 +2,11 @@
  NEWS for aiosmtpd
 ===================
 
+1.0.1 (2017-XX-XX)
+==================
+* After a ``STARTTLS`` is issued, when ``connection_lost()`` is called, the
+  original transport must be closed explicitly.
+
 1.0 (2017-05-15)
 ================
 * Release.
