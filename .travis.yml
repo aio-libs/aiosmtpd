@@ -6,9 +6,9 @@ install:
 matrix:
   include:
     - python: "3.5"
-      env: PYTHONASYNCIODEBUG=1
+      env: INTERP=py35 PYTHONASYNCIODEBUG=1
     - python: "3.6"
-      env: PYTHONASYNCIODEBUG=1
+      env: INTERP=py36 PYTHONASYNCIODEBUG=1
 script:
   - tox -e $INTERP-nocov,$INTERP-cov,qa,docs
   - 'if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then tox -e $INTERP-diffcov; fi'

@@ -8,10 +8,11 @@ environment:
     # http://www.appveyor.com/docs/installed-software#python
 
     - PYTHON: "C:\\Python35"
-    - PYTHON: "C:\\Python34-x64"
-      DISTUTILS_USE_SDK: "1"
+      INTERP: "py35"
     - PYTHON: "C:\\Python35-x64"
+      INTERP: "py35"
     - PYTHON: "C:\\Python36-x64"
+      INTERP: "py36"
 
 install:
   - "%PYTHON%\\python.exe -m pip install tox"
