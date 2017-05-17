@@ -5,7 +5,7 @@
 1.0.1 (2017-XX-XX)
 ==================
 * After a ``STARTTLS`` is issued, when ``connection_lost()`` is called, the
-  original transport must be closed explicitly.
+  original transport must be closed explicitly.  (Closes #83)
 
 1.0 (2017-05-15)
 ================
