@@ -381,8 +381,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self,
             self.tls_context,
             None,
-            server_side=True,
-            call_connection_made=True)
+            server_side=True)
         # Reconfigure transport layer.  Keep a reference to the original
         # transport so that we can close it explicitly when the connection is
         # lost.
