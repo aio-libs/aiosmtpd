@@ -384,9 +384,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             server_side=True)
         # Reconfigure transport layer.  Keep a reference to the original
         # transport so that we can close it explicitly when the connection is
-        # lost.
+        # lost.  XXX BaseTransport.set_protocol() was added in Python 3.5.3 :(
         self._original_transport = self.transport
-        self._original_transport.set_protocol(self._tls_protocol)
+        self._original_transport._protocol = self._tls_protocol
         # Reconfigure the protocol layer.  Why is the app transport a protected
         # property, if it MUST be used externally?
         self.transport = self._tls_protocol._app_transport
