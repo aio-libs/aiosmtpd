@@ -159,7 +159,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         # otherwise an unexpected eof_received() will be called *after* the
         # connection_lost().  At that point the stream reader will already be
         # destroyed and we'll get a traceback in super().eof_received() below.
-        if self._original_transport is not None:
+        if self._original_transport is not None:    # pragma: nopy34
             self._original_transport.close()
         super().connection_lost(error)
         self._writer.close()
