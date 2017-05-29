@@ -1,15 +1,9 @@
 import os
-import socket
 import asyncio
 import threading
 
 from aiosmtpd.smtp import SMTP
 from public import public
-
-try:
-    from socket import socketpair
-except ImportError:                                          # pragma: nocover
-    from asyncio.windows_utils import socketpair
 
 
 @public
@@ -26,17 +20,6 @@ class Controller:
         self._thread_exception = None
         self.ready_timeout = os.getenv(
             'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
-        # For exiting the loop.
-        self._rsock, self._wsock = socketpair()
-        self.loop.add_reader(self._rsock, self._reader)
-
-    def _reader(self):
-        self.loop.remove_reader(self._rsock)
-        self.loop.stop()
-        for task in asyncio.Task.all_tasks(self.loop):
-            task.cancel()
-        self._rsock.close()
-        self._wsock.close()
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
@@ -48,7 +31,7 @@ class Controller:
             self.server = self.loop.run_until_complete(
                 self.loop.create_server(
                     self.factory, host=self.hostname, port=self.port))
-        except socket.error as error:
+        except Exception as error:
             self._thread_exception = error
             return
         self.loop.call_soon(ready_event.set)
@@ -69,7 +52,13 @@ class Controller:
         if self._thread_exception is not None:
             raise self._thread_exception
 
+    def _stop(self):
+        self.loop.stop()
+        for task in asyncio.Task.all_tasks(self.loop):
+            task.cancel()
+
     def stop(self):
         assert self._thread is not None, 'SMTP daemon not running'
-        self._wsock.send(b'x')
+        self.loop.call_soon_threadsafe(self._stop)
         self._thread.join()
+        self._thread = None
