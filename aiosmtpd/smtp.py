@@ -18,7 +18,7 @@ else:                                               # pragma: nocover
     _has_ssl = sslproto and hasattr(ssl, 'MemoryBIO')
 
 
-__version__ = '2.0a1'
+__version__ = '1.1a1'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
@@ -97,6 +97,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.require_starttls = tls_context and require_starttls
         self._tls_handshake_okay = True
         self._tls_protocol = None
+        self._original_transport = None
         self.session = None
         self.envelope = None
         self.transport = None
@@ -127,15 +128,14 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._set_rset_state()
         self.session = self._create_session()
         self.session.peer = transport.get_extra_info('peername')
-        is_instance = (_has_ssl and
-                       isinstance(transport, sslproto._SSLProtocolTransport))
-        if self.transport is not None and is_instance:
+        seen_starttls = (_has_ssl and self._original_transport is not None)
+        if self.transport is not None and seen_starttls:      # pragma: nopy34
             # It is STARTTLS connection over normal connection.
             self._reader._transport = transport
             self._writer._transport = transport
             self.transport = transport
             # Do SSL certificate checking as rfc3207 part 4.1 says.
-            # Why _extra is protected attribute?
+            # Why is _extra a protected attribute?
             self.session.ssl = self._tls_protocol._extra
             handler = getattr(self.event_handler, 'handle_STARTTLS', None)
             if handler is None:
@@ -153,20 +153,27 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def connection_lost(self, error):
         log.info('%r connection lost', self.session.peer)
+        # If STARTTLS was issued, then our transport is the SSL protocol
+        # transport, and we need to close the original transport explicitly,
+        # otherwise an unexpected eof_received() will be called *after* the
+        # connection_lost().  At that point the stream reader will already be
+        # destroyed and we'll get a traceback in super().eof_received() below.
+        if self._original_transport is not None:    # pragma: nopy34
+            self._original_transport.close()
         super().connection_lost(error)
         self._writer.close()
         self.transport = None
+
+    def eof_received(self):
+        log.info('%r EOF received', self.session.peer)
+        self._handler_coroutine.cancel()
+        return super().eof_received()
 
     def _client_connected_cb(self, reader, writer):
         # This is redundant since we subclass StreamReaderProtocol, but I like
         # the shorter names.
         self._reader = reader
         self._writer = writer
-
-    def eof_received(self):
-        log.info('%r EOF received', self.session.peer)
-        self._handler_coroutine.cancel()
-        return super().eof_received()
 
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
@@ -360,14 +367,15 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.tls_context,
             None,
             server_side=True)
-        # Reconfigure transport layer.
-        socket_transport = self.transport
-        socket_transport._protocol = self._tls_protocol
-        # Reconfigure protocol layer.  We can't understand why app transport is
-        # protected property, if it MUST be used externally.
+        # Reconfigure transport layer.  Keep a reference to the original
+        # transport so that we can close it explicitly when the connection is
+        # lost.  XXX BaseTransport.set_protocol() was added in Python 3.5.3 :(
+        self._original_transport = self.transport
+        self._original_transport._protocol = self._tls_protocol
+        # Reconfigure the protocol layer.  Why is the app transport a protected
+        # property, if it MUST be used externally?
         self.transport = self._tls_protocol._app_transport
-        # Start handshake.
-        self._tls_protocol.connection_made(socket_transport)
+        self._tls_protocol.connection_made(self._original_transport)
 
     def _strip_command_keyword(self, keyword, arg):
         keylen = len(keyword)
