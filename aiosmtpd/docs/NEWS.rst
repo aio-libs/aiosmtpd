@@ -4,6 +4,10 @@
 
 1.1 (201X-XX-XX)
 ================
+* When aiosmtpd handles a ``STARTTLS`` it must arrange for the original
+  transport to be closed when the wrapped transport is closed.  This fixes a
+  hidden exception which occurs when an EOF is received on the original
+  tranport after the connection is lost.  (Closes #83)
 
 1.0 (2017-05-15)
 ================
