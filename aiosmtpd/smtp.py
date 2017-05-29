@@ -1,21 +1,14 @@
+import ssl
 import socket
 import asyncio
 import logging
 import collections
 
+from asyncio import sslproto
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
 from public import public
 from warnings import warn
-
-
-try:
-    import ssl
-    from asyncio import sslproto
-except ImportError:                                 # pragma: nocover
-    _has_ssl = False
-else:                                               # pragma: nocover
-    _has_ssl = sslproto and hasattr(ssl, 'MemoryBIO')
 
 
 __version__ = '1.1a1'
@@ -128,7 +121,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._set_rset_state()
         self.session = self._create_session()
         self.session.peer = transport.get_extra_info('peername')
-        seen_starttls = (_has_ssl and self._original_transport is not None)
+        seen_starttls = (self._original_transport is not None)
         if self.transport is not None and seen_starttls:      # pragma: nopy34
             # It is STARTTLS connection over normal connection.
             self._reader._transport = transport
@@ -323,7 +316,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if self.enable_SMTPUTF8:
             await self.push('250-SMTPUTF8')
             self.command_size_limits['MAIL'] += 10
-        if self.tls_context and not self._tls_protocol and _has_ssl:
+        if self.tls_context and not self._tls_protocol:
             await self.push('250-STARTTLS')
         if hasattr(self, 'ehlo_hook'):
             warn('Use handler.handle_EHLO() instead of .ehlo_hook()',
@@ -356,7 +349,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg:
             await self.push('501 Syntax: STARTTLS')
             return
-        if not (self.tls_context and _has_ssl):
+        if not self.tls_context:
             await self.push('454 TLS not available')
             return
         await self.push('220 Ready to start TLS')
