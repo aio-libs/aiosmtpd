@@ -25,10 +25,8 @@ protocols.
 Requirements
 ============
 
-You need at least Python 3.4 to use this library.  Python 3.3 might work if
-you install the standalone `asyncio <https://pypi.python.org/pypi/asyncio>`__
-library, but this combination is untested and unsupported.  Python 3.5 or
-newer is required for SSL support.  Both Windows and \*nix are supported.
+You need at least Python 3.5 to use this library.  Both Windows and \*nix are
+supported.
 
 
 License
@@ -74,7 +72,7 @@ Developing
 ==========
 
 You'll need the `tox <https://pypi.python.org/pypi/tox>`__ tool to run the
-test suite for Python 3.4, 3.5, and 3.6.  Once you've got that, run::
+test suite for Python 3.  Once you've got that, run::
 
     $ tox
 

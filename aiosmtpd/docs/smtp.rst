@@ -30,9 +30,8 @@ must also be coroutines.  Here's how you could implement this use case::
     >>> import asyncio
     >>> from aiosmtpd.smtp import SMTP as Server
     >>> class MyServer(Server):
-    ...     @asyncio.coroutine
-    ...     def smtp_PING(self, arg):
-    ...         yield from self.push('259 Pong')
+    ...     async def smtp_PING(self, arg):
+    ...         await self.push('259 Pong')
 
 Now let's run this server in a controller::
 

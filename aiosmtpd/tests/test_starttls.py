@@ -1,4 +1,4 @@
-import asyncio
+import ssl
 import unittest
 import pkg_resources
 
@@ -7,15 +7,6 @@ from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as SMTPProtocol
 from email.mime.text import MIMEText
 from smtplib import SMTP
-from unittest.mock import patch
-
-try:
-    import ssl
-    from asyncio import sslproto
-except ImportError:
-    _has_ssl = False
-else:
-    _has_ssl = sslproto and hasattr(ssl, 'MemoryBIO')
 
 
 class Controller(BaseController):
@@ -27,8 +18,7 @@ class ReceivingHandler:
     def __init__(self):
         self.box = []
 
-    @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope):
         self.box.append(envelope)
         return '250 OK'
 
@@ -65,7 +55,6 @@ class HandshakeFailingHandler:
 
 
 class TestStartTLS(unittest.TestCase):
-    @unittest.skipIf(not _has_ssl, 'SSL and Python 3.5 required')
     def test_starttls(self):
         handler = ReceivingHandler()
         controller = TLSController(handler)
@@ -83,7 +72,6 @@ class TestStartTLS(unittest.TestCase):
                 'rcpt1@example.com')
         self.assertEqual(len(handler.box), 1)
 
-    @unittest.skipIf(not _has_ssl, 'SSL and Python 3.5 required')
     def test_failed_handshake(self):
         controller = TLSController(HandshakeFailingHandler())
         controller.start()
@@ -96,19 +84,6 @@ class TestStartTLS(unittest.TestCase):
             self.assertEqual(code, 554)
             code, response = client.rcpt('rcpt@example.com')
             self.assertEqual(code, 554)
-
-    @patch('aiosmtpd.smtp._has_ssl', False)
-    def test_starttls_fails_with_no_ssl(self):
-        handler = ReceivingHandler()
-        controller = TLSController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            self.assertNotIn('starttls', client.esmtp_features)
-            code, response = client.docmd('STARTTLS')
-            self.assertEqual(code, 454)
 
     def test_disabled_tls(self):
         controller = Controller(Sink)
@@ -129,7 +104,6 @@ class TestStartTLS(unittest.TestCase):
             self.assertEqual(code, 501)
 
 
-@unittest.skipIf(not _has_ssl, 'SSL and Python 3.5 required')
 class TestTLSForgetsSessionData(unittest.TestCase):
     def setUp(self):
         controller = TLSController(Sink)
@@ -188,8 +162,7 @@ class TestRequireTLS(unittest.TestCase):
         with SMTP(*self.address) as client:
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
-            startls = 'starttls' in client.esmtp_features
-            self.assertEqual(startls, _has_ssl)
+            self.assertIn('starttls', client.esmtp_features)
 
     def test_mail_fails(self):
         with SMTP(*self.address) as client:

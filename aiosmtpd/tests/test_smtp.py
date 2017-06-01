@@ -33,8 +33,7 @@ class ReceivingHandler:
     def __init__(self):
         self.box = []
 
-    @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope):
         self.box.append(envelope)
         return '250 OK'
 
@@ -68,12 +67,10 @@ class CustomIdentController(Controller):
 class ErroringHandler:
     error = None
 
-    @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope):
         return '499 Could not accept the message'
 
-    @asyncio.coroutine
-    def handle_exception(self, error):
+    async def handle_exception(self, error):
         self.error = error
         return '500 ErroringHandler handling error'
 
@@ -81,8 +78,7 @@ class ErroringHandler:
 class ErroringHandlerCustomResponse:
     error = None
 
-    @asyncio.coroutine
-    def handle_exception(self, error):
+    async def handle_exception(self, error):
         self.error = error
         return '451 Temporary error: ({}) {}'.format(
             error.__class__.__name__, str(error))
@@ -91,8 +87,7 @@ class ErroringHandlerCustomResponse:
 class ErroringErrorHandler:
     error = None
 
-    @asyncio.coroutine
-    def handle_exception(self, error):
+    async def handle_exception(self, error):
         self.error = error
         raise ValueError('ErroringErrorHandler test')
 
@@ -105,15 +100,13 @@ class UndescribableError(Exception):
 class UndescribableErrorHandler:
     error = None
 
-    @asyncio.coroutine
-    def handle_exception(self, error):
+    async def handle_exception(self, error):
         self.error = error
         raise UndescribableError()
 
 
 class ErrorSMTP(Server):
-    @asyncio.coroutine
-    def smtp_HELO(self, hostname):
+    async def smtp_HELO(self, hostname):
         raise ValueError('test')
 
 
