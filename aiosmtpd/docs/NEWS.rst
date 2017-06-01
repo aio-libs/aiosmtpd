@@ -5,6 +5,7 @@
 1.1 (201X-XX-XX)
 ================
 * Drop support for Python 3.4.
+* General improvements in the ``Controller`` class.  (Closes #104)
 * When aiosmtpd handles a ``STARTTLS`` it must arrange for the original
   transport to be closed when the wrapped transport is closed.  This fixes a
   hidden exception which occurs when an EOF is received on the original
