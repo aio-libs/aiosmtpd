@@ -284,10 +284,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not hostname:
             await self.push('501 Syntax: HELO hostname')
             return
-        # See issue #21783 for a discussion of this behavior.
-        if self.session.host_name:
-            await self.push('503 Duplicate HELO/EHLO')
-            return
         self._set_rset_state()
         self.session.extended_smtp = False
         status = await self._call_handler_hook('HELO', hostname)
@@ -299,11 +295,6 @@ class SMTP(asyncio.StreamReaderProtocol):
     async def smtp_EHLO(self, hostname):
         if not hostname:
             await self.push('501 Syntax: EHLO hostname')
-            return
-        # See https://bugs.python.org/issue21783 for a discussion of this
-        # behavior.
-        if self.session.host_name:
-            await self.push('503 Duplicate HELO/EHLO')
             return
         self._set_rset_state()
         self.session.extended_smtp = True

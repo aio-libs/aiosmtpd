@@ -201,8 +201,7 @@ class TestSMTP(unittest.TestCase):
             code, response = client.helo('example.com')
             self.assertEqual(code, 250)
             code, response = client.helo('example.org')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Duplicate HELO/EHLO')
+            self.assertEqual(code, 250)
 
     def test_ehlo(self):
         with SMTP(*self.address) as client:
@@ -219,8 +218,7 @@ class TestSMTP(unittest.TestCase):
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
             code, response = client.ehlo('example.org')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Duplicate HELO/EHLO')
+            self.assertEqual(code, 250)
 
     def test_ehlo_no_hostname(self):
         with SMTP(*self.address) as client:
@@ -235,16 +233,14 @@ class TestSMTP(unittest.TestCase):
             code, response = client.helo('example.com')
             self.assertEqual(code, 250)
             code, response = client.ehlo('example.org')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Duplicate HELO/EHLO')
+            self.assertEqual(code, 250)
 
     def test_ehlo_then_helo(self):
         with SMTP(*self.address) as client:
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
             code, response = client.helo('example.org')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Duplicate HELO/EHLO')
+            self.assertEqual(code, 250)
 
     def test_noop(self):
         with SMTP(*self.address) as client:
