@@ -38,6 +38,15 @@ class ReceivingHandler:
         return '250 OK'
 
 
+class StoreEnvelopeOnVRFYHandler:
+    """Saves envelope for later inspection when handling VRFY."""
+    envelope = None
+
+    async def handle_VRFY(self, server, session, envelope, addr):
+        self.envelope = envelope
+        return '250 OK'
+
+
 class SizedController(Controller):
     def __init__(self, handler, size):
         self.size = size
@@ -659,6 +668,80 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(
                 response,
                 b'Error: command "FOOBAR" not recognized')
+
+
+class TestResetCommands(unittest.TestCase):
+    """Test that sender and recipients are reset on RSET, HELO, and EHLO.
+
+    The tests below issue each command twice with different addresses and
+    verify that mail_from and rcpt_tos have been replacecd.
+    """
+
+    expected_envelope_data = [{
+            'mail_from': 'from_first_run@example.com',
+            'rcpt_tos': ['to_first_run_1@example.com',
+                         'to_first_run_2@example.com']}, {
+            'mail_from': 'from_second_run@example.com',
+            'rcpt_tos': ['to_second_run_1@example.com',
+                         'to_second_run_2@example.com']}]
+
+    def send_envolope_data(self, client, mail_from, rcpt_tos):
+        client.mail(mail_from)
+        for rcpt in rcpt_tos:
+            client.rcpt(rcpt)
+
+    def test_helo(self):
+        handler = StoreEnvelopeOnVRFYHandler()
+        controller = DecodingController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+
+        with SMTP(controller.hostname, controller.port) as client:
+            for data in self.expected_envelope_data:
+                client.helo('example.com')
+                client.vrfy('dummy@addr.example')  # Save envelope in handler
+                self.assertIsNone(handler.envelope.mail_from)
+                self.assertEqual(len(handler.envelope.rcpt_tos), 0)
+                self.send_envolope_data(client, **data)
+                client.vrfy('dummy@addr.example')  # Save envelope in handler
+                self.assertEqual(handler.envelope.mail_from, data['mail_from'])
+                self.assertEqual(handler.envelope.rcpt_tos, data['rcpt_tos'])
+
+    def test_ehlo(self):
+        handler = StoreEnvelopeOnVRFYHandler()
+        controller = DecodingController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+
+        with SMTP(controller.hostname, controller.port) as client:
+            for data in self.expected_envelope_data:
+                client.ehlo('example.com')
+                client.vrfy('dummy@addr.example')  # Save envelope in handler
+                self.assertIsNone(handler.envelope.mail_from)
+                self.assertEqual(len(handler.envelope.rcpt_tos), 0)
+                self.send_envolope_data(client, **data)
+                client.vrfy('dummy@addr.example')  # Save envelope in handler
+                self.assertEqual(handler.envelope.mail_from, data['mail_from'])
+                self.assertEqual(handler.envelope.rcpt_tos, data['rcpt_tos'])
+
+    def test_rset(self):
+        handler = StoreEnvelopeOnVRFYHandler()
+        controller = DecodingController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+
+            for data in self.expected_envelope_data:
+                self.send_envolope_data(client, **data)
+                client.vrfy('dummy@addr.example')  # Save envelope in handler
+                self.assertEqual(handler.envelope.mail_from, data['mail_from'])
+                self.assertEqual(handler.envelope.rcpt_tos, data['rcpt_tos'])
+                client.rset()
+                client.vrfy('dummy@addr.example')  # Save envelope in handler
+                self.assertIsNone(handler.envelope.mail_from)
+                self.assertEqual(len(handler.envelope.rcpt_tos), 0)
 
 
 class TestSMTPWithController(unittest.TestCase):
