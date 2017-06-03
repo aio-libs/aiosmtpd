@@ -38,6 +38,15 @@ class ReceivingHandler:
         return '250 OK'
 
 
+class StoreEnvelopeOnVRFYHandler:
+    """Saves envelope for later inspection when handling VRFY."""
+    envelope = None
+
+    async def handle_VRFY(self, server, session, envelope, addr):
+        self.envelope = envelope
+        return '250 OK'
+
+
 class SizedController(Controller):
     def __init__(self, handler, size):
         self.size = size
@@ -201,8 +210,7 @@ class TestSMTP(unittest.TestCase):
             code, response = client.helo('example.com')
             self.assertEqual(code, 250)
             code, response = client.helo('example.org')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Duplicate HELO/EHLO')
+            self.assertEqual(code, 250)
 
     def test_ehlo(self):
         with SMTP(*self.address) as client:
@@ -219,8 +227,7 @@ class TestSMTP(unittest.TestCase):
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
             code, response = client.ehlo('example.org')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Duplicate HELO/EHLO')
+            self.assertEqual(code, 250)
 
     def test_ehlo_no_hostname(self):
         with SMTP(*self.address) as client:
@@ -235,16 +242,14 @@ class TestSMTP(unittest.TestCase):
             code, response = client.helo('example.com')
             self.assertEqual(code, 250)
             code, response = client.ehlo('example.org')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Duplicate HELO/EHLO')
+            self.assertEqual(code, 250)
 
     def test_ehlo_then_helo(self):
         with SMTP(*self.address) as client:
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
             code, response = client.helo('example.org')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Duplicate HELO/EHLO')
+            self.assertEqual(code, 250)
 
     def test_noop(self):
         with SMTP(*self.address) as client:
@@ -663,6 +668,87 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(
                 response,
                 b'Error: command "FOOBAR" not recognized')
+
+
+class TestResetCommands(unittest.TestCase):
+    """Test that sender and recipients are reset on RSET, HELO, and EHLO.
+
+    The tests below issue each command twice with different addresses and
+    verify that mail_from and rcpt_tos have been replacecd.
+    """
+    expected_envelope_data = [
+        # Pre-RSET/HELO/EHLO envelope data.
+        dict(
+            mail_from='anne@example.com',
+            rcpt_tos=['bart@example.com', 'cate@example.com'],
+            ),
+        dict(
+            mail_from='dave@example.com',
+            rcpt_tos=['elle@example.com', 'fred@example.com'],
+            ),
+        ]
+
+    def setUp(self):
+        self._handler = StoreEnvelopeOnVRFYHandler()
+        self._controller = DecodingController(self._handler)
+        self._controller.start()
+        self._address = (self._controller.hostname, self._controller.port)
+        self.addCleanup(self._controller.stop)
+
+    def _send_envelope_data(self, client, mail_from, rcpt_tos):
+        client.mail(mail_from)
+        for rcpt in rcpt_tos:
+            client.rcpt(rcpt)
+
+    def test_helo(self):
+        with SMTP(*self._address) as client:
+            # Each time through the loop, the HELO will reset the envelope.
+            for data in self.expected_envelope_data:
+                client.helo('example.com')
+                # Save the envelope in the handler.
+                client.vrfy('zuzu@example.com')
+                self.assertIsNone(self._handler.envelope.mail_from)
+                self.assertEqual(len(self._handler.envelope.rcpt_tos), 0)
+                self._send_envelope_data(client, **data)
+                client.vrfy('zuzu@example.com')
+                self.assertEqual(
+                    self._handler.envelope.mail_from, data['mail_from'])
+                self.assertEqual(
+                    self._handler.envelope.rcpt_tos, data['rcpt_tos'])
+
+    def test_ehlo(self):
+        with SMTP(*self._address) as client:
+            # Each time through the loop, the EHLO will reset the envelope.
+            for data in self.expected_envelope_data:
+                client.ehlo('example.com')
+                # Save the envelope in the handler.
+                client.vrfy('zuzu@example.com')
+                self.assertIsNone(self._handler.envelope.mail_from)
+                self.assertEqual(len(self._handler.envelope.rcpt_tos), 0)
+                self._send_envelope_data(client, **data)
+                client.vrfy('zuzu@example.com')
+                self.assertEqual(
+                    self._handler.envelope.mail_from, data['mail_from'])
+                self.assertEqual(
+                    self._handler.envelope.rcpt_tos, data['rcpt_tos'])
+
+    def test_rset(self):
+        with SMTP(*self._address) as client:
+            client.helo('example.com')
+            # Each time through the loop, the RSET will reset the envelope.
+            for data in self.expected_envelope_data:
+                self._send_envelope_data(client, **data)
+                # Save the envelope in the handler.
+                client.vrfy('zuzu@example.com')
+                self.assertEqual(
+                    self._handler.envelope.mail_from, data['mail_from'])
+                self.assertEqual(
+                    self._handler.envelope.rcpt_tos, data['rcpt_tos'])
+                # Reset the envelope explicitly.
+                client.rset()
+                client.vrfy('zuzu@example.com')
+                self.assertIsNone(self._handler.envelope.mail_from)
+                self.assertEqual(len(self._handler.envelope.rcpt_tos), 0)
 
 
 class TestSMTPWithController(unittest.TestCase):
