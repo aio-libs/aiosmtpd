@@ -5,6 +5,8 @@
 1.1 (201X-XX-XX)
 ================
 * Drop support for Python 3.4.
+* As per RFC 5321, §4.1.4, multiple ``HELO`` / ``EHLO`` commands in the same
+  session are semantically equivalent to ``RSET``.  (Closes #78)
 * General improvements in the ``Controller`` class.  (Closes #104)
 * When aiosmtpd handles a ``STARTTLS`` it must arrange for the original
   transport to be closed when the wrapped transport is closed.  This fixes a

@@ -676,72 +676,79 @@ class TestResetCommands(unittest.TestCase):
     The tests below issue each command twice with different addresses and
     verify that mail_from and rcpt_tos have been replacecd.
     """
+    expected_envelope_data = [
+        # Pre-RSET/HELO/EHLO envelope data.
+        dict(
+            mail_from='anne@example.com',
+            rcpt_tos=['bart@example.com', 'cate@example.com'],
+            ),
+        dict(
+            mail_from='dave@example.com',
+            rcpt_tos=['elle@example.com', 'fred@example.com'],
+            ),
+        ]
 
-    expected_envelope_data = [{
-            'mail_from': 'from_first_run@example.com',
-            'rcpt_tos': ['to_first_run_1@example.com',
-                         'to_first_run_2@example.com']}, {
-            'mail_from': 'from_second_run@example.com',
-            'rcpt_tos': ['to_second_run_1@example.com',
-                         'to_second_run_2@example.com']}]
+    def setUp(self):
+        self._handler = StoreEnvelopeOnVRFYHandler()
+        self._controller = DecodingController(self._handler)
+        self._controller.start()
+        self._address = (self._controller.hostname, self._controller.port)
+        self.addCleanup(self._controller.stop)
 
-    def send_envolope_data(self, client, mail_from, rcpt_tos):
+    def _send_envelope_data(self, client, mail_from, rcpt_tos):
         client.mail(mail_from)
         for rcpt in rcpt_tos:
             client.rcpt(rcpt)
 
     def test_helo(self):
-        handler = StoreEnvelopeOnVRFYHandler()
-        controller = DecodingController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-
-        with SMTP(controller.hostname, controller.port) as client:
+        with SMTP(*self._address) as client:
+            # Each time through the loop, the HELO will reset the envelope.
             for data in self.expected_envelope_data:
                 client.helo('example.com')
-                client.vrfy('dummy@addr.example')  # Save envelope in handler
-                self.assertIsNone(handler.envelope.mail_from)
-                self.assertEqual(len(handler.envelope.rcpt_tos), 0)
-                self.send_envolope_data(client, **data)
-                client.vrfy('dummy@addr.example')  # Save envelope in handler
-                self.assertEqual(handler.envelope.mail_from, data['mail_from'])
-                self.assertEqual(handler.envelope.rcpt_tos, data['rcpt_tos'])
+                # Save the envelope in the handler.
+                client.vrfy('zuzu@example.com')
+                self.assertIsNone(self._handler.envelope.mail_from)
+                self.assertEqual(len(self._handler.envelope.rcpt_tos), 0)
+                self._send_envelope_data(client, **data)
+                client.vrfy('zuzu@example.com')
+                self.assertEqual(
+                    self._handler.envelope.mail_from, data['mail_from'])
+                self.assertEqual(
+                    self._handler.envelope.rcpt_tos, data['rcpt_tos'])
 
     def test_ehlo(self):
-        handler = StoreEnvelopeOnVRFYHandler()
-        controller = DecodingController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-
-        with SMTP(controller.hostname, controller.port) as client:
+        with SMTP(*self._address) as client:
+            # Each time through the loop, the EHLO will reset the envelope.
             for data in self.expected_envelope_data:
                 client.ehlo('example.com')
-                client.vrfy('dummy@addr.example')  # Save envelope in handler
-                self.assertIsNone(handler.envelope.mail_from)
-                self.assertEqual(len(handler.envelope.rcpt_tos), 0)
-                self.send_envolope_data(client, **data)
-                client.vrfy('dummy@addr.example')  # Save envelope in handler
-                self.assertEqual(handler.envelope.mail_from, data['mail_from'])
-                self.assertEqual(handler.envelope.rcpt_tos, data['rcpt_tos'])
+                # Save the envelope in the handler.
+                client.vrfy('zuzu@example.com')
+                self.assertIsNone(self._handler.envelope.mail_from)
+                self.assertEqual(len(self._handler.envelope.rcpt_tos), 0)
+                self._send_envelope_data(client, **data)
+                client.vrfy('zuzu@example.com')
+                self.assertEqual(
+                    self._handler.envelope.mail_from, data['mail_from'])
+                self.assertEqual(
+                    self._handler.envelope.rcpt_tos, data['rcpt_tos'])
 
     def test_rset(self):
-        handler = StoreEnvelopeOnVRFYHandler()
-        controller = DecodingController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-
-        with SMTP(controller.hostname, controller.port) as client:
+        with SMTP(*self._address) as client:
             client.helo('example.com')
-
+            # Each time through the loop, the RSET will reset the envelope.
             for data in self.expected_envelope_data:
-                self.send_envolope_data(client, **data)
-                client.vrfy('dummy@addr.example')  # Save envelope in handler
-                self.assertEqual(handler.envelope.mail_from, data['mail_from'])
-                self.assertEqual(handler.envelope.rcpt_tos, data['rcpt_tos'])
+                self._send_envelope_data(client, **data)
+                # Save the envelope in the handler.
+                client.vrfy('zuzu@example.com')
+                self.assertEqual(
+                    self._handler.envelope.mail_from, data['mail_from'])
+                self.assertEqual(
+                    self._handler.envelope.rcpt_tos, data['rcpt_tos'])
+                # Reset the envelope explicitly.
                 client.rset()
-                client.vrfy('dummy@addr.example')  # Save envelope in handler
-                self.assertIsNone(handler.envelope.mail_from)
-                self.assertEqual(len(handler.envelope.rcpt_tos), 0)
+                client.vrfy('zuzu@example.com')
+                self.assertIsNone(self._handler.envelope.mail_from)
+                self.assertEqual(len(self._handler.envelope.rcpt_tos), 0)
 
 
 class TestSMTPWithController(unittest.TestCase):
