@@ -29,6 +29,12 @@ class TestServer(unittest.TestCase):
         server.command_size_limits['DATA'] = 1024
         self.assertEqual(server.max_command_size_limit, 1024)
 
+    def test_special_command_size_limit(self):
+        server = Server(Sink())
+        server.command_size_limit = 1024
+        self.assertEqual(server.max_command_size_limit, 1024)
+        self.assertEqual(server.command_size_limits['DATA'], 1024)
+
     def test_socket_error(self):
         # Testing starting a server with a port already in use
         s1 = Controller(Sink(), port=8025)
