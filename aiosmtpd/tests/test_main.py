@@ -6,7 +6,7 @@ import unittest
 
 from aiosmtpd.handlers import Debugging
 from aiosmtpd.main import main, parseargs
-from aiosmtpd.smtp import SMTP
+from aiosmtpd.smtp import SMTP, __version__
 from contextlib import ExitStack
 from functools import partial
 from io import StringIO
@@ -309,3 +309,23 @@ class TestParseArgs(unittest.TestCase):
             self.assertEqual(cm.exception.code, 2)
         usage_lines = stderr.getvalue().splitlines()
         self.assertEqual(usage_lines[-1][-24:], 'Invalid port number: foo')
+
+    def test_version(self):
+        stdout = StringIO()
+        with ExitStack() as resources:
+            resources.enter_context(patch('sys.stdout', stdout))
+            resources.enter_context(patch('aiosmtpd.main.PROGRAM', 'smtpd'))
+            cm = resources.enter_context(self.assertRaises(SystemExit))
+            parseargs(('--version',))
+            self.assertEqual(cm.exception.code, 0)
+        self.assertEqual(stdout.getvalue(), 'smtpd {}\n'.format(__version__))
+
+    def test_v(self):
+        stdout = StringIO()
+        with ExitStack() as resources:
+            resources.enter_context(patch('sys.stdout', stdout))
+            resources.enter_context(patch('aiosmtpd.main.PROGRAM', 'smtpd'))
+            cm = resources.enter_context(self.assertRaises(SystemExit))
+            parseargs(('-v',))
+            self.assertEqual(cm.exception.code, 0)
+        self.assertEqual(stdout.getvalue(), 'smtpd {}\n'.format(__version__))

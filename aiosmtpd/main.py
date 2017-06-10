@@ -4,7 +4,7 @@ import signal
 import asyncio
 import logging
 
-from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP
+from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP, __version__
 from argparse import ArgumentParser
 from functools import partial
 from importlib import import_module
@@ -28,6 +28,9 @@ def parseargs(args=None):
     parser = ArgumentParser(
         prog=PROGRAM,
         description='An RFC 5321 SMTP server with extensions.')
+    parser.add_argument(
+        '-v', '--version', action='version',
+        version='%(prog)s {}'.format(__version__))
     parser.add_argument(
         '-n', '--nosetuid',
         dest='setuid', default=True, action='store_false',

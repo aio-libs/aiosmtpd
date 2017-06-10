@@ -11,6 +11,8 @@
   ignored.  **API BREAK** If you have a handler that implements
   ``handle_NOOP()``, it previously took zero arguments but now requires a
   single argument.  (Closes #107)
+* The command line options ``--version`` / ``-v`` has been added to print the
+  package's current version number.  (Closes #111)
 * General improvements in the ``Controller`` class.  (Closes #104)
 * When aiosmtpd handles a ``STARTTLS`` it must arrange for the original
   transport to be closed when the wrapped transport is closed.  This fixes a
