@@ -320,11 +320,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push(status)
 
     async def smtp_NOOP(self, arg):
-        if arg:
-            await self.push('501 Syntax: NOOP')
-        else:
-            status = await self._call_handler_hook('NOOP')
-            await self.push('250 OK' if status is MISSING else status)
+        status = await self._call_handler_hook('NOOP', arg)
+        await self.push('250 OK' if status is MISSING else status)
 
     async def smtp_QUIT(self, arg):
         if arg:

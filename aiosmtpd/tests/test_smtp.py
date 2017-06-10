@@ -259,9 +259,8 @@ class TestSMTP(unittest.TestCase):
     def test_noop_with_arg(self):
         with SMTP(*self.address) as client:
             # .noop() doesn't accept arguments.
-            code, response = client.docmd('NOOP', 'oops')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: NOOP')
+            code, response = client.docmd('NOOP', 'ok')
+            self.assertEqual(code, 250)
 
     def test_quit(self):
         client = SMTP(*self.address)
