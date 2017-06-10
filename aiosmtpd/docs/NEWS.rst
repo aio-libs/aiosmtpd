@@ -7,6 +7,10 @@
 * Drop support for Python 3.4.
 * As per RFC 5321, §4.1.4, multiple ``HELO`` / ``EHLO`` commands in the same
   session are semantically equivalent to ``RSET``.  (Closes #78)
+* As per RFC 5321, $4.1.1.9, ``NOOP`` takes an optional argument, which is
+  ignored.  **API BREAK** If you have a handler that implements
+  ``handle_NOOP()``, it previously took zero arguments but now requires a
+  single argument.  (Closes #107)
 * General improvements in the ``Controller`` class.  (Closes #104)
 * When aiosmtpd handles a ``STARTTLS`` it must arrange for the original
   transport to be closed when the wrapped transport is closed.  This fixes a
