@@ -201,12 +201,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             try:
                 line = await self._reader.readline()
                 log.debug('_handle_client readline: %s', line)
-            except (ConnectionResetError, asyncio.CancelledError) as error:
-                # The connection got reset during the DATA command.
-                log.info('Connection lost during _handle_client()')
-                self.connection_lost(error)
-                return
-            try:
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.rstrip(b'\r\n')
                 log.info('%r Data: %s', self.session.peer, line)
@@ -266,6 +260,13 @@ class SMTP(asyncio.StreamReaderProtocol):
                         '500 Error: command "%s" not recognized' % command)
                     continue
                 await method(arg)
+            except (ConnectionResetError, asyncio.CancelledError) as error:
+                # The connection got reset during the DATA command.
+                # XXX If handler method raises ConnectionResetError, we should
+                # verify that it was actually self._reader that was reset.
+                log.info('Connection lost during _handle_client()')
+                self.connection_lost(error)
+                return
             except Exception as error:
                 try:
                     status = await self.handle_exception(error)
