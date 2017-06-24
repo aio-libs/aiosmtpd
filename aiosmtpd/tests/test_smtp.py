@@ -124,6 +124,13 @@ class ErrorController(Controller):
         return ErrorSMTP(self.handler)
 
 
+class SleepingHeloHandler:
+    async def handle_HELO(self, server, session, envelope, hostname):
+        await asyncio.sleep(0.01)
+        session.host_name = hostname
+        return '250 {}'.format(server.hostname)
+
+
 class TestProtocol(unittest.TestCase):
     def setUp(self):
         self.transport = Mock()
@@ -1135,3 +1142,17 @@ Testing\xFF
 """)
             self.assertEqual(cm.exception.smtp_code, 500)
             self.assertIn(b'Error: strict ASCII mode', cm.exception.smtp_error)
+
+
+class TestSleepingHandler(unittest.TestCase):
+    def setUp(self):
+        controller = NoDecodeController(SleepingHeloHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_close_after_helo(self):
+        with SMTP(*self.address) as client:
+            client.send('HELO example.com\r\n')
+            client.sock.shutdown(socket.SHUT_WR)
+            self.assertRaises(SMTPServerDisconnected, client.getreply)
