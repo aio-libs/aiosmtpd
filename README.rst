@@ -105,6 +105,7 @@ Contents
    aiosmtpd/docs/lmtp
    aiosmtpd/docs/handlers
    aiosmtpd/docs/migrating
+   aiosmtpd/docs/manpage
    aiosmtpd/docs/NEWS
 
 

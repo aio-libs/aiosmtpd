@@ -20,6 +20,7 @@
   tranport after the connection is lost.  (Closes #83)
 * Widen the catch of ``ConnectionResetError`` and ``CancelledError`` to also
   catch such errors from handler methods.  (Closes #110)
+* Added a manpage for the ``aiosmtpd`` command line script.  (Closes #116)
 
 1.0 (2017-05-15)
 ================
