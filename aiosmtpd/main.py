@@ -34,7 +34,7 @@ def parseargs(args=None):
     parser.add_argument(
         '-n', '--nosetuid',
         dest='setuid', default=True, action='store_false',
-        help="""This program generally tries to setuid `nobody', unless this
+        help="""This program generally tries to setuid `nobody`, unless this
                 flag is set.  The setuid call will fail if this program is not
                 run as root (in which case, use this flag).""")
     parser.add_argument(
