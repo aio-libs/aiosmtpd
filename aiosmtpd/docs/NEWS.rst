@@ -18,6 +18,8 @@
   transport to be closed when the wrapped transport is closed.  This fixes a
   hidden exception which occurs when an EOF is received on the original
   tranport after the connection is lost.  (Closes #83)
+* Widen the catch of ``ConnectionResetError`` and ``CancelledError`` to also
+  catch such errors from handler methods.  (Closes #110)
 
 1.0 (2017-05-15)
 ================
