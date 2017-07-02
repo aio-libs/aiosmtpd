@@ -421,7 +421,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 help_str = method._smtp_syntax
                 if self.session.extended_smtp and method._smtp_syntax_extended:
                     help_str += method._smtp_syntax_extended
-                yield from self.push('250 Syntax: ' + help_str)
+                    await self.push('250 Syntax: ' + help_str)
                 return
             code = 501
         commands = []
@@ -432,7 +432,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             if self._syntax_available(method):
                 commands.append(name.lstrip('smtp_'))
         commands.sort()
-        yield from self.push(
+        await self.push(
             '{} Supported commands: {}'.format(code, ' '.join(commands)))
 
     @syntax('VRFY <address>')
