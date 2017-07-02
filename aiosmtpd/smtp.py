@@ -53,9 +53,9 @@ def make_loop():
 
 def syntax(text, extended=None, when=None):
     def decorator(f):
-        f._smtp_syntax = text
-        f._smtp_syntax_extended = extended
-        f._smtp_syntax_when = when
+        f.__smtp_syntax__ = text
+        f.__smtp_syntax_extended__ = extended
+        f.__smtp_syntax_when__ = when
         return f
     return decorator
 
@@ -405,10 +405,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         return result
 
     def _syntax_available(self, method):
-        if not getattr(method, '_smtp_syntax', None):
+        if not getattr(method, '__smtp_syntax__', None):
             return False
-        if method._smtp_syntax_when:
-            return bool(getattr(self, method._smtp_syntax_when))
+        if method.__smtp_syntax_when__:
+            return bool(getattr(self, method.__smtp_syntax_when__))
         return True
 
     @asyncio.coroutine
@@ -418,9 +418,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             lc_arg = arg.upper()
             method = getattr(self, 'smtp_' + lc_arg, None)
             if method and self._syntax_available(method):
-                help_str = method._smtp_syntax
-                if self.session.extended_smtp and method._smtp_syntax_extended:
-                    help_str += method._smtp_syntax_extended
+                help_str = method.__smtp_syntax__
+                if (self.session.extended_smtp
+                        and method.__smtp_syntax_extended__):
+                    help_str += method.__smtp_syntax_extended__
                     await self.push('250 Syntax: ' + help_str)
                 return
             code = 501
