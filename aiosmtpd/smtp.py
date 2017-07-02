@@ -77,6 +77,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self._decode_data = decode_data
         self.command_size_limits.clear()
+        self.supported_commands = ['EHLO', 'HELO', 'MAIL', 'RCPT', 'DATA',
+                                   'RSET', 'NOOP', 'QUIT', 'VRFY']
         if hostname:
             self.hostname = hostname
         else:
@@ -85,6 +87,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if tls_context:
             # Through rfc3207 part 4.1 certificate checking is part of SMTP
             # protocol, not SSL layer.
+            self.supported_commands.append('STARTTLS')
             self.tls_context.check_hostname = False
             self.tls_context.verify_mode = ssl.CERT_NONE
         self.require_starttls = tls_context and require_starttls
@@ -392,42 +395,25 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     async def smtp_HELP(self, arg):
         if arg:
-            extended = ' [SP <mail-parameters>]'
             lc_arg = arg.upper()
-            if lc_arg == 'EHLO':
-                await self.push('250 Syntax: EHLO hostname')
-            elif lc_arg == 'HELO':
-                await self.push('250 Syntax: HELO hostname')
-            elif lc_arg == 'MAIL':
-                msg = '250 Syntax: MAIL FROM: <address>'
-                if self.session.extended_smtp:
-                    msg += extended
-                await self.push(msg)
-            elif lc_arg == 'RCPT':
-                msg = '250 Syntax: RCPT TO: <address>'
-                if self.session.extended_smtp:
-                    msg += extended
-                await self.push(msg)
-            elif lc_arg == 'DATA':
-                await self.push('250 Syntax: DATA')
-            elif lc_arg == 'RSET':
-                await self.push('250 Syntax: RSET')
-            elif lc_arg == 'NOOP':
-                await self.push('250 Syntax: NOOP')
-            elif lc_arg == 'QUIT':
-                await self.push('250 Syntax: QUIT')
-            elif lc_arg == 'VRFY':
-                await self.push('250 Syntax: VRFY <address>')
-            else:
-                await self.push(
-                    '501 Supported commands: EHLO HELO MAIL RCPT '
-                    'DATA RSET NOOP QUIT VRFY')
+            method = getattr(self, 'smtp_' + lc_arg, None)
+            if method and method.__doc__:
+                yield from self.push('250 ' + method.__doc__.strip())
+                return
+            msg = self.help_hook(lc_arg)
+            if msg:
+                yield from self.push(msg)
+                return
+            yield from self.push('501 Supported commands: {}'.format(
+                ' '.join(self.supported_commands)))
         else:
-            await self.push(
-                '250 Supported commands: EHLO HELO MAIL RCPT DATA '
-                'RSET NOOP QUIT VRFY')
+            yield from self.push(
+                '250 Supported commands: {}'.format(
+                    ' '.join(self.supported_commands)))
 
-    async def smtp_VRFY(self, arg):
+    @asyncio.coroutine
+    def smtp_VRFY(self, arg):
+        """ Syntax: VRFY <address> """
         if arg:
             try:
                 address, params = self._getaddr(arg)
