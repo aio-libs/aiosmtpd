@@ -436,7 +436,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             '{} Supported commands: {}'.format(code, ' '.join(commands)))
 
     @syntax('VRFY <address>')
-    def smtp_VRFY(self, arg):
+    async def smtp_VRFY(self, arg):
         if arg:
             try:
                 address, params = self._getaddr(arg)
