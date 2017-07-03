@@ -21,6 +21,8 @@
 * Widen the catch of ``ConnectionResetError`` and ``CancelledError`` to also
   catch such errors from handler methods.  (Closes #110)
 * Added a manpage for the ``aiosmtpd`` command line script.  (Closes #116)
+* The ``Controller`` class now takes an optional keyword argument ``ssl_context``
+  which is passed directly to the asyncio ``create_server()`` call.
 
 1.0 (2017-05-15)
 ================
