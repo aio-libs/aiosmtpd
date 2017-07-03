@@ -28,8 +28,9 @@ All methods implementing ``SMTP`` commands are prefixed with ``smtp_``; they
 must also be coroutines.  Here's how you could implement this use case::
 
     >>> import asyncio
-    >>> from aiosmtpd.smtp import SMTP as Server
+    >>> from aiosmtpd.smtp import SMTP as Server, syntax
     >>> class MyServer(Server):
+    ...     @syntax('PING [ignored]')
     ...     async def smtp_PING(self, arg):
     ...         await self.push('259 Pong')
 
@@ -60,6 +61,17 @@ command, we have to use the lower level interface to talk to it.
     259
     >>> message
     b'Pong'
+
+Because we prefixed the ``smtp_PING()`` method with the ``@syntax()``
+decorator, the command shows up in the ``HELP`` output.
+
+    >>> print(client.help().decode('utf-8'))
+    Supported commands: DATA EHLO HELO HELP MAIL NOOP PING QUIT RCPT RSET VRFY
+
+And we can get more detailed help on the new command.
+
+    >>> print(client.help('PING').decode('utf-8'))
+    Syntax: PING [ignored]
 
 
 Server hooks

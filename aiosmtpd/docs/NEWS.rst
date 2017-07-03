@@ -21,6 +21,10 @@
 * Widen the catch of ``ConnectionResetError`` and ``CancelledError`` to also
   catch such errors from handler methods.  (Closes #110)
 * Added a manpage for the ``aiosmtpd`` command line script.  (Closes #116)
+* Added much better support for the ``HELP``.  There's a new decorator called
+  ``@syntax()`` which you can use in derived classes to decorate ``smtp_*()``
+  methods.  These then show up in ``HELP`` responses.  This also fixes
+  ``HELP`` responses for the ``LMTP`` subclass.  (Closes #113)
 * The ``Controller`` class now takes an optional keyword argument ``ssl_context``
   which is passed directly to the asyncio ``create_server()`` call.
 
