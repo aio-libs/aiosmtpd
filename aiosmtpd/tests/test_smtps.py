@@ -1,4 +1,5 @@
 """Test SMTP over SSL/TLS."""
+
 import ssl
 import socket
 import unittest
@@ -27,10 +28,8 @@ class ReceivingHandler:
 def get_server_context():
     tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     tls_context.load_cert_chain(
-            pkg_resources.resource_filename('aiosmtpd.tests.certs',
-                                            'server.crt'),
-            pkg_resources.resource_filename('aiosmtpd.tests.certs',
-                                            'server.key'))
+        pkg_resources.resource_filename('aiosmtpd.tests.certs', 'server.crt'),
+        pkg_resources.resource_filename('aiosmtpd.tests.certs', 'server.key'))
     return tls_context
 
 
