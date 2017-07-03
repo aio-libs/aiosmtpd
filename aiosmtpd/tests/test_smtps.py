@@ -37,8 +37,8 @@ def get_client_context():
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
     context.check_hostname = False
     context.load_verify_locations(
-            cafile=pkg_resources.resource_filename('aiosmtpd.tests.certs',
-                                                   'server.crt'))
+        cafile=pkg_resources.resource_filename(
+            'aiosmtpd.tests.certs', 'server.crt'))
     return context
 
 
@@ -56,9 +56,7 @@ class TestSMTPS(unittest.TestCase):
             self.assertEqual(code, 250)
             self.assertEqual(response, bytes(socket.getfqdn(), 'utf-8'))
             client.send_message(
-                    MIMEText('hi'),
-                    'sender@example.com',
-                    'rcpt1@example.com')
+                MIMEText('hi'), 'sender@example.com', 'rcpt1@example.com')
         self.assertEqual(len(self.handler.box), 1)
         envelope = self.handler.box[0]
         self.assertEqual(envelope.mail_from, 'sender@example.com')
