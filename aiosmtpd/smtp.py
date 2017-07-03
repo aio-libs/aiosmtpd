@@ -331,7 +331,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             status = '250 HELP'
         await self.push(status)
 
-    @syntax('NOOP')
+    @syntax('NOOP [ignored]')
     async def smtp_NOOP(self, arg):
         status = await self._call_handler_hook('NOOP', arg)
         await self.push('250 OK' if status is MISSING else status)
@@ -346,7 +346,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._handler_coroutine.cancel()
             self.transport.close()
 
-    @syntax('STARTTLS')
+    @syntax('STARTTLS', when='tls_context')
     async def smtp_STARTTLS(self, arg):
         log.info('%r STARTTLS', self.session.peer)
         if arg:
@@ -405,24 +405,24 @@ class SMTP(asyncio.StreamReaderProtocol):
         return result
 
     def _syntax_available(self, method):
-        if not getattr(method, '__smtp_syntax__', None):
+        if getattr(method, '__smtp_syntax__', None) is None:
             return False
         if method.__smtp_syntax_when__:
             return bool(getattr(self, method.__smtp_syntax_when__))
         return True
 
+    @syntax('HELP [command]')
     @asyncio.coroutine
     async def smtp_HELP(self, arg):
         code = 250
         if arg:
-            lc_arg = arg.upper()
-            method = getattr(self, 'smtp_' + lc_arg, None)
+            method = getattr(self, 'smtp_' + arg.upper(), None)
             if method and self._syntax_available(method):
                 help_str = method.__smtp_syntax__
                 if (self.session.extended_smtp
                         and method.__smtp_syntax_extended__):
                     help_str += method.__smtp_syntax_extended__
-                    await self.push('250 Syntax: ' + help_str)
+                await self.push('250 Syntax: ' + help_str)
                 return
             code = 501
         commands = []

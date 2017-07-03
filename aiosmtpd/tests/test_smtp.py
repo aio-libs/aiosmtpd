@@ -287,7 +287,7 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('HELP')
             self.assertEqual(code, 250)
             self.assertEqual(response,
-                             b'Supported commands: DATA EHLO HELO MAIL '
+                             b'Supported commands: DATA EHLO HELO HELP MAIL '
                              b'NOOP QUIT RCPT RSET VRFY')
 
     def test_help_helo(self):
@@ -354,7 +354,7 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             code, response = client.docmd('HELP', 'NOOP')
             self.assertEqual(code, 250)
-            self.assertEqual(response, b'Syntax: NOOP')
+            self.assertEqual(response, b'Syntax: NOOP [ignored]')
 
     def test_help_quit(self):
         with SMTP(*self.address) as client:
@@ -374,7 +374,7 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('HELP me!')
             self.assertEqual(code, 501)
             self.assertEqual(response,
-                             b'Supported commands: DATA EHLO HELO MAIL '
+                             b'Supported commands: DATA EHLO HELO HELP MAIL '
                              b'NOOP QUIT RCPT RSET VRFY')
 
     def test_expn(self):
