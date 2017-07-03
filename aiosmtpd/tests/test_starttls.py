@@ -103,6 +103,18 @@ class TestStartTLS(unittest.TestCase):
             code, response = client.docmd('STARTTLS', 'TRUE')
             self.assertEqual(code, 501)
 
+    def test_help_after_starttls(self):
+        controller = TLSController(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            # Don't get tricked by smtplib processing of the response.
+            code, response = client.docmd('HELP')
+            self.assertEqual(code, 250)
+            self.assertEqual(response,
+                             b'Supported commands: DATA EHLO HELO HELP MAIL '
+                             b'NOOP QUIT RCPT RSET STARTTLS VRFY')
+
 
 class TestTLSForgetsSessionData(unittest.TestCase):
     def setUp(self):

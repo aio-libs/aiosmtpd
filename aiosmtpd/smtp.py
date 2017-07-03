@@ -51,6 +51,15 @@ def make_loop():
     return asyncio.get_event_loop()
 
 
+def syntax(text, extended=None, when=None):
+    def decorator(f):
+        f.__smtp_syntax__ = text
+        f.__smtp_syntax_extended__ = extended
+        f.__smtp_syntax_when__ = when
+        return f
+    return decorator
+
+
 @public
 class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
@@ -281,6 +290,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                     await self.push(status)
 
     # SMTP and ESMTP commands
+    @syntax('HELO hostname')
     async def smtp_HELO(self, hostname):
         if not hostname:
             await self.push('501 Syntax: HELO hostname')
@@ -293,6 +303,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             status = '250 {}'.format(self.hostname)
         await self.push(status)
 
+    @syntax('EHLO hostname')
     async def smtp_EHLO(self, hostname):
         if not hostname:
             await self.push('501 Syntax: EHLO hostname')
@@ -320,10 +331,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             status = '250 HELP'
         await self.push(status)
 
+    @syntax('NOOP [ignored]')
     async def smtp_NOOP(self, arg):
         status = await self._call_handler_hook('NOOP', arg)
         await self.push('250 OK' if status is MISSING else status)
 
+    @syntax('QUIT')
     async def smtp_QUIT(self, arg):
         if arg:
             await self.push('501 Syntax: QUIT')
@@ -333,6 +346,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._handler_coroutine.cancel()
             self.transport.close()
 
+    @syntax('STARTTLS', when='tls_context')
     async def smtp_STARTTLS(self, arg):
         log.info('%r STARTTLS', self.session.peer)
         if arg:
@@ -390,43 +404,39 @@ class SMTP(asyncio.StreamReaderProtocol):
             result[param] = value if eq else True
         return result
 
-    async def smtp_HELP(self, arg):
-        if arg:
-            extended = ' [SP <mail-parameters>]'
-            lc_arg = arg.upper()
-            if lc_arg == 'EHLO':
-                await self.push('250 Syntax: EHLO hostname')
-            elif lc_arg == 'HELO':
-                await self.push('250 Syntax: HELO hostname')
-            elif lc_arg == 'MAIL':
-                msg = '250 Syntax: MAIL FROM: <address>'
-                if self.session.extended_smtp:
-                    msg += extended
-                await self.push(msg)
-            elif lc_arg == 'RCPT':
-                msg = '250 Syntax: RCPT TO: <address>'
-                if self.session.extended_smtp:
-                    msg += extended
-                await self.push(msg)
-            elif lc_arg == 'DATA':
-                await self.push('250 Syntax: DATA')
-            elif lc_arg == 'RSET':
-                await self.push('250 Syntax: RSET')
-            elif lc_arg == 'NOOP':
-                await self.push('250 Syntax: NOOP')
-            elif lc_arg == 'QUIT':
-                await self.push('250 Syntax: QUIT')
-            elif lc_arg == 'VRFY':
-                await self.push('250 Syntax: VRFY <address>')
-            else:
-                await self.push(
-                    '501 Supported commands: EHLO HELO MAIL RCPT '
-                    'DATA RSET NOOP QUIT VRFY')
-        else:
-            await self.push(
-                '250 Supported commands: EHLO HELO MAIL RCPT DATA '
-                'RSET NOOP QUIT VRFY')
+    def _syntax_available(self, method):
+        if getattr(method, '__smtp_syntax__', None) is None:
+            return False
+        if method.__smtp_syntax_when__:
+            return bool(getattr(self, method.__smtp_syntax_when__))
+        return True
 
+    @syntax('HELP [command]')
+    @asyncio.coroutine
+    async def smtp_HELP(self, arg):
+        code = 250
+        if arg:
+            method = getattr(self, 'smtp_' + arg.upper(), None)
+            if method and self._syntax_available(method):
+                help_str = method.__smtp_syntax__
+                if (self.session.extended_smtp
+                        and method.__smtp_syntax_extended__):
+                    help_str += method.__smtp_syntax_extended__
+                await self.push('250 Syntax: ' + help_str)
+                return
+            code = 501
+        commands = []
+        for name in dir(self):
+            if not name.startswith('smtp_'):
+                continue
+            method = getattr(self, name)
+            if self._syntax_available(method):
+                commands.append(name.lstrip('smtp_'))
+        commands.sort()
+        await self.push(
+            '{} Supported commands: {}'.format(code, ' '.join(commands)))
+
+    @syntax('VRFY <address>')
     async def smtp_VRFY(self, arg):
         if arg:
             try:
@@ -444,6 +454,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         else:
             await self.push('501 Syntax: VRFY <address>')
 
+    @syntax('MAIL FROM: <address>', extended=' [SP <mail-parameters>]')
     async def smtp_MAIL(self, arg):
         if not self.session.host_name:
             await self.push('503 Error: send HELO first')
@@ -510,6 +521,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         log.info('%r sender: %s', self.session.peer, address)
         await self.push(status)
 
+    @syntax('RCPT TO: <address>', extended=' [SP <mail-parameters>]')
     async def smtp_RCPT(self, arg):
         if not self.session.host_name:
             await self.push('503 Error: send HELO first')
@@ -556,6 +568,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         log.info('%r recip: %s', self.session.peer, address)
         await self.push(status)
 
+    @syntax('RSET')
     async def smtp_RSET(self, arg):
         if arg:
             await self.push('501 Syntax: RSET')
@@ -568,6 +581,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         status = await self._call_handler_hook('RSET')
         await self.push('250 OK' if status is MISSING else status)
 
+    @syntax('DATA')
     async def smtp_DATA(self, arg):
         if not self.session.host_name:
             await self.push('503 Error: send HELO first')

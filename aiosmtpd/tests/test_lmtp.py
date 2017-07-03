@@ -40,3 +40,13 @@ class TestLMTP(unittest.TestCase):
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 500)
             self.assertEqual(response, b'Error: command "EHLO" not recognized')
+
+    def test_help(self):
+        # https://github.com/aio-libs/aiosmtpd/issues/113
+        with SMTP(*self.address) as client:
+            # Don't get tricked by smtplib processing of the response.
+            code, response = client.docmd('HELP')
+            self.assertEqual(code, 250)
+            self.assertEqual(response,
+                             b'Supported commands: DATA HELP LHLO MAIL '
+                             b'NOOP QUIT RCPT RSET VRFY')
