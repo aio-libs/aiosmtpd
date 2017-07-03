@@ -161,7 +161,7 @@ The EHLO response does not include the ``SMTPUTF8`` ESMTP option.
 Controller API
 ==============
 
-.. class:: Controller(handler, loop=None, hostname=None, port=8025, *, ready_timeout=1.0, enable_SMTPUTF8=True)
+.. class:: Controller(handler, loop=None, hostname=None, port=8025, *, ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None)
 
    *handler* is an instance of a :ref:`handler <handlers>` class.
 
@@ -181,6 +181,10 @@ Controller API
    argument to the ``SMTP`` constructor.  When True, the ESMTP ``SMTPUTF8``
    option is returned to the client in response to ``EHLO``, and UTF-8 content
    is accepted.
+
+   *ssl_context* is a ``SSLContext`` that will be used by the loops
+   server and is passed directly to :meth:`AbstractEventLoop.create_server`
+   method.
 
    .. attribute:: handler
 

@@ -9,11 +9,12 @@ from public import public
 @public
 class Controller:
     def __init__(self, handler, loop=None, hostname=None, port=8025, *,
-                 ready_timeout=1.0, enable_SMTPUTF8=True):
+                 ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None):
         self.handler = handler
         self.hostname = '::1' if hostname is None else hostname
         self.port = port
         self.enable_SMTPUTF8 = enable_SMTPUTF8
+        self.ssl_context = ssl_context
         self.loop = asyncio.new_event_loop() if loop is None else loop
         self.server = None
         self._thread = None
@@ -30,7 +31,8 @@ class Controller:
         try:
             self.server = self.loop.run_until_complete(
                 self.loop.create_server(
-                    self.factory, host=self.hostname, port=self.port))
+                    self.factory, host=self.hostname, port=self.port,
+                    ssl=self.ssl_context))
         except Exception as error:
             self._thread_exception = error
             return

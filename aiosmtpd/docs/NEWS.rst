@@ -25,6 +25,8 @@
   ``@syntax()`` which you can use in derived classes to decorate ``smtp_*()``
   methods.  These then show up in ``HELP`` responses.  This also fixes
   ``HELP`` responses for the ``LMTP`` subclass.  (Closes #113)
+* The ``Controller`` class now takes an optional keyword argument ``ssl_context``
+  which is passed directly to the asyncio ``create_server()`` call.
 
 1.0 (2017-05-15)
 ================
