@@ -131,7 +131,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.session = self._create_session()
         self.session.peer = transport.get_extra_info('peername')
         seen_starttls = (self._original_transport is not None)
-        if self.transport is not None and seen_starttls:      # pragma: nopy34
+        if self.transport is not None and seen_starttls:
             # It is STARTTLS connection over normal connection.
             self._reader._transport = transport
             self._writer._transport = transport
@@ -160,7 +160,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         # otherwise an unexpected eof_received() will be called *after* the
         # connection_lost().  At that point the stream reader will already be
         # destroyed and we'll get a traceback in super().eof_received() below.
-        if self._original_transport is not None:    # pragma: nopy34
+        if self._original_transport is not None:
             self._original_transport.close()
         super().connection_lost(error)
         self._writer.close()
