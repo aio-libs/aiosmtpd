@@ -6,6 +6,7 @@ import logging
 
 from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP, __version__
 from argparse import ArgumentParser
+from contextlib import suppress
 from functools import partial
 from importlib import import_module
 from public import public
@@ -137,7 +138,10 @@ def main(args=None):
 
     server = loop.run_until_complete(
         loop.create_server(factory, host=args.host, port=args.port))
-    loop.add_signal_handler(signal.SIGINT, loop.stop)
+    # Signal handlers are only supported on *nix, so just ignore the failure
+    # to set this on Windows.
+    with suppress(NotImplementedError):
+        loop.add_signal_handler(signal.SIGINT, loop.stop)
 
     log.info('Starting asyncio loop')
     try:
