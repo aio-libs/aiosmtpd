@@ -54,7 +54,7 @@ class TestSMTPS(unittest.TestCase):
         with SMTP_SSL(*self.address, context=get_client_context()) as client:
             code, response = client.helo('example.com')
             self.assertEqual(code, 250)
-            self.assertEqual(response, socket.getfqdn().decode('utf-8'))
+            self.assertEqual(response, socket.getfqdn().encode('utf-8'))
             client.send_message(
                 MIMEText('hi'), 'sender@example.com', 'rcpt1@example.com')
         self.assertEqual(len(self.handler.box), 1)
