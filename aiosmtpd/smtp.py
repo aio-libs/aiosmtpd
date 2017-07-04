@@ -163,7 +163,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if self._original_transport is not None:
             self._original_transport.close()
         super().connection_lost(error)
-        self._writer.close()
+        self._handler_coroutine.cancel()
         self.transport = None
 
     def eof_received(self):
@@ -205,7 +205,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     async def _handle_client(self):
         log.info('%r handling connection', self.session.peer)
         await self.push('220 {} {}'.format(self.hostname, self.__ident__))
-        while self.transport is not None:
+        while self.transport is not None:   # pragma: nobranch
             # XXX Put the line limit stuff into the StreamReader?
             try:
                 line = await self._reader.readline()
@@ -269,13 +269,13 @@ class SMTP(asyncio.StreamReaderProtocol):
                         '500 Error: command "%s" not recognized' % command)
                     continue
                 await method(arg)
-            except (ConnectionResetError, asyncio.CancelledError) as error:
+            except asyncio.CancelledError:
                 # The connection got reset during the DATA command.
                 # XXX If handler method raises ConnectionResetError, we should
                 # verify that it was actually self._reader that was reset.
                 log.info('Connection lost during _handle_client()')
-                self.connection_lost(error)
-                return
+                self._writer.close()
+                raise
             except Exception as error:
                 try:
                     status = await self.handle_exception(error)
@@ -600,11 +600,11 @@ class SMTP(asyncio.StreamReaderProtocol):
             try:
                 line = await self._reader.readline()
                 log.debug('DATA readline: %s', line)
-            except (ConnectionResetError, asyncio.CancelledError) as error:
+            except asyncio.CancelledError:
                 # The connection got reset during the DATA command.
                 log.info('Connection lost during DATA')
-                self.connection_lost(error)
-                return
+                self._writer.close()
+                raise
             if line == b'.\r\n':
                 if data:
                     data[-1] = data[-1].rstrip(b'\r\n')
