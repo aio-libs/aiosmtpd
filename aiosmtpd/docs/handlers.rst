@@ -52,7 +52,7 @@ The following hooks are currently defined:
     ``server.push(status)`` before returning ``250 HELP`` as the final
     response.
 
-``handle_NOOP(server, session, envelope)``
+``handle_NOOP(server, session, envelope, arg)``
     Called during ``NOOP``.
 
 ``handle_QUIT(server, session, envelope)``

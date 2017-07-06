@@ -11,7 +11,7 @@ from public import public
 from warnings import warn
 
 
-__version__ = '1.1a1'
+__version__ = '1.1'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 

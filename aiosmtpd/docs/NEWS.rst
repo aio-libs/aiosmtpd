@@ -2,7 +2,7 @@
  NEWS for aiosmtpd
 ===================
 
-1.1 (201X-XX-XX)
+1.1 (2017-07-06)
 ================
 * Drop support for Python 3.4.
 * As per RFC 5321, §4.1.4, multiple ``HELO`` / ``EHLO`` commands in the same
@@ -25,8 +25,9 @@
   ``@syntax()`` which you can use in derived classes to decorate ``smtp_*()``
   methods.  These then show up in ``HELP`` responses.  This also fixes
   ``HELP`` responses for the ``LMTP`` subclass.  (Closes #113)
-* The ``Controller`` class now takes an optional keyword argument ``ssl_context``
-  which is passed directly to the asyncio ``create_server()`` call.
+* The ``Controller`` class now takes an optional keyword argument
+  ``ssl_context`` which is passed directly to the asyncio ``create_server()``
+  call.
 
 1.0 (2017-05-15)
 ================
