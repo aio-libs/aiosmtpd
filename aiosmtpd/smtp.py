@@ -136,9 +136,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._reader._transport = transport
             self._writer._transport = transport
             self.transport = transport
-            # Do SSL certificate checking as rfc3207 part 4.1 says.
-            # Why is _extra a protected attribute?
+            # Do SSL certificate checking as rfc3207 part 4.1 says.  Why is
+            # _extra a protected attribute?
             self.session.ssl = self._tls_protocol._extra
+            log.info('SSL SETTING SESSION.SSL: {}'.format(self))
             handler = getattr(self.event_handler, 'handle_STARTTLS', None)
             if handler is None:
                 self._tls_handshake_okay = True
@@ -169,6 +170,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def eof_received(self):
         log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
+        log.info('SSL CHECKING SESSION.SSL: {}'.format(self))
         if self.session.ssl is not None:
             # If STARTTLS was issued, return False, because True has no effect
             # on an SSL transport and raises a warning. Our superclass has no
@@ -371,6 +373,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         # Reconfigure transport layer.  Keep a reference to the original
         # transport so that we can close it explicitly when the connection is
         # lost.  XXX BaseTransport.set_protocol() was added in Python 3.5.3 :(
+        log.info('SSL SETTING STARTTLS _original transport: {}'.format(self))
         self._original_transport = self.transport
         self._original_transport._protocol = self._tls_protocol
         # Reconfigure the protocol layer.  Why is the app transport a protected
