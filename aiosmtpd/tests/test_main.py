@@ -43,8 +43,17 @@ class TestMain(unittest.TestCase):
         # immediately.  This will allow the calls to main() in these tests to
         # also exit almost immediately.  Otherwise, the foreground test
         # process will hang.
+        #
+        # I think this introduces a race condition.  It depends on whether the
+        # call_later() can possibly run before the run_forever() does, or could
+        # cause it to not complete all its tasks.  In that case, you'd likely
+        # get an error or warning on stderr, which may or may not cause the
+        # test to fail.  I've only seen this happen once and don't have enough
+        # information to know for sure.
+        default_loop = asyncio.get_event_loop()
         loop = asyncio.new_event_loop()
         loop.call_later(0.1, loop.stop)
+        self.resources.callback(asyncio.set_event_loop, default_loop)
         asyncio.set_event_loop(loop)
         self.addCleanup(self.resources.close)
 
