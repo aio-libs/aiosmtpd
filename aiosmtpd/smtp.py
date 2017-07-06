@@ -170,7 +170,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def eof_received(self):
         log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
-        log.info('SSL CHECKING SESSION.SSL: {}'.format(self))
+        log.info('SSL CHECKING SESSION.SSL: {}'.format(self.session.ssl))
         if self.session.ssl is not None:
             # If STARTTLS was issued, return False, because True has no effect
             # on an SSL transport and raises a warning. Our superclass has no
