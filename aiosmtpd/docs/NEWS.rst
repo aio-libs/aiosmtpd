@@ -2,6 +2,11 @@
  NEWS for aiosmtpd
 ===================
 
+1.2 (201X-XX-XX)
+================
+* Improve the documentation on enabling ``STARTTLS``.  (Closes #125)
+
+
 1.1 (2017-07-06)
 ================
 * Drop support for Python 3.4.
