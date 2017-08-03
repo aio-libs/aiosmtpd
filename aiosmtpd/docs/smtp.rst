@@ -124,7 +124,7 @@ SMTP API
    *tls_context* and *require_starttls*.  The ``STARTTLS`` option of ESMTP
    (and LMTP), defined in `RFC 3207`_, provides for secure connections to the
    server. For this option to be available, *tls_context* must be supplied,
-   and *require_starttls* must be ``True``.  See :ref:`tls` for a more in
+   and *require_starttls* should be ``True``.  See :ref:`tls` for a more in
    depth discussion on enabling ``STARTTLS``.
 
    *loop* is the asyncio event loop to use.  If not given,
