@@ -72,10 +72,11 @@ class SMTP(asyncio.StreamReaderProtocol):
                  enable_SMTPUTF8=False,
                  decode_data=False,
                  hostname=None,
+                 ident=None,
                  tls_context=None,
                  require_starttls=False,
                  loop=None):
-        self.__ident__ = __ident__
+        self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
         super().__init__(
             asyncio.StreamReader(loop=self.loop),
