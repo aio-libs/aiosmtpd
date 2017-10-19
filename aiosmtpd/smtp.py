@@ -422,7 +422,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         return True
 
     @syntax('HELP [command]')
-    @asyncio.coroutine
     async def smtp_HELP(self, arg):
         code = 250
         if arg:
