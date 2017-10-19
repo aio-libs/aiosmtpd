@@ -84,6 +84,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.event_handler = handler
         self.data_size_limit = data_size_limit
         self.enable_SMTPUTF8 = enable_SMTPUTF8
+        self.encoding_for_push = 'utf-8' if self.enable_SMTPUTF8 else 'ascii'
         self._decode_data = decode_data
         self.command_size_limits.clear()
         if hostname:
@@ -196,8 +197,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._set_post_data_state()
 
     async def push(self, status):
-        response = bytes(
-            status + '\r\n', 'utf-8' if self.enable_SMTPUTF8 else 'ascii')
+        response = bytes(status + '\r\n', self.encoding_for_push)
         self._writer.write(response)
         log.debug(response)
         await self._writer.drain()
