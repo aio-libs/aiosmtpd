@@ -5,6 +5,7 @@
 1.2 (201X-XX-XX)
 ================
 * Improve the documentation on enabling ``STARTTLS``.  (Closes #125)
+* Add customizable ident field to SMTP class constructor. (Closes #131)
 
 
 1.1 (2017-07-06)

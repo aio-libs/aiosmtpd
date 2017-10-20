@@ -101,7 +101,7 @@ override to provide additional responses.
 SMTP API
 ========
 
-.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, decode_data=False, hostname=None, tls_context=None, require_starttls=False, loop=None)
+.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, decode_data=False, hostname=None, ident=None, tls_context=None, require_starttls=False, loop=None)
 
    *handler* is an instance of a :ref:`handler <handlers>` class.
 
@@ -117,9 +117,13 @@ SMTP API
    the ``DATA`` command, assigning the string value to the :ref:`envelope's
    <sessions_and_envelopes>` ``content`` attribute.  The default is False.
 
-   *hostname* is the string returned in the ``220`` greeting response given to
-   clients when they first connect to the server.  If not given, the system's
-   fully-qualified domain name is used.
+   *hostname* is the first part of the string returned in the ``220`` greeting
+   response given to clients when they first connect to the server.  If not given,
+   the system's fully-qualified domain name is used.
+   
+   *ident* is the second part of the string returned in the ``220`` greeting
+   response that identifies the software name and version of the SMTP server
+   to the client. If not given, a default Python SMTP ident is used.
 
    *tls_context* and *require_starttls*.  The ``STARTTLS`` option of ESMTP
    (and LMTP), defined in `RFC 3207`_, provides for secure connections to the

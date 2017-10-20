@@ -68,8 +68,7 @@ class CustomHostnameController(Controller):
 
 class CustomIdentController(Controller):
     def factory(self):
-        server = Server(self.handler)
-        server.__ident__ = 'Identifying SMTP v2112'
+        server = Server(self.handler, ident='Identifying SMTP v2112')
         return server
 
 
