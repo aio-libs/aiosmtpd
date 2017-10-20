@@ -8,7 +8,7 @@ Provide a Simple Mail Transfer Procotol (SMTP) server
 
 :Author: The aiosmtpd developers
 :Date: 2017-07-01
-:Copyright: 2015-2017 The aiosmtpd developrs
+:Copyright: 2015-2017 The aiosmtpd developers
 :Version: 1.1
 :Manual section: 1
 
