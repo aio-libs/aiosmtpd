@@ -639,7 +639,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 await self.push('501 bad command parameter syntax')
                 return
             self.session.xclient[key] = value
-        await self.push('220 success')
+        await self.push('220 {} {}'.format(self.hostname, self.__ident__))
 
     @syntax('DATA')
     async def smtp_DATA(self, arg):

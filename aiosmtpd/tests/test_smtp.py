@@ -705,7 +705,7 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             code, response = client.docmd('XCLIENT ADDR=10.1.1.1')
             self.assertEqual(code, 220)
-            self.assertEqual(response, b'success')
+            self.assertEqual(response[-len(GREETING):], bytes(GREETING, 'utf-8'))
 
     def test_unknown_xclient_attribute_name(self):
         with SMTP(*self.address) as client:
