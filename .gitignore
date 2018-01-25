@@ -27,3 +27,4 @@ __pycache__/
 htmlcov
 coverage.xml
 diffcov.html
+*.swp
