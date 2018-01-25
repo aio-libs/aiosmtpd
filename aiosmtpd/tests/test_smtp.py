@@ -307,7 +307,7 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 250)
             self.assertEqual(response,
                              b'Supported commands: DATA EHLO HELO HELP MAIL '
-                             b'NOOP QUIT RCPT RSET VRFY')
+                             b'NOOP QUIT RCPT RSET VRFY XCLIENT')
 
     def test_help_helo(self):
         with SMTP(*self.address) as client:
@@ -387,6 +387,13 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 250)
             self.assertEqual(response, b'Syntax: VRFY <address>')
 
+    def test_help_xclient(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('HELP', 'XCLIENT')
+            self.assertEqual(code, 250)
+            self.assertEqual(
+                response, b'Syntax: XCLIENT [key1=value1] ... [keyN=valueN]')
+
     def test_help_bad_arg(self):
         with SMTP(*self.address) as client:
             # Don't get tricked by smtplib processing of the response.
@@ -394,7 +401,7 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 501)
             self.assertEqual(response,
                              b'Supported commands: DATA EHLO HELO HELP MAIL '
-                             b'NOOP QUIT RCPT RSET VRFY')
+                             b'NOOP QUIT RCPT RSET VRFY XCLIENT')
 
     def test_expn(self):
         with SMTP(*self.address) as client:
@@ -693,6 +700,24 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(
                 response,
                 b'Error: command "FOOBAR" not recognized')
+
+    def test_xclient(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('XCLIENT ADDR=10.1.1.1')
+            self.assertEqual(code, 220)
+            self.assertEqual(response, b'success')
+
+    def test_uknown_xclient_attribute_name(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('XCLIENT FOOBAR=SPAM')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'bad command parameter syntax')
+
+    def test_wrong_xclient_attribute_syntax(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('XCLIENT FOOBARSPAM')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'bad command parameter syntax')
 
 
 class TestResetCommands(unittest.TestCase):

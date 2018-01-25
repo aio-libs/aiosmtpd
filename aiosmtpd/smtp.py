@@ -20,6 +20,8 @@ DATA_SIZE_DEFAULT = 33554432
 EMPTYBYTES = b''
 NEWLINE = '\n'
 MISSING = object()
+XCLIENT_ATTRIBUTES = (
+    'NAME', 'ADDR', 'PORT', 'PROTO', 'HELO', 'LOGIN', 'DESTADDR', 'DESTPORT')
 
 
 @public
@@ -30,6 +32,7 @@ class Session:
         self.host_name = None
         self.extended_smtp = False
         self.loop = loop
+        self.xclient = collections.OrderedDict()
 
 
 @public
@@ -623,6 +626,20 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.rset_hook()
         status = await self._call_handler_hook('RSET')
         await self.push('250 OK' if status is MISSING else status)
+
+    @syntax('XCLIENT [key1=value1] ... [keyN=valueN]')
+    async def smtp_XCLIENT(self, arg):
+        for kv in arg.split(' '):
+            try:
+                key, value = kv.split('=')
+            except ValueError:
+                await self.push('501 bad command parameter syntax')
+                return
+            if key not in XCLIENT_ATTRIBUTES:
+                await self.push('501 bad command parameter syntax')
+                return
+            self.session.xclient[key] = value
+        await self.push('220 success')
 
     @syntax('DATA')
     async def smtp_DATA(self, arg):
