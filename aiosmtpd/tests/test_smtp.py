@@ -707,7 +707,7 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 220)
             self.assertEqual(response, b'success')
 
-    def test_uknown_xclient_attribute_name(self):
+    def test_unknown_xclient_attribute_name(self):
         with SMTP(*self.address) as client:
             code, response = client.docmd('XCLIENT FOOBAR=SPAM')
             self.assertEqual(code, 501)
