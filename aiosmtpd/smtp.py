@@ -32,7 +32,6 @@ class Session:
         self.host_name = None
         self.extended_smtp = False
         self.loop = loop
-        self.xclient = collections.OrderedDict()
 
 
 @public
@@ -627,19 +626,31 @@ class SMTP(asyncio.StreamReaderProtocol):
         status = await self._call_handler_hook('RSET')
         await self.push('250 OK' if status is MISSING else status)
 
+    def _parse_xclient_attributes(self, attributes):
+        """
+        Parse key-value arguments and return OrderedDict on success.
+        Raise ValueError on wrong arguments.
+        """
+        result = collections.OrderedDict()
+        for kv in attributes.split(' '):
+            key, value = kv.split('=')
+            if key not in XCLIENT_ATTRIBUTES:
+                raise ValueError()
+            result[key] = value
+        return result
+
     @syntax('XCLIENT [key1=value1] ... [keyN=valueN]')
     async def smtp_XCLIENT(self, arg):
-        for kv in arg.split(' '):
-            try:
-                key, value = kv.split('=')
-            except ValueError:
-                await self.push('501 bad command parameter syntax')
-                return
-            if key not in XCLIENT_ATTRIBUTES:
-                await self.push('501 bad command parameter syntax')
-                return
-            self.session.xclient[key] = value
-        await self.push('220 {} {}'.format(self.hostname, self.__ident__))
+        if not hasattr(self.event_handler, 'handle_XCLIENT'):
+            await self.push('550 feature not enabled')
+            return
+        try:
+            attributes = self._parse_xclient_attributes(arg)
+        except ValueError:
+            await self.push('501 bad command parameter syntax')
+            return
+        status = await self._call_handler_hook('XCLIENT', attributes)
+        await self.push(status)
 
     @syntax('DATA')
     async def smtp_DATA(self, arg):

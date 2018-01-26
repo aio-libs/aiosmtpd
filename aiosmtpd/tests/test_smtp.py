@@ -136,6 +136,18 @@ class SleepingHeloHandler:
         return '250 {}'.format(server.hostname)
 
 
+class XCLIENTHandler:
+
+    def __init__(self, result):
+        self.result = result
+
+    async def handle_XCLIENT(self, server, session, envelope, attrs):
+        self.attrs = attrs
+        if self.result:
+            return '220 success'
+        return '501 bad command parameter syntax'
+
+
 class TestProtocol(unittest.TestCase):
     def setUp(self):
         self.transport = Mock()
@@ -701,11 +713,20 @@ class TestSMTP(unittest.TestCase):
                 response,
                 b'Error: command "FOOBAR" not recognized')
 
-    def test_xclient(self):
+    def test_xclient_feature_not_enabled(self):
         with SMTP(*self.address) as client:
             code, response = client.docmd('XCLIENT ADDR=10.1.1.1')
-            self.assertEqual(code, 220)
-            self.assertEqual(response[-len(GREETING):], bytes(GREETING, 'utf-8'))
+            self.assertEqual(code, 550)
+            self.assertEqual(response, b'feature not enabled')
+
+
+class TestXCLIENT(unittest.TestCase):
+    def setUp(self):
+        self.handler = XCLIENTHandler(True)
+        controller = DecodingController(self.handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
 
     def test_unknown_xclient_attribute_name(self):
         with SMTP(*self.address) as client:
@@ -716,6 +737,19 @@ class TestSMTP(unittest.TestCase):
     def test_wrong_xclient_attribute_syntax(self):
         with SMTP(*self.address) as client:
             code, response = client.docmd('XCLIENT FOOBARSPAM')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'bad command parameter syntax')
+
+    def test_return_greeting_on_success(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('XCLIENT ADDR=10.1.1.1')
+            self.assertEqual(code, 220)
+            self.assertEqual(response, b'success')
+
+    def test_return_handler_error(self):
+        self.handler.result = False
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('XCLIENT ADDR=10.1.1.1')
             self.assertEqual(code, 501)
             self.assertEqual(response, b'bad command parameter syntax')
 
