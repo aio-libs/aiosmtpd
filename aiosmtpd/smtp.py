@@ -21,7 +21,7 @@ EMPTYBYTES = b''
 NEWLINE = '\n'
 MISSING = object()
 XCLIENT_ATTRIBUTES = (
-    'NAME', 'ADDR', 'PORT', 'PROTO', 'HELO', 'LOGIN', 'DESTADDR', 'DESTPORT')
+    'ADDR', 'DESTADDR', 'DESTPORT', 'HELO', 'LOGIN', 'NAME', 'PORT', 'PROTO')
 
 
 @public
