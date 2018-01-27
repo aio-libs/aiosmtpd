@@ -632,7 +632,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         """
         result = {}
         for kv in attributes.split(' '):
-            key, value = kv.split('=')
+            try:
+                key, value = kv.split('=')
+            except ValueError as err:
+                raise ValueError('bad command parameter syntax') from err
             if key not in XCLIENT_ATTRIBUTES:
                 raise ValueError(
                     '{} is not a valid XCLIENT attribute'.format(key))

@@ -732,7 +732,8 @@ class TestXCLIENT(unittest.TestCase):
         with SMTP(*self.address) as client:
             code, response = client.docmd('XCLIENT FOOBAR=SPAM')
             self.assertEqual(code, 501)
-            self.assertEqual(response, b'bad command parameter syntax')
+            self.assertEqual(
+                response, b'FOOBAR is not a valid XCLIENT attribute')
 
     def test_wrong_xclient_attribute_syntax(self):
         with SMTP(*self.address) as client:
