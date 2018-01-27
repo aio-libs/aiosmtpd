@@ -137,7 +137,6 @@ class SleepingHeloHandler:
 
 
 class XCLIENTHandler:
-
     def __init__(self, result):
         self.result = result
 
