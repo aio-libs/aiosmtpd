@@ -49,4 +49,4 @@ class TestLMTP(unittest.TestCase):
             self.assertEqual(code, 250)
             self.assertEqual(response,
                              b'Supported commands: DATA HELP LHLO MAIL '
-                             b'NOOP QUIT RCPT RSET VRFY XCLIENT')
+                             b'NOOP QUIT RCPT RSET VRFY')

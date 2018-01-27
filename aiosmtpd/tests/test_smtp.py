@@ -318,7 +318,7 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 250)
             self.assertEqual(response,
                              b'Supported commands: DATA EHLO HELO HELP MAIL '
-                             b'NOOP QUIT RCPT RSET VRFY XCLIENT')
+                             b'NOOP QUIT RCPT RSET VRFY')
 
     def test_help_helo(self):
         with SMTP(*self.address) as client:
@@ -398,12 +398,14 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 250)
             self.assertEqual(response, b'Syntax: VRFY <address>')
 
-    def test_help_xclient(self):
+    def test_help_xclient_disabled(self):
+        """ Should return error if XCLIENT isn't supported by the handler """
         with SMTP(*self.address) as client:
             code, response = client.docmd('HELP', 'XCLIENT')
-            self.assertEqual(code, 250)
-            self.assertEqual(
-                response, b'Syntax: XCLIENT [key1=value1] ... [keyN=valueN]')
+            self.assertEqual(code, 501)
+            self.assertEqual(response,
+                             b'Supported commands: DATA EHLO HELO HELP MAIL '
+                             b'NOOP QUIT RCPT RSET VRFY')
 
     def test_help_bad_arg(self):
         with SMTP(*self.address) as client:
@@ -412,7 +414,7 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 501)
             self.assertEqual(response,
                              b'Supported commands: DATA EHLO HELO HELP MAIL '
-                             b'NOOP QUIT RCPT RSET VRFY XCLIENT')
+                             b'NOOP QUIT RCPT RSET VRFY')
 
     def test_expn(self):
         with SMTP(*self.address) as client:
@@ -726,6 +728,22 @@ class TestXCLIENT(unittest.TestCase):
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
+
+    def test_help_with_xclient_enabled(self):
+        """ Should return XCLIENT command if handler has hook """
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('HELP')
+            self.assertEqual(code, 250)
+            self.assertEqual(response,
+                             b'Supported commands: DATA EHLO HELO HELP MAIL '
+                             b'NOOP QUIT RCPT RSET VRFY XCLIENT')
+
+    def test_help_xclient(self):
+        with SMTP(*self.address) as client:
+            code, response = client.docmd('HELP', 'XCLIENT')
+            self.assertEqual(code, 250)
+            self.assertEqual(
+                response, b'Syntax: XCLIENT [key1=value1] ... [keyN=valueN]')
 
     def test_unknown_xclient_attribute_name(self):
         with SMTP(*self.address) as client:

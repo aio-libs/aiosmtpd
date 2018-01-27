@@ -113,7 +113,7 @@ class TestStartTLS(unittest.TestCase):
             self.assertEqual(code, 250)
             self.assertEqual(response,
                              b'Supported commands: DATA EHLO HELO HELP MAIL '
-                             b'NOOP QUIT RCPT RSET STARTTLS VRFY XCLIENT')
+                             b'NOOP QUIT RCPT RSET STARTTLS VRFY')
 
 
 class TestTLSForgetsSessionData(unittest.TestCase):

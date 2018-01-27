@@ -66,7 +66,7 @@ Because we prefixed the ``smtp_PING()`` method with the ``@syntax()``
 decorator, the command shows up in the ``HELP`` output.
 
     >>> print(client.help().decode('utf-8'))
-    Supported commands: DATA EHLO HELO HELP MAIL NOOP PING QUIT RCPT RSET VRFY XCLIENT
+    Supported commands: DATA EHLO HELO HELP MAIL NOOP PING QUIT RCPT RSET VRFY
 
 And we can get more detailed help on the new command.
 

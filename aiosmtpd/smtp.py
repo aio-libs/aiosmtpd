@@ -463,16 +463,21 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg:
             method = getattr(self, 'smtp_' + arg.upper(), None)
             if method and self._syntax_available(method):
-                help_str = method.__smtp_syntax__
-                if (self.session.extended_smtp
-                        and method.__smtp_syntax_extended__):
-                    help_str += method.__smtp_syntax_extended__
-                await self.push('250 Syntax: ' + help_str)
-                return
+                if (method != self.smtp_XCLIENT or
+                        self._is_handler_has_xclient_hook()):
+                    help_str = method.__smtp_syntax__
+                    if (self.session.extended_smtp
+                            and method.__smtp_syntax_extended__):
+                        help_str += method.__smtp_syntax_extended__
+                    await self.push('250 Syntax: ' + help_str)
+                    return
             code = 501
         commands = []
         for name in dir(self):
             if not name.startswith('smtp_'):
+                continue
+            if (name == 'smtp_XCLIENT') and (
+                    not self._is_handler_has_xclient_hook()):
                 continue
             method = getattr(self, name)
             if self._syntax_available(method):
@@ -642,9 +647,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             result[key] = value
         return result
 
+    def _is_handler_has_xclient_hook(self):
+        return hasattr(self.event_handler, 'handle_XCLIENT')
+
     @syntax('XCLIENT [key1=value1] ... [keyN=valueN]')
     async def smtp_XCLIENT(self, arg):
-        if not hasattr(self.event_handler, 'handle_XCLIENT'):
+        if not self._is_handler_has_xclient_hook():
             await self.push('550 feature not enabled')
             return
         try:
