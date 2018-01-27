@@ -646,8 +646,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         try:
             attributes = self._parse_xclient_attributes(arg)
-        except ValueError:
-            await self.push('501 bad command parameter syntax')
+        except ValueError as err:
+            await self.push('501 {}'.format(err))
             return
         status = await self._call_handler_hook('XCLIENT', attributes)
         await self.push(status)
