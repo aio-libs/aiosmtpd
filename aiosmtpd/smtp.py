@@ -627,8 +627,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push('250 OK' if status is MISSING else status)
 
     def _parse_xclient_attributes(self, attributes):
-        """
-        Parse key-value arguments and return OrderedDict on success.
+        """ Parse key-value arguments and return OrderedDict on success.
         Raise ValueError on wrong arguments.
         """
         result = collections.OrderedDict()
