@@ -634,7 +634,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         for kv in attributes.split(' '):
             key, value = kv.split('=')
             if key not in XCLIENT_ATTRIBUTES:
-                raise ValueError()
+                raise ValueError(
+                    '{} is not a valid XCLIENT attribute'.format(key))
             result[key] = value
         return result
 
