@@ -159,14 +159,14 @@ class TestProtocol(unittest.TestCase):
 
     def test_honors_mail_delimeters(self):
         handler = ReceivingHandler()
-        data = b'test\r\nmail\rdelimeters\nsaved'
+        data = b'test\r\nmail\rdelimeters\nsaved\r\n'
         protocol = self._get_protocol(handler)
         protocol.data_received(BCRLF.join([
             b'HELO example.org',
             b'MAIL FROM: <anne@example.com>',
             b'RCPT TO: <anne@example.com>',
             b'DATA',
-            data + b'\r\n.',
+            data + b'.',
             b'QUIT\r\n'
             ]))
         try:
@@ -902,7 +902,7 @@ Testing
             mail = CRLF.join(['Test', '.', 'mail'])
             client.sendmail('anne@example.com', ['bart@example.com'], mail)
             self.assertEqual(len(handler.box), 1)
-            self.assertEqual(handler.box[0].content, 'Test\r\n.\r\nmail')
+            self.assertEqual(handler.box[0].content, 'Test\r\n.\r\nmail\r\n')
 
     def test_unexpected_errors(self):
         handler = ErroringHandler()

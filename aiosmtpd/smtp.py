@@ -649,8 +649,6 @@ class SMTP(asyncio.StreamReaderProtocol):
                 self._writer.close()
                 raise
             if line == b'.\r\n':
-                if data:
-                    data[-1] = data[-1].rstrip(b'\r\n')
                 break
             num_bytes += len(line)
             if (not size_exceeded and

@@ -425,7 +425,7 @@ Testing
             'Subject: A test',
             'X-Peer: ::1',
             '',
-            'Testing']).encode('ascii')
+            'Testing\r\n']).encode('ascii')
 
     def test_deliver_bytes(self):
         with ExitStack() as resources:
