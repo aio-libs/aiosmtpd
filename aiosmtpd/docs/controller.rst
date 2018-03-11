@@ -168,7 +168,14 @@ Controller API
    *loop* is the asyncio event loop to use.  If not given,
    :meth:`asyncio.new_event_loop()` is called to create the event loop.
 
-   *hostname* and *port* are passed directly to your loop's
+   *hostname* is passed to your loop's
+   :meth:`AbstractEventLoop.create_server` method as the
+   ``host`` parameter,
+   except None (default) is translated to '::1'. To bind
+   dual-stack locally, use 'localhost'. To bind dual-stack
+   on all interfaces, use ''.
+
+   *port* is passed directly to your loop's
    :meth:`AbstractEventLoop.create_server` method.
 
    *ready_timeout* is float number of seconds that the controller will wait in
