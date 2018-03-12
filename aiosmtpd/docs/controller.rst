@@ -172,7 +172,8 @@ Controller API
    :meth:`AbstractEventLoop.create_server` method as the
    ``host`` parameter,
    except None (default) is translated to '::1'. To bind
-   dual-stack locally, use 'localhost'. To bind dual-stack
+   dual-stack locally, use 'localhost'. To bind `dual-stack
+   <https://en.wikipedia.org/wiki/IPv6#Dual-stack_IP_implementation>`_
    on all interfaces, use ''.
 
    *port* is passed directly to your loop's
