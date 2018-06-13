@@ -1,5 +1,6 @@
 """Test the SMTP protocol."""
 
+import time
 import socket
 import asyncio
 import unittest
@@ -25,6 +26,11 @@ class DecodingController(Controller):
 class NoDecodeController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=False)
+
+
+class TimeoutController(Controller):
+    def factory(self):
+        return Server(self.handler, timeout=1)
 
 
 class ReceivingHandler:
@@ -1154,4 +1160,18 @@ class TestSleepingHandler(unittest.TestCase):
         with SMTP(*self.address) as client:
             client.send('HELO example.com\r\n')
             client.sock.shutdown(socket.SHUT_WR)
+            self.assertRaises(SMTPServerDisconnected, client.getreply)
+
+
+class TestTimeout(unittest.TestCase):
+    def setUp(self):
+        controller = TimeoutController(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_timeout(self):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            time.sleep(2)
             self.assertRaises(SMTPServerDisconnected, client.getreply)
