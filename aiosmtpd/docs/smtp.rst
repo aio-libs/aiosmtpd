@@ -132,8 +132,8 @@ SMTP API
    depth discussion on enabling ``STARTTLS``.
 
    *timeout* is the number of seconds to wait between valid SMTP commands.
-   After this time the connection will be closed by the server.  The default 
-   es 300 seconds, as per `RFC 2821`_.
+   After this time the connection will be closed by the server.  The default
+   is 300 seconds, as per `RFC 2821`_.
 
    *loop* is the asyncio event loop to use.  If not given,
    :meth:`asyncio.new_event_loop()` is called to create the event loop.
