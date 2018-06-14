@@ -188,7 +188,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         return super().eof_received()
 
     def _reset_timeout(self):
-        if self._timeout_handle:
+        if self._timeout_handle is not None:
             self._timeout_handle.cancel()
 
         self._timeout_handle = self.loop.call_later(

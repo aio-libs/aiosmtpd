@@ -30,7 +30,7 @@ class NoDecodeController(Controller):
 
 class TimeoutController(Controller):
     def factory(self):
-        return Server(self.handler, timeout=1)
+        return Server(self.handler, timeout=0.1)
 
 
 class ReceivingHandler:
@@ -1173,5 +1173,5 @@ class TestTimeout(unittest.TestCase):
     def test_timeout(self):
         with SMTP(*self.address) as client:
             code, response = client.ehlo('example.com')
-            time.sleep(2)
+            time.sleep(0.3)
             self.assertRaises(SMTPServerDisconnected, client.getreply)
