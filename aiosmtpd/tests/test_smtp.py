@@ -763,6 +763,19 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 500)
             self.assertEqual(response, b'Error: line too long')
 
+    def test_way_too_long_command(self):
+        with SMTP(*self.address) as client:
+            # Send a very large string to ensure it is broken
+            # into several packets, which hits the inner
+            # LimitOverrunError code path in _handle_client.
+            client.send('a' * 1000000)
+            code, response = client.docmd('a' * 1001)
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Error: line too long')
+            code, response = client.docmd('NOOP')
+            self.assertEqual(code, 250)
+            self.assertEqual(response, b'OK')
+
     def test_unknown_command(self):
         with SMTP(*self.address) as client:
             code, response = client.docmd('FOOBAR')
@@ -1108,6 +1121,52 @@ class TestRequiredAuthentication(unittest.TestCase):
             code, response = client.docmd('DATA')
             assert_auth_required(self, code, response)
 
+    def test_close_in_command(self):
+        with SMTP(*self.address) as client:
+            client.send('FOO')  # without CRLF
+            client.close()
+
+    def test_reset_in_command(self):
+        with SMTP(*self.address) as client:
+            client.send('FOO')  # without CRLF
+            reset_connection(client)
+
+    def test_close_in_long_command(self):
+        with SMTP(*self.address) as client:
+            client.send('F' + 5555 * 'O')  # without CRLF
+            client.close()
+
+    def test_reset_in_long_command(self):
+        with SMTP(*self.address) as client:
+            client.send('F' + 5555 * 'O')  # without CRLF
+            reset_connection(client)
+
+    def test_close_in_data(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT TO: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('DATA')
+            self.assertEqual(code, 354)
+            client.send('FOO')  # without CRLF
+            client.close()
+
+    def test_reset_in_data(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT TO: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('DATA')
+            self.assertEqual(code, 354)
+            client.send('FOO')  # without CRLF
+            reset_connection(client)
+
 
 class TestResetCommands(unittest.TestCase):
     """Test that sender and recipients are reset on RSET, HELO, and EHLO.
@@ -1305,6 +1364,46 @@ Testing
             self.assertEqual(cm.exception.smtp_code, 552)
             self.assertEqual(cm.exception.smtp_error,
                              b'Error: Too much mail data')
+
+    def test_too_long_message_body_long_lines(self):
+        size = 2000
+        controller = SizedController(Sink(), size=size)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = '\r\n'.join(['z' * (size-1)] * 2)
+            with self.assertRaises(SMTPResponseException) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], mail)
+            self.assertEqual(cm.exception.smtp_code, 552)
+            self.assertEqual(cm.exception.smtp_error,
+                             b'Error: Too much mail data')
+
+    def test_data_line_too_long(self):
+        handler = ReceivingHandler()
+        controller = NoDecodeController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = b'\r\n'.join([b'a' * 5555] * 3)
+            client.sendmail('anne@example.com', ['bart@example.com'], mail)
+        self.assertEqual(len(handler.box), 1)
+        self.assertEqual(handler.box[0].content, mail)
+
+    def test_long_line_double_count(self):
+        controller = SizedController(Sink(), size=10000)
+        # With a read limit of 1001 bytes in aiosmtp.SMTP, asyncio.StreamReader
+        # returns too-long lines of length up to 2002 bytes.
+        # This test ensures that bytes in partial lines are only counted once.
+        # If the implementation has a double-counting bug, then a message of
+        # 9998 bytes + CRLF will raise SMTPResponseException.
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = 'z' * 9998
+            client.sendmail('anne@example.com', ['bart@example.com'], mail)
 
     def test_dots_escaped(self):
         handler = ReceivingHandler()

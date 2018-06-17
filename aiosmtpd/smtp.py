@@ -116,8 +116,9 @@ class SMTP(asyncio.StreamReaderProtocol):
                  loop=None):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
+        limit = 1001  # TODO compute properly and make configurable
         super().__init__(
-            asyncio.StreamReader(loop=self.loop),
+            asyncio.StreamReader(loop=self.loop, limit=limit),
             client_connected_cb=self._client_connected_cb,
             loop=self.loop)
         self.event_handler = handler
@@ -302,7 +303,23 @@ class SMTP(asyncio.StreamReaderProtocol):
         while self.transport is not None:   # pragma: nobranch
             # XXX Put the line limit stuff into the StreamReader?
             try:
-                line: bytes = await self._reader.readline()
+                try:
+                    line = await self._reader.readuntil()
+                except asyncio.LimitOverrunError as error:
+                    # Line too long. Read until end of line before sending 500.
+                    await self._reader.read(error.consumed)
+                    while True:
+                        try:
+                            await self._reader.readuntil()
+                            break
+                        except asyncio.LimitOverrunError as e:
+                            # Line is even longer...
+                            await self._reader.read(e.consumed)
+                            continue
+                    # Now that we have read a full line from the client,
+                    # send error response and read the next command line.
+                    await self.push('500 Error: line too long')
+                    continue
                 log.debug('_handle_client readline: %s', line)
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.rstrip(b'\r\n')
@@ -868,17 +885,29 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push('354 End data with <CR><LF>.<CR><LF>')
         data = []
         num_bytes = 0
+        unfinished_line = []
         size_exceeded = False
         while self.transport is not None:           # pragma: nobranch
+            # Since eof_received cancels this coroutine,
+            # readuntil() can never raise asyncio.IncompleteReadError.
             try:
-                line = await self._reader.readline()
+                line = await self._reader.readuntil()
                 log.debug('DATA readline: %s', line)
+                assert line.endswith(b'\n')
             except asyncio.CancelledError:
                 # The connection got reset during the DATA command.
                 log.info('Connection lost during DATA')
                 self._writer.close()
                 raise
-            if line == b'.\r\n':
+            except asyncio.LimitOverrunError as e:
+                # The line exceeds StreamReader's buffer.
+                # XXX Should we respond with 500 Line too long
+                # and set size_exceeded = True here?
+                # How is an SMTP implementation supposed to react?
+                line = await self._reader.read(e.consumed)
+                assert not line.endswith(b'\n')
+            # A lone dot in a line signals the end of DATA.
+            if not unfinished_line and line == b'.\r\n':
                 break
             num_bytes += len(line)
             if (not size_exceeded
@@ -887,10 +916,18 @@ class SMTP(asyncio.StreamReaderProtocol):
                 size_exceeded = True
                 await self.push('552 Error: Too much mail data')
             if not size_exceeded:
-                data.append(line)
+                if line.endswith(b'\n'):
+                    data.append(EMPTYBYTES.join(unfinished_line) + line)
+                    del unfinished_line[:]
+                else:
+                    unfinished_line.append(line)
+            elif line.endswith(b'\n'):
+                del unfinished_line[:]
         if size_exceeded:
             self._set_post_data_state()
             return
+        # If unfinished_line is non-empty, then the connection was closed.
+        assert not unfinished_line
         # Remove extraneous carriage returns and de-transparency
         # according to RFC 5321, Section 4.5.2.
         for i, text in enumerate(data):
