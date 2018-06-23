@@ -10,6 +10,11 @@ from public import public
 class Controller:
     def __init__(self, handler, loop=None, hostname=None, port=8025, *,
                  ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None):
+        """
+        `Documentation can be found here
+        <http://aiosmtpd.readthedocs.io/en/latest/aiosmtpd\
+/docs/controller.html#controller-api>`_.
+        """
         self.handler = handler
         self.hostname = '::1' if hostname is None else hostname
         self.port = port
