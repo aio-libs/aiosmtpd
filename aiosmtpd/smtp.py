@@ -234,10 +234,20 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # re-encoded back to the original bytes when the SMTP command
                 # is handled.
                 if i < 0:
-                    command = line.upper().decode(encoding='ascii')
+                    try:
+                        command = line.upper().decode(encoding='ascii')
+                    except UnicodeDecodeError:
+                        await self.push('500 Error: bad syntax')
+                        continue
+
                     arg = None
                 else:
-                    command = line[:i].upper().decode(encoding='ascii')
+                    try:
+                        command = line[:i].upper().decode(encoding='ascii')
+                    except UnicodeDecodeError:
+                        await self.push('500 Error: bad syntax')
+                        continue
+
                     arg = line[i+1:].strip()
                     # Remote SMTP servers can send us UTF-8 content despite
                     # whether they've declared to do so or not.  Some old

@@ -197,6 +197,20 @@ class TestSMTP(unittest.TestCase):
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
 
+    def test_binary(self):
+        with SMTP(*self.address) as client:
+            client.sock.send(b"\x80FAIL\r\n")
+            code, response = client.getreply()
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Error: bad syntax')
+
+    def test_binary_space(self):
+        with SMTP(*self.address) as client:
+            client.sock.send(b"\x80 FAIL\r\n")
+            code, response = client.getreply()
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Error: bad syntax')
+
     def test_helo(self):
         with SMTP(*self.address) as client:
             code, response = client.helo('example.com')
