@@ -613,7 +613,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         await self.push('354 End data with <CR><LF>.<CR><LF>')
         num_bytes = 0
-        content = original_content = bytearray()
+        original_content = bytearray()
         size_exceeded = False
         while self.transport is not None:           # pragma: nobranch
             try:
@@ -626,7 +626,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 raise
             if line == b'.\r\n':
                 if original_content:
-                    content = original_content = original_content.rstrip(b'\r\n')
+                    original_content = original_content.rstrip(b'\r\n')
                 break
             num_bytes += len(line)
             if (not size_exceeded and
@@ -643,12 +643,12 @@ class SMTP(asyncio.StreamReaderProtocol):
         if size_exceeded:
             self._set_post_data_state()
             return
+
+        content = original_content
         if self._decode_data:
             if self.enable_SMTPUTF8:
-                content = original_content.decode(
-                    'utf-8',
-                    errors='surrogateescape'
-                )
+                content = original_content.decode('utf-8',
+                                                  errors='surrogateescape')
             else:
                 try:
                     content = original_content.decode('ascii', errors='strict')
