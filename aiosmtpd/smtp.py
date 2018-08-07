@@ -17,7 +17,6 @@ log = logging.getLogger('mail.log')
 
 
 DATA_SIZE_DEFAULT = 33554432
-EMPTYBYTES = b''
 NEWLINE = '\n'
 MISSING = object()
 
@@ -613,8 +612,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push('501 Syntax: DATA')
             return
         await self.push('354 End data with <CR><LF>.<CR><LF>')
-        data = []
         num_bytes = 0
+        content = original_content = bytearray()
         size_exceeded = False
         while self.transport is not None:           # pragma: nobranch
             try:
@@ -626,8 +625,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                 self._writer.close()
                 raise
             if line == b'.\r\n':
-                if data:
-                    data[-1] = data[-1].rstrip(b'\r\n')
+                if original_content:
+                    content = original_content = original_content.rstrip(b'\r\n')
                 break
             num_bytes += len(line)
             if (not size_exceeded and
@@ -636,21 +635,20 @@ class SMTP(asyncio.StreamReaderProtocol):
                 size_exceeded = True
                 await self.push('552 Error: Too much mail data')
             if not size_exceeded:
-                data.append(line)
+                # Remove extraneous carriage returns and de-transparency
+                # according to RFC 5321, Section 4.5.2.
+                if line and line[:1] == b'.':
+                    line = line[1:]
+                original_content.extend(line)
         if size_exceeded:
             self._set_post_data_state()
             return
-        # Remove extraneous carriage returns and de-transparency
-        # according to RFC 5321, Section 4.5.2.
-        for i in range(len(data)):
-            text = data[i]
-            if text and text[:1] == b'.':
-                data[i] = text[1:]
-        content = original_content = EMPTYBYTES.join(data)
         if self._decode_data:
             if self.enable_SMTPUTF8:
                 content = original_content.decode(
-                    'utf-8', errors='surrogateescape')
+                    'utf-8',
+                    errors='surrogateescape'
+                )
             else:
                 try:
                     content = original_content.decode('ascii', errors='strict')

@@ -60,7 +60,7 @@ class Debugging:
             if in_headers and not line:
                 print(_format_peer(peer), file=self.stream)
                 in_headers = False
-            if isinstance(data, bytes):
+            if isinstance(data, bytearray):
                 # Avoid spurious 'str on bytes instance' warning.
                 line = line.decode('utf-8', 'replace')
             print(line, file=self.stream)
@@ -160,7 +160,7 @@ class Message:
         # If the server was created with decode_data True, then data will be a
         # str, otherwise it will be bytes.
         data = envelope.content
-        if isinstance(data, bytes):
+        if isinstance(data, bytearray):
             message = message_from_bytes(data, self.message_class)
         else:
             assert isinstance(data, str), (

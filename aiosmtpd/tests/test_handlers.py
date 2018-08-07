@@ -179,8 +179,8 @@ Testing
 """)
         # The content is not converted, so it's bytes.
         self.assertEqual(handler.content, handler.original_content)
-        self.assertIsInstance(handler.content, bytes)
-        self.assertIsInstance(handler.original_content, bytes)
+        self.assertIsInstance(handler.content, bytearray)
+        self.assertIsInstance(handler.original_content, bytearray)
 
     def test_message_decoded(self):
         # In this test, the message content comes in as a string.
@@ -199,7 +199,7 @@ Testing
 """)
         self.assertNotEqual(handler.content, handler.original_content)
         self.assertIsInstance(handler.content, str)
-        self.assertIsInstance(handler.original_content, bytes)
+        self.assertIsInstance(handler.original_content, bytearray)
 
 
 class TestAsyncMessage(unittest.TestCase):

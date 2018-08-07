@@ -153,7 +153,7 @@ class TestProtocol(unittest.TestCase):
 
     def test_honors_mail_delimeters(self):
         handler = ReceivingHandler()
-        data = b'test\r\nmail\rdelimeters\nsaved'
+        data = bytearray(b'test\r\nmail\rdelimeters\nsaved')
         protocol = self._get_protocol(handler)
         protocol.data_received(BCRLF.join([
             b'HELO example.org',
