@@ -3,7 +3,7 @@
 ==========
 
 -----------------------------------------------------
-Provide a Simple Mail Transfer Procotol (SMTP) server
+Provide a Simple Mail Transfer Protocol (SMTP) server
 -----------------------------------------------------
 
 :Author: The aiosmtpd developers
