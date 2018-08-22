@@ -190,9 +190,10 @@ Controller API
    option is returned to the client in response to ``EHLO``, and UTF-8 content
    is accepted.
 
-   *ssl_context* is a ``SSLContext`` that will be used by the loops
-   server and is passed directly to :meth:`AbstractEventLoop.create_server`
-   method.
+   *ssl_context* is an ``SSLContext`` that will be used by the loop's
+   server. It is passed directly to the :meth:`AbstractEventLoop.create_server`
+   method. Note that this implies unconditional encryption of the connection,
+   and prevents use of the ``STARTTLS`` mechanism.
 
    .. attribute:: handler
 
