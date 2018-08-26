@@ -101,7 +101,7 @@ override to provide additional responses.
 SMTP API
 ========
 
-.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, decode_data=False, hostname=None, ident=None, tls_context=None, require_starttls=False, loop=None)
+.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, decode_data=False, hostname=None, ident=None, tls_context=None, require_starttls=False, timeout=300, loop=None)
 
    *handler* is an instance of a :ref:`handler <handlers>` class.
 
@@ -120,7 +120,7 @@ SMTP API
    *hostname* is the first part of the string returned in the ``220`` greeting
    response given to clients when they first connect to the server.  If not given,
    the system's fully-qualified domain name is used.
-   
+
    *ident* is the second part of the string returned in the ``220`` greeting
    response that identifies the software name and version of the SMTP server
    to the client. If not given, a default Python SMTP ident is used.
@@ -130,6 +130,10 @@ SMTP API
    server. For this option to be available, *tls_context* must be supplied,
    and *require_starttls* should be ``True``.  See :ref:`tls` for a more in
    depth discussion on enabling ``STARTTLS``.
+
+   *timeout* is the number of seconds to wait between valid SMTP commands.
+   After this time the connection will be closed by the server.  The default
+   is 300 seconds, as per `RFC 2821`_.
 
    *loop* is the asyncio event loop to use.  If not given,
    :meth:`asyncio.new_event_loop()` is called to create the event loop.
@@ -253,8 +257,8 @@ advertised, and the ``STARTTLS`` command will not be accepted.
 *require_starttls* is meaningless in this case, and should be set to
 ``False``.
 
-
 .. _StreamReaderProtocol: https://docs.python.org/3/library/asyncio-stream.html#streamreaderprotocol
 .. _`RFC 3207`: http://www.faqs.org/rfcs/rfc3207.html
+.. _`RFC 2821`: https://www.ietf.org/rfc/rfc2821.txt
 .. _`asyncio transport`: https://docs.python.org/3/library/asyncio-protocol.html#asyncio-transport
 .. _ssl: https://docs.python.org/3/library/ssl.html

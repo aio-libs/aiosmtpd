@@ -75,6 +75,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  ident=None,
                  tls_context=None,
                  require_starttls=False,
+                 timeout=300,
                  loop=None):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
@@ -98,6 +99,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.tls_context.check_hostname = False
             self.tls_context.verify_mode = ssl.CERT_NONE
         self.require_starttls = tls_context and require_starttls
+        self._timeout_duration = timeout
+        self._timeout_handle = None
         self._tls_handshake_okay = True
         self._tls_protocol = None
         self._original_transport = None
@@ -131,6 +134,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._set_rset_state()
         self.session = self._create_session()
         self.session.peer = transport.get_extra_info('peername')
+        self._reset_timeout()
         seen_starttls = (self._original_transport is not None)
         if self.transport is not None and seen_starttls:
             # It is STARTTLS connection over normal connection.
@@ -156,6 +160,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def connection_lost(self, error):
         log.info('%r connection lost', self.session.peer)
+        self._timeout_handle.cancel()
         # If STARTTLS was issued, then our transport is the SSL protocol
         # transport, and we need to close the original transport explicitly,
         # otherwise an unexpected eof_received() will be called *after* the
@@ -181,6 +186,21 @@ class SMTP(asyncio.StreamReaderProtocol):
             # above.
             return False
         return super().eof_received()
+
+    def _reset_timeout(self):
+        if self._timeout_handle is not None:
+            self._timeout_handle.cancel()
+
+        self._timeout_handle = self.loop.call_later(
+                self._timeout_duration, self._timeout_cb)
+
+    def _timeout_cb(self):
+        log.info('%r connection timeout', self.session.peer)
+
+        # Calling close() on the transport will trigger connection_lost(),
+        # which gracefully closes the SSL transport if required and cleans
+        # up state.
+        self.transport.close()
 
     def _client_connected_cb(self, reader, writer):
         # This is redundant since we subclass StreamReaderProtocol, but I like
@@ -289,6 +309,9 @@ class SMTP(asyncio.StreamReaderProtocol):
                     await self.push(
                         '500 Error: command "%s" not recognized' % command)
                     continue
+
+                # Received a valid command, reset the timer.
+                self._reset_timeout()
                 await method(arg)
             except asyncio.CancelledError:
                 # The connection got reset during the DATA command.
