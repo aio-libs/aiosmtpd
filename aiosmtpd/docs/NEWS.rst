@@ -2,10 +2,16 @@
  NEWS for aiosmtpd
 ===================
 
-1.2 (201X-XX-XX)
+1.2 (2018-09-01)
 ================
 * Improve the documentation on enabling ``STARTTLS``.  (Closes #125)
 * Add customizable ident field to SMTP class constructor. (Closes #131)
+* Remove asyncio.coroutine decorator as it was introduced in Python 3.5.
+* Add Controller docstring, explain dual-stack binding. (Closes #140)
+* Gracefully handle ASCII decoding exceptions. (Closes #142)
+* Fix typo.
+* Improve Controller ssl_context documentation.
+* Add timeout feature. (Partial fix for #145)
 
 
 1.1 (2017-07-06)
