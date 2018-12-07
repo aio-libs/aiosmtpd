@@ -144,7 +144,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.session = self._create_session()
         self.session.peer = transport.get_extra_info('peername')
         self._reset_timeout()
-        self._reset__global_timeout()
+        self._reset_global_timeout()
         seen_starttls = (self._original_transport is not None)
         if self.transport is not None and seen_starttls:
             # It is STARTTLS connection over normal connection.
