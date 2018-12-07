@@ -76,6 +76,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                  tls_context=None,
                  require_starttls=False,
                  timeout=300,
+                 global_timeout=300,
+                 command_call_limit=10,
                  loop=None):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
@@ -101,6 +103,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.require_starttls = tls_context and require_starttls
         self._timeout_duration = timeout
         self._timeout_handle = None
+        self._global_timeout_duration = global_timeout
+        self._global_timeout_handle = None
         self._tls_handshake_okay = True
         self._tls_protocol = None
         self._original_transport = None
@@ -108,6 +112,11 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.envelope = None
         self.transport = None
         self._handler_coroutine = None
+
+        # This will be used for call limiting the commands
+        self._command_call_count = {}
+        self._command_call_limit = None
+        self._command_call_limit_global = command_call_limit
 
     def _create_session(self):
         return Session(self.loop)
@@ -135,6 +144,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.session = self._create_session()
         self.session.peer = transport.get_extra_info('peername')
         self._reset_timeout()
+        self._reset__global_timeout()
         seen_starttls = (self._original_transport is not None)
         if self.transport is not None and seen_starttls:
             # It is STARTTLS connection over normal connection.
@@ -161,6 +171,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def connection_lost(self, error):
         log.info('%r connection lost', self.session.peer)
         self._timeout_handle.cancel()
+        self._global_timeout_handle.cancel()
         # If STARTTLS was issued, then our transport is the SSL protocol
         # transport, and we need to close the original transport explicitly,
         # otherwise an unexpected eof_received() will be called *after* the
@@ -193,6 +204,13 @@ class SMTP(asyncio.StreamReaderProtocol):
 
         self._timeout_handle = self.loop.call_later(
                 self._timeout_duration, self._timeout_cb)
+    
+    def _reset_global_timeout(self):
+        if self._global_timeout_handle is not None:
+            self._global_timeout_handle.cancel()
+
+        self._global_timeout_handle = self.loop.call_later(
+                self._global_timeout_duration, self._global_timeout_cb)
 
     def _timeout_cb(self):
         log.info('%r connection timeout', self.session.peer)
@@ -200,7 +218,17 @@ class SMTP(asyncio.StreamReaderProtocol):
         # Calling close() on the transport will trigger connection_lost(),
         # which gracefully closes the SSL transport if required and cleans
         # up state.
-        self.transport.close()
+        if self.transport:
+            self.transport.close()
+
+    def _global_timeout_cb(self):
+        log.info('%r connection timeout', self.session.peer)
+
+        # Calling close() on the transport will trigger connection_lost(),
+        # which gracefully closes the SSL transport if required and cleans
+        # up state.
+        if self.transport:
+            self.transport.close()
 
     def _client_connected_cb(self, reader, writer):
         # This is redundant since we subclass StreamReaderProtocol, but I like
@@ -215,6 +243,25 @@ class SMTP(asyncio.StreamReaderProtocol):
     def _set_rset_state(self):
         """Reset all state variables except the greeting."""
         self._set_post_data_state()
+    
+    def is_command_call_limited(self, command):
+        """Check if that specific command has been called too many times"""
+
+        if command not in self._command_call_count:
+            self._command_call_count[command] = 0
+
+        self._command_call_count[command] += 1
+
+        limit = self._command_call_limit_global
+        if isinstance(self._command_call_limit, dict) and command in self._command_call_limit:
+            limit = self._command_call_limit[command]
+
+        return self._command_call_count[command] > limit
+
+    def set_command_call_limit(self, options):
+        """Set a limit per command options. For instance, RCPT could accept more than MAIL"""
+        assert isinstance(options, dict)
+        self._command_call_limit = options
 
     async def push(self, status):
         response = bytes(
@@ -303,6 +350,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                         and command not in ['EHLO', 'STARTTLS', 'QUIT']):
                     # RFC3207 part 4
                     await self.push('530 Must issue a STARTTLS command first')
+                    continue
+                if self.is_command_call_limited(command):
+                    await self.push(
+                        '500 Error: command "%s" sent too many times' % command)
                     continue
                 method = getattr(self, 'smtp_' + command, None)
                 if method is None:
