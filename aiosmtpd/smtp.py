@@ -354,6 +354,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 if self.is_command_call_limited(command):
                     await self.push(
                         '500 Error: command "%s" sent too many times' % command)
+                    self.transport.close()
                     continue
                 method = getattr(self, 'smtp_' + command, None)
                 if method is None:
