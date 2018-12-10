@@ -352,19 +352,21 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not hostname:
             await self.push('501 Syntax: EHLO hostname')
             return
+
+        response = []
         self._set_rset_state()
         self.session.extended_smtp = True
-        await self.push('250-%s' % self.hostname)
+        response.append('250-%s' % self.hostname)
         if self.data_size_limit:
-            await self.push('250-SIZE %s' % self.data_size_limit)
+            response.append('250-SIZE %s' % self.data_size_limit)
             self.command_size_limits['MAIL'] += 26
         if not self._decode_data:
-            await self.push('250-8BITMIME')
+            response.append('250-8BITMIME')
         if self.enable_SMTPUTF8:
-            await self.push('250-SMTPUTF8')
+            response.append('250-SMTPUTF8')
             self.command_size_limits['MAIL'] += 10
         if self.tls_context and not self._tls_protocol:
-            await self.push('250-STARTTLS')
+            response.append('250-STARTTLS')
         if hasattr(self, 'ehlo_hook'):
             warn('Use handler.handle_EHLO() instead of .ehlo_hook()',
                  DeprecationWarning)
@@ -372,8 +374,11 @@ class SMTP(asyncio.StreamReaderProtocol):
         status = await self._call_handler_hook('EHLO', hostname)
         if status is MISSING:
             self.session.host_name = hostname
-            status = '250 HELP'
-        await self.push(status)
+            response.append('250 HELP')
+            for r in response:
+                await self.push(r)
+        else:
+            await self.push(status)
 
     @syntax('NOOP [ignored]')
     async def smtp_NOOP(self, arg):
