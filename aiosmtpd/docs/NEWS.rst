@@ -2,6 +2,13 @@
  NEWS for aiosmtpd
 ===================
 
+unreleased
+==========
+
+Fixed
+-----
+* Don't strip last ``\r\n`` prior to terminating dot.
+
 1.2 (2018-09-01)
 ================
 * Improve the documentation on enabling ``STARTTLS``.  (Closes #125)
