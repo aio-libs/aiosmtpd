@@ -10,7 +10,7 @@ from aiosmtpd.smtp import SMTP, __version__
 from contextlib import ExitStack
 from functools import partial
 from io import StringIO
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 try:
     import pwd
@@ -150,7 +150,7 @@ class TestLoop(unittest.TestCase):
         pfunc = partial(patch.object, self.loop)
         resources = ExitStack()
         self.addCleanup(resources.close)
-        self.create_server = resources.enter_context(pfunc('create_server'))
+        self.create_server = resources.enter_context(pfunc('create_server', MagicMock()))
         self.run_until_complete = resources.enter_context(
             pfunc('run_until_complete'))
         self.add_signal_handler = resources.enter_context(
