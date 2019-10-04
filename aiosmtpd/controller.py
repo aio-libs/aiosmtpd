@@ -8,15 +8,16 @@ from public import public
 
 @public
 class Controller:
-    def __init__(self, handler, loop=None, hostname=None, port=8025, *,
-                 ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None):
+    def __init__(self, handler, loop=None, hostname=None, port=None, *,
+                 ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None,
+                 sock=None):
         """
         `Documentation can be found here
         <http://aiosmtpd.readthedocs.io/en/latest/aiosmtpd\
 /docs/controller.html#controller-api>`_.
         """
         self.handler = handler
-        self.hostname = '::1' if hostname is None else hostname
+        self.hostname = hostname
         self.port = port
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self.ssl_context = ssl_context
@@ -26,6 +27,7 @@ class Controller:
         self._thread_exception = None
         self.ready_timeout = os.getenv(
             'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
+        self.sock = sock
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
@@ -34,9 +36,15 @@ class Controller:
     def _run(self, ready_event):
         asyncio.set_event_loop(self.loop)
         try:
+            if self.sock is None:
+                if self.port is None:
+                    self.port = 8025
+                if self.hostname is None:
+                    self.hostname = '::1'
             self.server = self.loop.run_until_complete(
                 self.loop.create_server(
                     self.factory, host=self.hostname, port=self.port,
+                    sock=self.sock,
                     ssl=self.ssl_context))
         except Exception as error:
             self._thread_exception = error

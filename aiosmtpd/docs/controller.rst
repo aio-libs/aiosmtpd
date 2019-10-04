@@ -161,7 +161,7 @@ The EHLO response does not include the ``SMTPUTF8`` ESMTP option.
 Controller API
 ==============
 
-.. class:: Controller(handler, loop=None, hostname=None, port=8025, *, ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None)
+.. class:: Controller(handler, loop=None, hostname=None, port=None, *, ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None, sock=None)
 
    *handler* is an instance of a :ref:`handler <handlers>` class.
 
@@ -171,13 +171,14 @@ Controller API
    *hostname* is passed to your loop's
    :meth:`AbstractEventLoop.create_server` method as the
    ``host`` parameter,
-   except None (default) is translated to '::1'. To bind
+   except None (default) is translated to '::1' if *sock* is also None. To bind
    dual-stack locally, use 'localhost'. To bind `dual-stack
    <https://en.wikipedia.org/wiki/IPv6#Dual-stack_IP_implementation>`_
    on all interfaces, use ''.
 
    *port* is passed directly to your loop's
-   :meth:`AbstractEventLoop.create_server` method.
+   :meth:`AbstractEventLoop.create_server` method, except None
+   (default) is translated to 8025 if *sock* is also None.
 
    *ready_timeout* is float number of seconds that the controller will wait in
    :meth:`Controller.start` for the subthread to start its server.  You can
@@ -194,6 +195,11 @@ Controller API
    server. It is passed directly to the :meth:`AbstractEventLoop.create_server`
    method. Note that this implies unconditional encryption of the connection,
    and prevents use of the ``STARTTLS`` mechanism.
+
+   *sock* is a pre-existing ``Socket`` object.  If you specify either
+   of *hostname* or *port*, you should not specify *sock*.  If
+   specified, it will be passed directly to your loop's
+   `AbstractEventLoop.create_server()` method.
 
    .. attribute:: handler
 
