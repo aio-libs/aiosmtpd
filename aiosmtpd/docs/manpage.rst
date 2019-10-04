@@ -63,4 +63,10 @@ OPTIONS
 -l [HOST:PORT], --listen [HOST:PORT]
     Optional host and port to listen on. If the PORT part is not given, then
     port 8025 is used. If only :PORT is given, then localhost is used for the
-    hostname. If neither are given, localhost:8025 is used.
+    hostname. (mutually-exclusive with ``--supervised``)
+
+--supervised
+    Run under systemd-style supervision. (mutually-exclusive with ``--listen``)
+
+If neither ``--listen`` nor ``--supervised`` are given, ``--listen
+localhost:8025`` is used.

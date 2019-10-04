@@ -1,6 +1,7 @@
 import os
 import sys
 import signal
+import socket
 import asyncio
 import logging
 
@@ -61,7 +62,12 @@ def parseargs(args=None):
         '-d', '--debug',
         default=0, action='count',
         help="""Increase debugging output.""")
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        '--supervised',
+        default=False, action='store_true',
+        help="""Run supervised under systemd-style socket activation.""")
+    group.add_argument(
         '-l', '--listen', metavar='HOST:PORT',
         nargs='?', default=None,
         help="""Optional host and port to listen on.  If the PORT part is not
@@ -134,10 +140,14 @@ def main(args=None):
     if args.debug > 2:
         loop.set_debug(enabled=True)
 
-    log.info('Server listening on %s:%s', args.host, args.port)
-
-    server = loop.run_until_complete(
-        loop.create_server(factory, host=args.host, port=args.port))
+    if args.supervised:
+        log.info('Server listening on socket-activated file descriptor')
+        sock = socket.fromfd(3, socket.AF_INET, socket.SOCK_STREAM)
+        stage = loop.create_server(factory, sock=sock)
+    else:
+        log.info('Server listening on %s:%s', args.host, args.port)
+        stage = loop.create_server(factory, host=args.host, port=args.port)
+    server = loop.run_until_complete(stage)
     # Signal handlers are only supported on *nix, so just ignore the failure
     # to set this on Windows.
     with suppress(NotImplementedError):

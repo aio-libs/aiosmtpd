@@ -70,7 +70,13 @@ Optional arguments include:
 ``-l [HOST:PORT]``, ``--listen [HOST:PORT]``
     Optional host and port to listen on.  If the ``PORT`` part is not given,
     then port 8025 is used.  If only ``:PORT`` is given, then ``localhost`` is
-    used for the host name.  If neither are given, ``localhost:8025`` is used.
+    used for the host name. (mutually-exclusive with ``--supervised``)
+
+``--supervised``
+    Run under `systemd-style supervision`_. (mutually-exclusive with ``--listen``)
+
+If neither ``--listen`` nor ``--supervised`` are given, ``--listen
+localhost:8025`` is used.
 
 Optional positional arguments provide additional arguments to the handler
 class constructor named in the ``--class`` option.  Provide as many of these
@@ -80,3 +86,4 @@ as supported by the handler class's ``from_cli()`` class method, if provided.
 .. _smtplib: https://docs.python.org/3/library/smtplib.html
 .. _`RFC 1870`: http://www.faqs.org/rfcs/rfc1870.html
 .. _`RFC 6531`: http://www.faqs.org/rfcs/rfc6531.html
+.. _`systemd-style supervision`: https://www.freedesktop.org/software/systemd/man/sd_listen_fds.html
