@@ -11,6 +11,7 @@ from aiosmtpd.testing.helpers import (
     get_server_context,
 )
 from contextlib import ExitStack
+from aiosmtpd.smtp import SMTP as SMTPProtocol, TLSSetupException
 from email.mime.text import MIMEText
 from smtplib import SMTP
 from unittest.mock import Mock, patch
@@ -27,6 +28,7 @@ def setUpModule():
 
 def tearDownModule():
     ModuleResources.close()
+from smtplib import SMTP, SMTPServerDisconnected
 
 
 class Controller(BaseController):
@@ -171,6 +173,35 @@ class TestStartTLS(unittest.TestCase):
             code, response = client.docmd('HELP')
             self.assertEqual(code, 250)
             self.assertEqual(response, SUPPORTED_COMMANDS_TLS)
+
+    def test_tls_handshake_stopcontroller(self):
+        controller = TLSController(Sink())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd('STARTTLS')
+            self.doCleanups()
+            self.assertRaises(SMTPServerDisconnected, client.quit)
+
+    def test_tls_handshake_failing(self):
+        class ExceptionCaptureHandler:
+            error = None
+
+            async def handle_exception(self, error):
+                self.error = error
+                return '500 ExceptionCaptureHandler handling error'
+        handler = ExceptionCaptureHandler()
+        controller = TLSController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd('STARTTLS')
+            self.assertRaises(SMTPServerDisconnected, client.docmd,
+                              'SOMEFAILINGHANDSHAKE')
+            self.doCleanups()
+            self.assertIsInstance(handler.error, TLSSetupException)
 
 
 class TestTLSForgetsSessionData(unittest.TestCase):

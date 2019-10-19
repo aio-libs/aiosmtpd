@@ -108,6 +108,10 @@ def login_always_fail(mechanism, login, password):
     return False
 
 
+class TLSSetupException(Exception):
+    pass
+
+
 @public
 class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
@@ -319,8 +323,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             status = await self.event_handler.handle_exception(error)
             return status
         else:
-            log.exception('SMTP session exception')
-            status = '451 Error: ({}) {}'.format(
+            log.exception('%r SMTP session exception', self.session.peer)
+            status = '500 Error: ({}) {}'.format(
                 error.__class__.__name__, str(error))
             return status
 
@@ -416,25 +420,32 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # The connection got reset during the DATA command.
                 # XXX If handler method raises ConnectionResetError, we should
                 # verify that it was actually self._reader that was reset.
-                log.info('Connection lost during _handle_client()')
+                log.info('%r Connection lost during _handle_client()',
+                         self.session.peer)
                 self._writer.close()
                 raise
             except ConnectionResetError:
-                log.info('Connection lost during _handle_client()')
+                log.info('%r Connection lost during _handle_client()',
+                         self.session.peer)
                 self._writer.close()
                 raise
             except Exception as error:
                 try:
                     status = await self.handle_exception(error)
-                    await self.push(status)
-                except Exception as error:
+                except Exception as error2:
                     try:
-                        log.exception('Exception in handle_exception()')
-                        status = '451 Error: ({}) {}'.format(
-                            error.__class__.__name__, str(error))
+                        log.exception('%r Exception in handle_exception()',
+                                      self.session.peer)
+                        status = '500 Error: ({}) {}'.format(
+                            error2.__class__.__name__, str(error2))
                     except Exception:
-                        status = '451 Error: Cannot describe error'
-                    await self.push(status)
+                        status = '500 Error: Cannot describe error'
+                finally:
+                    if isinstance(error, TLSSetupException):
+                        self.transport.close()
+                        self.connection_lost(error)
+                    else:
+                        await self.push(status)
 
     async def check_helo_needed(self, helo: str = "HELO") -> bool:
         """
@@ -532,13 +543,15 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push('454 TLS not available')
             return
         await self.push('220 Ready to start TLS')
+        # Create a waiter Future to wait for SSL handshake to complete
+        waiter = self.loop.create_future()
         # Create SSL layer.
         # noinspection PyTypeChecker
         self._tls_protocol = sslproto.SSLProtocol(
             self.loop,
             self,
             self.tls_context,
-            None,
+            waiter,
             server_side=True)
         # Reconfigure transport layer.  Keep a reference to the original
         # transport so that we can close it explicitly when the connection is
@@ -549,6 +562,13 @@ class SMTP(asyncio.StreamReaderProtocol):
         # property, if it MUST be used externally?
         self.transport = self._tls_protocol._app_transport
         self._tls_protocol.connection_made(self._original_transport)
+        # wait until handshake complete
+        try:
+            await waiter
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            raise TLSSetupException() from error
 
     @syntax("AUTH <mechanism>")
     async def smtp_AUTH(self, arg: str) -> None:
