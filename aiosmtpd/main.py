@@ -140,7 +140,7 @@ def main(args=None):
     if args.debug > 2:
         loop.set_debug(enabled=True)
 
-    if args.supervised:
+    if args.supervised:                           # pragma: nomswin
         log.info('Server listening on socket-activated file descriptor')
         sock = socket.fromfd(3, socket.AF_INET, socket.SOCK_STREAM)
         stage = loop.create_server(factory, sock=sock)

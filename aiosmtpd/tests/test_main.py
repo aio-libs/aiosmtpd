@@ -1,5 +1,7 @@
 import os
+import sys
 import signal
+import socket
 import asyncio
 import logging
 import unittest
@@ -225,6 +227,24 @@ class TestLoop(unittest.TestCase):
         self.assertEqual(positional[0].keywords, dict(
             data_size_limit=None,
             enable_SMTPUTF8=True))
+
+    @unittest.skipIf(sys.platform.startswith("win"),
+                     "socket-activated supervision doesn't work on Windows")
+    def test_supervised(self):
+        # We mock out so much of this, is it even a worthwhile test?  Well, it
+        # does give us coverage.
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        sock.bind(('localhost', 19666))
+        sock.listen()
+        os.dup2(sock.fileno(), 3)
+        main(('-n', '--supervised'))
+        positional, keywords = self.create_server.call_args
+        # what should we actually be testing here?
+        self.assertEqual(positional[0].keywords, dict(
+            data_size_limit=None,
+            enable_SMTPUTF8=False))
+        self.assertEqual(keywords['sock'].getsockname()[1], 19666)
+        sock.close()
 
 
 class TestParseArgs(unittest.TestCase):
