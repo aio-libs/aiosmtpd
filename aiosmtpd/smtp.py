@@ -432,12 +432,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             except Exception as error:
                 try:
                     status = await self.handle_exception(error)
-                except Exception as error2:
+                except Exception as inner_error:
                     try:
                         log.exception('%r Exception in handle_exception()',
                                       self.session.peer)
                         status = '500 Error: ({}) {}'.format(
-                            error2.__class__.__name__, str(error2))
+                            inner_error.__class__.__name__, str(inner_error))
                     except Exception:
                         status = '500 Error: Cannot describe error'
                 finally:
