@@ -315,7 +315,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return status
         else:
             log.exception('SMTP session exception')
-            status = '500 Error: ({}) {}'.format(
+            status = '451 Error: ({}) {}'.format(
                 error.__class__.__name__, str(error))
             return status
 
@@ -425,10 +425,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                 except Exception as error:
                     try:
                         log.exception('Exception in handle_exception()')
-                        status = '500 Error: ({}) {}'.format(
+                        status = '451 Error: ({}) {}'.format(
                             error.__class__.__name__, str(error))
                     except Exception:
-                        status = '500 Error: Cannot describe error'
+                        status = '451 Error: Cannot describe error'
                     await self.push(status)
 
     async def check_helo_needed(self, helo: str = "HELO") -> bool:
