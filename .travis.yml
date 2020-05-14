@@ -11,7 +11,7 @@ matrix:
       env: INTERP=py36 PYTHONASYNCIODEBUG=1
     - python: "3.7"
       env: INTERP=py37 PYTHONASYNCIODEBUG=1
-      dist: xenial
+      dist: bionic
 before_script:
   # Disable IPv6. Ref travis-ci/travis-ci#8711
   - echo 0 | sudo tee /proc/sys/net/ipv6/conf/all/disable_ipv6
