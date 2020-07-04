@@ -60,8 +60,14 @@ class Controller:
             raise self._thread_exception
 
     def _stop(self):
+        try:
+            _all_tasks = asyncio.all_tasks
+        except AttributeError:  # pragma: nocover
+            # all_tasks was somewhere else before Python 3.7
+            _all_tasks = asyncio.Task.all_tasks
+
         self.loop.stop()
-        for task in asyncio.Task.all_tasks(self.loop):
+        for task in _all_tasks(self.loop):
             task.cancel()
 
     def stop(self):
