@@ -1,4 +1,3 @@
-import ssl
 import socket
 import asyncio
 import logging
@@ -530,7 +529,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     @syntax('HELP [command]')
     async def smtp_HELP(self, arg):
         if self.auth_required and not self.authenticated:
-            log.info('Authentication required')
+            log.info('HELP: Authentication required')
             await self.push('530 Authentication required')
             return
         code = 250
@@ -558,7 +557,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     @syntax('VRFY <address>')
     async def smtp_VRFY(self, arg):
         if self.auth_required and not self.authenticated:
-            log.info('Authentication required')
+            log.info('VRFY: Authentication required')
             await self.push('530 Authentication required')
             return
         if arg:
@@ -583,7 +582,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push('503 Error: send HELO first')
             return
         if self.auth_required and not self.authenticated:
-            log.info('MAIL FROM Authentication required')
+            log.info('MAIL FROM: Authentication required')
             await self.push('530 Authentication required')
             return
         log.debug('===> MAIL %s', arg)
@@ -654,7 +653,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push('503 Error: send HELO first')
             return
         if self.auth_required and not self.authenticated:
-            log.info('RCPT TO Authentication required')
+            log.info('RCPT TO: Authentication required')
             await self.push('530 Authentication required')
             return
         log.debug('===> RCPT %s', arg)
@@ -715,7 +714,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push('503 Error: send HELO first')
             return
         if self.auth_required and not self.authenticated:
-            log.info('Authentication required')
+            log.info('DATA: Authentication required')
             await self.push('530 Authentication required')
             return
         if not self.envelope.rcpt_tos:
