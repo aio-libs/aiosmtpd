@@ -262,7 +262,7 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(lines[0], bytes(socket.getfqdn(), 'utf-8'))
             self.assertEqual(lines[1], b'SIZE 33554432')
             self.assertEqual(lines[2], b'SMTPUTF8')
-            self.assertEqual(lines[3], b'AUTH PLAIN')
+            self.assertEqual(lines[3], b'AUTH LOGIN PLAIN')
             self.assertEqual(lines[4], b'HELP')
 
     def test_ehlo_duplicate(self):
@@ -408,7 +408,7 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             code, response = client.docmd('HELP', 'AUTH')
             self.assertEqual(code, 250)
-            self.assertEqual(response, b'Syntax: AUTH PLAIN')
+            self.assertEqual(response, b'Syntax: AUTH <mechanism>')
 
     def test_help_bad_arg(self):
         with SMTP(*self.address) as client:
@@ -745,7 +745,7 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(response, b'Not enough value')
 
     def test_auth_not_supported_methods(self):
-        for method in ('GSSAPI', 'DIGEST-MD5', 'LOGIN', 'MD5', 'CRAM-MD5'):
+        for method in ('GSSAPI', 'DIGEST-MD5', 'MD5', 'CRAM-MD5'):
             with SMTP(*self.address) as client:
                 client.ehlo('example.com')
                 code, response = client.docmd('AUTH '+method)

@@ -3,6 +3,7 @@ import socket
 import asyncio
 import logging
 import collections
+import binascii
 from base64 import b64decode
 from asyncio import sslproto
 from email._header_value_parser import get_addr_spec, get_angle_addr
@@ -10,7 +11,7 @@ from email.errors import HeaderParseError
 from public import public
 from warnings import warn
 
-from typing import Callable, Optional, Union, List, Awaitable
+from typing import Callable, Optional, Union, List, Awaitable, Any
 
 
 __version__ = '1.2+'
@@ -18,7 +19,7 @@ __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
 
-AuthMethodType = Callable[[List[str]], Awaitable[Optional[str]]]
+AuthMethodType = Callable[[List[str]], Awaitable[Any]]
 
 
 DATA_SIZE_DEFAULT = 33554432
@@ -35,7 +36,7 @@ class Session:
         self.host_name = None
         self.extended_smtp = False
         self.loop = loop
-        self.login = None
+        self.login: Optional[bytes] = None
 
 
 @public
@@ -44,7 +45,7 @@ class Envelope:
         self.mail_from = None
         self.mail_options = []
         self.smtp_utf8 = False
-        self.content = None
+        self.content: Union[None, bytes, str] = None
         self.original_content = None
         self.rcpt_tos = []
         self.rcpt_options = []
@@ -388,7 +389,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             warn('Use handler.handle_EHLO() instead of .ehlo_hook()',
                  DeprecationWarning)
             await self.ehlo_hook()
-        await self.push('250-AUTH PLAIN')
+        auth = "250-AUTH " + " ".join(sorted(
+            m.replace("auth_", "")
+            for m in dir(self)
+            if m.startswith("auth_")
+        ))
+        await self.push(auth)
         status = await self._call_handler_hook('EHLO', hostname)
         if status is MISSING:
             self.session.host_name = hostname
@@ -438,7 +444,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.transport = self._tls_protocol._app_transport
         self._tls_protocol.connection_made(self._original_transport)
 
-    @syntax("AUTH PLAIN")
+    @syntax("AUTH <mechanism>")
     async def smtp_AUTH(self, arg):
         if not self.session.host_name:
             await self.push('503 Error: send EHLO first')
@@ -467,43 +473,79 @@ class SMTP(asyncio.StreamReaderProtocol):
             if method is None:
                 await self.push(f'504 Unsupported AUTH mechanism {mechanism}')
                 return
-            status = await method(args)
+            login = await method(args)
+            if login is None:
+                # None means already handled by method and we don't need to
+                # do anything more
+                return
+            elif login is MISSING:
+                # MISSING means auth failed
+                status = '535 Authentication credentials invalid'
+            else:
+                self.authenticated = True
+                self.session.login = login
+                status = '235 Authentication successful'
         if status is not None:
             await self.push(status)
 
-    async def auth_PLAIN(self, args: List[str]) -> Optional[str]:
+    async def _auth_interact(self, server_message):
         blob: bytes
+        await self.push(server_message)
+        line = await self._reader.readline()
+        blob = line.strip()
+        if blob == b"=":
+            return None
+        if blob == b"*":
+            await self.push("501 Auth aborted")
+            return MISSING
+        try:
+            decoded_blob = b64decode(blob, validate=True)
+        except binascii.Error:
+            await self.push("501 Can't decode base64")
+            return MISSING
+        return decoded_blob
+
+    async def auth_PLAIN(self, args: List[str]):
         if len(args) == 1:
-            # In accordance with RFC 4954, a space MUST be added after 334
-            await self.push('334 ')  # wait client login/password
-            line = await self._reader.readline()
-            blob = line.strip()
-            if blob.decode() == '*':
-                await self.push("501 Auth aborted")
+            loginpassword = self._auth_interact("334 ")
+            if loginpassword is MISSING:
                 return
         else:
             blob = args[1].encode()
-        log.debug('login/password %s', blob)
-        if blob == b'=':
+            if blob is None:
+                loginpassword = None
+            else:
+                try:
+                    loginpassword = b64decode(blob, validate=True)
+                except Exception:
+                    await self.push("501 Can't decode base64")
+                    return
+        if loginpassword is None:
             login = password = None
         else:
-            try:
-                loginpassword = b64decode(blob, validate=True)
-            except Exception:
-                await self.push("501 Can't decode base64")
-                return
             try:
                 _, login, password = loginpassword.split(b"\x00")
             except ValueError:  # not enough args
                 await self.push("500 Can't split auth value")
                 return
         if self.auth_method(login, password):
-            self.authenticated = True
-            self.session.login = login
-            status = '235 Authentication successful'
+            return login
         else:
-            status = '535 Authentication credentials invalid'
-        return status
+            return MISSING
+
+    async def auth_LOGIN(self, args: List[str]):
+        login = await self._auth_interact("334 VXNlciBOYW1lAA==")  # b'User Name\x00'
+        if login is MISSING:
+            return
+
+        password = await self._auth_interact("334 UGFzc3dvcmQA")  # b'Password\x00'
+        if password is MISSING:
+            return
+
+        if self.auth_method(login, password):
+            return login
+        else:
+            return MISSING
 
     def _strip_command_keyword(self, keyword, arg):
         keylen = len(keyword)
