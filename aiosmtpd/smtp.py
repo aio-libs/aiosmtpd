@@ -10,12 +10,15 @@ from email.errors import HeaderParseError
 from public import public
 from warnings import warn
 
-from typing import Callable
+from typing import Callable, Optional, Union, List, Awaitable
 
 
 __version__ = '1.2+'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
+
+
+AuthMethodType = Callable[[List[str]], Awaitable[Optional[str]]]
 
 
 DATA_SIZE_DEFAULT = 33554432
@@ -459,42 +462,48 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         status = await self._call_handler_hook('AUTH', args)
         if status is MISSING:
-            method = args[0]
-            if method != 'PLAIN':
-                await self.push('500 PLAIN method or die')
+            mechanism = args[0]
+            method: AuthMethodType = getattr(self, f"auth_{mechanism}", None)
+            if method is None:
+                await self.push(f'504 Unsupported AUTH mechanism {mechanism}')
                 return
-            if len(args) == 1:
-                # In accordance with RFC 4954, a space MUST be added after 334
-                await self.push('334 ')  # wait client login/password
-                line = await self._reader.readline()
-                blob = line.strip()
-                if blob.decode() == '*':
-                    await self.push("501 Auth aborted")
-                    return
-            else:
-                blob = args[1].encode()
-            log.debug('login/password %s', blob)
-            if blob == b'=':
-                login = None
-                password = None
-            else:
-                try:
-                    loginpassword = b64decode(blob, validate=True)
-                except Exception:
-                    await self.push("501 Can't decode base64")
-                    return
-                try:
-                    _, login, password = loginpassword.split(b"\x00")
-                except ValueError:  # not enough args
-                    await self.push("500 Can't split auth value")
-                    return
-            if self.auth_method(login, password):
-                self.authenticated = True
-                self.session.login = login
-                status = '235 Authentication successful'
-            else:
-                status = '535 Authentication credentials invalid'
-        await self.push(status)
+            status = await method(args)
+        if status is not None:
+            await self.push(status)
+
+    async def auth_PLAIN(self, args: List[str]) -> Optional[str]:
+        blob: bytes
+        if len(args) == 1:
+            # In accordance with RFC 4954, a space MUST be added after 334
+            await self.push('334 ')  # wait client login/password
+            line = await self._reader.readline()
+            blob = line.strip()
+            if blob.decode() == '*':
+                await self.push("501 Auth aborted")
+                return
+        else:
+            blob = args[1].encode()
+        log.debug('login/password %s', blob)
+        if blob == b'=':
+            login = password = None
+        else:
+            try:
+                loginpassword = b64decode(blob, validate=True)
+            except Exception:
+                await self.push("501 Can't decode base64")
+                return
+            try:
+                _, login, password = loginpassword.split(b"\x00")
+            except ValueError:  # not enough args
+                await self.push("500 Can't split auth value")
+                return
+        if self.auth_method(login, password):
+            self.authenticated = True
+            self.session.login = login
+            status = '235 Authentication successful'
+        else:
+            status = '535 Authentication credentials invalid'
+        return status
 
     def _strip_command_keyword(self, keyword, arg):
         keylen = len(keyword)

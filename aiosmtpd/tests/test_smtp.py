@@ -749,8 +749,9 @@ class TestSMTP(unittest.TestCase):
             with SMTP(*self.address) as client:
                 client.ehlo('example.com')
                 code, response = client.docmd('AUTH '+method)
-                self.assertEqual(code, 500)
-                self.assertEqual(response, b'PLAIN method or die')
+                self.assertEqual(code, 504)
+                self.assertEqual(
+                    response, b'Unsupported AUTH mechanism ' + method.encode())
 
     def test_auth_already_authenticated(self):
         with SMTP(*self.address) as client:
