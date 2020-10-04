@@ -222,9 +222,10 @@ class TestRequireTLSAUTH(unittest.TestCase):
             client.ehlo('example.com')
             code, response = client.docmd("AUTH ")
             self.assertEqual(code, 500)
-            self.assertEqual(response, b"Error: command 'AUTH' not recognized")
+            self.assertEqual(response,
+                             b"538 Encryption required for requested "
+                             b"authentication mechanism")
 
-    @unittest.skipIf(not _has_ssl, 'SSL and Python 3.5 required')
     def test_auth_tls(self):
         with SMTP(*self.address) as client:
             client.starttls()
