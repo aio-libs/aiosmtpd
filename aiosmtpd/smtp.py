@@ -3,9 +3,7 @@ import socket
 import asyncio
 import logging
 import collections
-
 from base64 import b64decode
-
 from asyncio import sslproto
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
@@ -34,6 +32,7 @@ class Session:
         self.host_name = None
         self.extended_smtp = False
         self.loop = loop
+        self.login = None
 
 
 @public
@@ -484,6 +483,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                     return
             if self.auth_method(login, password):
                 self.authenticated = True
+                self.session.login = login
                 status = '235 Authentication successful'
             else:
                 status = '535 Authentication credentials invalid'
