@@ -389,11 +389,18 @@ class SMTP(asyncio.StreamReaderProtocol):
             warn('Use handler.handle_EHLO() instead of .ehlo_hook()',
                  DeprecationWarning)
             await self.ehlo_hook()
-        auth = "250-AUTH " + " ".join(sorted(
+        auth_handlers = sorted(
             m.replace("auth_", "")
-            for m in dir(self)
+            for m in dir(self.event_handler)
             if m.startswith("auth_")
-        ))
+        )
+        if not auth_handlers:
+            auth_handlers = sorted(
+                m.replace("auth_", "")
+                for m in dir(self)
+                if m.startswith("auth_")
+            )
+        auth = "250-AUTH " + " ".join(auth_handlers)
         await self.push(auth)
         status = await self._call_handler_hook('EHLO', hostname)
         if status is MISSING:
@@ -469,7 +476,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         status = await self._call_handler_hook('AUTH', args)
         if status is MISSING:
             mechanism = args[0]
-            method: AuthMethodType = getattr(self, f"auth_{mechanism}", None)
+            method: AuthMethodType
+            method = getattr(self.event_handler, f"auth_{mechanism}", None)
+            if method is None:
+                method = getattr(self, f"auth_{mechanism}", None)
             if method is None:
                 await self.push(f'504 Unsupported AUTH mechanism {mechanism}')
                 return
