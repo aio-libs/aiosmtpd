@@ -4,8 +4,9 @@ import signal
 import asyncio
 import logging
 
-from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP
+from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP, __version__
 from argparse import ArgumentParser
+from contextlib import suppress
 from functools import partial
 from importlib import import_module
 from public import public
@@ -29,9 +30,12 @@ def parseargs(args=None):
         prog=PROGRAM,
         description='An RFC 5321 SMTP server with extensions.')
     parser.add_argument(
+        '-v', '--version', action='version',
+        version='%(prog)s {}'.format(__version__))
+    parser.add_argument(
         '-n', '--nosetuid',
         dest='setuid', default=True, action='store_false',
-        help="""This program generally tries to setuid `nobody', unless this
+        help="""This program generally tries to setuid `nobody`, unless this
                 flag is set.  The setuid call will fail if this program is not
                 run as root (in which case, use this flag).""")
     parser.add_argument(
@@ -134,7 +138,10 @@ def main(args=None):
 
     server = loop.run_until_complete(
         loop.create_server(factory, host=args.host, port=args.port))
-    loop.add_signal_handler(signal.SIGINT, loop.stop)
+    # Signal handlers are only supported on *nix, so just ignore the failure
+    # to set this on Windows.
+    with suppress(NotImplementedError):
+        loop.add_signal_handler(signal.SIGINT, loop.stop)
 
     log.info('Starting asyncio loop')
     try:

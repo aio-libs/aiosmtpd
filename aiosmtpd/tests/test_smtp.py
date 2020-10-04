@@ -1,5 +1,6 @@
 """Test the SMTP protocol."""
 
+import time
 import socket
 import asyncio
 import unittest
@@ -12,7 +13,7 @@ from base64 import b64encode
 from contextlib import ExitStack
 from smtplib import (
     SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected)
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, PropertyMock, patch
 
 CRLF = '\r\n'
 BCRLF = b'\r\n'
@@ -36,6 +37,11 @@ class NoDecodeController(Controller):
         return Server(self.handler, decode_data=False)
 
 
+class TimeoutController(Controller):
+    def factory(self):
+        return Server(self.handler, timeout=0.1)
+
+
 class RequiredAuthDecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
@@ -49,9 +55,17 @@ class ReceivingHandler:
     def __init__(self):
         self.box = []
 
-    @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope):
         self.box.append(envelope)
+        return '250 OK'
+
+
+class StoreEnvelopeOnVRFYHandler:
+    """Saves envelope for later inspection when handling VRFY."""
+    envelope = None
+
+    async def handle_VRFY(self, server, session, envelope, addr):
+        self.envelope = envelope
         return '250 OK'
 
 
@@ -76,20 +90,17 @@ class CustomHostnameController(Controller):
 
 class CustomIdentController(Controller):
     def factory(self):
-        server = Server(self.handler)
-        server.__ident__ = 'Identifying SMTP v2112'
+        server = Server(self.handler, ident='Identifying SMTP v2112')
         return server
 
 
 class ErroringHandler:
     error = None
 
-    @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope):
         return '499 Could not accept the message'
 
-    @asyncio.coroutine
-    def handle_exception(self, error):
+    async def handle_exception(self, error):
         self.error = error
         return '500 ErroringHandler handling error'
 
@@ -97,8 +108,7 @@ class ErroringHandler:
 class ErroringHandlerCustomResponse:
     error = None
 
-    @asyncio.coroutine
-    def handle_exception(self, error):
+    async def handle_exception(self, error):
         self.error = error
         return '451 Temporary error: ({}) {}'.format(
             error.__class__.__name__, str(error))
@@ -107,8 +117,7 @@ class ErroringHandlerCustomResponse:
 class ErroringErrorHandler:
     error = None
 
-    @asyncio.coroutine
-    def handle_exception(self, error):
+    async def handle_exception(self, error):
         self.error = error
         raise ValueError('ErroringErrorHandler test')
 
@@ -121,21 +130,26 @@ class UndescribableError(Exception):
 class UndescribableErrorHandler:
     error = None
 
-    @asyncio.coroutine
-    def handle_exception(self, error):
+    async def handle_exception(self, error):
         self.error = error
         raise UndescribableError()
 
 
 class ErrorSMTP(Server):
-    @asyncio.coroutine
-    def smtp_HELO(self, hostname):
+    async def smtp_HELO(self, hostname):
         raise ValueError('test')
 
 
 class ErrorController(Controller):
     def factory(self):
         return ErrorSMTP(self.handler)
+
+
+class SleepingHeloHandler:
+    async def handle_HELO(self, server, session, envelope, hostname):
+        await asyncio.sleep(0.01)
+        session.host_name = hostname
+        return '250 {}'.format(server.hostname)
 
 
 class TestProtocol(unittest.TestCase):
@@ -161,14 +175,14 @@ class TestProtocol(unittest.TestCase):
 
     def test_honors_mail_delimeters(self):
         handler = ReceivingHandler()
-        data = b'test\r\nmail\rdelimeters\nsaved'
+        data = b'test\r\nmail\rdelimeters\nsaved\r\n'
         protocol = self._get_protocol(handler)
         protocol.data_received(BCRLF.join([
             b'HELO example.org',
             b'MAIL FROM: <anne@example.com>',
             b'RCPT TO: <anne@example.com>',
             b'DATA',
-            data + b'\r\n.',
+            data + b'.',
             b'QUIT\r\n'
             ]))
         try:
@@ -205,6 +219,20 @@ class TestSMTP(unittest.TestCase):
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
 
+    def test_binary(self):
+        with SMTP(*self.address) as client:
+            client.sock.send(b"\x80FAIL\r\n")
+            code, response = client.getreply()
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Error: bad syntax')
+
+    def test_binary_space(self):
+        with SMTP(*self.address) as client:
+            client.sock.send(b"\x80 FAIL\r\n")
+            code, response = client.getreply()
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Error: bad syntax')
+
     def test_helo(self):
         with SMTP(*self.address) as client:
             code, response = client.helo('example.com')
@@ -224,8 +252,7 @@ class TestSMTP(unittest.TestCase):
             code, response = client.helo('example.com')
             self.assertEqual(code, 250)
             code, response = client.helo('example.org')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Duplicate HELO/EHLO')
+            self.assertEqual(code, 250)
 
     def test_ehlo(self):
         with SMTP(*self.address) as client:
@@ -243,8 +270,7 @@ class TestSMTP(unittest.TestCase):
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
             code, response = client.ehlo('example.org')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Duplicate HELO/EHLO')
+            self.assertEqual(code, 250)
 
     def test_ehlo_no_hostname(self):
         with SMTP(*self.address) as client:
@@ -259,16 +285,14 @@ class TestSMTP(unittest.TestCase):
             code, response = client.helo('example.com')
             self.assertEqual(code, 250)
             code, response = client.ehlo('example.org')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Duplicate HELO/EHLO')
+            self.assertEqual(code, 250)
 
     def test_ehlo_then_helo(self):
         with SMTP(*self.address) as client:
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
             code, response = client.helo('example.org')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Duplicate HELO/EHLO')
+            self.assertEqual(code, 250)
 
     def test_noop(self):
         with SMTP(*self.address) as client:
@@ -278,9 +302,8 @@ class TestSMTP(unittest.TestCase):
     def test_noop_with_arg(self):
         with SMTP(*self.address) as client:
             # .noop() doesn't accept arguments.
-            code, response = client.docmd('NOOP', 'oops')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: NOOP')
+            code, response = client.docmd('NOOP', 'ok')
+            self.assertEqual(code, 250)
 
     def test_quit(self):
         client = SMTP(*self.address)
@@ -300,8 +323,8 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('HELP')
             self.assertEqual(code, 250)
             self.assertEqual(response,
-                             b'Supported commands: EHLO HELO MAIL RCPT '
-                             b'DATA RSET NOOP QUIT VRFY AUTH')
+                             b'Supported commands: AUTH DATA EHLO HELO HELP MAIL '
+                             b'NOOP QUIT RCPT RSET VRFY')
 
     def test_help_helo(self):
         with SMTP(*self.address) as client:
@@ -367,7 +390,7 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             code, response = client.docmd('HELP', 'NOOP')
             self.assertEqual(code, 250)
-            self.assertEqual(response, b'Syntax: NOOP')
+            self.assertEqual(response, b'Syntax: NOOP [ignored]')
 
     def test_help_quit(self):
         with SMTP(*self.address) as client:
@@ -393,8 +416,8 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('HELP me!')
             self.assertEqual(code, 501)
             self.assertEqual(response,
-                             b'Supported commands: EHLO HELO MAIL RCPT '
-                             b'DATA RSET NOOP QUIT VRFY AUTH')
+                             b'Supported commands: AUTH DATA EHLO HELO HELP MAIL '
+                             b'NOOP QUIT RCPT RSET VRFY')
 
     def test_expn(self):
         with SMTP(*self.address) as client:
@@ -494,6 +517,16 @@ class TestSMTP(unittest.TestCase):
                 response,
                 b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')
 
+    # Test the workaround http://bugs.python.org/issue27931
+    @patch('email._header_value_parser.AngleAddr.addr_spec',
+           side_effect=IndexError, new_callable=PropertyMock)
+    def test_mail_fail_parse_email(self, addr_spec):
+        with SMTP(*self.address) as client:
+            client.helo('example.com')
+            code, response = client.docmd('MAIL FROM: <""@example.com>')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
+
     def test_rcpt_no_helo(self):
         with SMTP(*self.address) as client:
             code, response = client.docmd('RCPT TO: <anne@example.com>')
@@ -515,6 +548,16 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('MAIL FROM: <anne@example.com>')
             self.assertEqual(code, 250)
             code, response = client.docmd('RCPT')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: RCPT TO: <address>')
+
+    def test_rcpt_no_to(self):
+        with SMTP(*self.address) as client:
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT <anne@example.com')
             self.assertEqual(code, 501)
             self.assertEqual(response, b'Syntax: RCPT TO: <address>')
 
@@ -578,6 +621,22 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(
                 response,
                 b'RCPT TO parameters not recognized or not implemented')
+
+    # Test the workaround http://bugs.python.org/issue27931
+    @patch('email._header_value_parser.AngleAddr.addr_spec',
+           new_callable=PropertyMock)
+    def test_rcpt_fail_parse_email(self, addr_spec):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            addr_spec.side_effect = IndexError
+            code, response = client.docmd('RCPT TO: <""@example.com>')
+            self.assertEqual(code, 501)
+            self.assertEqual(
+                response,
+                b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
 
     def test_rset(self):
         with SMTP(*self.address) as client:
@@ -898,6 +957,87 @@ class TestRequiredAuthentication(unittest.TestCase):
             self.assertEqual(response, b'Authentication required')
 
 
+class TestResetCommands(unittest.TestCase):
+    """Test that sender and recipients are reset on RSET, HELO, and EHLO.
+
+    The tests below issue each command twice with different addresses and
+    verify that mail_from and rcpt_tos have been replacecd.
+    """
+    expected_envelope_data = [
+        # Pre-RSET/HELO/EHLO envelope data.
+        dict(
+            mail_from='anne@example.com',
+            rcpt_tos=['bart@example.com', 'cate@example.com'],
+            ),
+        dict(
+            mail_from='dave@example.com',
+            rcpt_tos=['elle@example.com', 'fred@example.com'],
+            ),
+        ]
+
+    def setUp(self):
+        self._handler = StoreEnvelopeOnVRFYHandler()
+        self._controller = DecodingController(self._handler)
+        self._controller.start()
+        self._address = (self._controller.hostname, self._controller.port)
+        self.addCleanup(self._controller.stop)
+
+    def _send_envelope_data(self, client, mail_from, rcpt_tos):
+        client.mail(mail_from)
+        for rcpt in rcpt_tos:
+            client.rcpt(rcpt)
+
+    def test_helo(self):
+        with SMTP(*self._address) as client:
+            # Each time through the loop, the HELO will reset the envelope.
+            for data in self.expected_envelope_data:
+                client.helo('example.com')
+                # Save the envelope in the handler.
+                client.vrfy('zuzu@example.com')
+                self.assertIsNone(self._handler.envelope.mail_from)
+                self.assertEqual(len(self._handler.envelope.rcpt_tos), 0)
+                self._send_envelope_data(client, **data)
+                client.vrfy('zuzu@example.com')
+                self.assertEqual(
+                    self._handler.envelope.mail_from, data['mail_from'])
+                self.assertEqual(
+                    self._handler.envelope.rcpt_tos, data['rcpt_tos'])
+
+    def test_ehlo(self):
+        with SMTP(*self._address) as client:
+            # Each time through the loop, the EHLO will reset the envelope.
+            for data in self.expected_envelope_data:
+                client.ehlo('example.com')
+                # Save the envelope in the handler.
+                client.vrfy('zuzu@example.com')
+                self.assertIsNone(self._handler.envelope.mail_from)
+                self.assertEqual(len(self._handler.envelope.rcpt_tos), 0)
+                self._send_envelope_data(client, **data)
+                client.vrfy('zuzu@example.com')
+                self.assertEqual(
+                    self._handler.envelope.mail_from, data['mail_from'])
+                self.assertEqual(
+                    self._handler.envelope.rcpt_tos, data['rcpt_tos'])
+
+    def test_rset(self):
+        with SMTP(*self._address) as client:
+            client.helo('example.com')
+            # Each time through the loop, the RSET will reset the envelope.
+            for data in self.expected_envelope_data:
+                self._send_envelope_data(client, **data)
+                # Save the envelope in the handler.
+                client.vrfy('zuzu@example.com')
+                self.assertEqual(
+                    self._handler.envelope.mail_from, data['mail_from'])
+                self.assertEqual(
+                    self._handler.envelope.rcpt_tos, data['rcpt_tos'])
+                # Reset the envelope explicitly.
+                client.rset()
+                client.vrfy('zuzu@example.com')
+                self.assertIsNone(self._handler.envelope.mail_from)
+                self.assertEqual(len(self._handler.envelope.rcpt_tos), 0)
+
+
 class TestSMTPWithController(unittest.TestCase):
     def test_mail_with_size_too_large(self):
         controller = SizedController(Sink(), 9999)
@@ -1024,7 +1164,7 @@ Testing
             mail = CRLF.join(['Test', '.', 'mail'])
             client.sendmail('anne@example.com', ['bart@example.com'], mail)
             self.assertEqual(len(handler.box), 1)
-            self.assertEqual(handler.box[0].content, 'Test\r\n.\r\nmail')
+            self.assertEqual(handler.box[0].content, 'Test\r\n.\r\nmail\r\n')
 
     def test_unexpected_errors(self):
         handler = ErroringHandler()
@@ -1283,3 +1423,31 @@ Testing\xFF
 """)
             self.assertEqual(cm.exception.smtp_code, 500)
             self.assertIn(b'Error: strict ASCII mode', cm.exception.smtp_error)
+
+
+class TestSleepingHandler(unittest.TestCase):
+    def setUp(self):
+        controller = NoDecodeController(SleepingHeloHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_close_after_helo(self):
+        with SMTP(*self.address) as client:
+            client.send('HELO example.com\r\n')
+            client.sock.shutdown(socket.SHUT_WR)
+            self.assertRaises(SMTPServerDisconnected, client.getreply)
+
+
+class TestTimeout(unittest.TestCase):
+    def setUp(self):
+        controller = TimeoutController(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_timeout(self):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            time.sleep(0.3)
+            self.assertRaises(SMTPServerDisconnected, client.getreply)

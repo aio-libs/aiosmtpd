@@ -6,7 +6,7 @@ from aiosmtpd.handlers import Sink
 
 
 async def amain(loop):
-    cont = Controller(Sink(), hostname='::0', port=8025)
+    cont = Controller(Sink(), hostname='', port=8025)
     cont.start()
 
 

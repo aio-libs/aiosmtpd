@@ -383,8 +383,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             warn('Use handler.handle_EHLO() instead of .ehlo_hook()',
                  DeprecationWarning)
             await self.ehlo_hook()
-        status = await self._call_handler_hook('EHLO', hostname)
         await self.push('250-AUTH PLAIN')
+        status = await self._call_handler_hook('EHLO', hostname)
         if status is MISSING:
             self.session.host_name = hostname
             status = '250 HELP'

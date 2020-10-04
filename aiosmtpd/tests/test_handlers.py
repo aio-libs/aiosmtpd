@@ -1,6 +1,5 @@
 import os
 import sys
-import asyncio
 import unittest
 
 from aiosmtpd.controller import Controller
@@ -33,8 +32,7 @@ class DataHandler:
         self.content = None
         self.original_content = None
 
-    @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope):
         self.content = envelope.content
         self.original_content = envelope.original_content
         return '250 OK'
@@ -214,8 +212,7 @@ class TestAsyncMessage(unittest.TestCase):
         self.handled_message = None
 
         class MessageHandler(AsyncMessage):
-            @asyncio.coroutine
-            def handle_message(handler_self, message):
+            async def handle_message(handler_self, message):
                 self.handled_message = message
 
         self.handler = MessageHandler()
@@ -433,7 +430,7 @@ Testing
             'Subject: A test',
             'X-Peer: ::1',
             '',
-            'Testing']).encode('ascii')
+            'Testing\r\n']).encode('ascii')
 
     def test_deliver_bytes(self):
         with ExitStack() as resources:
@@ -517,27 +514,23 @@ Testing
 
 
 class HELOHandler:
-    @asyncio.coroutine
-    def handle_HELO(self, server, session, envelope, hostname):
+    async def handle_HELO(self, server, session, envelope, hostname):
         return '250 geddy.example.com'
 
 
 class EHLOHandler:
-    @asyncio.coroutine
-    def handle_EHLO(self, server, session, envelope, hostname):
+    async def handle_EHLO(self, server, session, envelope, hostname):
         return '250 alex.example.com'
 
 
 class MAILHandler:
-    @asyncio.coroutine
-    def handle_MAIL(self, server, session, envelope, address, options):
+    async def handle_MAIL(self, server, session, envelope, address, options):
         envelope.mail_options.extend(options)
         return '250 Yeah, sure'
 
 
 class RCPTHandler:
-    @asyncio.coroutine
-    def handle_RCPT(self, server, session, envelope, address, options):
+    async def handle_RCPT(self, server, session, envelope, address, options):
         envelope.rcpt_options.extend(options)
         if address == 'bart@example.com':
             return '550 Rejected'
@@ -546,8 +539,7 @@ class RCPTHandler:
 
 
 class DATAHandler:
-    @asyncio.coroutine
-    def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope):
         return '599 Not today'
 
 
@@ -656,10 +648,9 @@ class CapturingServer(Server):
         self.warnings = None
         super().__init__(*args, **kws)
 
-    @asyncio.coroutine
-    def smtp_DATA(self, arg):
+    async def smtp_DATA(self, arg):
         with patch('aiosmtpd.smtp.warn') as mock:
-            yield from super().smtp_DATA(arg)
+            await super().smtp_DATA(arg)
         self.warnings = mock.call_args_list
 
 
@@ -675,8 +666,7 @@ class DeprecatedHandler:
 
 
 class AsyncDeprecatedHandler:
-    @asyncio.coroutine
-    def process_message(self, peer, mailfrom, rcpttos, data, **kws):
+    async def process_message(self, peer, mailfrom, rcpttos, data, **kws):
         pass
 
 
@@ -685,24 +675,20 @@ class DeprecatedHookServer(Server):
         self.warnings = None
         super().__init__(*args, **kws)
 
-    @asyncio.coroutine
-    def smtp_EHLO(self, arg):
+    async def smtp_EHLO(self, arg):
         with patch('aiosmtpd.smtp.warn') as mock:
-            yield from super().smtp_EHLO(arg)
+            await super().smtp_EHLO(arg)
         self.warnings = mock.call_args_list
 
-    @asyncio.coroutine
-    def smtp_RSET(self, arg):
+    async def smtp_RSET(self, arg):
         with patch('aiosmtpd.smtp.warn') as mock:
-            yield from super().smtp_RSET(arg)
+            await super().smtp_RSET(arg)
         self.warnings = mock.call_args_list
 
-    @asyncio.coroutine
-    def ehlo_hook(self):
+    async def ehlo_hook(self):
         pass
 
-    @asyncio.coroutine
-    def rset_hook(self):
+    async def rset_hook(self):
         pass
 
 

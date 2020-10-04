@@ -1,42 +1,31 @@
 import os
-import socket
 import asyncio
 import threading
 
 from aiosmtpd.smtp import SMTP
 from public import public
 
-try:
-    from socket import socketpair
-except ImportError:                                          # pragma: nocover
-    from asyncio.windows_utils import socketpair
-
 
 @public
 class Controller:
     def __init__(self, handler, loop=None, hostname=None, port=8025, *,
-                 ready_timeout=1.0, enable_SMTPUTF8=True):
+                 ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None):
+        """
+        `Documentation can be found here
+        <http://aiosmtpd.readthedocs.io/en/latest/aiosmtpd\
+/docs/controller.html#controller-api>`_.
+        """
         self.handler = handler
         self.hostname = '::1' if hostname is None else hostname
         self.port = port
         self.enable_SMTPUTF8 = enable_SMTPUTF8
+        self.ssl_context = ssl_context
         self.loop = asyncio.new_event_loop() if loop is None else loop
         self.server = None
-        self.thread = None
-        self.thread_exception = None
+        self._thread = None
+        self._thread_exception = None
         self.ready_timeout = os.getenv(
             'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
-        # For exiting the loop.
-        self._rsock, self._wsock = socketpair()
-        self.loop.add_reader(self._rsock, self._reader)
-
-    def _reader(self):
-        self.loop.remove_reader(self._rsock)
-        self.loop.stop()
-        for task in asyncio.Task.all_tasks(self.loop):
-            task.cancel()
-        self._rsock.close()
-        self._wsock.close()
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
@@ -47,9 +36,10 @@ class Controller:
         try:
             self.server = self.loop.run_until_complete(
                 self.loop.create_server(
-                    self.factory, host=self.hostname, port=self.port))
-        except socket.error as error:
-            self.thread_exception = error
+                    self.factory, host=self.hostname, port=self.port,
+                    ssl=self.ssl_context))
+        except Exception as error:
+            self._thread_exception = error
             return
         self.loop.call_soon(ready_event.set)
         self.loop.run_forever()
@@ -59,17 +49,23 @@ class Controller:
         self.server = None
 
     def start(self):
-        assert self.thread is None, 'SMTP daemon already running'
+        assert self._thread is None, 'SMTP daemon already running'
         ready_event = threading.Event()
-        self.thread = threading.Thread(target=self._run, args=(ready_event,))
-        self.thread.daemon = True
-        self.thread.start()
+        self._thread = threading.Thread(target=self._run, args=(ready_event,))
+        self._thread.daemon = True
+        self._thread.start()
         # Wait a while until the server is responding.
         ready_event.wait(self.ready_timeout)
-        if self.thread_exception is not None:
-            raise self.thread_exception
+        if self._thread_exception is not None:
+            raise self._thread_exception
+
+    def _stop(self):
+        self.loop.stop()
+        for task in asyncio.Task.all_tasks(self.loop):
+            task.cancel()
 
     def stop(self):
-        assert self.thread is not None, 'SMTP daemon not running'
-        self._wsock.send(b'x')
-        self.thread.join()
+        assert self._thread is not None, 'SMTP daemon not running'
+        self.loop.call_soon_threadsafe(self._stop)
+        self._thread.join()
+        self._thread = None
