@@ -114,6 +114,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.envelope = None
         self.transport = None
         self._handler_coroutine = None
+        if not auth_require_tls and auth_required:
+            warn("Requiring AUTH PLAIN while not requiring TLS "
+                 "can lead to security vulnerabilities!")
         self.auth_require_tls = auth_require_tls
         if auth_method is None:
             self.auth_method = lambda login, password: False  # pragma: nocover
@@ -437,9 +440,12 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not self.session.host_name:
             await self.push('503 Error: send EHLO first')
             return
-        if (not self.session.extended_smtp or
-                (self.auth_require_tls and not self._tls_protocol)):
+        if not self.session.extended_smtp:
             await self.push("500 Error: command 'AUTH' not recognized")
+            return
+        if self.auth_require_tls and not self._tls_protocol:
+            await self.push("538 Encryption required for requested "
+                            "authentication mechanism")
             return
         if self.authenticated:
             await self.push('503 Already authenticated')
@@ -458,6 +464,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 await self.push('500 PLAIN method or die')
                 return
             if len(args) == 1:
+                # In accordance with RFC 4954, a space MUST be added after 334
                 await self.push('334 ')  # wait client login/password
                 line = await self._reader.readline()
                 blob = line.strip()
