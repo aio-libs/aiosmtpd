@@ -19,7 +19,7 @@ __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
 
-AuthMethodType = Callable[[List[str]], Awaitable[Any]]
+AuthMethodType = Callable[["SMTP", List[str]], Awaitable[Any]]
 
 
 DATA_SIZE_DEFAULT = 33554432
@@ -477,13 +477,12 @@ class SMTP(asyncio.StreamReaderProtocol):
         if status is MISSING:
             mechanism = args[0]
             method: AuthMethodType
-            method = getattr(self.event_handler, f"auth_{mechanism}", None)
-            if method is None:
-                method = getattr(self, f"auth_{mechanism}", None)
+            method = getattr(self.event_handler, f"auth_{mechanism}", None) \
+                or getattr(self, f"auth_{mechanism}", None)
             if method is None:
                 await self.push(f'504 Unsupported AUTH mechanism {mechanism}')
                 return
-            login = await method(args)
+            login = await method(self, args)
             if login is None:
                 # None means already handled by method and we don't need to
                 # do anything more
@@ -515,7 +514,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return MISSING
         return decoded_blob
 
-    async def auth_PLAIN(self, args: List[str]):
+    async def auth_PLAIN(self, _, args: List[str]):
         if len(args) == 1:
             loginpassword = self._auth_interact("334 ")
             if loginpassword is MISSING:
@@ -543,7 +542,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         else:
             return MISSING
 
-    async def auth_LOGIN(self, args: List[str]):
+    async def auth_LOGIN(self, _, args: List[str]):
         login = await self._auth_interact("334 VXNlciBOYW1lAA==")  # b'User Name\x00'
         if login is MISSING:
             return
