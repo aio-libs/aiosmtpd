@@ -119,7 +119,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.transport = None
         self._handler_coroutine = None
         if not auth_require_tls and auth_required:
-            warn("Requiring AUTH PLAIN while not requiring TLS "
+            warn("Requiring AUTH while not requiring TLS "
                  "can lead to security vulnerabilities!")
         self.auth_require_tls = auth_require_tls
         if auth_method is None:
@@ -416,7 +416,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._handler_coroutine.cancel()
             self.transport.close()
 
-    # noinspection PyTypeChecker
     @syntax('STARTTLS', when='tls_context')
     async def smtp_STARTTLS(self, arg):
         log.info('%r STARTTLS', self.session.peer)
@@ -428,6 +427,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         await self.push('220 Ready to start TLS')
         # Create SSL layer.
+        # noinspection PyTypeChecker
         self._tls_protocol = sslproto.SSLProtocol(
             self.loop,
             self,
