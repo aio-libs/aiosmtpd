@@ -26,7 +26,7 @@ CRLF = '\r\n'
 BCRLF = b'\r\n'
 
 
-def authenticator(login, password):
+def authenticator(mechanism, login, password):
     if login and login.decode() == 'goodlogin':
         return True
     else:
@@ -739,14 +739,14 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd('AUTH PLAIN NONE NONE')
-            self.assertEqual(code, 500)
+            self.assertEqual(code, 501)
             self.assertEqual(response, b'Too many values')
 
     def test_auth_not_enough_values(self):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd('AUTH')
-            self.assertEqual(code, 500)
+            self.assertEqual(code, 501)
             self.assertEqual(response, b'Not enough value')
 
     def test_auth_not_supported_methods(self):
@@ -756,7 +756,7 @@ class TestSMTP(unittest.TestCase):
                 code, response = client.docmd('AUTH '+method)
                 self.assertEqual(code, 504)
                 self.assertEqual(
-                    response, b'Unsupported AUTH mechanism ' + method.encode())
+                    response, b'5.5.4 Unrecognized authentication type')
 
     def test_auth_already_authenticated(self):
         with SMTP(*self.address) as client:
@@ -775,15 +775,15 @@ class TestSMTP(unittest.TestCase):
             client.ehlo('example.com')
             code, response = client.docmd('AUTH PLAIN not-b64')
             self.assertEqual(code, 501)
-            self.assertEqual(response, b"Can't decode base64")
+            self.assertEqual(response, b"5.5.2 Can't decode base64")
 
     def test_auth_bad_base64_length(self):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd(
                     'AUTH PLAIN ' + b64encode(b'\0onlylogin').decode())
-            self.assertEqual(code, 500)
-            self.assertEqual(response, b"Can't split auth value")
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b"5.5.2 Can't split auth value")
 
     def test_auth_bad_credentials(self):
         with SMTP(*self.address) as client:
@@ -826,6 +826,15 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 501)
             self.assertEqual(response, b'Auth aborted')
 
+    def test_auth_two_steps_bad_base64_encoding(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd('AUTH PLAIN')
+            self.assertEqual(code, 334)
+            code, response = client.docmd("ab@%")
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b"5.5.2 Can't decode base64")
+
     def test_auth_good_credentials(self):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
@@ -848,8 +857,19 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 334)
             self.assertEqual(response, b'')
             code, response = client.docmd('=')
-            self.assertEqual(code, 535)
-            self.assertEqual(response, b'Authentication credentials invalid')
+            assert_auth_invalid(self, code, response)
+
+    def test_auth_login_multisteps_no_credentials(self):
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, response = client.docmd("AUTH LOGIN")
+            self.assertEqual(code, 334)
+            self.assertEqual(response, b"VXNlciBOYW1lAA==")
+            code, response = client.docmd('=')
+            self.assertEqual(code, 334)
+            self.assertEqual(response, b"UGFzc3dvcmQA")
+            code, response = client.docmd('=')
+            assert_auth_invalid(self, code, response)
 
 
 class TestRequiredAuthentication(unittest.TestCase):
