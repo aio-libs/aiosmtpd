@@ -544,8 +544,7 @@ class DATAHandler:
 
 
 class AUTHHandler:
-    @asyncio.coroutine
-    def handle_AUTH(self, server, session, envelope, args):
+    async def handle_AUTH(self, server, session, envelope, args):
         server.authenticates = True
         return '235 Authentication successful'
 
