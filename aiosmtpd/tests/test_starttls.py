@@ -5,6 +5,7 @@ import pkg_resources
 from aiosmtpd.controller import Controller as BaseController
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as SMTPProtocol
+from aiosmtpd.testing.helpers import assert_auth_invalid, SUPPORTED_COMMANDS_TLS
 from email.mime.text import MIMEText
 from smtplib import SMTP
 
@@ -120,9 +121,7 @@ class TestStartTLS(unittest.TestCase):
             # Don't get tricked by smtplib processing of the response.
             code, response = client.docmd('HELP')
             self.assertEqual(code, 250)
-            self.assertEqual(response,
-                             b'Supported commands: DATA EHLO HELO HELP MAIL '
-                             b'NOOP QUIT RCPT RSET STARTTLS VRFY')
+            self.assertEqual(response, SUPPORTED_COMMANDS_TLS)
 
 
 class TestTLSForgetsSessionData(unittest.TestCase):
@@ -221,9 +220,9 @@ class TestRequireTLSAUTH(unittest.TestCase):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd("AUTH ")
-            self.assertEqual(code, 500)
+            self.assertEqual(code, 538)
             self.assertEqual(response,
-                             b"538 Encryption required for requested "
+                             b"5.7.11 Encryption required for requested "
                              b"authentication mechanism")
 
     def test_auth_tls(self):
@@ -231,5 +230,4 @@ class TestRequireTLSAUTH(unittest.TestCase):
             client.starttls()
             client.ehlo('example.com')
             code, response = client.docmd('AUTH PLAIN AHRlc3QAdGVzdA==')
-            self.assertEqual(code, 535)
-            self.assertEqual(response, b'Authentication credentials invalid')
+            assert_auth_invalid(self, code, response)
