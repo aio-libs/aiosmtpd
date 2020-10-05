@@ -67,6 +67,10 @@ def syntax(text, extended=None, when=None):
     return decorator
 
 
+def login_always_fail(mechanism, login, password):
+    return False
+
+
 @public
 class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
@@ -83,10 +87,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                  tls_context=None,
                  require_starttls=False,
                  timeout=300,
-                 auth_require_tls=True,
-                 auth_method: Callable[[bytes, bytes], bool] = None,
                  auth_required=False,
+                 auth_require_tls=True,
                  auth_exclude_mechanism: Optional[Set[str]] = None,
+                 auth_callback: Callable[[str, bytes, bytes], bool] = None,
                  loop=None):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
@@ -123,10 +127,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             warn("Requiring AUTH while not requiring TLS "
                  "can lead to security vulnerabilities!")
         self.auth_require_tls = auth_require_tls
-        if auth_method is None:
-            self.auth_method = lambda login, password: False  # pragma: nocover
+        if auth_callback is None:
+            self.auth_callback = login_always_fail  # pragma: nocover
         else:
-            self.auth_method = auth_method
+            self.auth_callback = auth_callback
         self.auth_exclude_mechanism = auth_exclude_mechanism or set()
         self.authenticated = False
         self.auth_required = auth_required
@@ -557,7 +561,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             except ValueError:  # not enough args
                 await self.push("500 Can't split auth value")
                 return
-        if self.auth_method(login, password):
+        if self.auth_callback("PLAIN", login, password):
             return login
         else:
             return MISSING
@@ -571,7 +575,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if password is MISSING:
             return
 
-        if self.auth_method(login, password):
+        if self.auth_callback("LOGIN", login, password):
             return login
         else:
             return MISSING
