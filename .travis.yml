@@ -18,7 +18,5 @@ before_script:
 script:
   - tox -e $INTERP-nocov,$INTERP-cov,qa,docs
   - 'if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then tox -e $INTERP-diffcov; fi'
-before_script:
-  - echo 0 | sudo tee /proc/sys/net/ipv6/conf/all/disable_ipv6
 after_success:
   - bash <(curl -s https://codecov.io/bash)
