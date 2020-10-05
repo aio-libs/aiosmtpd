@@ -11,7 +11,7 @@ from email.errors import HeaderParseError
 from public import public
 from warnings import warn
 
-from typing import Callable, Optional, Union, List, Awaitable, Any
+from typing import Callable, Optional, Union, List, Awaitable, Any, Set
 
 
 __version__ = '1.2+'
@@ -86,6 +86,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  auth_require_tls=True,
                  auth_method: Callable[[bytes, bytes], bool] = None,
                  auth_required=False,
+                 auth_exclude_mechanism: Optional[Set[str]] = None,
                  loop=None):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
@@ -126,6 +127,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.auth_method = lambda login, password: False  # pragma: nocover
         else:
             self.auth_method = auth_method
+        self.auth_exclude_mechanism = auth_exclude_mechanism or set()
         self.authenticated = False
         self.auth_required = auth_required
 
@@ -389,19 +391,22 @@ class SMTP(asyncio.StreamReaderProtocol):
             warn('Use handler.handle_EHLO() instead of .ehlo_hook()',
                  DeprecationWarning)
             await self.ehlo_hook()
-        auth_handlers = sorted(
-            m.replace("auth_", "")
-            for m in dir(self.event_handler)
-            if m.startswith("auth_")
-        )
-        if not auth_handlers:
+        if not self.auth_require_tls or self._tls_protocol:
             auth_handlers = sorted(
                 m.replace("auth_", "")
-                for m in dir(self)
+                for m in dir(self.event_handler)
                 if m.startswith("auth_")
             )
-        auth = "250-AUTH " + " ".join(auth_handlers)
-        await self.push(auth)
+            if not auth_handlers:
+                auth_handlers = sorted(
+                    m.replace("auth_", "")
+                    for m in dir(self)
+                    if m.startswith("auth_")
+                )
+            await self.push("250-AUTH " + " ".join(
+                ah for ah in auth_handlers
+                if ah not in self.auth_exclude_mechanism
+            ))
         status = await self._call_handler_hook('EHLO', hostname)
         if status is MISSING:
             self.session.host_name = hostname
