@@ -36,7 +36,7 @@ class Session:
         self.host_name = None
         self.extended_smtp = False
         self.loop = loop
-        self.login: Optional[bytes] = None
+        self.login_id = None
 
 
 @public
@@ -487,18 +487,19 @@ class SMTP(asyncio.StreamReaderProtocol):
             if method is None:
                 await self.push(f'504 Unsupported AUTH mechanism {mechanism}')
                 return
-            login = await method(self, args)
-            if login is None:
-                # None means already handled by method and we don't need to
-                # do anything more
+            login_id = await method(self, args)
+            if login_id is None:
+                # None means there's an error already handled by method and
+                # we don't need to do anything more
                 return
-            elif login is MISSING:
-                # MISSING means auth failed
-                status = '535 Authentication credentials invalid'
+            elif login_id is MISSING:
+                # MISSING means no error in AUTH process, but credentials
+                # is rejected / not valid
+                status = '535 5.7.8 Authentication credentials invalid'
             else:
                 self.authenticated = True
-                self.session.login = login
-                status = '235 Authentication successful'
+                self.session.login_id = login_id
+                status = '235 2.7.0 Authentication successful'
         if status is not None:
             await self.push(status)
 
@@ -519,9 +520,23 @@ class SMTP(asyncio.StreamReaderProtocol):
             return MISSING
         return decoded_blob
 
+    # IMPORTANT NOTES FOR THE auth_* METHODS
+    #
+    # 1. Due to how the methods are called, we must ignore the first arg
+    # 2. All auth_* methods can return one of three values:
+    #    - None: An error happened and handled; smtp_AUTH should do nothing more
+    #    - MISSING: No error during SMTP AUTH process, but authentication failed
+    #    - [bytes]: Authentication succeeded and this is the 'identity' of the SMTP user
+    #      - 'identity' is not always username, depending on the auth mechanism. Might
+    #        be a session key, a one-time user ID, or any kind of object, actually.
+    #      - If the client provides "=" for username during interaction, the method MUST
+    #        return b"" (empty bytes)
+    # 3. Auth credentials checking is performed in the auth_* methods because more
+    #    advanced auth mechanism might not return login+password pair (see above)
+
     async def auth_PLAIN(self, _, args: List[str]):
         if len(args) == 1:
-            loginpassword = self._auth_interact("334 ")
+            loginpassword = self._auth_interact("334 ")  # Trailing space is mandatory
             if loginpassword is MISSING:
                 return
         else:
