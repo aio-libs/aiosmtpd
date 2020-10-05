@@ -578,12 +578,12 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     async def auth_LOGIN(self, _, args: List[str]):
         login: TriStateType
-        login = await self._auth_interact("334 VXNlciBOYW1lAA==")  # b'User Name\x00'
+        login = await self._auth_interact("334 VXNlciBOYW1lAA==")  # 'User Name\x00'
         if login is MISSING:
             return
 
         password: TriStateType
-        password = await self._auth_interact("334 UGFzc3dvcmQA")  # b'Password\x00'
+        password = await self._auth_interact("334 UGFzc3dvcmQA")  # 'Password\x00'
         if password is MISSING:
             return
 
