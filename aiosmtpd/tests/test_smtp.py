@@ -39,6 +39,35 @@ class DecodingController(Controller):
                       auth_require_tls=False, auth_callback=authenticator)
 
 
+class PeekerAuth:
+    def __init__(self):
+        self.login = None
+        self.password = None
+
+    def authenticate(self, mechanism: str, login: bytes, password: bytes) -> bool:
+        self.login = login
+        self.password = password
+        return True
+
+
+class PeekerHandler:
+    def __init__(self):
+        self.session = None
+
+    async def handle_MAIL(self, server, session, envelope, address, mail_options):
+        self.session = session
+        return "250 OK"
+
+
+auth_peeker = PeekerAuth()
+
+
+class DecodingControllerPeekAuth(Controller):
+    def factory(self):
+        return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
+                      auth_require_tls=False, auth_callback=auth_peeker.authenticate)
+
+
 class NoDecodeController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=False)
@@ -870,6 +899,68 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(response, b"UGFzc3dvcmQA")
             code, response = client.docmd('=')
             assert_auth_invalid(self, code, response)
+
+
+class TestSMTPDeep(unittest.TestCase):
+    def setUp(self):
+        self.handler = PeekerHandler()
+        controller = DecodingControllerPeekAuth(self.handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_auth_plain_null_credential(self):
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, response = client.docmd("AUTH PLAIN")
+            self.assertEqual(code, 334)
+            self.assertEqual(response, b"")
+            code, response = client.docmd('=')
+            assert_auth_success(self, code, response)
+            self.assertEqual(auth_peeker.login, None)
+            self.assertEqual(auth_peeker.password, None)
+            code, response = client.mail("alice@example.com")
+            self.assertEqual(self.handler.session.login_id, b"")
+
+    def test_auth_login_null_credential(self):
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, response = client.docmd("AUTH LOGIN")
+            self.assertEqual(code, 334)
+            self.assertEqual(response, b"VXNlciBOYW1lAA==")
+            code, response = client.docmd('=')
+            self.assertEqual(code, 334)
+            self.assertEqual(response, b"UGFzc3dvcmQA")
+            code, response = client.docmd('=')
+            assert_auth_success(self, code, response)
+            self.assertEqual(auth_peeker.login, None)
+            self.assertEqual(auth_peeker.password, None)
+            code, response = client.mail("alice@example.com")
+            self.assertEqual(self.handler.session.login_id, b"")
+
+    def test_auth_login_abort_login(self):
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, response = client.docmd("AUTH LOGIN")
+            self.assertEqual(code, 334)
+            self.assertEqual(response, b"VXNlciBOYW1lAA==")
+            code, response = client.docmd('*')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b"Auth aborted")
+
+    def test_auth_login_abort_password(self):
+        auth_peeker.return_val = False
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, response = client.docmd("AUTH LOGIN")
+            self.assertEqual(code, 334)
+            self.assertEqual(response, b"VXNlciBOYW1lAA==")
+            code, response = client.docmd('=')
+            self.assertEqual(code, 334)
+            self.assertEqual(response, b"UGFzc3dvcmQA")
+            code, response = client.docmd('*')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b"Auth aborted")
 
 
 class TestRequiredAuthentication(unittest.TestCase):
