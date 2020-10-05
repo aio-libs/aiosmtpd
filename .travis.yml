@@ -5,8 +5,6 @@ install:
   - pip install -r aiosmtpd.egg-info/requires.txt
 matrix:
   include:
-    - python: "3.5"
-      env: INTERP=py35 PYTHONASYNCIODEBUG=1
     - python: "3.6"
       env: INTERP=py36 PYTHONASYNCIODEBUG=1
     - python: "3.7"
