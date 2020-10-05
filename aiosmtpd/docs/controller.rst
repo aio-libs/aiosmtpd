@@ -153,7 +153,6 @@ The EHLO response does not include the ``SMTPUTF8`` ESMTP option.
     ...     print(line)
     SIZE 33554432
     8BITMIME
-    AUTH LOGIN PLAIN
     HELP
 
     >>> controller.stop()
