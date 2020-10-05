@@ -19,13 +19,20 @@ __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
 
-AuthMethodType = Callable[["SMTP", List[str]], Awaitable[Any]]
-
-
 DATA_SIZE_DEFAULT = 33554432
 EMPTYBYTES = b''
 NEWLINE = '\n'
-MISSING = object()
+
+
+class Missing:
+    pass
+
+
+MISSING = Missing()
+
+
+AuthMechanismType = Callable[["SMTP", List[str]], Awaitable[Any]]
+TriStateType = Union[None, Missing, bytes]
 
 
 @public
@@ -485,7 +492,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         status = await self._call_handler_hook('AUTH', args)
         if status is MISSING:
             mechanism = args[0]
-            method: AuthMethodType
+            method: AuthMechanismType
             method = getattr(self.event_handler, f"auth_{mechanism}", None) \
                 or getattr(self, f"auth_{mechanism}", None)
             if method is None:
@@ -507,7 +514,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if status is not None:
             await self.push(status)
 
-    async def _auth_interact(self, server_message):
+    async def _auth_interact(self, server_message) -> TriStateType:
         blob: bytes
         await self.push(server_message)
         line = await self._reader.readline()
@@ -539,13 +546,14 @@ class SMTP(asyncio.StreamReaderProtocol):
     #    advanced auth mechanism might not return login+password pair (see above)
 
     async def auth_PLAIN(self, _, args: List[str]):
+        loginpassword: TriStateType
         if len(args) == 1:
-            loginpassword = self._auth_interact("334 ")  # Trailing space is mandatory
+            loginpassword = await self._auth_interact("334 ")  # Trailing space is mandatory
             if loginpassword is MISSING:
                 return
         else:
             blob = args[1].encode()
-            if blob is None:
+            if blob == b"=":
                 loginpassword = None
             else:
                 try:
@@ -562,20 +570,26 @@ class SMTP(asyncio.StreamReaderProtocol):
                 await self.push("500 Can't split auth value")
                 return
         if self._auth_callback("PLAIN", login, password):
+            if login is None:
+                login = EMPTYBYTES
             return login
         else:
             return MISSING
 
     async def auth_LOGIN(self, _, args: List[str]):
+        login: TriStateType
         login = await self._auth_interact("334 VXNlciBOYW1lAA==")  # b'User Name\x00'
         if login is MISSING:
             return
 
+        password: TriStateType
         password = await self._auth_interact("334 UGFzc3dvcmQA")  # b'Password\x00'
         if password is MISSING:
             return
 
         if self._auth_callback("LOGIN", login, password):
+            if login is None:
+                login = EMPTYBYTES
             return login
         else:
             return MISSING
