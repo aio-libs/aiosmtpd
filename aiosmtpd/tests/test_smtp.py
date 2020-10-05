@@ -45,8 +45,10 @@ class NoDecodeController(Controller):
 
 
 class TimeoutController(Controller):
+    Delay: float = 3.0
+
     def factory(self):
-        return Server(self.handler, timeout=0.1)
+        return Server(self.handler, timeout=self.Delay)
 
 
 class RequiredAuthDecodingController(Controller):
@@ -1435,5 +1437,5 @@ class TestTimeout(unittest.TestCase):
     def test_timeout(self):
         with SMTP(*self.address) as client:
             code, response = client.ehlo('example.com')
-            time.sleep(0.3)
+            time.sleep(0.1 + TimeoutController.Delay)
             self.assertRaises(SMTPServerDisconnected, client.getreply)
