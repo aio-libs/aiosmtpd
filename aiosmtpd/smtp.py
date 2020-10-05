@@ -476,18 +476,18 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push("500 Error: command 'AUTH' not recognized")
             return
         if self._auth_require_tls and not self._tls_protocol:
-            await self.push("538 Encryption required for requested "
+            await self.push("538 5.7.11 Encryption required for requested "
                             "authentication mechanism")
             return
         if self.authenticated:
             await self.push('503 Already authenticated')
             return
         if not arg:
-            await self.push('500 Not enough value')
+            await self.push('501 Not enough value')
             return
         args = arg.split(' ')
         if len(args) > 2:
-            await self.push('500 Too many values')
+            await self.push('501 Too many values')
             return
         status = await self._call_handler_hook('AUTH', args)
         if status is MISSING:
@@ -496,7 +496,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             method = getattr(self.event_handler, f"auth_{mechanism}", None) \
                 or getattr(self, f"auth_{mechanism}", None)
             if method is None:
-                await self.push(f'504 Unsupported AUTH mechanism {mechanism}')
+                await self.push(f'504 5.5.4 Unrecognized authentication type')
                 return
             login_id = await method(self, args)
             if login_id is None:
@@ -527,7 +527,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         try:
             decoded_blob = b64decode(blob, validate=True)
         except binascii.Error:
-            await self.push("501 Can't decode base64")
+            await self.push("501 5.5.2 Can't decode base64")
             return MISSING
         return decoded_blob
 
@@ -559,7 +559,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 try:
                     loginpassword = b64decode(blob, validate=True)
                 except Exception:
-                    await self.push("501 Can't decode base64")
+                    await self.push("501 5.5.2 Can't decode base64")
                     return
         if loginpassword is None:
             login = password = None
@@ -567,7 +567,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             try:
                 _, login, password = loginpassword.split(b"\x00")
             except ValueError:  # not enough args
-                await self.push("500 Can't split auth value")
+                await self.push("501 5.5.2 Can't split auth value")
                 return
         if self._auth_callback("PLAIN", login, password):
             if login is None:
@@ -636,7 +636,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     async def smtp_HELP(self, arg):
         if self._auth_required and not self.authenticated:
             log.info('HELP: Authentication required')
-            await self.push('530 Authentication required')
+            await self.push('530 5.7.0 Authentication required')
             return
         code = 250
         if arg:
@@ -664,7 +664,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     async def smtp_VRFY(self, arg):
         if self._auth_required and not self.authenticated:
             log.info('VRFY: Authentication required')
-            await self.push('530 Authentication required')
+            await self.push('530 5.7.0 Authentication required')
             return
         if arg:
             try:
@@ -689,7 +689,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         if self._auth_required and not self.authenticated:
             log.info('MAIL FROM: Authentication required')
-            await self.push('530 Authentication required')
+            await self.push('530 5.7.0 Authentication required')
             return
         log.debug('===> MAIL %s', arg)
         syntaxerr = '501 Syntax: MAIL FROM: <address>'
@@ -760,7 +760,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         if self._auth_required and not self.authenticated:
             log.info('RCPT TO: Authentication required')
-            await self.push('530 Authentication required')
+            await self.push('530 5.7.0 Authentication required')
             return
         log.debug('===> RCPT %s', arg)
         if not self.envelope.mail_from:
@@ -821,7 +821,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         if self._auth_required and not self.authenticated:
             log.info('DATA: Authentication required')
-            await self.push('530 Authentication required')
+            await self.push('530 5.7.0 Authentication required')
             return
         if not self.envelope.rcpt_tos:
             await self.push('503 Error: need RCPT command')
