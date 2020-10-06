@@ -5,9 +5,18 @@
 unreleased
 ==========
 
+Added
+-----
+* Support for SMTP ``AUTH``, with AUTH hooks feature
+* Built-in implementation for ``AUTH PLAIN`` and ``AUTH LOGIN`` logic
+* Feature to inject keyword args during server class instantiation in ``Controller.factory``
+
 Fixed
 -----
 * Don't strip last ``\r\n`` prior to terminating dot.
+* A more maintainable test suite
+* Drop support for Python 3.5
+
 
 1.2 (2018-09-01)
 ================
