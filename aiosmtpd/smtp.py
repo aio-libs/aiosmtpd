@@ -14,9 +14,11 @@ from typing import (
     Any,
     Awaitable,
     Callable,
+    Dict,
+    Iterable,
     List,
+    NamedTuple,
     Optional,
-    Set,
     Union,
 )
 from warnings import warn
@@ -41,6 +43,11 @@ MISSING = _Missing()
 
 AuthMechanismType = Callable[["SMTP", List[str]], Awaitable[Any]]
 _TriStateType = Union[None, _Missing, bytes]
+
+
+class _AuthMechAttr(NamedTuple):
+    method: AuthMechanismType
+    is_builtin: bool
 
 
 @public
@@ -104,7 +111,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  timeout=300,
                  auth_required=False,
                  auth_require_tls=True,
-                 auth_exclude_mechanism: Optional[Set[str]] = None,
+                 auth_exclude_mechanism: Optional[Iterable[str]] = None,
                  auth_callback: Callable[[str, bytes, bytes], bool] = None,
                  loop=None):
         self.__ident__ = ident or __ident__
@@ -146,8 +153,15 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._auth_callback = login_always_fail
         else:
             self._auth_callback = auth_callback
-        self._auth_exclude: Set[str] = auth_exclude_mechanism or set()
         self._auth_required = auth_required
+        self._auth_methods: Dict[str, _AuthMechAttr] = {
+            m.replace("auth_", ""): _AuthMechAttr(getattr(h, m), h is self)
+            for h in (self, handler)
+            for m in dir(h)
+            if m.startswith("auth_")
+        }
+        for m in (auth_exclude_mechanism or []):
+            self._auth_methods.pop(m, None)
         self.authenticated = False
 
     def _create_session(self):
@@ -411,13 +425,9 @@ class SMTP(asyncio.StreamReaderProtocol):
                  DeprecationWarning)
             await self.ehlo_hook()
         if not self._auth_require_tls or self._tls_protocol:
-            auth_handlers: Set[str] = {
-                m.replace("auth_", "")
-                for h in (self.event_handler, self)
-                for m in dir(h)
-                if m.startswith("auth_")
-            } - self._auth_exclude
-            await self.push("250-AUTH " + " ".join(sorted(auth_handlers)))
+            await self.push(
+                "250-AUTH " + " ".join(sorted(self._auth_methods.keys()))
+            )
         status = await self._call_handler_hook('EHLO', hostname)
         if status is MISSING:
             self.session.host_name = hostname
@@ -489,25 +499,21 @@ class SMTP(asyncio.StreamReaderProtocol):
         if len(args) > 2:
             await self.push('501 Too many values')
             return
+        mechanism = args[0]
+        if mechanism not in self._auth_methods:
+            await self.push('504 5.5.4 Unrecognized authentication type')
+            return
         status = await self._call_handler_hook('AUTH', args)
         if status is MISSING:
-            mechanism = args[0]
-            mechanism_method = f"auth_{mechanism}"
-            method: AuthMechanismType
-            method = getattr(self.event_handler, mechanism_method, None)
-            if method is not None:
-                log.debug(f"Passing to handler's {mechanism_method}()")
+            method = self._auth_methods[mechanism]
+            if method.is_builtin:
+                log.debug(f"Using builtin AUTH hook for {mechanism}")
             else:
-                method = getattr(self, mechanism_method, None)
-                if method is None:
-                    await self.push(
-                        '504 5.5.4 Unrecognized authentication type')
-                    return
-                log.debug(f"Using internal {mechanism_method}()")
+                log.debug(f"Using handler AUTH hook for {mechanism}")
             # Pass 'self' to method so external methods can leverage this
             # class's helper methods such as push()
-            login_id = await method(self, args)
-            log.debug(f"{mechanism_method} returned {login_id}")
+            login_id = await method.method(self, args)
+            log.debug(f"auth_{mechanism} returned {login_id}")
             if login_id is None:
                 # None means there's an error already handled by method and
                 # we don't need to do anything more

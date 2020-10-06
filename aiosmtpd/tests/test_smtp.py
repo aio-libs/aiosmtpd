@@ -7,7 +7,7 @@ import unittest
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
+from aiosmtpd.smtp import MISSING, SMTP as Server, __ident__ as GREETING
 from aiosmtpd.testing.helpers import (
     SUPPORTED_COMMANDS_NOTLS,
     assert_auth_invalid,
@@ -53,6 +53,11 @@ class PeekerHandler:
     ):
         return "NULL_login"
 
+    async def auth_DONT(
+            self, server, kargs
+    ):
+        return MISSING
+
 
 class PeekerAuth:
     def __init__(self):
@@ -74,7 +79,8 @@ class DecodingControllerPeekAuth(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
                       auth_require_tls=False,
-                      auth_callback=auth_peeker.authenticate)
+                      auth_callback=auth_peeker.authenticate,
+                      **self.server_kwargs)
 
 
 class NoDecodeController(Controller):
@@ -918,7 +924,9 @@ class TestSMTP(unittest.TestCase):
 class TestSMTPAuth(unittest.TestCase):
     def setUp(self):
         self.handler = PeekerHandler()
-        controller = DecodingControllerPeekAuth(self.handler)
+        controller = DecodingControllerPeekAuth(
+            self.handler, server_kwargs={"auth_exclude_mechanism": ["DONT"]}
+        )
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)

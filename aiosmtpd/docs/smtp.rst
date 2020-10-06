@@ -147,8 +147,8 @@ SMTP API
    considerations. Please note that *require_starttls* takes precedence
    over this setting.
 
-   *auth_exclude_mechanism* is a ``Set[str]`` that specifies SMTP AUTH mechanisms
-   to NOT use.
+   *auth_exclude_mechanism* is an ``Iterable[str]`` that specifies SMTP AUTH
+   mechanisms to NOT use.
 
    *auth_callback* is a function that accepts three arguments: ``mechanism: str``,
    ``login: bytes``, and ``password: bytes``. Based on these args, the function
