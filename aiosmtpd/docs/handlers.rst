@@ -98,7 +98,7 @@ The following hooks are currently defined:
     Called to handle ``AUTH`` command, if you need custom AUTH behavior.
     You *must* comply with |RFC 4954|_.
     Most of the time, you don't *need* to implement this hook;
-    ``auth_MECHANISM`` hooks are provided to override/implement selctive
+    :ref:`AUTH hooks <auth_hooks>` are provided to override/implement selctive
     SMTP AUTH mechanisms (see below).
 
     ``args`` will contain the list of words following the ``AUTH`` command.
@@ -119,29 +119,53 @@ synchronously (i.e. they are **not** coroutines).
     handling of a connection (e.g. if an ``smtp_<command>()`` method raises an
     exception).  The exception object is passed in.  This method *must* return
     a status string, such as ``'542 Internal server error'``.  If the method
-    returns None or raises an exception, an exception will be logged, and a 500
-    code will be returned to the client.
+    returns ``None`` or raises an exception, an exception will be logged, and a
+    ``500`` code will be returned to the client.
 
-Finally, in addition to the above SMTP hooks, you can also implement AUTH hooks.
+
+.. _auth_hooks:
+
+AUTH hooks
+=============
+
+In addition to the above SMTP hooks, you can also implement AUTH hooks.
 **These hooks are asynchronous**.
 Every AUTH hook is named ``auth_MECHANISM`` where ``MECHANISM`` is the all-uppercase
 mechanism that the hook will implement. AUTH hooks will be called with the SMTP
-server instance and a list of str following the ``AUTH`` command. **For example**:
+server instance and a list of str following the ``AUTH`` command.
 
-``auth_LOGIN(server, args)``
-    Will be called to handle ``AUTH LOGIN`` mechanism; ``args[0] == "LOGIN"``
+The SMTP class provides built-in AUTH hooks for the ``LOGIN`` and ``PLAIN``
+mechanisms, named ``auth_LOGIN`` and ``auth_PLAIN``, respectively.
+If the handler class implements ``auth_LOGIN`` and/or ``auth_PLAIN``, then
+those methods of the handler instance will override the built-in methods.
 
-    Note: This hook will override ``SMTP`` class's built-in ``auth_LOGIN`` method.
+``auth_MECHANISM(server: SMTP, args: List[str])``
 
-``auth_PLAIN(server, args)``
-    Will be called to handle ``AUTH LOGIN`` mechanism; ``args[0] == "PLAIN"``
+  *server* is the instance of the ``SMTP`` class invoking the AUTH hook.
+  This allows the AUTH hook implementation to invoke facilities such as the
+  ``push()`` and ``_auth_interact()`` methods.
 
-    Note: This hook will override ``SMTP`` class's built-in ``auth_PLAIN`` method.
+  *args* is a list of string split from the string after the ``AUTH`` command.
+  ``args[0]`` is always equal to ``MECHANISM``.
 
-``auth_GSSAPI(server, args)``
-    Implements the ``GSSAPI`` AUTH mechanism; ``args[0] == "GSSAPI"``
+  The AUTH hook **must** perform the actual validation of AUTH credentials.
+  In the built-in AUTH hooks, this is done by invoking the function specified
+  by the ``auth_callback`` initialization argument. AUTH hooks in handlers
+  are NOT required to do the same.
 
-``... and so on ...``
+  The AUTH hook **must** return one of the following values:
+
+    * ``None`` -- an error happened during AUTH exchange/procedure, and has
+      been handled inside the hook. ``smtp_AUTH`` will not do anything more.
+
+    * ``MISSING`` -- no error during exchange, but the credentials received
+      are invalid/rejected. (``MISSING`` is a pre-instantiated object you
+      can import from ``aiosmtpd.smtp``)
+
+    * *Anything else* -- an 'identity' of the STMP user. Usually is the username
+      given during AUTH exchange/procedure, but not necessarily so; can also
+      be, for instance, a Session ID. This will be stored in the Session
+      object's ``login_id`` property.
 
 
 Built-in handlers
