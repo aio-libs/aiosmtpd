@@ -32,15 +32,15 @@ EMPTYBYTES = b''
 NEWLINE = '\n'
 
 
-class Missing:
+class _Missing:
     pass
 
 
-MISSING = Missing()
+MISSING = _Missing()
 
 
 AuthMechanismType = Callable[["SMTP", List[str]], Awaitable[Any]]
-TriStateType = Union[None, Missing, bytes]
+_TriStateType = Union[None, _Missing, bytes]
 
 
 @public
@@ -522,7 +522,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if status is not None:  # pragma: no branch
             await self.push(status)
 
-    async def _auth_interact(self, server_message) -> TriStateType:
+    async def _auth_interact(self, server_message) -> _TriStateType:
         blob: bytes
         await self.push(server_message)
         line = await self._reader.readline()
@@ -559,7 +559,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     #    (see #2 above)
 
     async def auth_PLAIN(self, _, args: List[str]):
-        loginpassword: TriStateType
+        loginpassword: _TriStateType
         if len(args) == 1:
             # Trailing space is MANDATORY
             loginpassword = await self._auth_interact("334 ")
@@ -591,13 +591,13 @@ class SMTP(asyncio.StreamReaderProtocol):
             return MISSING
 
     async def auth_LOGIN(self, _, args: List[str]):
-        login: TriStateType
+        login: _TriStateType
         # 'User Name\x00'
         login = await self._auth_interact("334 VXNlciBOYW1lAA==")
         if login is MISSING:
             return
 
-        password: TriStateType
+        password: _TriStateType
         # 'Password\x00'
         password = await self._auth_interact("334 UGFzc3dvcmQA")
         if password is MISSING:
