@@ -4,12 +4,14 @@ import threading
 
 from aiosmtpd.smtp import SMTP
 from public import public
+from typing import Any, Dict
 
 
 @public
 class Controller:
     def __init__(self, handler, loop=None, hostname=None, port=8025, *,
-                 ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None):
+                 ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None,
+                 server_kwargs: Dict[str, Any] = None):
         """
         `Documentation can be found here
         <http://aiosmtpd.readthedocs.io/en/latest/aiosmtpd\
@@ -26,10 +28,12 @@ class Controller:
         self._thread_exception = None
         self.ready_timeout = os.getenv(
             'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
+        self.server_kwargs: Dict[str, Any] = server_kwargs or {}
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
-        return SMTP(self.handler, enable_SMTPUTF8=self.enable_SMTPUTF8)
+        return SMTP(self.handler, enable_SMTPUTF8=self.enable_SMTPUTF8,
+                    **self.server_kwargs)
 
     def _run(self, ready_event):
         asyncio.set_event_loop(self.loop)

@@ -161,7 +161,7 @@ The EHLO response does not include the ``SMTPUTF8`` ESMTP option.
 Controller API
 ==============
 
-.. class:: Controller(handler, loop=None, hostname=None, port=8025, *, ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None)
+.. class:: Controller(handler, loop=None, hostname=None, port=8025, *, ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None, server_kwargs=None)
 
    *handler* is an instance of a :ref:`handler <handlers>` class.
 
@@ -194,6 +194,10 @@ Controller API
    server. It is passed directly to the :meth:`AbstractEventLoop.create_server`
    method. Note that this implies unconditional encryption of the connection,
    and prevents use of the ``STARTTLS`` mechanism.
+
+   *server_kwargs* is a dict that will be passed through as keyword arguments
+   to the server's class during server creation in the :meth:`Controller.factory`
+   method.
 
    .. attribute:: handler
 
