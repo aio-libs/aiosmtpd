@@ -301,11 +301,15 @@ class TestSMTP(unittest.TestCase):
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
             lines = response.splitlines()
-            self.assertEqual(lines[0], bytes(socket.getfqdn(), 'utf-8'))
-            self.assertEqual(lines[1], b'SIZE 33554432')
-            self.assertEqual(lines[2], b'SMTPUTF8')
-            self.assertEqual(lines[3], b'AUTH LOGIN PLAIN')
-            self.assertEqual(lines[4], b'HELP')
+            expecteds = (
+                bytes(socket.getfqdn(), 'utf-8'),
+                b'SIZE 33554432',
+                b'SMTPUTF8',
+                b'AUTH LOGIN PLAIN',
+                b'HELP',
+            )
+            for actual, expected in zip(lines, expecteds):
+                self.assertEqual(actual, expected)
 
     def test_ehlo_duplicate(self):
         with SMTP(*self.address) as client:
