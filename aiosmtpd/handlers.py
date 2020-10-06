@@ -164,7 +164,7 @@ class Message:
             message = message_from_bytes(data, self.message_class)
         else:
             assert isinstance(data, str), (
-              'Expected str or bytes, got {}'.format(type(data)))
+                'Expected str or bytes, got {}'.format(type(data)))
             message = message_from_string(data, self.message_class)
         message['X-Peer'] = str(session.peer)
         message['X-MailFrom'] = envelope.mail_from

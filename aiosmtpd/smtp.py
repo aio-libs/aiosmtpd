@@ -2,16 +2,24 @@ import ssl
 import socket
 import asyncio
 import logging
-import collections
 import binascii
-from base64 import b64decode
+import collections
+
 from asyncio import sslproto
+from base64 import b64decode
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
 from public import public
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    List,
+    Optional,
+    Set,
+    Union,
+)
 from warnings import warn
-
-from typing import Callable, Optional, Union, List, Awaitable, Any, Set
 
 
 __version__ = '1.2+'
@@ -225,7 +233,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._timeout_handle.cancel()
 
         self._timeout_handle = self.loop.call_later(
-                self._timeout_duration, self._timeout_cb)
+            self._timeout_duration, self._timeout_cb)
 
     def _timeout_cb(self):
         log.info('%r connection timeout', self.session.peer)
@@ -301,7 +309,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                         await self.push('500 Error: bad syntax')
                         continue
 
-                    arg = line[i+1:].strip()
+                    arg = line[i + 1:].strip()
                     # Remote SMTP servers can send us UTF-8 content despite
                     # whether they've declared to do so or not.  Some old
                     # servers can send 8-bit data.  Use surrogateescape so
@@ -496,7 +504,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             method = getattr(self.event_handler, f"auth_{mechanism}", None) \
                 or getattr(self, f"auth_{mechanism}", None)
             if method is None:
-                await self.push(f'504 5.5.4 Unrecognized authentication type')
+                await self.push('504 5.5.4 Unrecognized authentication type')
                 return
             login_id = await method(self, args)
             if login_id is None:
@@ -535,20 +543,26 @@ class SMTP(asyncio.StreamReaderProtocol):
     #
     # 1. Due to how the methods are called, we must ignore the first arg
     # 2. All auth_* methods can return one of three values:
-    #    - None: An error happened and handled; smtp_AUTH should do nothing more
-    #    - MISSING: No error during SMTP AUTH process, but authentication failed
-    #    - [bytes]: Authentication succeeded and this is the 'identity' of the SMTP user
-    #      - 'identity' is not always username, depending on the auth mechanism. Might
-    #        be a session key, a one-time user ID, or any kind of object, actually.
-    #      - If the client provides "=" for username during interaction, the method MUST
-    #        return b"" (empty bytes)
-    # 3. Auth credentials checking is performed in the auth_* methods because more
-    #    advanced auth mechanism might not return login+password pair (see above)
+    #    - None: An error happened and handled;
+    #            smtp_AUTH should do nothing more
+    #    - MISSING: No error during SMTP AUTH process, but authentication
+    #               failed
+    #    - [bytes]: Authentication succeeded and this is the 'identity' of
+    #               the SMTP user
+    #      - 'identity' is not always username, depending on the auth mecha-
+    #        nism. Might be a session key, a one-time user ID, or any kind of
+    #        object, actually.
+    #      - If the client provides "=" for username during interaction, the
+    #        method MUST return b"" (empty bytes)
+    # 3. Auth credentials checking is performed in the auth_* methods because
+    #    more advanced auth mechanism might not return login+password pair
+    #    (see #2 above)
 
     async def auth_PLAIN(self, _, args: List[str]):
         loginpassword: TriStateType
         if len(args) == 1:
-            loginpassword = await self._auth_interact("334 ")  # Trailing space is mandatory
+            # Trailing space is MANDATORY
+            loginpassword = await self._auth_interact("334 ")
             if loginpassword is MISSING:
                 return
         else:
@@ -578,12 +592,14 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     async def auth_LOGIN(self, _, args: List[str]):
         login: TriStateType
-        login = await self._auth_interact("334 VXNlciBOYW1lAA==")  # 'User Name\x00'
+        # 'User Name\x00'
+        login = await self._auth_interact("334 VXNlciBOYW1lAA==")
         if login is MISSING:
             return
 
         password: TriStateType
-        password = await self._auth_interact("334 UGFzc3dvcmQA")  # 'Password\x00'
+        # 'Password\x00'
+        password = await self._auth_interact("334 UGFzc3dvcmQA")
         if password is MISSING:
             return
 
@@ -845,9 +861,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             if line == b'.\r\n':
                 break
             num_bytes += len(line)
-            if (not size_exceeded and
-                    self.data_size_limit and
-                    num_bytes > self.data_size_limit):
+            if (not size_exceeded
+                    and self.data_size_limit
+                    and num_bytes > self.data_size_limit):
                 size_exceeded = True
                 await self.push('552 Error: Too much mail data')
             if not size_exceeded:

@@ -5,7 +5,10 @@ import pkg_resources
 from aiosmtpd.controller import Controller as BaseController
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as SMTPProtocol
-from aiosmtpd.testing.helpers import assert_auth_invalid, SUPPORTED_COMMANDS_TLS
+from aiosmtpd.testing.helpers import (
+    SUPPORTED_COMMANDS_TLS,
+    assert_auth_invalid,
+)
 from email.mime.text import MIMEText
 from smtplib import SMTP
 

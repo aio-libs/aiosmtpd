@@ -9,12 +9,11 @@ from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server, __ident__ as GREETING
 from aiosmtpd.testing.helpers import (
-    reset_connection,
-    assert_auth_success,
+    SUPPORTED_COMMANDS_NOTLS,
     assert_auth_invalid,
     assert_auth_required,
-    SUPPORTED_COMMANDS_TLS,
-    SUPPORTED_COMMANDS_NOTLS,
+    assert_auth_success,
+    reset_connection,
 )
 from base64 import b64encode
 from contextlib import ExitStack
@@ -39,24 +38,28 @@ class DecodingController(Controller):
                       auth_require_tls=False, auth_callback=authenticator)
 
 
+class PeekerHandler:
+    def __init__(self):
+        self.session = None
+
+    async def handle_MAIL(
+            self, server, session, envelope, address, mail_options
+    ):
+        self.session = session
+        return "250 OK"
+
+
 class PeekerAuth:
     def __init__(self):
         self.login = None
         self.password = None
 
-    def authenticate(self, mechanism: str, login: bytes, password: bytes) -> bool:
+    def authenticate(
+            self, mechanism: str, login: bytes, password: bytes
+    ) -> bool:
         self.login = login
         self.password = password
         return True
-
-
-class PeekerHandler:
-    def __init__(self):
-        self.session = None
-
-    async def handle_MAIL(self, server, session, envelope, address, mail_options):
-        self.session = session
-        return "250 OK"
 
 
 auth_peeker = PeekerAuth()
@@ -65,7 +68,8 @@ auth_peeker = PeekerAuth()
 class DecodingControllerPeekAuth(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
-                      auth_require_tls=False, auth_callback=auth_peeker.authenticate)
+                      auth_require_tls=False,
+                      auth_callback=auth_peeker.authenticate)
 
 
 class NoDecodeController(Controller):
@@ -689,9 +693,10 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('VRFY <anne@example.com>')
             self.assertEqual(code, 252)
             self.assertEqual(
-              response,
-              b'Cannot VRFY user, but will accept message and attempt delivery'
-              )
+                response,
+                b'Cannot VRFY user, but will accept message and '
+                b'attempt delivery'
+                )
 
     def test_vrfy_no_arg(self):
         with SMTP(*self.address) as client:
@@ -782,7 +787,7 @@ class TestSMTP(unittest.TestCase):
         for method in ('GSSAPI', 'DIGEST-MD5', 'MD5', 'CRAM-MD5'):
             with SMTP(*self.address) as client:
                 client.ehlo('example.com')
-                code, response = client.docmd('AUTH '+method)
+                code, response = client.docmd('AUTH ' + method)
                 self.assertEqual(code, 504)
                 self.assertEqual(
                     response, b'5.5.4 Unrecognized authentication type')
@@ -791,8 +796,8 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd(
-                    'AUTH PLAIN ' +
-                    b64encode(b'\0goodlogin\0goodpasswd').decode()
+                'AUTH PLAIN ' +
+                b64encode(b'\0goodlogin\0goodpasswd').decode()
                 )
             assert_auth_success(self, code, response)
             code, response = client.docmd('AUTH')
@@ -810,7 +815,7 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd(
-                    'AUTH PLAIN ' + b64encode(b'\0onlylogin').decode())
+                'AUTH PLAIN ' + b64encode(b'\0onlylogin').decode())
             self.assertEqual(code, 501)
             self.assertEqual(response, b"5.5.2 Can't split auth value")
 
@@ -818,8 +823,8 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd(
-                    'AUTH PLAIN ' +
-                    b64encode(b'\0badlogin\0badpasswd').decode()
+                'AUTH PLAIN ' +
+                b64encode(b'\0badlogin\0badpasswd').decode()
                 )
             assert_auth_invalid(self, code, response)
 
@@ -830,8 +835,8 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 334)
             self.assertEqual(response, b'')
             code, response = client.docmd(
-                    b64encode(b'\0goodlogin\0goodpasswd').decode()
-                )
+                b64encode(b'\0goodlogin\0goodpasswd').decode()
+            )
             assert_auth_success(self, code, response)
 
     def test_auth_two_steps_bad_credentials(self):
@@ -841,8 +846,8 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 334)
             self.assertEqual(response, b'')
             code, response = client.docmd(
-                    b64encode(b'\0badlogin\0badpasswd').decode()
-                )
+                b64encode(b'\0badlogin\0badpasswd').decode()
+            )
             assert_auth_invalid(self, code, response)
 
     def test_auth_two_steps_abort(self):
@@ -868,9 +873,9 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd(
-                    'AUTH PLAIN ' +
-                    b64encode(b'\0goodlogin\0goodpasswd').decode()
-                )
+                'AUTH PLAIN ' +
+                b64encode(b'\0goodlogin\0goodpasswd').decode()
+            )
             assert_auth_success(self, code, response)
 
     def test_auth_no_credentials(self):
@@ -1002,9 +1007,9 @@ class TestRequiredAuthentication(unittest.TestCase):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd(
-                    'AUTH PLAIN ' +
-                    b64encode(b'\0goodlogin\0goodpasswd').decode()
-                )
+                'AUTH PLAIN ' +
+                b64encode(b'\0goodlogin\0goodpasswd').decode()
+            )
             assert_auth_success(self, code, response)
             code, response = client.docmd('HELP')
             self.assertEqual(code, 250)
@@ -1014,24 +1019,25 @@ class TestRequiredAuthentication(unittest.TestCase):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd(
-                    'AUTH PLAIN ' +
-                    b64encode(b'\0goodlogin\0goodpasswd').decode()
-                )
+                'AUTH PLAIN ' +
+                b64encode(b'\0goodlogin\0goodpasswd').decode()
+            )
             assert_auth_success(self, 235, response)
             code, response = client.docmd('VRFY <anne@example.com>')
             self.assertEqual(code, 252)
             self.assertEqual(
-              response,
-              b'Cannot VRFY user, but will accept message and attempt delivery'
-              )
+                response,
+                b'Cannot VRFY user, but will accept message and '
+                b'attempt delivery'
+            )
 
     def test_mail_authenticated(self):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd(
-                    'AUTH PLAIN ' +
-                    b64encode(b'\0goodlogin\0goodpasswd').decode()
-                )
+                'AUTH PLAIN ' +
+                b64encode(b'\0goodlogin\0goodpasswd').decode()
+            )
             assert_auth_success(self, code, response)
             code, response = client.docmd('MAIL FROM: <anne@example.com>')
             self.assertEqual(code, 250)
@@ -1041,9 +1047,9 @@ class TestRequiredAuthentication(unittest.TestCase):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd(
-                    'AUTH PLAIN ' +
-                    b64encode(b'\0goodlogin\0goodpasswd').decode()
-                )
+                'AUTH PLAIN ' +
+                b64encode(b'\0goodlogin\0goodpasswd').decode()
+            )
             assert_auth_success(self, code, response)
             code, response = client.docmd('RCPT TO: <anne@example.com>')
             self.assertEqual(code, 503)
