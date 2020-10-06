@@ -165,7 +165,8 @@ those methods of the handler instance will override the built-in methods.
     * *Anything else* -- an 'identity' of the STMP user. Usually is the username
       given during AUTH exchange/procedure, but not necessarily so; can also
       be, for instance, a Session ID. This will be stored in the Session
-      object's ``login_id`` property.
+      object's ``login_data`` property (see
+      :ref:`Session and Envelopes <sessions_and_envelopes>`)
 
 **NOTE:** Defining *additional* AUTH hooks in your handler will NOT disable
 the built-in LOGIN and PLAIN hooks; if you do not want to offer the LOGIN and

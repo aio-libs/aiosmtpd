@@ -949,7 +949,7 @@ class TestSMTPAuth(unittest.TestCase):
             self.assertEqual(auth_peeker.login, None)
             self.assertEqual(auth_peeker.password, None)
             code, response = client.mail("alice@example.com")
-            self.assertEqual(self.handler.session.login_id, b"")
+            self.assertEqual(self.handler.session.login_data, b"")
 
     def test_auth_login_null_credential(self):
         with SMTP(*self.address) as client:
@@ -965,7 +965,7 @@ class TestSMTPAuth(unittest.TestCase):
             self.assertEqual(auth_peeker.login, None)
             self.assertEqual(auth_peeker.password, None)
             code, response = client.mail("alice@example.com")
-            self.assertEqual(self.handler.session.login_id, b"")
+            self.assertEqual(self.handler.session.login_data, b"")
 
     def test_auth_login_abort_login(self):
         with SMTP(*self.address) as client:

@@ -51,7 +51,7 @@ class Session:
         self.host_name = None
         self.extended_smtp = False
         self.loop = loop
-        self.login_id = None
+        self.login_data = None
 
 
 @public
@@ -518,7 +518,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 status = '535 5.7.8 Authentication credentials invalid'
             else:
                 self.authenticated = True
-                self.session.login_id = login_id
+                self.session.login_data = login_id
                 status = '235 2.7.0 Authentication successful'
         if status is not None:  # pragma: no branch
             await self.push(status)
