@@ -135,7 +135,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  "can lead to security vulnerabilities!")
         self._auth_require_tls = auth_require_tls
         if auth_callback is None:
-            self._auth_callback = login_always_fail  # pragma: nocover
+            self._auth_callback = login_always_fail
         else:
             self._auth_callback = auth_callback
         self._auth_exclude_mechanism = auth_exclude_mechanism or set()
@@ -408,7 +408,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 for m in dir(self.event_handler)
                 if m.startswith("auth_")
             )
-            if not auth_handlers:
+            if not auth_handlers:  # pragma: no branch
                 auth_handlers = sorted(
                     m.replace("auth_", "")
                     for m in dir(self)
@@ -511,7 +511,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 self.authenticated = True
                 self.session.login_id = login_id
                 status = '235 2.7.0 Authentication successful'
-        if status is not None:
+        if status is not None:  # pragma: no branch
             await self.push(status)
 
     async def _auth_interact(self, server_message) -> TriStateType:
@@ -588,7 +588,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
 
         if self._auth_callback("LOGIN", login, password):
-            if login is None:
+            if login is None:  # pragma: no branch
                 login = EMPTYBYTES
             return login
         else:
