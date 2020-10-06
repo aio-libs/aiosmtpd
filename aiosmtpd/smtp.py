@@ -500,13 +500,21 @@ class SMTP(asyncio.StreamReaderProtocol):
         status = await self._call_handler_hook('AUTH', args)
         if status is MISSING:
             mechanism = args[0]
+            mechanism_method = f"auth_{mechanism}"
             method: AuthMechanismType
-            method = getattr(self.event_handler, f"auth_{mechanism}", None) \
-                or getattr(self, f"auth_{mechanism}", None)
-            if method is None:
-                await self.push('504 5.5.4 Unrecognized authentication type')
-                return
+            method = getattr(self.event_handler, mechanism_method, None)
+            if method is not None:
+                log.debug(f"Passing to handler's {mechanism_method}()")
+            else:
+                method = getattr(self, mechanism_method, None)
+                if method is None:
+                    await self.push('504 5.5.4 Unrecognized authentication type')
+                    return
+                log.debug(f"Using internal {mechanism_method}()")
+            # Pass 'self' to method so external methods can leverage this
+            # class's helper methods such as push()
             login_id = await method(self, args)
+            log.debug(f"{mechanism_method} returned {login_id}")
             if login_id is None:
                 # None means there's an error already handled by method and
                 # we don't need to do anything more
@@ -527,9 +535,12 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push(server_message)
         line = await self._reader.readline()
         blob = line.strip()
+        # '=' and '*' handling are in accordance with RFC4954
         if blob == b"=":
+            log.debug("User responded with '='")
             return None
         if blob == b"*":
+            log.warning("User requested abort with '*'")
             await self.push("501 Auth aborted")
             return MISSING
         try:
@@ -541,14 +552,15 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     # IMPORTANT NOTES FOR THE auth_* METHODS
     #
-    # 1. Due to how the methods are called, we must ignore the first arg
+    # 1. For internal methods, due to how they are called, we must ignore
+    #    the first arg
     # 2. All auth_* methods can return one of three values:
     #    - None: An error happened and handled;
     #            smtp_AUTH should do nothing more
     #    - MISSING: No error during SMTP AUTH process, but authentication
     #               failed
-    #    - [bytes]: Authentication succeeded and this is the 'identity' of
-    #               the SMTP user
+    #    - [Any]: Authentication succeeded and this is the 'identity' of
+    #             the SMTP user
     #      - 'identity' is not always username, depending on the auth mecha-
     #        nism. Might be a session key, a one-time user ID, or any kind of
     #        object, actually.
