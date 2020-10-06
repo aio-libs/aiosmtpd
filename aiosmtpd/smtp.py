@@ -146,7 +146,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._auth_callback = login_always_fail
         else:
             self._auth_callback = auth_callback
-        self._auth_exclude_mechanism = auth_exclude_mechanism or set()
+        self._auth_exclude: Set[str] = auth_exclude_mechanism or set()
         self._auth_required = auth_required
         self.authenticated = False
 
@@ -411,21 +411,13 @@ class SMTP(asyncio.StreamReaderProtocol):
                  DeprecationWarning)
             await self.ehlo_hook()
         if not self._auth_require_tls or self._tls_protocol:
-            auth_handlers = sorted(
+            auth_handlers: Set[str] = {
                 m.replace("auth_", "")
-                for m in dir(self.event_handler)
+                for h in (self.event_handler, self)
+                for m in dir(h)
                 if m.startswith("auth_")
-            )
-            if not auth_handlers:  # pragma: no branch
-                auth_handlers = sorted(
-                    m.replace("auth_", "")
-                    for m in dir(self)
-                    if m.startswith("auth_")
-                )
-            await self.push("250-AUTH " + " ".join(
-                ah for ah in auth_handlers
-                if ah not in self._auth_exclude_mechanism
-            ))
+            } - self._auth_exclude
+            await self.push("250-AUTH " + " ".join(sorted(auth_handlers)))
         status = await self._call_handler_hook('EHLO', hostname)
         if status is MISSING:
             self.session.host_name = hostname
@@ -508,7 +500,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             else:
                 method = getattr(self, mechanism_method, None)
                 if method is None:
-                    await self.push('504 5.5.4 Unrecognized authentication type')
+                    await self.push(
+                        '504 5.5.4 Unrecognized authentication type')
                     return
                 log.debug(f"Using internal {mechanism_method}()")
             # Pass 'self' to method so external methods can leverage this

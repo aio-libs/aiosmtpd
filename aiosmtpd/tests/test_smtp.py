@@ -48,6 +48,11 @@ class PeekerHandler:
         self.session = session
         return "250 OK"
 
+    async def auth_NULL(
+            self, server, kargs
+    ):
+        return "NULL_login"
+
 
 class PeekerAuth:
     def __init__(self):
@@ -910,13 +915,28 @@ class TestSMTP(unittest.TestCase):
             assert_auth_invalid(self, code, response)
 
 
-class TestSMTPDeep(unittest.TestCase):
+class TestSMTPAuth(unittest.TestCase):
     def setUp(self):
         self.handler = PeekerHandler()
         controller = DecodingControllerPeekAuth(self.handler)
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
+
+    def test_ehlo(self):
+        with SMTP(*self.address) as client:
+            code, response = client.ehlo('example.com')
+            self.assertEqual(code, 250)
+            lines = response.splitlines()
+            expecteds = (
+                bytes(socket.getfqdn(), 'utf-8'),
+                b'SIZE 33554432',
+                b'SMTPUTF8',
+                b'AUTH LOGIN NULL PLAIN',
+                b'HELP',
+            )
+            for actual, expected in zip(lines, expecteds):
+                self.assertEqual(actual, expected)
 
     def test_auth_plain_null_credential(self):
         with SMTP(*self.address) as client:
@@ -970,6 +990,13 @@ class TestSMTPDeep(unittest.TestCase):
             code, response = client.docmd('*')
             self.assertEqual(code, 501)
             self.assertEqual(response, b"Auth aborted")
+
+    def test_auth_null(self):
+        auth_peeker.return_val = False
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, response = client.docmd("AUTH NULL")
+            assert_auth_success(self, code, response)
 
 
 class TestRequiredAuthentication(unittest.TestCase):

@@ -167,6 +167,11 @@ those methods of the handler instance will override the built-in methods.
       be, for instance, a Session ID. This will be stored in the Session
       object's ``login_id`` property.
 
+**NOTE:** Defining *additional* AUTH hooks in your handler will NOT disable
+the built-in LOGIN and PLAIN hooks; if you do not want to offer the LOGIN and
+PLAIN mechanisms, specify them in the ``auth_exclude_mechanism`` parameter
+of the :ref:`SMTP class<smtp_api>`.
+
 
 Built-in handlers
 =================

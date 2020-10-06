@@ -98,6 +98,8 @@ override to provide additional responses.
     server.
 
 
+.. _smtp_api:
+
 SMTP API
 ========
 
