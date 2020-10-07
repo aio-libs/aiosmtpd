@@ -38,7 +38,11 @@ class Controller:
                 self.loop.create_server(
                     self.factory, host=self.hostname, port=self.port,
                     ssl=self.ssl_context))
-        except Exception as error:
+        except Exception as error:  # pragma: nowsl
+            # Somehow WSL1.0 (Windows Subsystem for Linux) allows multiple
+            # listeners on one port?!
+            # That is why we add "pragma: nowsl" there, so when testing on
+            # WSL we can specify "PLATFORM=wsl".
             self._thread_exception = error
             return
         self.loop.call_soon(ready_event.set)
@@ -56,7 +60,8 @@ class Controller:
         self._thread.start()
         # Wait a while until the server is responding.
         ready_event.wait(self.ready_timeout)
-        if self._thread_exception is not None:
+        if self._thread_exception is not None:  # pragma: nowsl
+            # See comment about WSL1.0 in the _run() method
             raise self._thread_exception
 
     def _stop(self):
