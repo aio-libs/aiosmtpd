@@ -1,6 +1,6 @@
 """Test other aspects of the server implementation."""
 
-
+import os
 import socket
 import unittest
 
@@ -8,6 +8,13 @@ from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
 from smtplib import SMTP
+
+
+def in_wsl():
+    # WSL 1.0 somehow allows more than one listener on one port.
+    # So when testing on WSL, we must set PLATFORM=wsl and skip the
+    # "test_socket_error" test.
+    return os.environ.get("PLATFORM") == "wsl"
 
 
 class TestServer(unittest.TestCase):
@@ -29,6 +36,8 @@ class TestServer(unittest.TestCase):
         server.command_size_limits['DATA'] = 1024
         self.assertEqual(server.max_command_size_limit, 1024)
 
+    @unittest.skipIf(in_wsl(), "WSL prevents socket collisions")
+    # See explanation in the in_wsl() function
     def test_socket_error(self):
         # Testing starting a server with a port already in use
         s1 = Controller(Sink(), port=8025)
