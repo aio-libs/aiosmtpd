@@ -6,13 +6,13 @@ install:
 matrix:
   include:
     - python: "3.6"
-      env: INTERP=py36 PYTHONASYNCIODEBUG=1
+      env: INTERP=py36
     - python: "3.7"
-      env: INTERP=py37 PYTHONASYNCIODEBUG=1
+      env: INTERP=py37
     - python: "3.8"
-      env: INTERP=py38 PYTHONASYNCIODEBUG=1
+      env: INTERP=py38
     - python: "pypy3"
-      env: INTERP=pypy3 PYTHONASYNCIODEBUG=1
+      env: INTERP=pypy3
 before_script:
   # Disable IPv6. Ref travis-ci/travis-ci#8711
   - echo 0 | sudo tee /proc/sys/net/ipv6/conf/all/disable_ipv6

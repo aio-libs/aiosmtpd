@@ -24,6 +24,7 @@ var/*
 docs/_build/
 nosetests.xml
 __pycache__/
-htmlcov
+htmlcov/
+_dynamic/
 coverage.xml
 diffcov.html
