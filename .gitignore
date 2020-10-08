@@ -28,3 +28,4 @@ htmlcov/
 _dynamic/
 coverage.xml
 diffcov.html
+.python-version
