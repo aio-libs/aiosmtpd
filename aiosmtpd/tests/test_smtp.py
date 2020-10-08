@@ -89,7 +89,7 @@ class NoDecodeController(Controller):
 
 
 class TimeoutController(Controller):
-    Delay: float = 3.0
+    Delay: float = 2.0
 
     def factory(self):
         return Server(self.handler, timeout=self.Delay)
