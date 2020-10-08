@@ -100,11 +100,10 @@ class Proxy:
         # Look for the last header
         i = 0
         ending = CRLF
-        for line in lines:                          # pragma: nobranch
+        for i, line in enumerate(lines):  # pragma: nobranch
             if NLCRE.match(line):
                 ending = line
                 break
-            i += 1
         peer = session.peer[0].encode('ascii')
         lines.insert(i, b'X-Peer: %s%s' % (peer, ending))
         data = EMPTYBYTES.join(lines)
