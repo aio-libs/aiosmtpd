@@ -174,7 +174,7 @@ def main(args=None):
     log.info('Starting asyncio loop')
     try:
         loop.run_forever()
-    except KeyboardInterrupt:
+    except KeyboardInterrupt:  # pragma: nocover
         pass
     server_loop.close()
     log.info('Completed asyncio loop')
