@@ -7,12 +7,11 @@ omit =
      aiosmtpd/tests/*
     .tox/*/lib/python3.*/site-packages/*
     .tox/*/Lib/site-packages/*
-    .tox/*/site-packages/*
+    .tox/Lib/site-packages/*
 
 [paths]
 source =
     aiosmtpd
-    .tox/*/lib/python*/site-packages/aiosmtpd
 
 [report]
 exclude_lines =
