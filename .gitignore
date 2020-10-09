@@ -20,6 +20,7 @@ var/*
 .tox
 .DS_Store
 .coverage
+.coverage.*.*
 .noseids
 docs/_build/
 nosetests.xml
