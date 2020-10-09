@@ -164,12 +164,12 @@ class SMTP(asyncio.StreamReaderProtocol):
         }
         for m in (auth_exclude_mechanism or []):
             self._auth_methods.pop(m, None)
-        self._handle_hooks: Dict[str, Awaitable] = {
+        self._handle_hooks: Dict[str, Callable] = {
             m.replace("handle_", ""): getattr(handler, m)
             for m in dir(handler)
             if m.startswith("handle_")
         }
-        self._smtp_methods: Dict[str, Awaitable] = {
+        self._smtp_methods: Dict[str, Any] = {
             m.replace("smtp_", ""): getattr(self, m)
             for m in dir(self)
             if m.startswith("smtp_")
