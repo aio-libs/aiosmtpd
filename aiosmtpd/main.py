@@ -137,10 +137,35 @@ def main(args=None):
     if args.debug > 2:
         loop.set_debug(enabled=True)
 
-    log.info('Server listening on %s:%s', args.host, args.port)
+    fails = 0
+    server = server_loop = None
+    while True:
+        log.info('Attempting to start server on %s:%s', args.host, args.port)
+        try:
+            server = loop.create_server(
+                factory, host=args.host, port=args.port)
+            server_loop = loop.run_until_complete(server)
+        except RuntimeError:  # pragma: nocover
+            # This part only *rarely* happened, and when it happened it was
+            # probably due to some external factors(?), so it's better to
+            # leave this out of coverage testing.
+            fails += 1
+            log.exception(f"Failed attempt #{fails}. "
+                          f"Exception data:")
+            if server:
+                server.close()
+                server = None
+                if server_loop:
+                    loop.stop()
+                    loop.close()
+                    server_loop = None
+            if fails > 3:
+                log.critical("Too many failed attempts.")
+                raise
+        else:
+            break
 
-    server = loop.run_until_complete(
-        loop.create_server(factory, host=args.host, port=args.port))
+    log.info('Server listening on %s:%s', args.host, args.port)
     # Signal handlers are only supported on *nix, so just ignore the failure
     # to set this on Windows.
     with suppress(NotImplementedError):
@@ -151,9 +176,9 @@ def main(args=None):
         loop.run_forever()
     except KeyboardInterrupt:
         pass
-    server.close()
+    server_loop.close()
     log.info('Completed asyncio loop')
-    loop.run_until_complete(server.wait_closed())
+    loop.run_until_complete(server_loop.wait_closed())
     loop.close()
 
 
