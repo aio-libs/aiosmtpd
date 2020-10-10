@@ -381,6 +381,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                 log.info('Connection lost during _handle_client()')
                 self._writer.close()
                 raise
+            except ConnectionResetError:
+                log.info('Connection lost during _handle_client()')
+                self._writer.close()
+                raise
             except Exception as error:
                 try:
                     status = await self.handle_exception(error)

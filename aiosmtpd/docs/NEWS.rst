@@ -20,6 +20,7 @@ Fixed/Improved
 * No more failures/DeprecationWarnings for Python 3.8 (fixes #167)
 * Faster ``_handle_client()`` processing
 * Faster method access for ``smtp_*``, ``handle_*``, and ``auth_*`` hooks
+* Make sure that handle_exception() do not get called when the client disconnected. (fixes #127 #162)
 
 Removed
 -------
