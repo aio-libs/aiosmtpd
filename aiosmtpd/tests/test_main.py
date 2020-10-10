@@ -113,11 +113,11 @@ class TestMain(unittest.TestCase):
     def test_debug_0(self):
         # For this test, the runner will have already set the log level so it
         # may not be logging.ERROR.
-        log = logging.getLogger('mail.log')
-        default_level = log.getEffectiveLevel()
-        with patch.object(log, 'info'):
+        _log = logging.getLogger('mail.log')
+        default_level = _log.getEffectiveLevel()
+        with patch.object(_log, 'info'):
             main(('-n',))
-            self.assertEqual(log.getEffectiveLevel(), default_level)
+            self.assertEqual(_log.getEffectiveLevel(), default_level)
 
     def test_debug_1(self):
         # Mock the logger to eliminate console noise.
