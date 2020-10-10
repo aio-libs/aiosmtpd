@@ -70,7 +70,11 @@ class Controller:
 
     def _stop(self):
         self.loop.stop()
-        for task in asyncio.Task.all_tasks(self.loop):
+        try:
+            _all_tasks = asyncio.Task.all_tasks
+        except AttributeError:   # pragma: nocover
+            _all_tasks = asyncio.all_tasks
+        for task in _all_tasks(self.loop):
             task.cancel()
 
     def stop(self):
