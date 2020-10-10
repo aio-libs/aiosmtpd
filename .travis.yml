@@ -11,8 +11,6 @@ matrix:
       env: INTERP=py37
     - python: "3.8"
       env: INTERP=py38
-    - python: "3.9"
-      env: INTERP=py39
     - python: "pypy3"
       env: INTERP=pypy3
 before_script:
