@@ -654,6 +654,10 @@ class CapturingServer(Server):
 
 
 class CapturingController(Controller):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.smtpd = None
+
     def factory(self):
         self.smtpd = CapturingServer(self.handler)
         return self.smtpd
@@ -692,6 +696,10 @@ class DeprecatedHookServer(Server):
 
 
 class DeprecatedHookController(Controller):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.smtpd = None
+
     def factory(self):
         self.smtpd = DeprecatedHookServer(self.handler)
         return self.smtpd
