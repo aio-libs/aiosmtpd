@@ -8,6 +8,7 @@ omit =
     .tox/*/lib/python3.*/site-packages/*
     .tox/*/Lib/site-packages/*
     .tox/Lib/site-packages/*
+    .tox/*/site-packages/*
 
 [paths]
 source =
