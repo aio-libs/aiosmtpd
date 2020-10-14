@@ -49,7 +49,18 @@ class TestMain(unittest.TestCase):
         # information to know for sure.
         default_loop = asyncio.get_event_loop()
         loop = asyncio.new_event_loop()
-        loop.call_later(0.1, loop.stop)
+        # The original value of 0.1 is too small; on underpowered test benches
+        # (like my laptop) the initialization of the whole asyncio 'system'
+        # (i.e., create_server + run_until_complete + run_forever) *sometimes*
+        # takes more than 0.1 seconds, causing tests to fail intermittently
+        # with “Event loop stopped before Future completed.” error.
+        #
+        # Because the error is intermittent and infrequently happen (maybe
+        # only about 5-10% of testing attempts), I figure the actual time
+        # needed would be 0.1 +/- 20%; so raising this value by 900%
+        # *should* be enough. We can revisit this in the future if it needs
+        # to be longer.
+        loop.call_later(1.0, loop.stop)
         self.resources.callback(asyncio.set_event_loop, default_loop)
         asyncio.set_event_loop(loop)
         self.addCleanup(self.resources.close)
