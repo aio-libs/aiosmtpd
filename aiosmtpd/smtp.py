@@ -392,6 +392,31 @@ class SMTP(asyncio.StreamReaderProtocol):
                         status = '500 Error: Cannot describe error'
                     await self.push(status)
 
+    async def check_helo_needed(self, helo: str = "HELO") -> bool:
+        """
+        Check if HELO/EHLO is needed.
+
+        :param helo: The actual string of HELO/EHLO
+        :return: True if HELO/EHLO is needed
+        """
+        if not self.session.host_name:
+            await self.push(f'503 Error: send {helo} first')
+            return True
+        return False
+
+    async def check_auth_needed(self, caller_method: str) -> bool:
+        """
+        Check if AUTH is needed.
+
+        :param caller_method: The SMTP method needing a check (for logging)
+        :return: True if AUTH is needed
+        """
+        if self._auth_required and not self.authenticated:
+            log.info(f'{caller_method}: Authentication required')
+            await self.push('530 5.7.0 Authentication required')
+            return True
+        return False
+
     # SMTP and ESMTP commands
     @syntax('HELO hostname')
     async def smtp_HELO(self, hostname):
@@ -482,9 +507,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._tls_protocol.connection_made(self._original_transport)
 
     @syntax("AUTH <mechanism>")
-    async def smtp_AUTH(self, arg):
-        if not self.session.host_name:
-            await self.push('503 Error: send EHLO first')
+    async def smtp_AUTH(self, arg: str) -> None:
+        if await self.check_helo_needed("EHLO"):
             return
         if not self.session.extended_smtp:
             await self.push("500 Error: command 'AUTH' not recognized")
@@ -664,10 +688,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         return True
 
     @syntax('HELP [command]')
-    async def smtp_HELP(self, arg):
-        if self._auth_required and not self.authenticated:
-            log.info('HELP: Authentication required')
-            await self.push('530 5.7.0 Authentication required')
+    async def smtp_HELP(self, arg: str) -> None:
+        if await self.check_auth_needed("HELP"):
             return
         code = 250
         if arg:
@@ -689,10 +711,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             '{} Supported commands: {}'.format(code, ' '.join(commands)))
 
     @syntax('VRFY <address>')
-    async def smtp_VRFY(self, arg):
-        if self._auth_required and not self.authenticated:
-            log.info('VRFY: Authentication required')
-            await self.push('530 5.7.0 Authentication required')
+    async def smtp_VRFY(self, arg: str) -> None:
+        if await self.check_auth_needed("VRFY"):
             return
         if arg:
             try:
@@ -711,13 +731,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push('501 Syntax: VRFY <address>')
 
     @syntax('MAIL FROM: <address>', extended=' [SP <mail-parameters>]')
-    async def smtp_MAIL(self, arg):
-        if not self.session.host_name:
-            await self.push('503 Error: send HELO first')
+    async def smtp_MAIL(self, arg: str) -> None:
+        if await self.check_helo_needed():
             return
-        if self._auth_required and not self.authenticated:
-            log.info('MAIL FROM: Authentication required')
-            await self.push('530 5.7.0 Authentication required')
+        if await self.check_auth_needed("MAIL"):
             return
         log.debug('===> MAIL %s', arg)
         syntaxerr = '501 Syntax: MAIL FROM: <address>'
@@ -782,13 +799,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push(status)
 
     @syntax('RCPT TO: <address>', extended=' [SP <mail-parameters>]')
-    async def smtp_RCPT(self, arg):
-        if not self.session.host_name:
-            await self.push('503 Error: send HELO first')
+    async def smtp_RCPT(self, arg: str) -> None:
+        if await self.check_helo_needed():
             return
-        if self._auth_required and not self.authenticated:
-            log.info('RCPT TO: Authentication required')
-            await self.push('530 5.7.0 Authentication required')
+        if await self.check_auth_needed("RCPT"):
             return
         log.debug('===> RCPT %s', arg)
         if not self.envelope.mail_from:
@@ -843,13 +857,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push('250 OK' if status is MISSING else status)
 
     @syntax('DATA')
-    async def smtp_DATA(self, arg):
-        if not self.session.host_name:
-            await self.push('503 Error: send HELO first')
+    async def smtp_DATA(self, arg: str) -> None:
+        if await self.check_helo_needed():
             return
-        if self._auth_required and not self.authenticated:
-            log.info('DATA: Authentication required')
-            await self.push('530 5.7.0 Authentication required')
+        if await self.check_auth_needed("DATA"):
             return
         if not self.envelope.rcpt_tos:
             await self.push('503 Error: need RCPT command')
