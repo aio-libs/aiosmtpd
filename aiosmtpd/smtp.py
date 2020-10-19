@@ -192,7 +192,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._timeout_handle.cancel()
 
         self._timeout_handle = self.loop.call_later(
-                self._timeout_duration, self._timeout_cb)
+            self._timeout_duration, self._timeout_cb)
 
     def _timeout_cb(self):
         log.info('%r connection timeout', self.session.peer)
@@ -268,7 +268,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                         await self.push('500 Error: bad syntax')
                         continue
 
-                    arg = line[i+1:].strip()
+                    arg = line[i + 1:].strip()
                     # Remote SMTP servers can send us UTF-8 content despite
                     # whether they've declared to do so or not.  Some old
                     # servers can send 8-bit data.  Use surrogateescape so
