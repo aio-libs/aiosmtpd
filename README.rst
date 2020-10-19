@@ -91,6 +91,73 @@ and these options can be combined::
     $ tox -e py35-nocov -- -P test_connection_reset_during_DATA -E
 
 
+Supported 'testenvs'
+------------------------
+
+In general, the ``-e`` parameter to tox specifies one (or more) **testenv**
+to run (separate using comma if more than one testenv). The following testenvs
+have been configured and tested:
+
+* ``{py36,py37,py38,py39,pypy3}-{nocov,cov,diffcov,profile}``
+
+  Specifies the interpreter to run and the kind of testing to perform.
+
+  - ``nocov`` = no coverage testing. Tests will run verbosely.
+  - ``cov`` = with coverage testing. Tests will run in brief mode
+    (showing a single character per test run)
+  - ``diffcov`` = with diff-coverage report (showing difference in
+    coverage compared to previous commit). Tests will run in brief mode
+  - ``profile`` = no coverage testing, but code profiling instead.
+    This must be **invoked manually** using the ``-e`` parameter
+
+  **Note:** Due to possible 'complications' when setting up PyPy on
+  systems without pyenv, ``pypy3`` tests also will not be automatically
+  run; you must invoke them manually.
+
+* ``qa``
+
+  Perform ``flake8`` code style checking
+
+* ``docs``
+
+  Builds HTML documentation using Sphinx
+
+
+Environment Variables
+-------------------------
+
+``PLATFORM``
+    Used on non-native-Linux operating systems to specify tests to skip.
+    Valid values:
+
+    * ``mswin`` -- when running tox on Microsoft Windows
+    * ``wsl`` -- when running tox on Windows Subsystem for Linux (WSL)
+
+
+Different Python Versions
+-----------------------------
+
+The tox configuration files have been created to cater for more than one
+Python versions `safely`: If an interpreter is not found for a certain
+Python version, tox will skip that whole testenv.
+
+However, with a little bit of effort, you can have multiple Python interpreter
+versions on your system by using ``pyenv``. General steps:
+
+1. Install ``pyenv`` from https://github.com/pyenv/pyenv#installation
+
+2. Install ``tox-pyenv`` from https://pypi.org/project/tox-pyenv/
+
+3. Using ``pyenv``, install the Python versions you want to test on
+
+4. Create a ``.python-version`` file in the root of the repo, listing the
+   Python interpreter versions you want to make available to tox (see pyenv's
+   documentation about this file)
+
+5. Invoke tox with the option ``--tox-pyenv-no-fallback`` (see tox-pyenv's
+   documentation about this option)
+
+
 Contents
 ========
 
