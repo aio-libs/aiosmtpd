@@ -632,9 +632,10 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('VRFY <anne@example.com>')
             self.assertEqual(code, 252)
             self.assertEqual(
-              response,
-              b'Cannot VRFY user, but will accept message and attempt delivery'
-              )
+                response,
+                b'Cannot VRFY user, but will accept message and '
+                b'attempt delivery'
+                )
 
     def test_vrfy_no_arg(self):
         with SMTP(*self.address) as client:

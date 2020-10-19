@@ -64,11 +64,14 @@ def parseargs(args=None):
     parser.add_argument(
         '-l', '--listen', metavar='HOST:PORT',
         nargs='?', default=None,
-        help="""Optional host and port to listen on.  If the PORT part is not
-                given, then port {port} is used.  If only :PORT is given,
-                then {host} is used for the hostname.  If neither are given,
-                {host}:{port} is used.""".format(
-                    host=DEFAULT_HOST, port=DEFAULT_PORT))
+        help=(
+            "Optional host and port to listen on.  If the PORT part is not "
+            "given, then port {port} is used.  If only :PORT is given, "
+            "then {host} is used for the hostname.  If neither are given, "
+            "{host}:{port} is used.".format(
+                host=DEFAULT_HOST, port=DEFAULT_PORT
+            ))
+        )
     parser.add_argument(
         'classargs', metavar='CLASSARGS',
         nargs='*', default=(),
