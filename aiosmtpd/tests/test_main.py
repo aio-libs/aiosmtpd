@@ -96,9 +96,15 @@ class TestMain(unittest.TestCase):
         with self.assertRaises(SystemExit) as cm:
             main(args=())
         self.assertEqual(cm.exception.code, 1)
-        self.assertEqual(
+        # On Python 3.8 on Linux, a bunch of "RuntimeWarning: coroutine
+        # 'AsyncMockMixin._execute_mock_call' was never awaited" messages
+        # gets mixed up into stderr causing test fail.
+        # Therefore, we use assertIn instead of assertEqual here, because
+        # the string DOES appear in stderr, just buried.
+        self.assertIn(
+            'Cannot import module "pwd"; try running with -n option.\n',
             stderr.getvalue(),
-            'Cannot import module "pwd"; try running with -n option.\n')
+        )
 
     @unittest.skipUnless(has_setuid, 'setuid is unvailable')
     def test_n(self):
