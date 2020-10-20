@@ -49,12 +49,12 @@ class PeekerHandler:
         return "250 OK"
 
     async def auth_NULL(
-            self, server, kargs
+            self, server, args
     ):
         return "NULL_login"
 
     async def auth_DONT(
-            self, server, kargs
+            self, server, args
     ):
         return MISSING
 
