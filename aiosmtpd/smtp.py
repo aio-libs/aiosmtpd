@@ -512,52 +512,51 @@ class SMTP(asyncio.StreamReaderProtocol):
     async def smtp_AUTH(self, arg: str) -> None:
         if await self.check_helo_needed("EHLO"):
             return
-        if not self.session.extended_smtp:
+        elif not self.session.extended_smtp:
             await self.push("500 Error: command 'AUTH' not recognized")
-            return
-        if self._auth_require_tls and not self._tls_protocol:
+        elif self._auth_require_tls and not self._tls_protocol:
             await self.push("538 5.7.11 Encryption required for requested "
                             "authentication mechanism")
-            return
-        if self.authenticated:
+        elif self.authenticated:
             await self.push('503 Already authenticated')
-            return
-        if not arg:
+        elif not arg:
             await self.push('501 Not enough value')
-            return
-        args = arg.split(' ')
-        if len(args) > 2:
-            await self.push('501 Too many values')
-            return
-        mechanism = args[0]
-        if mechanism not in self._auth_methods:
-            await self.push('504 5.5.4 Unrecognized authentication type')
-            return
-        status = await self._call_handler_hook('AUTH', args)
-        if status is MISSING:
-            method = self._auth_methods[mechanism]
-            if method.is_builtin:
-                log.debug(f"Using builtin AUTH hook for {mechanism}")
-            else:
-                log.debug(f"Using handler AUTH hook for {mechanism}")
-            # Pass 'self' to method so external methods can leverage this
-            # class's helper methods such as push()
-            login_data = await method.method(self, args)
-            log.debug(f"auth_{mechanism} returned {login_data}")
-            if login_data is None:
-                # None means there's an error already handled by method and
-                # we don't need to do anything more
+        else:
+            args = arg.split()
+            if len(args) > 2:
+                await self.push('501 Too many values')
                 return
-            elif login_data is MISSING:
-                # MISSING means no error in AUTH process, but credentials
-                # is rejected / not valid
-                status = '535 5.7.8 Authentication credentials invalid'
-            else:
-                self.authenticated = True
-                self.session.login_data = login_data
-                status = '235 2.7.0 Authentication successful'
-        if status is not None:  # pragma: no branch
-            await self.push(status)
+
+            mechanism = args[0]
+            if mechanism not in self._auth_methods:
+                await self.push('504 5.5.4 Unrecognized authentication type')
+                return
+
+            status = await self._call_handler_hook('AUTH', args)
+            if status is MISSING:
+                method = self._auth_methods[mechanism]
+                if method.is_builtin:
+                    log.debug(f"Using builtin auth_ hook for {mechanism}")
+                else:
+                    log.debug(f"Using handler auth_ hook for {mechanism}")
+                # Pass 'self' to method so external methods can leverage this
+                # class's helper methods such as push()
+                login_data = await method.method(self, args)
+                log.debug(f"auth_{mechanism} returned {login_data}")
+                if login_data is None:
+                    # None means there's an error already handled by method and
+                    # we don't need to do anything more
+                    return
+                elif login_data is MISSING:
+                    # MISSING means no error in AUTH process, but credentials
+                    # is rejected / not valid
+                    status = '535 5.7.8 Authentication credentials invalid'
+                else:
+                    self.authenticated = True
+                    self.session.login_data = login_data
+                    status = '235 2.7.0 Authentication successful'
+            if status is not None:  # pragma: no branch
+                await self.push(status)
 
     async def _auth_interact(self, server_message) -> _TriStateType:
         blob: bytes
