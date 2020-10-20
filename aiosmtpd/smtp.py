@@ -161,6 +161,11 @@ class SMTP(asyncio.StreamReaderProtocol):
         }
         for m in (auth_exclude_mechanism or []):
             self._auth_methods.pop(m, None)
+        msg = "Available AUTH mechanisms:"
+        for m, impl in sorted(
+                self._auth_methods.items()):  # type: str, _AuthMechAttr
+            msg += f" {m}{'(builtin)' if impl.is_builtin else ''}"
+        log.info(msg)
         self._handle_hooks: Dict[str, Callable] = {
             m.replace("handle_", ""): getattr(handler, m)
             for m in dir(handler)
