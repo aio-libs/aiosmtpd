@@ -149,10 +149,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             warn("Requiring AUTH while not requiring TLS "
                  "can lead to security vulnerabilities!")
         self._auth_require_tls = auth_require_tls
-        if auth_callback is None:
-            self._auth_callback = login_always_fail
-        else:
-            self._auth_callback = auth_callback
+        self._auth_callback = auth_callback or login_always_fail
         self._auth_required = auth_required
         self.authenticated = False
         # Get hooks & methods to significantly speedup getattr's
@@ -601,6 +598,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         loginpassword: _TriStateType
         if len(args) == 1:
             # Trailing space is MANDATORY
+            # See https://tools.ietf.org/html/rfc4954#page-4
             loginpassword = await self._auth_interact("334 ")
             if loginpassword is MISSING:
                 return

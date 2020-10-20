@@ -73,6 +73,15 @@ class Controller:
         try:
             _all_tasks = asyncio.Task.all_tasks
         except AttributeError:   # pragma: nocover
+            # I don't like using pragma:nocover just like everyone else, but at
+            # the time being this is the only way to achieve 100% coverage on
+            # 3.6 <= Python < 3.9. (One day *if* we drop support for 3.6, we
+            # can revisit and simplify this, because 3.7 implemented
+            # asyncio.all_tasks)
+            # That said, I'm planning to use coverage-conditional-plugin, but I
+            # have hit some problems that prevented me from using that plugin's
+            # 'conditional pragmas'. As soon as I can get that problem fixed,
+            # I'll replace the pragma:nocover.
             _all_tasks = asyncio.all_tasks
         for task in _all_tasks(self.loop):
             task.cancel()
