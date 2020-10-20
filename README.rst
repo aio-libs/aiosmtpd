@@ -2,6 +2,11 @@
  aiosmtpd - An asyncio based SMTP server
 =========================================
 
+.. image:: https://travis-ci.com/aio-libs/aiosmtpd.svg?branch=master
+   :target: https://travis-ci.com/github/aio-libs/aiosmtpd
+.. image:: https://img.shields.io/lgtm/grade/python/github/aio-libs/aiosmtpd.svg?logo=lgtm&logoWidth=18
+   :target: https://lgtm.com/projects/g/aio-libs/aiosmtpd/context:python
+
 The Python standard library includes a basic
 `SMTP <http://www.faqs.org/rfcs/rfc5321.html>`__ server in the
 `smtpd <https://docs.python.org/3/library/smtpd.html>`__ module, based on the
