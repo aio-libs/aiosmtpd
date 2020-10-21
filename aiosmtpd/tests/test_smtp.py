@@ -999,7 +999,7 @@ class TestSMTPAuth(unittest.TestCase):
             self.assertEqual(code, 501)
             self.assertEqual(response, b"Auth aborted")
 
-    def test_auth_null(self):
+    def test_auth_custom_mechanism(self):
         auth_peeker.return_val = False
         with SMTP(*self.address) as client:
             client.ehlo("example.com")
