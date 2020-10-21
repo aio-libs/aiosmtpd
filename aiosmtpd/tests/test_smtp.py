@@ -1006,6 +1006,13 @@ class TestSMTPAuth(unittest.TestCase):
             code, response = client.docmd("AUTH NULL")
             assert_auth_success(self, code, response)
 
+    def test_auth_disabled_mechanism(self):
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, response = client.docmd("AUTH DONT")
+            self.assertEqual(code, 504)
+            self.assertEqual(response, b"5.5.4 Unrecognized authentication type")
+
 
 class TestRequiredAuthentication(unittest.TestCase):
     def setUp(self):
