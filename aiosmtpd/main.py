@@ -157,12 +157,7 @@ def main(args=None):
     log.debug('Starting asyncio loop')
     try:
         loop.run_forever()
-    except KeyboardInterrupt:  # pragma: nocover
-        # This is a temporary pragma:nocover as I try to write a test case
-        # that will properly run this -- then simulate a KeyboardInterrupt.
-        # I'm blocked by Windows' insane SIGINT implementation. Or, to be
-        # precise, the LACK of SIGINT implementation and needing to resort
-        # to some WinAPI black magic w.r.t Ctrl-C and Ctrl-Break.
+    except KeyboardInterrupt:
         pass
     server_loop.close()
     log.debug('Completed asyncio loop')

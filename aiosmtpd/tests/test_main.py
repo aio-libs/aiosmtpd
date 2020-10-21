@@ -246,3 +246,27 @@ class TestParseArgs(unittest.TestCase):
             parseargs(('-v',))
             self.assertEqual(cm.exception.code, 0)
         self.assertEqual(stdout.getvalue(), 'smtpd {}\n'.format(__version__))
+
+
+class TestSigint(unittest.TestCase):
+    def setUp(self):
+        default_loop = asyncio.get_event_loop()
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self.addCleanup(asyncio.set_event_loop, default_loop)
+
+    def test_keyboard_interrupt(self):
+        """
+        main() must close loop gracefully on Ctrl-C.
+        """
+
+        def interrupt():
+            raise KeyboardInterrupt
+        self.loop.call_later(1.5, interrupt)
+
+        try:
+            main(("-n",))
+        except Exception:
+            self.fail("main() should've closed cleanly without exceptions!")
+        else:
+            self.assertFalse(self.loop.is_running())
