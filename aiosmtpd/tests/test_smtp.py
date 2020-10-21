@@ -1011,7 +1011,8 @@ class TestSMTPAuth(unittest.TestCase):
             client.ehlo("example.com")
             code, response = client.docmd("AUTH DONT")
             self.assertEqual(code, 504)
-            self.assertEqual(response, b"5.5.4 Unrecognized authentication type")
+            self.assertEqual(response,
+                             b"5.5.4 Unrecognized authentication type")
 
 
 class TestRequiredAuthentication(unittest.TestCase):
