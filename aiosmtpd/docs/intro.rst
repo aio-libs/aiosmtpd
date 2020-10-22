@@ -32,6 +32,8 @@ Relevant RFCs
   Extension for Returning Enhanced Error Codes
 * `RFC 6531 <http://www.faqs.org/rfcs/rfc6531.html>`__ - SMTP Extension for
   Internationalized Email
+* `RFC 4954 <http://www.faqs.org/rfcs/rfc4954.html>`__ - SMTP Service Extension
+  for Authentication
 
 
 Other references

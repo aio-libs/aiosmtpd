@@ -8,6 +8,7 @@ import logging
 import warnings
 
 from contextlib import ExitStack
+from unittest import TestCase
 from unittest.mock import patch
 
 
@@ -58,3 +59,26 @@ def start(plugin):
         logging.getLogger('asyncio').setLevel(logging.DEBUG)
         logging.getLogger('mail.log').setLevel(logging.DEBUG)
         warnings.filterwarnings('always', category=ResourceWarning)
+
+
+def assert_auth_success(testcase: TestCase, code, response):
+    testcase.assertEqual(code, 235)
+    testcase.assertEqual(response, b"2.7.0 Authentication successful")
+
+
+def assert_auth_invalid(testcase: TestCase, code, response):
+    testcase.assertEqual(code, 535)
+    testcase.assertEqual(response, b'5.7.8 Authentication credentials invalid')
+
+
+def assert_auth_required(testcase: TestCase, code, response):
+    testcase.assertEqual(code, 530)
+    testcase.assertEqual(response, b'5.7.0 Authentication required')
+
+
+SUPPORTED_COMMANDS_TLS: bytes = (
+    b'Supported commands: AUTH DATA EHLO HELO HELP MAIL '
+    b'NOOP QUIT RCPT RSET STARTTLS VRFY'
+)
+
+SUPPORTED_COMMANDS_NOTLS = SUPPORTED_COMMANDS_TLS.replace(b" STARTTLS", b"")

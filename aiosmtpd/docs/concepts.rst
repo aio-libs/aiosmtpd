@@ -71,6 +71,12 @@ object is created.
 
       This is the asyncio event loop instance.
 
+   .. attribute:: login_data
+
+      Contains the login information gathered during the ``AUTH`` procedure.
+      If it contains ``None``, that means authentication has not taken place
+      or has failed.
+
 
 Envelope
 --------

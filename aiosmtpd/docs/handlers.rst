@@ -89,11 +89,21 @@ The following hooks are currently defined:
     instantiated with ``decode_data=False`` (the default) or
     ``decode_data=True``.  In the former case, both ``envelope.content`` and
     ``envelope.original_content`` will be the content bytes (normalized
-    according to the transparency rules in `RFC 5321, §4.5.2
-    <https://tools.ietf.org/html/rfc5321#section-4.5.2>`_).  In the latter
+    according to the transparency rules in |RFC 5321, §4.5.2|_).  In the latter
     case, ``envelope.original_content`` will be the normalized bytes, but
     ``envelope.content`` will be the UTF-8 decoded string of the original
     content.
+
+``handle_AUTH(server, session, envelope, args)``
+    Called to handle ``AUTH`` command, if you need custom AUTH behavior.
+    You *must* comply with |RFC 4954|_.
+    Most of the time, you don't *need* to implement this hook;
+    :ref:`AUTH hooks <auth_hooks>` are provided to override/implement selctive
+    SMTP AUTH mechanisms (see below).
+
+    ``args`` will contain the list of words following the ``AUTH`` command.
+    You will need to call some ``server`` methods and modify some ``session``
+    properties. ``envelope`` is usually ignored.
 
 In addition to the SMTP command hooks, the following hooks can also be
 implemented by handlers.  These have different APIs, and are called
@@ -109,8 +119,59 @@ synchronously (i.e. they are **not** coroutines).
     handling of a connection (e.g. if an ``smtp_<command>()`` method raises an
     exception).  The exception object is passed in.  This method *must* return
     a status string, such as ``'542 Internal server error'``.  If the method
-    returns None or raises an exception, an exception will be logged, and a 500
-    code will be returned to the client.
+    returns ``None`` or raises an exception, an exception will be logged, and a
+    ``500`` code will be returned to the client.
+
+
+.. _auth_hooks:
+
+AUTH hooks
+=============
+
+In addition to the above SMTP hooks, you can also implement AUTH hooks.
+**These hooks are asynchronous**.
+Every AUTH hook is named ``auth_MECHANISM`` where ``MECHANISM`` is the all-uppercase
+mechanism that the hook will implement. AUTH hooks will be called with the SMTP
+server instance and a list of str following the ``AUTH`` command.
+
+The SMTP class provides built-in AUTH hooks for the ``LOGIN`` and ``PLAIN``
+mechanisms, named ``auth_LOGIN`` and ``auth_PLAIN``, respectively.
+If the handler class implements ``auth_LOGIN`` and/or ``auth_PLAIN``, then
+those methods of the handler instance will override the built-in methods.
+
+``auth_MECHANISM(server: SMTP, args: List[str])``
+
+  *server* is the instance of the ``SMTP`` class invoking the AUTH hook.
+  This allows the AUTH hook implementation to invoke facilities such as the
+  ``push()`` and ``_auth_interact()`` methods.
+
+  *args* is a list of string split from the string after the ``AUTH`` command.
+  ``args[0]`` is always equal to ``MECHANISM``.
+
+  The AUTH hook **must** perform the actual validation of AUTH credentials.
+  In the built-in AUTH hooks, this is done by invoking the function specified
+  by the ``auth_callback`` initialization argument. AUTH hooks in handlers
+  are NOT required to do the same.
+
+  The AUTH hook **must** return one of the following values:
+
+    * ``None`` -- an error happened during AUTH exchange/procedure, and has
+      been handled inside the hook. ``smtp_AUTH`` will not do anything more.
+
+    * ``MISSING`` -- no error during exchange, but the credentials received
+      are invalid/rejected. (``MISSING`` is a pre-instantiated object you
+      can import from ``aiosmtpd.smtp``)
+
+    * *Anything else* -- an 'identity' of the STMP user. Usually is the username
+      given during AUTH exchange/procedure, but not necessarily so; can also
+      be, for instance, a Session ID. This will be stored in the Session
+      object's ``login_data`` property (see
+      :ref:`Session and Envelopes <sessions_and_envelopes>`)
+
+**NOTE:** Defining *additional* AUTH hooks in your handler will NOT disable
+the built-in LOGIN and PLAIN hooks; if you do not want to offer the LOGIN and
+PLAIN mechanisms, specify them in the ``auth_exclude_mechanism`` parameter
+of the :ref:`SMTP class<smtp_api>`.
 
 
 Built-in handlers
@@ -228,3 +289,7 @@ We open up the mailbox again, and all three messages are waiting for us.
 .. _ArgumentParser: https://docs.python.org/3/library/argparse.html#argumentparser-objects
 .. _`email.message.Message`: https://docs.python.org/3/library/email.compat32-message.html#email.message.Message
 .. _Maildir: https://docs.python.org/3/library/mailbox.html#maildir
+.. _RFC 4954: https://tools.ietf.org/html/rfc4954
+.. |RFC 4954| replace:: **RFC 4954**
+.. _RFC 5321, §4.5.2: https://tools.ietf.org/html/rfc5321#section-4.5.2
+.. |RFC 5321, §4.5.2| replace:: **RFC 5321, §4.5.2**

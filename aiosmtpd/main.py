@@ -137,23 +137,31 @@ def main(args=None):
     if args.debug > 2:
         loop.set_debug(enabled=True)
 
-    log.info('Server listening on %s:%s', args.host, args.port)
+    log.debug('Attempting to start server on %s:%s', args.host, args.port)
+    server = server_loop = None
+    try:
+        server = loop.create_server(factory, host=args.host, port=args.port)
+        server_loop = loop.run_until_complete(server)
+    except RuntimeError as e:  # pragma: nocover
+        log.critical("\u001b[33;1m" + "#" * 600 + "\u001b[0m",
+                     exc_info=e)
+        raise
+    log.debug(f"server_loop = {server_loop}")
+    log.info('Server is listening on %s:%s', args.host, args.port)
 
-    server = loop.run_until_complete(
-        loop.create_server(factory, host=args.host, port=args.port))
     # Signal handlers are only supported on *nix, so just ignore the failure
     # to set this on Windows.
     with suppress(NotImplementedError):
         loop.add_signal_handler(signal.SIGINT, loop.stop)
 
-    log.info('Starting asyncio loop')
+    log.debug('Starting asyncio loop')
     try:
         loop.run_forever()
     except KeyboardInterrupt:
         pass
-    server.close()
-    log.info('Completed asyncio loop')
-    loop.run_until_complete(server.wait_closed())
+    server_loop.close()
+    log.debug('Completed asyncio loop')
+    loop.run_until_complete(server_loop.wait_closed())
     loop.close()
 
 

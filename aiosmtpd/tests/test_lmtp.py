@@ -48,5 +48,5 @@ class TestLMTP(unittest.TestCase):
             code, response = client.docmd('HELP')
             self.assertEqual(code, 250)
             self.assertEqual(response,
-                             b'Supported commands: DATA HELP LHLO MAIL '
+                             b'Supported commands: AUTH DATA HELP LHLO MAIL '
                              b'NOOP QUIT RCPT RSET VRFY')

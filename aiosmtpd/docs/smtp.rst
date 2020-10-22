@@ -66,7 +66,7 @@ Because we prefixed the ``smtp_PING()`` method with the ``@syntax()``
 decorator, the command shows up in the ``HELP`` output.
 
     >>> print(client.help().decode('utf-8'))
-    Supported commands: DATA EHLO HELO HELP MAIL NOOP PING QUIT RCPT RSET VRFY
+    Supported commands: AUTH DATA EHLO HELO HELP MAIL NOOP PING QUIT RCPT RSET VRFY
 
 And we can get more detailed help on the new command.
 
@@ -98,10 +98,12 @@ override to provide additional responses.
     server.
 
 
+.. _smtp_api:
+
 SMTP API
 ========
 
-.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, decode_data=False, hostname=None, ident=None, tls_context=None, require_starttls=False, timeout=300, loop=None)
+.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, decode_data=False, hostname=None, ident=None, tls_context=None, require_starttls=False, timeout=300, auth_required=False, auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, loop=None)
 
    *handler* is an instance of a :ref:`handler <handlers>` class.
 
@@ -134,6 +136,24 @@ SMTP API
    *timeout* is the number of seconds to wait between valid SMTP commands.
    After this time the connection will be closed by the server.  The default
    is 300 seconds, as per `RFC 2821`_.
+
+   *auth_required* specifies whether SMTP Authentication is mandatory or
+   not for the session. This impacts some SMTP commands such as HELP, MAIL
+   FROM, RCPT TO, and others.
+
+   *auth_require_tls* specifies whether ``STARTTLS`` must be used before
+   AUTH exchange or not. If you set this to ``False`` then AUTH exchange can
+   be done outside a TLS context, but the class will warn you of security
+   considerations. Please note that *require_starttls* takes precedence
+   over this setting.
+
+   *auth_exclude_mechanism* is an ``Iterable[str]`` that specifies SMTP AUTH
+   mechanisms to NOT use.
+
+   *auth_callback* is a function that accepts three arguments: ``mechanism: str``,
+   ``login: bytes``, and ``password: bytes``. Based on these args, the function
+   must return a ``bool`` that indicates whether the client's authentication
+   attempt is accepted/successful or not.
 
    *loop* is the asyncio event loop to use.  If not given,
    :meth:`asyncio.new_event_loop()` is called to create the event loop.
@@ -183,6 +203,10 @@ SMTP API
 
       The event loop being used.  This will either be the given *loop*
       argument, or the new event loop that was created.
+
+   .. attribute:: authenticated
+
+      A flag that indicates whether authentication had succeeded.
 
    .. method:: _create_session()
 

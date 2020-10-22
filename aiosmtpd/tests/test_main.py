@@ -1,14 +1,11 @@
 import os
-import signal
 import asyncio
 import logging
 import unittest
 
-from aiosmtpd.handlers import Debugging
 from aiosmtpd.main import main, parseargs
-from aiosmtpd.smtp import SMTP, __version__
+from aiosmtpd.smtp import __version__
 from contextlib import ExitStack
-from functools import partial
 from io import StringIO
 from unittest.mock import patch
 
@@ -133,11 +130,11 @@ class TestMain(unittest.TestCase):
     def test_debug_0(self):
         # For this test, the runner will have already set the log level so it
         # may not be logging.ERROR.
-        log = logging.getLogger('mail.log')
-        default_level = log.getEffectiveLevel()
-        with patch.object(log, 'info'):
+        _log = logging.getLogger('mail.log')
+        default_level = _log.getEffectiveLevel()
+        with patch.object(_log, 'info'):
             main(('-n',))
-            self.assertEqual(log.getEffectiveLevel(), default_level)
+            self.assertEqual(_log.getEffectiveLevel(), default_level)
 
     def test_debug_1(self):
         # Mock the logger to eliminate console noise.
@@ -157,91 +154,6 @@ class TestMain(unittest.TestCase):
             main(('-n', '-ddd'))
             self.assertEqual(log.getEffectiveLevel(), logging.DEBUG)
             self.assertTrue(asyncio.get_event_loop().get_debug())
-
-
-class TestLoop(unittest.TestCase):
-    def setUp(self):
-        # We mock out so much of this, is it even worthwhile testing?  Well, it
-        # does give us coverage.
-        self.loop = asyncio.get_event_loop()
-        pfunc = partial(patch.object, self.loop)
-        resources = ExitStack()
-        self.addCleanup(resources.close)
-        self.create_server = resources.enter_context(pfunc('create_server'))
-        self.run_until_complete = resources.enter_context(
-            pfunc('run_until_complete'))
-        self.add_signal_handler = resources.enter_context(
-            pfunc('add_signal_handler'))
-        resources.enter_context(
-            patch.object(logging.getLogger('mail.log'), 'info'))
-        self.run_forever = resources.enter_context(pfunc('run_forever'))
-
-    def test_loop(self):
-        main(('-n',))
-        # create_server() is called with a partial as the factory, and a
-        # socket object.
-        self.assertEqual(self.create_server.call_count, 1)
-        positional, keywords = self.create_server.call_args
-        self.assertEqual(positional[0].func, SMTP)
-        self.assertEqual(len(positional[0].args), 1)
-        self.assertIsInstance(positional[0].args[0], Debugging)
-        self.assertEqual(positional[0].keywords, dict(
-            data_size_limit=None,
-            enable_SMTPUTF8=False))
-        self.assertEqual(sorted(keywords), ['host', 'port'])
-        # run_until_complete() was called once.  The argument isn't important.
-        self.assertTrue(self.run_until_complete.called)
-        # add_signal_handler() is called with two arguments.
-        self.assertEqual(self.add_signal_handler.call_count, 1)
-        signal_number, callback = self.add_signal_handler.call_args[0]
-        self.assertEqual(signal_number, signal.SIGINT)
-        self.assertEqual(callback, self.loop.stop)
-        # run_forever() was called once.
-        self.assertEqual(self.run_forever.call_count, 1)
-
-    def test_loop_keyboard_interrupt(self):
-        # We mock out so much of this, is it even a worthwhile test?  Well, it
-        # does give us coverage.
-        self.run_forever.side_effect = KeyboardInterrupt
-        main(('-n',))
-        # loop.run_until_complete() was still executed.
-        self.assertTrue(self.run_until_complete.called)
-
-    def test_s(self):
-        # We mock out so much of this, is it even a worthwhile test?  Well, it
-        # does give us coverage.
-        main(('-n', '-s', '3000'))
-        positional, keywords = self.create_server.call_args
-        self.assertEqual(positional[0].keywords, dict(
-            data_size_limit=3000,
-            enable_SMTPUTF8=False))
-
-    def test_size(self):
-        # We mock out so much of this, is it even a worthwhile test?  Well, it
-        # does give us coverage.
-        main(('-n', '--size', '3000'))
-        positional, keywords = self.create_server.call_args
-        self.assertEqual(positional[0].keywords, dict(
-            data_size_limit=3000,
-            enable_SMTPUTF8=False))
-
-    def test_u(self):
-        # We mock out so much of this, is it even a worthwhile test?  Well, it
-        # does give us coverage.
-        main(('-n', '-u'))
-        positional, keywords = self.create_server.call_args
-        self.assertEqual(positional[0].keywords, dict(
-            data_size_limit=None,
-            enable_SMTPUTF8=True))
-
-    def test_smtputf8(self):
-        # We mock out so much of this, is it even a worthwhile test?  Well, it
-        # does give us coverage.
-        main(('-n', '--smtputf8'))
-        positional, keywords = self.create_server.call_args
-        self.assertEqual(positional[0].keywords, dict(
-            data_size_limit=None,
-            enable_SMTPUTF8=True))
 
 
 class TestParseArgs(unittest.TestCase):
@@ -334,3 +246,27 @@ class TestParseArgs(unittest.TestCase):
             parseargs(('-v',))
             self.assertEqual(cm.exception.code, 0)
         self.assertEqual(stdout.getvalue(), 'smtpd {}\n'.format(__version__))
+
+
+class TestSigint(unittest.TestCase):
+    def setUp(self):
+        default_loop = asyncio.get_event_loop()
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self.addCleanup(asyncio.set_event_loop, default_loop)
+
+    def test_keyboard_interrupt(self):
+        """
+        main() must close loop gracefully on Ctrl-C.
+        """
+
+        def interrupt():
+            raise KeyboardInterrupt
+        self.loop.call_later(1.5, interrupt)
+
+        try:
+            main(("-n",))
+        except Exception:
+            self.fail("main() should've closed cleanly without exceptions!")
+        else:
+            self.assertFalse(self.loop.is_running())

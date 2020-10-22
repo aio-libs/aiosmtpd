@@ -5,6 +5,10 @@ import pkg_resources
 from aiosmtpd.controller import Controller as BaseController
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as SMTPProtocol
+from aiosmtpd.testing.helpers import (
+    SUPPORTED_COMMANDS_TLS,
+    assert_auth_invalid,
+)
 from email.mime.text import MIMEText
 from smtplib import SMTP
 
@@ -46,6 +50,15 @@ class TLSController(Controller):
             self.handler,
             decode_data=True,
             require_starttls=False,
+            tls_context=get_tls_context())
+
+
+class RequireTLSAuthDecodingController(Controller):
+    def factory(self):
+        return SMTPProtocol(
+            self.handler,
+            decode_data=True,
+            auth_require_tls=True,
             tls_context=get_tls_context())
 
 
@@ -111,9 +124,7 @@ class TestStartTLS(unittest.TestCase):
             # Don't get tricked by smtplib processing of the response.
             code, response = client.docmd('HELP')
             self.assertEqual(code, 250)
-            self.assertEqual(response,
-                             b'Supported commands: DATA EHLO HELO HELP MAIL '
-                             b'NOOP QUIT RCPT RSET STARTTLS VRFY')
+            self.assertEqual(response, SUPPORTED_COMMANDS_TLS)
 
 
 class TestTLSForgetsSessionData(unittest.TestCase):
@@ -199,3 +210,27 @@ class TestRequireTLS(unittest.TestCase):
             client.ehlo('example.com')
             code, response = client.docmd('DATA')
             self.assertEqual(code, 530)
+
+
+class TestRequireTLSAUTH(unittest.TestCase):
+    def setUp(self):
+        controller = RequireTLSAuthDecodingController(Sink)
+        controller.start()
+        self.addCleanup(controller.stop)
+        self.address = (controller.hostname, controller.port)
+
+    def test_auth_notls(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd("AUTH ")
+            self.assertEqual(code, 538)
+            self.assertEqual(response,
+                             b"5.7.11 Encryption required for requested "
+                             b"authentication mechanism")
+
+    def test_auth_tls(self):
+        with SMTP(*self.address) as client:
+            client.starttls()
+            client.ehlo('example.com')
+            code, response = client.docmd('AUTH PLAIN AHRlc3QAdGVzdA==')
+            assert_auth_invalid(self, code, response)
