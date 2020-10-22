@@ -18,3 +18,4 @@ source =
 exclude_lines =
     pragma: nocover
     pragma: no${PLATFORM}
+    pragma: skipif_${PY_39}_py39
