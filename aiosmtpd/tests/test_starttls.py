@@ -6,8 +6,8 @@ from aiosmtpd.controller import Controller as BaseController
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import Session as Sess_, SMTP as SMTPProtocol
 from aiosmtpd.testing.helpers import (
+    SMTP_with_asserts,
     SUPPORTED_COMMANDS_TLS,
-    assert_auth_invalid,
 )
 from email.mime.text import MIMEText
 from smtplib import SMTP
@@ -276,8 +276,7 @@ class TestRequireTLSAUTH(unittest.TestCase):
                              b"authentication mechanism")
 
     def test_auth_tls(self):
-        with SMTP(*self.address) as client:
+        with SMTP_with_asserts(self, *self.address) as client:
             client.starttls()
             client.ehlo('example.com')
-            code, response = client.docmd('AUTH PLAIN AHRlc3QAdGVzdA==')
-            assert_auth_invalid(self, code, response)
+            client.assert_auth_invalid('AUTH PLAIN AHRlc3QAdGVzdA==')
