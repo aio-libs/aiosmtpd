@@ -1,5 +1,6 @@
 """Testing helpers."""
 
+import ssl
 import sys
 import socket
 import struct
@@ -8,8 +9,10 @@ import logging
 import warnings
 
 from contextlib import ExitStack
+from pkg_resources import resource_filename
+from typing import Optional
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 def reset_connection(client):
@@ -82,3 +85,37 @@ SUPPORTED_COMMANDS_TLS: bytes = (
 )
 
 SUPPORTED_COMMANDS_NOTLS = SUPPORTED_COMMANDS_TLS.replace(b" STARTTLS", b"")
+
+
+def get_server_context():
+    tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    tls_context.load_cert_chain(
+        resource_filename('aiosmtpd.tests.certs', 'server.crt'),
+        resource_filename('aiosmtpd.tests.certs', 'server.key'),
+    )
+    return tls_context
+
+
+class ExitStackWithMock(ExitStack):
+
+    def __init__(self, test_case: Optional[TestCase] = None):
+        super().__init__()
+        if isinstance(test_case, TestCase):
+            test_case.addCleanup(self.close)
+
+    def enter_patch(self, target: str) -> Mock:
+        return self.enter_context(patch(target))
+
+    def enter_patch_object(self, obj, target: str) -> Mock:
+        return self.enter_context(patch.object(obj, target))
+
+
+class ReceivingHandler:
+    box = None
+
+    def __init__(self):
+        self.box = []
+
+    async def handle_DATA(self, server, session, envelope):
+        self.box.append(envelope)
+        return '250 OK'
