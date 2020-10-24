@@ -2,6 +2,18 @@
  NEWS for aiosmtpd
 ===================
 
+1.2.3 (aiosmtpd-next)
+=====================
+
+Added
+-----
+* Test for ``SMTP.__init__`` behavior after taking out code that edits TLS Context
+
+Fixed/Improved
+--------------
+* :class:`SMTP` no longer edits user-supplied SSL Context (closes #191)
+
+
 1.2.2 (2020-11-08)
 ==================
 
