@@ -7,6 +7,7 @@ aiosmtpd-next
 
 Added
 -----
+* **Apache License version 2.0**
 * Support for SMTP ``AUTH``, with AUTH hooks feature
 * Built-in implementation for ``AUTH PLAIN`` and ``AUTH LOGIN`` logic (fixes #102)
 * Feature to inject keyword args during server class instantiation in ``Controller.factory``
