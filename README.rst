@@ -2,6 +2,30 @@
  aiosmtpd - An asyncio based SMTP server
 =========================================
 
+| |github license| |travis ci| |codecov| |LGTM.com| |readthedocs| |PyPI|
+|
+| |Discourse|
+
+.. |github license| image:: https://img.shields.io/github/license/aio-libs/aiosmtpd
+   :alt: GitHub
+.. |travis ci| image:: https://travis-ci.com/aio-libs/aiosmtpd.svg?branch=master
+   :target: https://travis-ci.com/github/aio-libs/aiosmtpd
+   :alt: Travis CI Build Status
+.. |codecov| image:: https://codecov.io/github/aio-libs/aiosmtpd/coverage.svg?branch=master
+   :target: https://codecov.io/github/aio-libs/aiosmtpd?branch=master
+   :alt: Code Coverage
+.. |LGTM.com| image:: https://img.shields.io/lgtm/grade/python/github/aio-libs/aiosmtpd.svg?logo=lgtm&logoWidth=18
+   :target: https://lgtm.com/projects/g/aio-libs/aiosmtpd/context:python
+   :alt: Semmle/LGTM.com quality
+.. |readthedocs| image:: https://readthedocs.org/projects/aiosmtpd/badge/?version=latest
+   :target: https://aiosmtpd.readthedocs.io/en/latest/?badge=latest
+   :alt: Documentation Status
+.. |PyPI| image:: https://badge.fury.io/py/aiosmtpd.svg
+   :target: https://badge.fury.io/py/aiosmtpd
+   :alt: PyPI Package
+.. |Discourse| image:: https://img.shields.io/discourse/status?server=https%3A%2F%2Faio-libs.discourse.group%2F&style=social
+   :alt: Discourse status
+
 The Python standard library includes a basic
 `SMTP <http://www.faqs.org/rfcs/rfc5321.html>`__ server in the
 `smtpd <https://docs.python.org/3/library/smtpd.html>`__ module, based on the
