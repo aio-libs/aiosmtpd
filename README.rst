@@ -7,7 +7,8 @@
 | |Discourse|
 
 .. |github license| image:: https://img.shields.io/github/license/aio-libs/aiosmtpd
-   :alt: GitHub
+   :target: https://github.com/aio-libs/aiosmtpd/blob/master/LICENSE
+   :alt: Project License on GitHub
 .. |travis ci| image:: https://travis-ci.com/aio-libs/aiosmtpd.svg?branch=master
    :target: https://travis-ci.com/github/aio-libs/aiosmtpd
    :alt: Travis CI Build Status
@@ -24,6 +25,7 @@
    :target: https://badge.fury.io/py/aiosmtpd
    :alt: PyPI Package
 .. |Discourse| image:: https://img.shields.io/discourse/status?server=https%3A%2F%2Faio-libs.discourse.group%2F&style=social
+   :target: https://aio-libs.discourse.group/
    :alt: Discourse status
 
 The Python standard library includes a basic
