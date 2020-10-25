@@ -49,7 +49,7 @@ protocols.
 Requirements
 ============
 
-You need at least Python 3.5 to use this library.  Both Windows and \*nix are
+You need **at least Python 3.6** to use this library.  Both Windows and \*nix are
 supported.
 
 
@@ -102,17 +102,17 @@ test suite for Python 3.  Once you've got that, run::
 
 Individual tests can be run like this::
 
-    $ tox -e py35-nocov -- -P <pattern>
+    $ tox -e py36-nocov -- -P <pattern>
 
 where *<pattern>* is a Python regular expression matching a test name.
 
 You can also add the ``-E`` option to boost debugging output, e.g.::
 
-    $ tox -e py35-nocov -- -E
+    $ tox -e py36-nocov -- -E
 
 and these options can be combined::
 
-    $ tox -e py35-nocov -- -P test_connection_reset_during_DATA -E
+    $ tox -e py36-nocov -- -P test_connection_reset_during_DATA -E
 
 
 Supported 'testenvs'
