@@ -466,6 +466,8 @@ class TestProxyMocked(unittest.TestCase):
         controller.start()
         self.addCleanup(controller.stop)
         self.address = (controller.hostname, controller.port)
+        self.resources = ExitStack()
+        self.addCleanup(self.resources.close)
         self.source = """\
 From: Anne Person <anne@example.com>
 To: Bart Person <bart@example.com>
@@ -475,42 +477,40 @@ Testing
 """
 
     def test_recipients_refused(self):
-        with ExitStack() as resources:
-            log_mock = resources.enter_context(patch('aiosmtpd.handlers.log'))
-            mock = resources.enter_context(
-                patch('aiosmtpd.handlers.smtplib.SMTP'))
-            mock().sendmail.side_effect = SMTPRecipientsRefused({
-                'bart@example.com': (500, 'Bad Bart'),
-                })
-            client = resources.enter_context(SMTP(*self.address))
-            client.sendmail(
-                'anne@example.com', ['bart@example.com'], self.source)
-            client.quit()
-            # The log contains information about what happened in the proxy.
-            self.assertEqual(
-                log_mock.info.call_args_list, [
-                    call('got SMTPRecipientsRefused'),
-                    call('we got some refusals: %s',
-                         {'bart@example.com': (500, 'Bad Bart')})]
-                )
+        BAD_BART = {'bart@example.com': (500, 'Bad Bart')}
+        resources = self.resources
+        log_mock = resources.enter_context(patch('aiosmtpd.handlers.log'))
+        mock = resources.enter_context(
+            patch('aiosmtpd.handlers.smtplib.SMTP'))
+        mock().sendmail.side_effect = SMTPRecipientsRefused(BAD_BART)
+        client = resources.enter_context(SMTP(*self.address))
+        client.sendmail(
+            'anne@example.com', ['bart@example.com'], self.source)
+        client.quit()
+        # The log contains information about what happened in the proxy.
+        self.assertEqual(
+            log_mock.info.call_args_list, [
+                call('got SMTPRecipientsRefused'),
+                call('we got some refusals: %s', BAD_BART)]
+            )
 
     def test_oserror(self):
-        with ExitStack() as resources:
-            log_mock = resources.enter_context(patch('aiosmtpd.handlers.log'))
-            mock = resources.enter_context(
-                patch('aiosmtpd.handlers.smtplib.SMTP'))
-            mock().sendmail.side_effect = OSError
-            client = resources.enter_context(SMTP(*self.address))
-            client.sendmail(
-                'anne@example.com', ['bart@example.com'], self.source)
-            client.quit()
-            # The log contains information about what happened in the proxy.
-            self.assertEqual(
-                log_mock.info.call_args_list, [
-                    call('we got some refusals: %s',
-                         {'bart@example.com': (-1, 'ignore')}),
-                    ]
-                )
+        resources = self.resources
+        log_mock = resources.enter_context(patch('aiosmtpd.handlers.log'))
+        mock = resources.enter_context(
+            patch('aiosmtpd.handlers.smtplib.SMTP'))
+        mock().sendmail.side_effect = OSError
+        client = resources.enter_context(SMTP(*self.address))
+        client.sendmail(
+            'anne@example.com', ['bart@example.com'], self.source)
+        client.quit()
+        # The log contains information about what happened in the proxy.
+        self.assertEqual(
+            log_mock.info.call_args_list, [
+                call('we got some refusals: %s',
+                     {'bart@example.com': (-1, 'ignore')}),
+                ]
+            )
 
 
 class HELOHandler:
