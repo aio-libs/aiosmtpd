@@ -1,13 +1,13 @@
-import ssl
 import unittest
-import pkg_resources
 
 from aiosmtpd.controller import Controller as BaseController
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import Session as Sess_, SMTP as SMTPProtocol
 from aiosmtpd.testing.helpers import (
+    ReceivingHandler,
     SMTP_with_asserts,
     SUPPORTED_COMMANDS_TLS,
+    get_server_context,
 )
 from email.mime.text import MIMEText
 from smtplib import SMTP
@@ -18,30 +18,13 @@ class Controller(BaseController):
         return SMTPProtocol(self.handler)
 
 
-class ReceivingHandler:
-    def __init__(self):
-        self.box = []
-
-    async def handle_DATA(self, server, session, envelope):
-        self.box.append(envelope)
-        return '250 OK'
-
-
-def get_tls_context():
-    tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    tls_context.load_cert_chain(
-        pkg_resources.resource_filename('aiosmtpd.tests.certs', 'server.crt'),
-        pkg_resources.resource_filename('aiosmtpd.tests.certs', 'server.key'))
-    return tls_context
-
-
 class TLSRequiredController(Controller):
     def factory(self):
         return SMTPProtocol(
             self.handler,
             decode_data=True,
             require_starttls=True,
-            tls_context=get_tls_context())
+            tls_context=get_server_context())
 
 
 class TLSController(Controller):
@@ -50,7 +33,7 @@ class TLSController(Controller):
             self.handler,
             decode_data=True,
             require_starttls=False,
-            tls_context=get_tls_context())
+            tls_context=get_server_context())
 
 
 class RequireTLSAuthDecodingController(Controller):
@@ -59,7 +42,7 @@ class RequireTLSAuthDecodingController(Controller):
             self.handler,
             decode_data=True,
             auth_require_tls=True,
-            tls_context=get_tls_context())
+            tls_context=get_server_context())
 
 
 class HandshakeFailingHandler:

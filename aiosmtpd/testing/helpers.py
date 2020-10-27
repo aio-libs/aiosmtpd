@@ -1,10 +1,12 @@
 """Testing helpers."""
 
+import ssl
 import sys
 import socket
 import struct
 import smtplib
 
+from pkg_resources import resource_filename
 from aiosmtpd.controller import Controller
 from unittest import TestCase
 from typing import Tuple
@@ -113,3 +115,23 @@ class SMTP_with_asserts(smtplib.SMTP):
         code, resp_text = self.helo(name)
         self._testcase.assertEqual(250, code)
         return resp_text
+
+
+def get_server_context():
+    tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    tls_context.load_cert_chain(
+        resource_filename('aiosmtpd.tests.certs', 'server.crt'),
+        resource_filename('aiosmtpd.tests.certs', 'server.key'),
+    )
+    return tls_context
+
+
+class ReceivingHandler:
+    box = None
+
+    def __init__(self):
+        self.box = []
+
+    async def handle_DATA(self, server, session, envelope):
+        self.box.append(envelope)
+        return '250 OK'

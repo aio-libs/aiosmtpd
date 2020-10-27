@@ -11,6 +11,7 @@ from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import MISSING, SMTP as Server, __ident__ as GREETING
 from aiosmtpd.testing.helpers import (
     SMTP_with_asserts,
+    ReceivingHandler,
     SUPPORTED_COMMANDS_NOTLS,
     reset_connection,
 )
@@ -100,17 +101,6 @@ class RequiredAuthDecodingController(Controller):
         return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
                       auth_require_tls=False, auth_callback=authenticator,
                       auth_required=True)
-
-
-class ReceivingHandler:
-    box = None
-
-    def __init__(self):
-        self.box = []
-
-    async def handle_DATA(self, server, session, envelope):
-        self.box.append(envelope)
-        return '250 OK'
 
 
 class StoreEnvelopeOnVRFYHandler:
