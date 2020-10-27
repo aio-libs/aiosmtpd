@@ -5,6 +5,7 @@ import unittest
 
 from aiosmtpd.main import main, parseargs
 from aiosmtpd.smtp import __version__
+from aiosmtpd.testing.helpers import ExitStackWithMock
 from contextlib import ExitStack
 from io import StringIO
 from unittest.mock import patch
@@ -14,8 +15,8 @@ try:
 except ImportError:
     pwd = None
 
-has_setuid = hasattr(os, 'setuid')
-log = logging.getLogger('mail.log')
+HAS_SETUID = hasattr(os, 'setuid')
+MAIL_LOG = logging.getLogger('mail.log')
 
 
 class TestHandler1:
@@ -33,9 +34,9 @@ class TestHandler2:
 
 class TestMain(unittest.TestCase):
     def setUp(self):
-        old_log_level = log.getEffectiveLevel()
-        self.addCleanup(log.setLevel, old_log_level)
-        self.resources = ExitStack()
+        old_log_level = MAIL_LOG.getEffectiveLevel()
+        self.addCleanup(MAIL_LOG.setLevel, old_log_level)
+        self.resources = ExitStackWithMock(self)
         # Create a new event loop, and arrange for that loop to end almost
         # immediately.  This will allow the calls to main() in these tests to
         # also exit almost immediately.  Otherwise, the foreground test
@@ -73,10 +74,11 @@ class TestMain(unittest.TestCase):
 
     @unittest.skipIf(pwd is None, 'No pwd module available')
     def test_setuid_permission_error(self):
-        mock = self.resources.enter_context(
-            patch('os.setuid', side_effect=PermissionError))
+        # mock = self.resources.enter_context(
+        mock = self.resources.enter_patch('os.setuid',
+                                          side_effect=PermissionError)
         stderr = StringIO()
-        self.resources.enter_context(patch('sys.stderr', stderr))
+        self.resources.enter_patch('sys.stderr', stderr)
         with self.assertRaises(SystemExit) as cm:
             main(args=())
         self.assertEqual(cm.exception.code, 1)
@@ -87,9 +89,9 @@ class TestMain(unittest.TestCase):
 
     @unittest.skipIf(pwd is None, 'No pwd module available')
     def test_setuid_no_pwd_module(self):
-        self.resources.enter_context(patch('aiosmtpd.main.pwd', None))
+        self.resources.enter_patch('aiosmtpd.main.pwd', None)
         stderr = StringIO()
-        self.resources.enter_context(patch('sys.stderr', stderr))
+        self.resources.enter_patch('sys.stderr', stderr)
         with self.assertRaises(SystemExit) as cm:
             main(args=())
         self.assertEqual(cm.exception.code, 1)
@@ -103,26 +105,24 @@ class TestMain(unittest.TestCase):
             stderr.getvalue(),
         )
 
-    @unittest.skipUnless(has_setuid, 'setuid is unvailable')
+    @unittest.skipUnless(HAS_SETUID, 'setuid is unvailable')
     def test_n(self):
-        self.resources.enter_context(patch('aiosmtpd.main.pwd', None))
-        self.resources.enter_context(
-            patch('os.setuid', side_effect=PermissionError))
+        self.resources.enter_patch('aiosmtpd.main.pwd', None)
+        self.resources.enter_patch('os.setuid', side_effect=PermissionError)
         # Just to short-circuit the main() function.
-        self.resources.enter_context(
-            patch('aiosmtpd.main.partial', side_effect=RuntimeError))
+        self.resources.enter_patch('aiosmtpd.main.partial',
+                                   side_effect=RuntimeError)
         # Getting the RuntimeError means that a SystemExit was never
         # triggered in the setuid section.
         self.assertRaises(RuntimeError, main, ('-n',))
 
-    @unittest.skipUnless(has_setuid, 'setuid is unvailable')
+    @unittest.skipUnless(HAS_SETUID, 'setuid is unvailable')
     def test_nosetuid(self):
-        self.resources.enter_context(patch('aiosmtpd.main.pwd', None))
-        self.resources.enter_context(
-            patch('os.setuid', side_effect=PermissionError))
+        self.resources.enter_patch('aiosmtpd.main.pwd', None)
+        self.resources.enter_patch('os.setuid', side_effect=PermissionError)
         # Just to short-circuit the main() function.
-        self.resources.enter_context(
-            patch('aiosmtpd.main.partial', side_effect=RuntimeError))
+        self.resources.enter_patch('aiosmtpd.main.partial',
+                                   side_effect=RuntimeError)
         # Getting the RuntimeError means that a SystemExit was never
         # triggered in the setuid section.
         self.assertRaises(RuntimeError, main, ('--nosetuid',))
@@ -130,30 +130,31 @@ class TestMain(unittest.TestCase):
     def test_debug_0(self):
         # For this test, the runner will have already set the log level so it
         # may not be logging.ERROR.
-        _log = logging.getLogger('mail.log')
-        default_level = _log.getEffectiveLevel()
-        with patch.object(_log, 'info'):
-            main(('-n',))
-            self.assertEqual(_log.getEffectiveLevel(), default_level)
+        default_level = MAIL_LOG.getEffectiveLevel()
+        self.resources.enter_patch_object(MAIL_LOG, "info")
+        main(('-n',))
+        self.assertEqual(MAIL_LOG.getEffectiveLevel(), default_level)
 
     def test_debug_1(self):
         # Mock the logger to eliminate console noise.
-        with patch.object(logging.getLogger('mail.log'), 'info'):
-            main(('-n', '-d'))
-            self.assertEqual(log.getEffectiveLevel(), logging.INFO)
+        self.resources.enter_patch_object(MAIL_LOG, "info")
+        main(('-n', '-d'))
+        self.assertEqual(MAIL_LOG.getEffectiveLevel(), logging.INFO)
 
     def test_debug_2(self):
         # Mock the logger to eliminate console noise.
-        with patch.object(logging.getLogger('mail.log'), 'info'):
-            main(('-n', '-dd'))
-            self.assertEqual(log.getEffectiveLevel(), logging.DEBUG)
+        self.resources.enter_patch_object(MAIL_LOG, "info")
+        self.resources.enter_patch_object(MAIL_LOG, "debug")
+        main(('-n', '-dd'))
+        self.assertEqual(MAIL_LOG.getEffectiveLevel(), logging.DEBUG)
 
     def test_debug_3(self):
         # Mock the logger to eliminate console noise.
-        with patch.object(logging.getLogger('mail.log'), 'info'):
-            main(('-n', '-ddd'))
-            self.assertEqual(log.getEffectiveLevel(), logging.DEBUG)
-            self.assertTrue(asyncio.get_event_loop().get_debug())
+        self.resources.enter_patch_object(MAIL_LOG, "info")
+        self.resources.enter_patch_object(MAIL_LOG, "debug")
+        main(('-n', '-ddd'))
+        self.assertEqual(MAIL_LOG.getEffectiveLevel(), logging.DEBUG)
+        self.assertTrue(asyncio.get_event_loop().get_debug())
 
 
 class TestParseArgs(unittest.TestCase):

@@ -6,10 +6,12 @@ import socket
 import struct
 import smtplib
 
-from pkg_resources import resource_filename
 from aiosmtpd.controller import Controller
+from contextlib import ExitStack
+from pkg_resources import resource_filename
+from typing import Optional, Tuple
 from unittest import TestCase
-from typing import Tuple
+from unittest.mock import DEFAULT, Mock, patch
 
 
 SMTPResponse = Tuple[int, bytes]
@@ -124,6 +126,24 @@ def get_server_context():
         resource_filename('aiosmtpd.tests.certs', 'server.key'),
     )
     return tls_context
+
+
+class ExitStackWithMock(ExitStack):
+
+    def __init__(self, test_case: Optional[TestCase] = None):
+        super().__init__()
+        if isinstance(test_case, TestCase):
+            test_case.addCleanup(self.close)
+
+    def enter_patch(self, target: str, new=DEFAULT, spec=None, create=False,
+                    spec_set=None, autospec=None, new_callable=None, **kwargs)\
+            -> Mock:
+        return self.enter_context(
+            patch(target, new=new, spec=spec, create=create, spec_set=spec_set,
+                  autospec=autospec, new_callable=new_callable, **kwargs))
+
+    def enter_patch_object(self, obj, target: str) -> Mock:
+        return self.enter_context(patch.object(obj, target))
 
 
 class ReceivingHandler:

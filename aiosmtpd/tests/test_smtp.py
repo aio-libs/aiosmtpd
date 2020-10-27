@@ -3,6 +3,7 @@
 import time
 import socket
 import asyncio
+import logging
 import unittest
 import warnings
 
@@ -10,13 +11,13 @@ from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import MISSING, SMTP as Server, __ident__ as GREETING
 from aiosmtpd.testing.helpers import (
+    ExitStackWithMock,
     SMTP_with_asserts,
     ReceivingHandler,
     SUPPORTED_COMMANDS_NOTLS,
     reset_connection,
 )
 from base64 import b64encode
-from contextlib import ExitStack
 from smtplib import (
     SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected)
 from typing import List
@@ -24,6 +25,7 @@ from unittest.mock import Mock, PropertyMock, patch
 
 CRLF = '\r\n'
 BCRLF = b'\r\n'
+MAIL_LOG = logging.getLogger("mail.log")
 
 
 def authenticator(mechanism, login, password):
@@ -44,19 +46,14 @@ class PeekerHandler:
         self.session = None
 
     async def handle_MAIL(
-            self, server, session, envelope, address, mail_options
-    ):
+            self, server, session, envelope, address, mail_options):
         self.session = session
         return "250 OK"
 
-    async def auth_NULL(
-            self, server, args
-    ):
+    async def auth_NULL(self, server, args):
         return "NULL_login"
 
-    async def auth_DONT(
-            self, server, args
-    ):
+    async def auth_DONT(self, server, args):
         return MISSING
 
 
@@ -66,21 +63,21 @@ class PeekerAuth:
         self.password = None
 
     def authenticate(
-            self, mechanism: str, login: bytes, password: bytes
-    ) -> bool:
+            self, mechanism: str, login: bytes, password: bytes) -> bool:
         self.login = login
         self.password = password
         return True
 
 
-auth_peeker = PeekerAuth()
-
-
 class DecodingControllerPeekAuth(Controller):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.auth_peeker = PeekerAuth()
+
     def factory(self):
         return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
                       auth_require_tls=False,
-                      auth_callback=auth_peeker.authenticate,
+                      auth_callback=self.auth_peeker.authenticate,
                       **self.server_kwargs)
 
 
@@ -261,11 +258,11 @@ class TestSMTP(unittest.TestCase):
         controller.start()
         self.addCleanup(controller.stop)
 
-        resources = ExitStack()
-        self.client: SMTP_with_asserts = resources.enter_context(
+        self.resources = ExitStackWithMock(self)
+        self.client: SMTP_with_asserts = self.resources.enter_context(
             SMTP_with_asserts(self, from_=controller)
         )
-        self.addCleanup(resources.close)
+        self.addCleanup(self.resources.close)
 
     def test_binary(self):
         self.client.sock.send(b"\x80FAIL\r\n")
@@ -787,6 +784,7 @@ class TestSMTP(unittest.TestCase):
             'AUTH PLAIN',
             (334, b'')
         )
+        self.resources.enter_patch_object(MAIL_LOG, "warning")
         self.client.assert_cmd_resp(
             '*',
             (501, b'Auth aborted')
@@ -842,15 +840,14 @@ class TestSMTPAuth(unittest.TestCase):
             self.handler, server_kwargs={"auth_exclude_mechanism": ["DONT"]}
         )
         controller.start()
+        self.auth_peeker = controller.auth_peeker
         self.addCleanup(controller.stop)
 
-        resource = ExitStack()
-
-        self.client: SMTP_with_asserts = resource.enter_context(
+        self.resources = ExitStackWithMock(self)
+        self.client: SMTP_with_asserts = self.resources.enter_context(
             SMTP_with_asserts(self, from_=controller)
         )
-
-        self.addCleanup(resource.close)
+        self.addCleanup(self.resources.close)
 
     def test_ehlo(self):
         code, response = self.client.ehlo('example.com')
@@ -873,8 +870,8 @@ class TestSMTPAuth(unittest.TestCase):
             (334, b"")
         )
         self.client.assert_auth_success('=')
-        self.assertEqual(auth_peeker.login, None)
-        self.assertEqual(auth_peeker.password, None)
+        self.assertEqual(self.auth_peeker.login, None)
+        self.assertEqual(self.auth_peeker.password, None)
         resp = self.client.mail("alice@example.com")
         self.assertEqual((250, b"OK"), resp)
         self.assertEqual(self.handler.session.login_data, b"")
@@ -890,8 +887,8 @@ class TestSMTPAuth(unittest.TestCase):
             (334, b"UGFzc3dvcmQA")
         )
         self.client.assert_auth_success('=')
-        self.assertEqual(auth_peeker.login, None)
-        self.assertEqual(auth_peeker.password, None)
+        self.assertEqual(self.auth_peeker.login, None)
+        self.assertEqual(self.auth_peeker.password, None)
         resp = self.client.mail("alice@example.com")
         self.assertEqual((250, b"OK"), resp)
         self.assertEqual(self.handler.session.login_data, b"")
@@ -902,13 +899,14 @@ class TestSMTPAuth(unittest.TestCase):
             "AUTH LOGIN",
             (334, b"VXNlciBOYW1lAA==")
         )
+        self.resources.enter_patch_object(MAIL_LOG, "warning")
         self.client.assert_cmd_resp(
             '*',
             (501, b"Auth aborted")
         )
 
     def test_auth_login_abort_password(self):
-        auth_peeker.return_val = False
+        self.auth_peeker.return_val = False
         self.client.assert_ehlo_ok("example.com")
         self.client.assert_cmd_resp(
             "AUTH LOGIN",
@@ -918,13 +916,14 @@ class TestSMTPAuth(unittest.TestCase):
             '=',
             (334, b"UGFzc3dvcmQA")
         )
+        self.resources.enter_patch_object(MAIL_LOG, "warning")
         self.client.assert_cmd_resp(
             '*',
             (501, b"Auth aborted")
         )
 
     def test_auth_custom_mechanism(self):
-        auth_peeker.return_val = False
+        self.auth_peeker.return_val = False
         self.client.assert_ehlo_ok("example.com")
         self.client.assert_auth_success("AUTH NULL")
 
@@ -944,7 +943,7 @@ class TestSMTPLowLevel(unittest.TestCase):
 
     def test_warn_auth(self):
         self.controller.start()
-        with ExitStack() as stack:
+        with ExitStackWithMock(self) as stack:
             w: List[warnings.WarningMessage]
             w = stack.enter_context(warnings.catch_warnings(record=True))
             stack.enter_context(SMTP(*self.address))
@@ -962,7 +961,7 @@ class TestSMTPRequiredAuthentication(unittest.TestCase):
         controller.start()
         self.addCleanup(controller.stop)
 
-        resources = ExitStack()
+        resources = ExitStackWithMock(self)
         self.w = resources.enter_context(
             warnings.catch_warnings(record=True))
         warnings.filterwarnings("ignore", category=UserWarning)
@@ -1120,6 +1119,7 @@ class TestResetCommands(unittest.TestCase):
 
 
 class TestSMTPWithController(unittest.TestCase):
+
     def test_mail_with_size_too_large(self):
         controller = SizedController(Sink(), 9999)
         controller.start()
@@ -1243,10 +1243,10 @@ Testing
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
+        with ExitStackWithMock(self) as resources:
             # Suppress logging to the console during the tests.  Depending on
             # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
+            resources.enter_patch('aiosmtpd.smtp.log.exception')
             client = resources.enter_context(
                 SMTP(controller.hostname, controller.port))
             self.assertEqual(
@@ -1261,10 +1261,10 @@ Testing
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
+        with ExitStackWithMock(self) as resources:
             # Suppress logging to the console during the tests.  Depending on
             # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
+            resources.enter_patch('aiosmtpd.smtp.log.exception')
             client = resources.enter_context(
                 SMTP(controller.hostname, controller.port))
             self.assertEqual(
@@ -1280,10 +1280,10 @@ Testing
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
+        with ExitStackWithMock(self) as resources:
             # Suppress logging to the console during the tests.  Depending on
             # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
+            resources.enter_patch('aiosmtpd.smtp.log.exception')
             client = resources.enter_context(
                 SMTP(controller.hostname, controller.port))
             self.assertEqual(
@@ -1297,10 +1297,10 @@ Testing
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
+        with ExitStackWithMock(self) as resources:
             # Suppress logging to the console during the tests.  Depending on
             # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
+            resources.enter_patch('aiosmtpd.smtp.log.exception')
             client = resources.enter_context(
                 SMTP(controller.hostname, controller.port))
             self.assertEqual(
@@ -1314,10 +1314,10 @@ Testing
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
+        with ExitStackWithMock(self) as resources:
             # Suppress logging to the console during the tests.  Depending on
             # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
+            resources.enter_patch('aiosmtpd.smtp.log.exception')
             client = resources.enter_context(
                 SMTP(controller.hostname, controller.port))
             self.assertEqual(
@@ -1354,6 +1354,7 @@ Testing
 
 
 class TestCustomizations(unittest.TestCase):
+
     def test_custom_hostname(self):
         controller = CustomHostnameController(Sink())
         controller.start()
@@ -1404,54 +1405,59 @@ class TestClientCrash(unittest.TestCase):
         controller = Controller(Sink)
         controller.start()
         self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
+
+        resources = ExitStackWithMock(self)
+        self.client: SMTP_with_asserts = resources.enter_context(
+            SMTP_with_asserts(self, from_=controller)
+        )
+        self.addCleanup(resources.close)
 
     def test_connection_reset_during_DATA(self):
-        with SMTP(*self.address) as client:
-            client.helo('example.com')
-            client.docmd('MAIL FROM: <anne@example.com>')
-            client.docmd('RCPT TO: <bart@example.com>')
-            client.docmd('DATA')
-            # Start sending the DATA but reset the connection before that
-            # completes, i.e. before the .\r\n
-            client.send(b'From: <anne@example.com>')
-            reset_connection(client)
-            # The connection should be disconnected, so trying to do another
-            # command from here will give us an exception.  In GH#62, the
-            # server just hung.
-            self.assertRaises(SMTPServerDisconnected, client.noop)
+        client = self.client
+        client.helo('example.com')
+        client.docmd('MAIL FROM: <anne@example.com>')
+        client.docmd('RCPT TO: <bart@example.com>')
+        client.docmd('DATA')
+        # Start sending the DATA but reset the connection before that
+        # completes, i.e. before the .\r\n
+        client.send(b'From: <anne@example.com>')
+        reset_connection(client)
+        # The connection should be disconnected, so trying to do another
+        # command from here will give us an exception.  In GH#62, the
+        # server just hung.
+        self.assertRaises(SMTPServerDisconnected, client.noop)
 
     def test_connection_reset_during_command(self):
-        with SMTP(*self.address) as client:
-            client.helo('example.com')
-            # Start sending a command but reset the connection before that
-            # completes, i.e. before the \r\n
-            client.send('MAIL FROM: <anne')
-            reset_connection(client)
-            # The connection should be disconnected, so trying to do another
-            # command from here will give us an exception.  In GH#62, the
-            # server just hung.
-            self.assertRaises(SMTPServerDisconnected, client.noop)
+        client = self.client
+        client.helo('example.com')
+        # Start sending a command but reset the connection before that
+        # completes, i.e. before the \r\n
+        client.send('MAIL FROM: <anne')
+        reset_connection(client)
+        # The connection should be disconnected, so trying to do another
+        # command from here will give us an exception.  In GH#62, the
+        # server just hung.
+        self.assertRaises(SMTPServerDisconnected, client.noop)
 
     def test_close_in_command(self):
-        with SMTP(*self.address) as client:
-            # Don't include the CRLF.
-            client.send('FOO')
-            client.close()
+        client = self.client
+        # Don't include the CRLF.
+        client.send('FOO')
+        client.close()
 
     def test_close_in_data(self):
-        with SMTP(*self.address) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('RCPT TO: <bart@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('DATA')
-            self.assertEqual(code, 354)
-            # Don't include the CRLF.
-            client.send('FOO')
-            client.close()
+        client = self.client
+        code, _ = client.helo('example.com')
+        self.assertEqual(code, 250)
+        code, _ = client.docmd('MAIL FROM: <anne@example.com>')
+        self.assertEqual(code, 250)
+        code, _ = client.docmd('RCPT TO: <bart@example.com>')
+        self.assertEqual(code, 250)
+        code, _ = client.docmd('DATA')
+        self.assertEqual(code, 354)
+        # Don't include the CRLF.
+        client.send('FOO')
+        client.close()
 
 
 class TestStrictASCII(unittest.TestCase):
