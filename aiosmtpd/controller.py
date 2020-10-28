@@ -71,9 +71,9 @@ class Controller:
     def _stop(self):
         self.loop.stop()
         try:
-            _all_tasks = asyncio.Task.all_tasks
-        except AttributeError:   # pragma: skipif_lt_py39
             _all_tasks = asyncio.all_tasks
+        except AttributeError:   # pragma: skipif_gt_py36
+            _all_tasks = asyncio.Task.all_tasks
         for task in _all_tasks(self.loop):
             task.cancel()
 

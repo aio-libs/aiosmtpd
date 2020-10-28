@@ -19,3 +19,5 @@ exclude_lines =
     pragma: nocover
     pragma: no${PLATFORM}
     pragma: skipif_${PY_39}_py39
+    pragma: skipon_${INTERP}
+    pragma: skipif_${PY_36}_py36
