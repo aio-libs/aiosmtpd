@@ -11,7 +11,7 @@ from operator import itemgetter
 from smtplib import SMTP, SMTPDataError, SMTPRecipientsRefused
 from unittest.mock import call, patch
 
-from typing import Any, AnyStr, Callable, NamedTuple, Optional
+from typing import Any, Callable, NamedTuple
 from textwrap import dedent
 from pathlib import Path
 
@@ -28,7 +28,6 @@ class ControllerStream(NamedTuple):
 class ControllerHandler(NamedTuple):
     controller: Controller
     handler: Any
-    expected: Optional[AnyStr] = None
 
 
 # region ##### Support Classes ###############################################
@@ -187,9 +186,7 @@ class AsyncDeprecatedHandler:
 @pytest.fixture
 def client() -> SMTP:
     with SMTP(*SERVER_ADDRESS) as client:
-        #
         yield client
-        #
 
 
 @pytest.fixture
@@ -229,7 +226,9 @@ def contrh_mailbox(temp_maildir) -> ControllerHandler:
     handler = Mailbox(temp_maildir)
     controller = Controller(handler)
     controller.start()
+    #
     yield ControllerHandler(controller, handler)
+    #
     controller.stop()
 
 
@@ -439,134 +438,136 @@ class TestDebugging:
             """.format(peer))
 
 
-def test_message_Data(paramzd_contrh_handled, client):
-    handler = paramzd_contrh_handled.handler
-    assert isinstance(handler, DataHandler)
-    # In this test, the message content comes in as a bytes.
-    client.sendmail('anne@example.com', ['bart@example.com'], dedent("""\
-        From: Anne Person <anne@example.com>
-        To: Bart Person <bart@example.com>
-        Subject: A test
-        Message-ID: <ant>
+class TestMessage:
 
-        Testing
-        """))
-    # The content is not converted, so it's bytes.
-    assert handler.content == handler.original_content
-    assert isinstance(handler.content, bytes)
-    assert isinstance(handler.original_content, bytes)
+    def test_message_Data(self, paramzd_contrh_handled, client):
+        handler = paramzd_contrh_handled.handler
+        assert isinstance(handler, DataHandler)
+        # In this test, the message content comes in as a bytes.
+        client.sendmail('anne@example.com', ['bart@example.com'], dedent("""\
+            From: Anne Person <anne@example.com>
+            To: Bart Person <bart@example.com>
+            Subject: A test
+            Message-ID: <ant>
 
+            Testing
+            """))
+        # The content is not converted, so it's bytes.
+        assert handler.content == handler.original_content
+        assert isinstance(handler.content, bytes)
+        assert isinstance(handler.original_content, bytes)
 
-def test_message_decoded_Data(paramzd_contrh_handled_decoding, client):
-    handler = paramzd_contrh_handled_decoding.handler
-    assert isinstance(handler, DataHandler)
-    # In this test, the message content comes in as a string.
-    client.sendmail('anne@example.com', ['bart@example.com'], dedent("""\
-        From: Anne Person <anne@example.com>
-        To: Bart Person <bart@example.com>
-        Subject: A test
-        Message-ID: <ant>
+    def test_message_decoded_Data(
+            self, paramzd_contrh_handled_decoding, client):
+        handler = paramzd_contrh_handled_decoding.handler
+        assert isinstance(handler, DataHandler)
+        # In this test, the message content comes in as a string.
+        client.sendmail('anne@example.com', ['bart@example.com'], dedent("""\
+            From: Anne Person <anne@example.com>
+            To: Bart Person <bart@example.com>
+            Subject: A test
+            Message-ID: <ant>
 
-        Testing
-        """))
-    assert handler.content != handler.original_content
-    assert isinstance(handler.content, str)
-    assert isinstance(handler.original_content, bytes)
+            Testing
+            """))
+        assert handler.content != handler.original_content
+        assert isinstance(handler.content, str)
+        assert isinstance(handler.original_content, bytes)
 
+    def test_message_AsyncMessage(self, paramzd_contrh_handled, client):
+        handler = paramzd_contrh_handled.handler
+        assert isinstance(handler, AsyncMessageHandler)
+        # In this test, the message data comes in as bytes.
+        client.sendmail('anne@example.com', ['bart@example.com'], dedent("""\
+            From: Anne Person <anne@example.com>
+            To: Bart Person <bart@example.com>
+            Subject: A test
+            Message-ID: <ant>
 
-def test_message_AsyncMessage(paramzd_contrh_handled, client):
-    handler = paramzd_contrh_handled.handler
-    assert isinstance(handler, AsyncMessageHandler)
-    # In this test, the message data comes in as bytes.
-    client.sendmail('anne@example.com', ['bart@example.com'], dedent("""\
-        From: Anne Person <anne@example.com>
-        To: Bart Person <bart@example.com>
-        Subject: A test
-        Message-ID: <ant>
+            Testing
+            """))
+        handled_message = handler.handled_message
+        assert handled_message['subject'] == 'A test'
+        assert handled_message['message-id'] == '<ant>'
+        assert handled_message['X-Peer'] is not None
+        assert handled_message['X-MailFrom'] == 'anne@example.com'
+        assert handled_message['X-RcptTo'] == 'bart@example.com'
 
-        Testing
-        """))
-    handled_message = handler.handled_message
-    assert handled_message['subject'] == 'A test'
-    assert handled_message['message-id'] == '<ant>'
-    assert handled_message['X-Peer'] is not None
-    assert handled_message['X-MailFrom'] == 'anne@example.com'
-    assert handled_message['X-RcptTo'] == 'bart@example.com'
+    def test_message_decoded_AsyncMessage(
+            self, paramzd_contrh_handled_decoding, client):
+        handler = paramzd_contrh_handled_decoding.handler
+        assert isinstance(handler, AsyncMessageHandler)
+        # With a server that decodes the data, the messages come in as
+        # strings.  There's no difference in the message seen by the
+        # handler's handle_message() method, but internally this gives full
+        # coverage.
+        client.sendmail('anne@example.com', ['bart@example.com'], dedent("""\
+            From: Anne Person <anne@example.com>
+            To: Bart Person <bart@example.com>
+            Subject: A test
+            Message-ID: <ant>
 
-
-def test_message_decoded_AsyncMessage(paramzd_contrh_handled_decoding, client):
-    handler = paramzd_contrh_handled_decoding.handler
-    assert isinstance(handler, AsyncMessageHandler)
-    # With a server that decodes the data, the messages come in as
-    # strings.  There's no difference in the message seen by the
-    # handler's handle_message() method, but internally this gives full
-    # coverage.
-    client.sendmail('anne@example.com', ['bart@example.com'], dedent("""\
-        From: Anne Person <anne@example.com>
-        To: Bart Person <bart@example.com>
-        Subject: A test
-        Message-ID: <ant>
-
-        Testing
-        """))
-    handled_message = handler.handled_message
-    assert handled_message['subject'] == 'A test'
-    assert handled_message['message-id'] == '<ant>'
-    assert handled_message['X-Peer'] is not None
-    assert handled_message['X-MailFrom'] == 'anne@example.com'
-    assert handled_message['X-RcptTo'] == 'bart@example.com'
-
-
-def test_mailbox(temp_maildir, contrh_mailbox, client):
-    client.sendmail(
-        'aperson@example.com', ['bperson@example.com'], dedent("""\
-        From: Anne Person <anne@example.com>
-        To: Bart Person <bart@example.com>
-        Subject: A test
-        Message-ID: <ant>
-
-        Hi Bart, this is Anne.
-        """))
-    client.sendmail(
-        'cperson@example.com', ['dperson@example.com'], dedent("""\
-        From: Cate Person <cate@example.com>
-        To: Dave Person <dave@example.com>
-        Subject: A test
-        Message-ID: <bee>
-
-        Hi Dave, this is Cate.
-        """))
-    client.sendmail(
-        'eperson@example.com', ['fperson@example.com'], dedent("""\
-        From: Elle Person <elle@example.com>
-        To: Fred Person <fred@example.com>
-        Subject: A test
-        Message-ID: <cat>
-
-        Hi Fred, this is Elle.
-        """))
-    # Check the messages in the mailbox.
-    mailbox = Maildir(temp_maildir)
-    messages = sorted(mailbox, key=itemgetter('message-id'))
-    assert (
-        list(message['message-id'] for message in messages)
-        == ['<ant>', '<bee>', '<cat>']
-    )
+            Testing
+            """))
+        handled_message = handler.handled_message
+        assert handled_message['subject'] == 'A test'
+        assert handled_message['message-id'] == '<ant>'
+        assert handled_message['X-Peer'] is not None
+        assert handled_message['X-MailFrom'] == 'anne@example.com'
+        assert handled_message['X-RcptTo'] == 'bart@example.com'
 
 
-def test_mailbox_reset(temp_maildir, contrh_mailbox, client):
-    client.sendmail(
-        'aperson@example.com', ['bperson@example.com'], dedent("""\
-        From: Anne Person <anne@example.com>
-        To: Bart Person <bart@example.com>
-        Subject: A test
-        Message-ID: <ant>
+class TestMailbox:
 
-        Hi Bart, this is Anne.
-        """))
-    contrh_mailbox.handler.reset()
-    mailbox = Maildir(temp_maildir)
-    assert list(mailbox) == []
+    def test_mailbox(self, temp_maildir, contrh_mailbox, client):
+        client.sendmail(
+            'aperson@example.com', ['bperson@example.com'], dedent("""\
+            From: Anne Person <anne@example.com>
+            To: Bart Person <bart@example.com>
+            Subject: A test
+            Message-ID: <ant>
+
+            Hi Bart, this is Anne.
+            """))
+        client.sendmail(
+            'cperson@example.com', ['dperson@example.com'], dedent("""\
+            From: Cate Person <cate@example.com>
+            To: Dave Person <dave@example.com>
+            Subject: A test
+            Message-ID: <bee>
+
+            Hi Dave, this is Cate.
+            """))
+        client.sendmail(
+            'eperson@example.com', ['fperson@example.com'], dedent("""\
+            From: Elle Person <elle@example.com>
+            To: Fred Person <fred@example.com>
+            Subject: A test
+            Message-ID: <cat>
+
+            Hi Fred, this is Elle.
+            """))
+        # Check the messages in the mailbox.
+        mailbox = Maildir(temp_maildir)
+        messages = sorted(mailbox, key=itemgetter('message-id'))
+        assert (
+            list(message['message-id'] for message in messages)
+            == ['<ant>', '<bee>', '<cat>']
+        )
+
+    def test_mailbox_reset(self, temp_maildir, contrh_mailbox, client):
+        client.sendmail(
+            'aperson@example.com', ['bperson@example.com'], dedent("""\
+            From: Anne Person <anne@example.com>
+            To: Bart Person <bart@example.com>
+            Subject: A test
+            Message-ID: <ant>
+
+            Hi Bart, this is Anne.
+            """))
+        contrh_mailbox.handler.reset()
+        mailbox = Maildir(temp_maildir)
+        assert list(mailbox) == []
 
 
 class TestCLI:
@@ -787,6 +788,7 @@ def _wait_not_None(func: Callable):
         if rslt is not None:
             return rslt
     else:
+        # we've waited too long
         return None
 
 
