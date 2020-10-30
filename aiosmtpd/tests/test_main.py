@@ -46,17 +46,6 @@ def suppresslog_infodebug(mocker):
 
 
 @pytest.fixture
-def temp_event_loop() -> asyncio.AbstractEventLoop:
-    default_loop = asyncio.get_event_loop()
-    new_loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(new_loop)
-    #
-    yield new_loop
-    #
-    asyncio.set_event_loop(default_loop)
-
-
-@pytest.fixture
 def autostop_loop(temp_event_loop) -> asyncio.AbstractEventLoop:
     # Create a new event loop, and arrange for that loop to end almost
     # immediately.  This will allow the calls to main() in these tests to
