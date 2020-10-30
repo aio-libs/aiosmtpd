@@ -1,6 +1,6 @@
 import sys
-import time
 import pytest
+import logging
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
@@ -8,12 +8,10 @@ from aiosmtpd.smtp import SMTP as Server
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
-from smtplib import SMTP, SMTPDataError, SMTPRecipientsRefused
-from unittest.mock import call, patch
-
-from typing import Any, Callable, NamedTuple
-from textwrap import dedent
 from pathlib import Path
+from smtplib import SMTP, SMTPDataError, SMTPRecipientsRefused
+from textwrap import dedent
+from typing import Any, NamedTuple
 
 
 CRLF = '\r\n'
@@ -109,30 +107,6 @@ class NoHooksHandler:
     pass
 
 
-class CapturingController(Controller):
-
-    smtpd: "CapturingController.CapturingServer" = None
-
-    class CapturingServer(Server):
-
-        warnings: list = None
-
-        def __init__(self, *args, **kws):
-            super().__init__(*args, **kws)
-
-        async def smtp_DATA(self, arg):
-            with patch('aiosmtpd.smtp.warn') as mock:
-                await super().smtp_DATA(arg)
-            self.warnings = mock.call_args_list
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def factory(self):
-        self.smtpd = CapturingController.CapturingServer(self.handler)
-        return self.smtpd
-
-
 class DeprecatedHookController(Controller):
 
     smtpd: "DeprecatedHookController.DeprecatedHookServer" = None
@@ -143,16 +117,6 @@ class DeprecatedHookController(Controller):
 
         def __init__(self, *args, **kws):
             super().__init__(*args, **kws)
-
-        async def smtp_EHLO(self, arg):
-            with patch('aiosmtpd.smtp.warn') as mock:
-                await super().smtp_EHLO(arg)
-            self.warnings = mock.call_args_list
-
-        async def smtp_RSET(self, arg):
-            with patch('aiosmtpd.smtp.warn') as mock:
-                await super().smtp_RSET(arg)
-            self.warnings = mock.call_args_list
 
         async def ehlo_hook(self):
             pass
@@ -310,17 +274,6 @@ def paramzd_contrh_handled_decoding(request) -> ControllerHandler:
 def contrh_auth_decoding() -> ControllerHandler:
     handler = AUTHHandler()
     controller = AUTHDecodingController(handler)
-    controller.start()
-    #
-    yield ControllerHandler(controller, handler)
-    #
-    controller.stop()
-
-
-@pytest.fixture
-def paramzd_contrh_deprecated(request) -> ControllerHandler:
-    handler = _get_handler(request)
-    controller = CapturingController(handler)
     controller.start()
     #
     yield ControllerHandler(controller, handler)
@@ -677,34 +630,41 @@ class TestProxyMocked:
         Testing
         """)
 
-    def test_recipients_refused(self, mocker, contr_proxy_decoding, client):
-        log_mock = mocker.patch('aiosmtpd.handlers.log')
+    @pytest.fixture
+    def patch_smtp_refused(self, mocker):
         mock = mocker.patch('aiosmtpd.handlers.smtplib.SMTP')
         mock().sendmail.side_effect = SMTPRecipientsRefused(self.BAD_BART)
+
+    def test_recipients_refused(self, caplog, patch_smtp_refused,
+                                contr_proxy_decoding, client):
+        logger_name = "mail.debug"
+        caplog.set_level(logging.INFO, logger=logger_name)
         client.sendmail(
             'anne@example.com', ['bart@example.com'], self.SOURCE)
         # The log contains information about what happened in the proxy.
-        assert (
-            log_mock.info.call_args_list ==
-            [
-                mocker.call('got SMTPRecipientsRefused'),
-                mocker.call('we got some refusals: %s', self.BAD_BART)
-            ]
-            )
+        assert caplog.record_tuples[-2] == (
+            logger_name, logging.INFO, 'got SMTPRecipientsRefused'
+        )
+        assert caplog.record_tuples[-1] == (
+            logger_name, logging.INFO, f'we got some refusals: {self.BAD_BART}'
+        )
 
-    def test_oserror(self, mocker, contr_proxy_decoding, client):
-        log_mock = mocker.patch('aiosmtpd.handlers.log')
+    @pytest.fixture
+    def patch_smtp_oserror(self, mocker):
         mock = mocker.patch('aiosmtpd.handlers.smtplib.SMTP')
         mock().sendmail.side_effect = OSError
+        yield
+
+    def test_oserror(self, caplog, patch_smtp_oserror, contr_proxy_decoding,
+                     client):
+        logger_name = "mail.debug"
+        caplog.set_level(logging.INFO, logger=logger_name)
         client.sendmail(
             'anne@example.com', ['bart@example.com'], self.SOURCE)
-        # The log contains information about what happened in the proxy.
-        assert (
-            log_mock.info.call_args_list ==
-            [
-                mocker.call('we got some refusals: %s',
-                            {'bart@example.com': (-1, 'ignore')}),
-            ]
+        assert caplog.record_tuples[-1] == (
+            logger_name,
+            logging.INFO,
+            "we got some refusals: {'bart@example.com': (-1, 'ignore')}",
         )
 
 
@@ -779,81 +739,53 @@ class TestHooks:
         assert code == 250
 
 
-def _wait_not_None(func: Callable):
-    # pytest is too fast, we put in this sleep-poll to give time to asyncio
-    # to catch up
-    for _ in range(50):
-        time.sleep(0.1)
-        rslt = func()
-        if rslt is not None:
-            return rslt
-    else:
-        # we've waited too long
-        return None
-
-
 class TestDeprecation:
 
     def _process_message_testing(self, controller, client):
-        assert isinstance(controller, CapturingController)
-        #
-        client.sendmail(
-            'anne@example.com', ['bart@example.com'], dedent("""
-                From: Anne Person <anne@example.com>
-                To: Bart Person <bart@example.com>
-                Subject: A test
+        assert isinstance(controller, Controller)
+        with pytest.warns(DeprecationWarning) as record:
+            client.sendmail(
+                'anne@example.com', ['bart@example.com'], dedent("""
+                    From: Anne Person <anne@example.com>
+                    To: Bart Person <bart@example.com>
+                    Subject: A test
+    
+                    Testing
+                    """)
+            )
+        assert len(record) == 1
+        assert record[0].message.args[0] == \
+            'Use handler.handle_DATA() instead of .process_message()'
 
-                Testing
-                """)
-        )
-        # Wait for asyncio to catch up
-        w = _wait_not_None(lambda: controller.smtpd.warnings)
-        assert isinstance(w, list)
-        assert len(w) == 1
-        assert (
-            w[0] ==
-            call('Use handler.handle_DATA() instead of .process_message()',
-                 DeprecationWarning)
-        )
-
-    def test_process_message_Deprecated(
-            self, paramzd_contrh_deprecated, client):
+    def test_process_message_Deprecated(self, paramzd_contrh_handled, client):
         """handler.process_message is Deprecated"""
-        handler = paramzd_contrh_deprecated.handler
+        handler = paramzd_contrh_handled.handler
         assert isinstance(handler, DeprecatedHandler)
-        controller = paramzd_contrh_deprecated.controller
+        controller = paramzd_contrh_handled.controller
         self._process_message_testing(controller, client)
 
-    def test_process_message_AsyncDeprecated(
-            self, paramzd_contrh_deprecated, client):
+    def test_process_message_AsyncDeprecated(self, paramzd_contrh_handled,
+                                             client):
         """handler.process_message is Deprecated"""
-        handler = paramzd_contrh_deprecated.handler
+        handler = paramzd_contrh_handled.handler
         assert isinstance(handler, AsyncDeprecatedHandler)
-        controller = paramzd_contrh_deprecated.controller
+        controller = paramzd_contrh_handled.controller
         self._process_message_testing(controller, client)
 
-    def test_ehlo_hook(self, contr_deprecated_hook, client):
+    def test_ehlo_hook_warn(self, contr_deprecated_hook, client):
+        """SMTP.ehlo_hook is Deprecated"""
         controller: DeprecatedHookController = contr_deprecated_hook
-        client.ehlo("example.com")
-        # Wait for asyncio to catch up
-        w = _wait_not_None(lambda: controller.smtpd.warnings)
-        assert isinstance(w, list)
-        assert len(w) == 1
-        assert (
-            w[0] ==
-            call('Use handler.handle_EHLO() instead of .ehlo_hook()',
-                 DeprecationWarning)
-        )
+        with pytest.warns(DeprecationWarning) as record:
+            client.ehlo("example.com")
+        assert len(record) == 1
+        assert record[0].message.args[0] == \
+            'Use handler.handle_EHLO() instead of .ehlo_hook()'
 
     def test_rset_hook(self, contr_deprecated_hook, client):
+        """SMTP.rset_hook is Deprecated"""
         controller: DeprecatedHookController = contr_deprecated_hook
-        client.rset()
-        # Wait for asyncio to catch up
-        w = _wait_not_None(lambda: controller.smtpd.warnings)
-        assert isinstance(w, list)
-        assert len(w) == 1
-        assert (
-            w[0] ==
-            call('Use handler.handle_RSET() instead of .rset_hook()',
-                 DeprecationWarning)
-        )
+        with pytest.warns(DeprecationWarning) as record:
+            client.rset()
+        assert len(record) == 1
+        assert record[0].message.args[0] == \
+            'Use handler.handle_RSET() instead of .rset_hook()'
