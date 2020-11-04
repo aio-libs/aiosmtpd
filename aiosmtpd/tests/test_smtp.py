@@ -726,6 +726,13 @@ class TestSMTPNieuw(_CommonMethods):
         self._helo(client)
         resp = client.docmd('MAIL FROM: <""@example.com>')
         assert resp == (250, b"OK")
+        resp = client.docmd('RCPT TO: <""@example.org>')
+        assert resp == (250, b"OK")
+
+    def test_mail_smtp_malformed(self, client):
+        self._helo(client)
+        resp = client.docmd("MAIL FROM: <@example.com>")
+        assert resp == (501, b"Error: malformed address")
 
     def test_rcpt_no_mail(self, client):
         self._helo(client)
@@ -776,6 +783,13 @@ class TestSMTPNieuw(_CommonMethods):
             b"RCPT TO parameters not recognized or " b"not implemented",
         )
 
+    def test_rcpt_malformed(self, client):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == (250, b"OK")
+        resp = client.docmd("RCPT TO: <@example.com>")
+        assert resp == (501, b"Error: malformed address")
+
     # This was a bug, and it's already fixed since 3.6 (see bug)
     # Since we now only support >=3.6, there is no point emulating this bug
     # Rather, we test that bug is fixed.
@@ -795,6 +809,13 @@ class TestSMTPNieuw(_CommonMethods):
         self._ehlo(client)
         resp = client.docmd('MAIL FROM: <""@example.com> SIZE=28113')
         assert resp == (250, b"OK")
+        resp = client.docmd('RCPT TO: <""@example.org>')
+        assert resp == (250, b"OK")
+
+    def test_mail_esmtp_malformed(self, client):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <@example.com> SIZE=28113")
+        assert resp == (501, b"Error: malformed address")
 
     def test_rset(self, client):
         resp = client.rset()

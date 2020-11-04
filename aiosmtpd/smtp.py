@@ -740,7 +740,11 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg is None:
             await self.push(syntaxerr)
             return
-        address, params = self._getaddr(arg)
+        try:
+            address, params = self._getaddr(arg)
+        except HeaderParseError:
+            await self.push("501 Error: malformed address")
+            return
         if not self.session.extended_smtp and params:
             await self.push(syntaxerr)
             return
@@ -808,7 +812,11 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg is None:
             await self.push(syntaxerr)
             return
-        address, params = self._getaddr(arg)
+        try:
+            address, params = self._getaddr(arg)
+        except HeaderParseError:
+            await self.push("501 Error: malformed address")
+            return
         if not address:
             await self.push(syntaxerr)
             return
