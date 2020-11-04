@@ -38,14 +38,6 @@ def save_log_level():
 
 
 @pytest.fixture
-def suppresslog_infodebug(mocker):
-    # Mock the logger to eliminate console noise.
-    mocker.patch.object(MAIL_LOG, "info")
-    mocker.patch.object(MAIL_LOG, "debug")
-    yield
-
-
-@pytest.fixture
 def autostop_loop(temp_event_loop) -> asyncio.AbstractEventLoop:
     # Create a new event loop, and arrange for that loop to end almost
     # immediately.  This will allow the calls to main() in these tests to
@@ -119,22 +111,22 @@ class TestMain:
         with pytest.raises(RuntimeError):
             main(("--nosetuid",))
 
-    def test_debug_0(self, suppresslog_infodebug, autostop_loop):
+    def test_debug_0(self, autostop_loop):
         # For this test, the test runner likely has already set the log level
         # so it may not be logging.ERROR.
         default_level = MAIL_LOG.getEffectiveLevel()
         main(("-n",))
         assert MAIL_LOG.getEffectiveLevel() == default_level
 
-    def test_debug_1(self, suppresslog_infodebug, autostop_loop):
+    def test_debug_1(self, autostop_loop):
         main(("-n", "-d"))
         assert MAIL_LOG.getEffectiveLevel() == logging.INFO
 
-    def test_debug_2(self, suppresslog_infodebug, autostop_loop):
+    def test_debug_2(self, autostop_loop):
         main(("-n", "-dd"))
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
 
-    def test_debug_3(self, suppresslog_infodebug, autostop_loop):
+    def test_debug_3(self, autostop_loop):
         main(("-n", "-ddd"))
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
         assert asyncio.get_event_loop().get_debug()
