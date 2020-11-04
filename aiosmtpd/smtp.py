@@ -659,11 +659,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             address, rest = get_angle_addr(arg)
         else:
             address, rest = get_addr_spec(arg)
-        try:
-            address = address.addr_spec
-        except IndexError:
-            # Workaround http://bugs.python.org/issue27931
-            address = None
+        address = address.addr_spec
         return address, rest
 
     def _getparams(self, params):
@@ -745,9 +741,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push(syntaxerr)
             return
         address, params = self._getaddr(arg)
-        if address is None:
-            await self.push(syntaxerr)
-            return
         if not self.session.extended_smtp and params:
             await self.push(syntaxerr)
             return
