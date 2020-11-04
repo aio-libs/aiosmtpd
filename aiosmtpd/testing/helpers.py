@@ -7,9 +7,10 @@ import struct
 import smtplib
 
 from aiosmtpd.controller import Controller
+from aiosmtpd.smtp import Envelope
 from contextlib import ExitStack
 from pkg_resources import resource_filename
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from unittest import TestCase
 from unittest.mock import DEFAULT, Mock, patch
 
@@ -147,7 +148,7 @@ class ExitStackWithMock(ExitStack):
 
 
 class ReceivingHandler:
-    box = None
+    box: List[Envelope] = None
 
     def __init__(self):
         self.box = []
