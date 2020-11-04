@@ -647,7 +647,7 @@ class TestSMTPNieuw(_CommonMethods):
         ids=lambda x: x.split()[0],
     )
     def test_no_helo(self, client, command):
-        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        resp = client.docmd(command)
         assert resp == (503, b"Error: send HELO first")
 
     @pytest.mark.parametrize(
@@ -1270,34 +1270,11 @@ class TestSMTPWithControllerNieuw(_CommonMethods):
         exception_type = ErrorSMTP.exception_type
         assert isinstance(handler.error, exception_type)
 
-    # The next text basically wants to ensure that if handler does not have a
-    # handle_exception() method, then that (non-existent) method will not be called.
-    #
-    # This, however, is the wrong way to do it. Rather than checking that an
-    # an attribute -- which the SMTP class does not have any idea of it existing --
-    # has changed, it instead must check that SMTP does not raise an Exception.
-    #
-    # Therefore this test will NOT get converted to pytest
-    #
-    # def test_unexpected_errors_unhandled(self):
-    #     handler = Sink()
-    #     handler.error = None
-    #     controller = ErrorController(handler)
-    #     controller.start()
-    #     self.addCleanup(controller.stop)
-    #     with ExitStackWithMock(self) as resources:
-    #         # Suppress logging to the console during the tests.  Depending on
-    #         # timing, the exception may or may not be logged.
-    #         resources.enter_patch("aiosmtpd.smtp.log.exception")
-    #         client = resources.enter_context(
-    #             SMTP(controller.hostname, controller.port)
-    #         )
-    #         self.assertEqual(
-    #             (500, b"Error: (ValueError) test"), client.helo("example.com")
-    #         )
-    #     # handler.error did not change because the handler does not have a
-    #     # handle_exception() method.
-    #     self.assertIsNone(handler.error)
+    def test_unexpected_errors_unhandled(self, error_controller, client):
+        resp = client.helo("example.com")
+        exception_type = ErrorSMTP.exception_type
+        exception_nameb = exception_type.__name__.encode("ascii")
+        assert resp == (500, b"Error: (" + exception_nameb + b") test")
 
     @pytest.mark.handler_data(class_=ErroringHandler)
     def test_unexpected_errors_custom_response(self, error_controller, client):
