@@ -1,5 +1,6 @@
 """Test the SMTP protocol."""
 
+import os
 import time
 import pytest
 import socket
@@ -35,6 +36,12 @@ CRLF = "\r\n"
 BCRLF = b"\r\n"
 MAIL_LOG = logging.getLogger("mail.log")
 SRV_ADDR = IPPort("localhost", 8025)
+
+ASYNCIO_CATCHUP_DELAY = float(os.environ.get("ASYNCIO_CATCHUP_DELAY", 0.1))
+"""
+Delay (in seconds) to give asyncio event loop time to catch up and do things. May need
+to be increased for slow and/or overburdened test systems.
+"""
 
 
 # region ##### Test Harness Functions & Classes #######################################
@@ -209,14 +216,6 @@ class SleepingHeloHandler:
         return "250 {}".format(server.hostname)
 
 
-class ExposingHandler:
-    smtpd: Server = None
-
-    async def handle_HELO(self, server, session, envelope, hostname):
-        self.smtpd = server
-        return MISSING
-
-
 class ExposingController(Controller):
     smtpd: Server = None
 
@@ -317,7 +316,7 @@ def decoding_controller(request) -> DecodingController:
 
 @pytest.fixture
 def exposing_controller() -> ExposingController:
-    handler = ExposingHandler()
+    handler = Sink()
     controller = ExposingController(handler)
     controller.start()
     #
@@ -524,6 +523,66 @@ class TestProtocolNieuw:
 # be automagically started and teardown-ed on each test case func
 @pytest.mark.usefixtures("decoding_controller")
 class TestSMTPNieuw(_CommonMethods):
+    valid_mailfrom_addresses = [
+        # no space between colon and address
+        "anne@example.com",
+        "<anne@example.com>",
+        # one space between colon and address
+        " anne@example.com",
+        " <anne@example.com>",
+        # multiple spaces between colon and address
+        "  anne@example.com",
+        "  <anne@example.com>",
+        # non alphanums in local part
+        "anne.arthur@example.com",
+        "anne+promo@example.com",
+        "anne-arthur@example.com",
+        "anne_arthur@example.com",
+        "_@example.com",
+        # IP address in domain part
+        "anne@127.0.0.1",
+        "anne@[127.0.0.1]",
+        "anne@[IPv6:2001:db8::1]",
+        "anne@[IPv6::1]",
+        # email with comments -- obsolete, but still valid
+        "anne(comment)@example.com",
+        "(comment)anne@example.com",
+        "anne@example.com(comment)",
+        "anne@machine(comment).  example",  # RFC5322 § A.6.3
+        # source route -- RFC5321 § 4.1.2 "MUST BE accepted"
+        "<@example.org:anne@example.com>",
+        "<@example.net,@example.org:anne@example.com>",
+        # strange -- but valid -- addresses
+        "anne@mail",
+        '""@example.com',
+        '<""@example.com>',
+        '" "@example.com',
+        '"anne..arthur"@example.com',
+        "mailhost!anne@example.com",
+        "anne%example.org@example.com",
+        'much."more\\ unusual"@example.com',
+        'very."(),:;<>[]".VERY."very@\\ "very.unusual@strange.example.com',
+        # more from RFC3696 § 3
+        # 'Abc\\@def@example.com', -- get_addr_spec does not support this
+        "Fred\\ Bloggs@example.com",
+        "Joe.\\\\Blow@example.com",
+        '"Abc@def"@example.com',
+        '"Fred Bloggs"@example.com',
+        "customer/department=shipping@example.com",
+        "$A12345@example.com",
+        "!def!xyz%abc@example.com",
+    ]
+
+    valid_rcptto_addresses = valid_mailfrom_addresses + [
+        # Postmaster -- RFC5321 § 4.1.1.3
+        "<Postmaster>",
+    ]
+
+    invalid_email_addresses = [
+        "<@example.com>",  # no local part
+        "a" * 65 + "@example.com",  # local-part > 64 chars
+    ]
+
     @pytest.mark.parametrize("data", [b"\x80FAIL\r\n", b"\x80 FAIL\r\n"])
     def test_binary(self, client, data):
         client.sock.send(data)
@@ -651,14 +710,23 @@ class TestSMTPNieuw(_CommonMethods):
         assert resp == (503, b"Error: send HELO first")
 
     @pytest.mark.parametrize(
+        "address", valid_mailfrom_addresses, ids=range(len(valid_mailfrom_addresses))
+    )
+    def test_mail_valid_addresses(self, client, address):
+        self._ehlo(client)
+        resp = client.docmd(f"MAIL FROM:{address}")
+        assert resp == (250, b"OK")
+
+    @pytest.mark.parametrize(
         "command",
         [
             "MAIL",
             "MAIL <anne@example.com>",
+            "MAIL FROM:",
             "MAIL FROM: <anne@example.com> SIZE=10000",
             "MAIL FROM: Anne <anne@example.com>",
         ],
-        ids=["noarg", "nofrom", "params_noesmtp", "malformed"],
+        ids=["noarg", "nofrom", "noaddr", "params_noesmtp", "malformed"],
     )
     def test_mail_smtp_errsyntax(self, client, command):
         self._helo(client)
@@ -699,17 +767,17 @@ class TestSMTPNieuw(_CommonMethods):
     def test_mail_esmtp_errsyntax(self, client, command):
         self._ehlo(client)
         resp = client.docmd(command)
-        assert resp == (501, b"Syntax: MAIL FROM: <address> " b"[SP <mail-parameters>]")
+        assert resp == (501, b"Syntax: MAIL FROM: <address> [SP <mail-parameters>]")
 
     def test_mail_esmtp_params_unrecognized(self, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com> FOO=BAR")
         assert resp == (
             555,
-            b"MAIL FROM parameters not recognized or " b"not implemented",
+            b"MAIL FROM parameters not recognized or not implemented",
         )
 
-    # This was a bug, and it's already fixed since 3.6 (see bug)
+    # This was a bug, and it's already fixed since 3.6 (see bpo below)
     # Since we now only support >=3.6, there is no point emulating this bug.
     # Rather, we test that bug is fixed.
     #
@@ -729,10 +797,13 @@ class TestSMTPNieuw(_CommonMethods):
         resp = client.docmd('RCPT TO: <""@example.org>')
         assert resp == (250, b"OK")
 
-    def test_mail_smtp_malformed(self, client):
+    @pytest.mark.parametrize(
+        "address", invalid_email_addresses, ids=range(len(invalid_email_addresses))
+    )
+    def test_mail_smtp_malformed(self, client, address):
         self._helo(client)
-        resp = client.docmd("MAIL FROM: <@example.com>")
-        assert resp == (501, b"Error: malformed address")
+        resp = client.docmd(f"MAIL FROM: {address}")
+        assert resp == (553, b"5.1.3 Error: malformed address")
 
     def test_rcpt_no_mail(self, client):
         self._helo(client)
@@ -771,26 +842,36 @@ class TestSMTPNieuw(_CommonMethods):
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == (250, b"OK")
         resp = client.docmd(command)
-        assert resp == (501, b"Syntax: RCPT TO: <address> " b"[SP <mail-parameters>]")
+        assert resp == (501, b"Syntax: RCPT TO: <address> [SP <mail-parameters>]")
 
     def test_rcpt_unknown_params(self, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == (250, b"OK")
         resp = client.docmd("RCPT TO: <bart@example.com> FOOBAR")
-        assert resp == (
-            555,
-            b"RCPT TO parameters not recognized or " b"not implemented",
-        )
+        assert resp == (555, b"RCPT TO parameters not recognized or not implemented")
 
-    def test_rcpt_malformed(self, client):
+    @pytest.mark.parametrize(
+        "address", valid_rcptto_addresses, ids=range(len(valid_rcptto_addresses))
+    )
+    def test_rcpt_valid(self, client, address):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == (250, b"OK")
-        resp = client.docmd("RCPT TO: <@example.com>")
-        assert resp == (501, b"Error: malformed address")
+        resp = client.docmd(f"RCPT TO: {address}")
+        assert resp == (250, b"OK")
 
-    # This was a bug, and it's already fixed since 3.6 (see bug)
+    @pytest.mark.parametrize(
+        "address", invalid_email_addresses, ids=range(len(invalid_email_addresses))
+    )
+    def test_rcpt_malformed(self, client, address):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == (250, b"OK")
+        resp = client.docmd(f"RCPT TO: {address}")
+        assert resp == (553, b"5.1.3 Error: malformed address")
+
+    # This was a bug, and it's already fixed since 3.6 (see bpo below)
     # Since we now only support >=3.6, there is no point emulating this bug
     # Rather, we test that bug is fixed.
     #
@@ -812,10 +893,13 @@ class TestSMTPNieuw(_CommonMethods):
         resp = client.docmd('RCPT TO: <""@example.org>')
         assert resp == (250, b"OK")
 
-    def test_mail_esmtp_malformed(self, client):
+    @pytest.mark.parametrize(
+        "address", invalid_email_addresses, ids=range(len(invalid_email_addresses))
+    )
+    def test_mail_esmtp_malformed(self, client, address):
         self._ehlo(client)
-        resp = client.docmd("MAIL FROM: <@example.com> SIZE=28113")
-        assert resp == (501, b"Error: malformed address")
+        resp = client.docmd(f"MAIL FROM: {address} SIZE=28113")
+        assert resp == (553, b"5.1.3 Error: malformed address")
 
     def test_rset(self, client):
         resp = client.rset()
@@ -829,7 +913,7 @@ class TestSMTPNieuw(_CommonMethods):
         resp = client.docmd("VRFY <anne@example.com>")
         assert resp == (
             252,
-            b"Cannot VRFY user, but will accept message and " b"attempt delivery",
+            b"Cannot VRFY user, but will accept message and attempt delivery",
         )
 
     def test_vrfy_no_arg(self, client):
@@ -1122,7 +1206,7 @@ class TestSMTPRequiredAuthenticationNieuw(_CommonMethods):
         resp = client.docmd("VRFY <anne@example.com>")
         assert resp == (
             252,
-            b"Cannot VRFY user, but will accept message and " b"attempt delivery",
+            b"Cannot VRFY user, but will accept message and attempt delivery",
         )
 
     def test_mail_authenticated(self, client):
@@ -1401,8 +1485,7 @@ class TestClientCrashNieuw(_CommonMethods):
     # A bit more invasive than I like, but can't be helped.
 
     def test_connreset_during_DATA(self, mocker, exposing_controller, client):
-        # Trigger factory() to produce the smtpd server, and ensure that instance
-        # to be 'captured' by ExposingHandler
+        # Trigger factory() to produce the smtpd server
         self._helo(client)
         # Monkeypatching
         smtpd: Server = exposing_controller.smtpd
@@ -1419,9 +1502,7 @@ class TestClientCrashNieuw(_CommonMethods):
             # completes, i.e. before the .\r\n
             client.send(b"From: <anne@example.com>")
             reset_connection(client)
-            # Give time for the asyncio event loop to catch up, or else we won't
-            # see ._writer.close() being invoked
-            time.sleep(0.25)
+            time.sleep(ASYNCIO_CATCHUP_DELAY)
             # Apparently within that delay, ._writer.close() invoked several times
             # That is okay; we just want to ensure that it's invoked at least once.
             assert spy.call_count > 0
@@ -1429,19 +1510,16 @@ class TestClientCrashNieuw(_CommonMethods):
             exposing_controller.stop()
 
     def test_connreset_during_command(self, mocker, exposing_controller, client):
-        # Trigger factory() to produce the smtpd server, and ensure that instance
-        # to be 'captured' by ExposingHandler
+        # Trigger factory() to produce the smtpd server
         self._helo(client)
-        # Give time for the asyncio event loop to catch up
-        time.sleep(0.1)
-        smtpd: Server = exposing_controller.handler.smtpd
+        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        smtpd: Server = exposing_controller.smtpd
         spy: MagicMock = mocker.spy(smtpd._writer, "close")
         # Start sending a command but reset the connection before that
         # completes, i.e. before the \r\n
         client.send("MAIL FROM: <anne")
         reset_connection(client)
-        # Give time for the asyncio event loop to catch up
-        time.sleep(0.25)
+        time.sleep(ASYNCIO_CATCHUP_DELAY)
         # Should be called at least once. (In practice, almost certainly just once.)
         assert spy.call_count > 0
 
@@ -1457,8 +1535,7 @@ class TestClientCrashNieuw(_CommonMethods):
         # Don't include the CRLF.
         client.send("FOO")
         client.close()
-        # Give time for the asyncio event loop to catch up
-        time.sleep(0.25)
+        time.sleep(ASYNCIO_CATCHUP_DELAY)
         # At this point, smtpd's StreamWriter hasn't been initialized. Prolly since
         # the call is self._reader.readline() and we abort before CRLF is sent
         writer = exposing_controller.smtpd._writer
@@ -1468,16 +1545,14 @@ class TestClientCrashNieuw(_CommonMethods):
 
     def test_connclose_in_command_2(self, mocker, exposing_controller, client):
         self._helo(client)
-        # Give time for the asyncio event loop to catch up
-        time.sleep(0.1)
-        smtpd: Server = exposing_controller.handler.smtpd
+        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        smtpd: Server = exposing_controller.smtpd
         writer = smtpd._writer
         spy: MagicMock = mocker.spy(writer, "close")
         # Don't include the CRLF.
         client.send("FOO")
         client.close()
-        # Give time for the asyncio event loop to catch up
-        time.sleep(0.25)
+        time.sleep(ASYNCIO_CATCHUP_DELAY)
         # Check that smtpd._writer.close() invoked at least once
         assert spy.call_count > 0
         # transport.is_closing() == True if transport is in the process of closing,
@@ -1507,9 +1582,8 @@ class TestClientCrashNieuw(_CommonMethods):
 
     def test_connclose_in_data(self, mocker, exposing_controller, client):
         self._helo(client)
-        # Give time for the asyncio event loop to catch up
-        time.sleep(0.1)
-        smtpd: Server = exposing_controller.handler.smtpd
+        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        smtpd: Server = exposing_controller.smtpd
         writer = smtpd._writer
         spy: MagicMock = mocker.spy(writer, "close")
 
@@ -1525,8 +1599,7 @@ class TestClientCrashNieuw(_CommonMethods):
             # Don't include the CRLF.
             client.send("FOO")
             client.close()
-            # Give time for the asyncio event loop to catch up
-            time.sleep(0.25)
+            time.sleep(ASYNCIO_CATCHUP_DELAY)
             # Check that smtpd._writer.close() invoked at least once
             assert spy.call_count > 0
             # transport.is_closing() == True if transport is in the process of closing,
@@ -1582,15 +1655,13 @@ class TestSleepingHandlerNieuw(_CommonMethods):
 
     def test_sockclose_after_helo(self, mocker, exposing_controller, client):
         client.send("HELO example.com\r\n")
-        # Give time for the asyncio event loop to catch up
-        time.sleep(0.1)
-        smtpd: Server = exposing_controller.handler.smtpd
+        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        smtpd: Server = exposing_controller.smtpd
         writer = smtpd._writer
         spy: MagicMock = mocker.spy(writer, "close")
 
         client.sock.shutdown(socket.SHUT_WR)
-        # Give time for the asyncio event loop to catch up
-        time.sleep(0.1)
+        time.sleep(ASYNCIO_CATCHUP_DELAY)
         # Check that smtpd._writer.close() invoked at least once
         assert spy.call_count > 0
         # transport.is_closing() == True if transport is in the process of closing,
