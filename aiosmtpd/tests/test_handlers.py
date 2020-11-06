@@ -5,6 +5,7 @@ import logging
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
 from aiosmtpd.smtp import SMTP as Server
+from .conftest import _get_handler
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
@@ -223,14 +224,6 @@ def contr_proxy_decoding(contr_upstream) -> Controller:
     yield proxy_controller
     #
     proxy_controller.stop()
-
-
-def _get_handler(request):
-    testname: str = request.node.name
-    command = testname.split("_")[-1]
-    handler_name = command + "Handler"
-    handler_class = globals()[handler_name]
-    return handler_class()
 
 
 @pytest.fixture
