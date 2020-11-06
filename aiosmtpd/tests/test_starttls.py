@@ -1,48 +1,60 @@
-import unittest
+import pytest
 
-from aiosmtpd.controller import Controller as BaseController
+from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import Session as Sess_, SMTP as SMTPProtocol
+from aiosmtpd.smtp import SMTP as SMTPProtocol
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
-    SMTP_with_asserts,
     SUPPORTED_COMMANDS_TLS,
     get_server_context,
 )
+from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
+from .conftest import _get_handler
+from collections import namedtuple
+from contextlib import suppress
 from email.mime.text import MIMEText
 from smtplib import SMTP
 
 
-class Controller(BaseController):
+SRV_ADDR = namedtuple("IPPort", ("ip", "port"))("localhost", 8025)
+
+
+# region #### Harness Classes & Functions #############################################
+
+
+class SimpleController(Controller):
     def factory(self):
         return SMTPProtocol(self.handler)
 
 
-class TLSRequiredController(Controller):
+class TLSRequiredController(SimpleController):
     def factory(self):
         return SMTPProtocol(
             self.handler,
             decode_data=True,
             require_starttls=True,
-            tls_context=get_server_context())
+            tls_context=get_server_context(),
+        )
 
 
-class TLSController(Controller):
+class TLSController(SimpleController):
     def factory(self):
         return SMTPProtocol(
             self.handler,
             decode_data=True,
             require_starttls=False,
-            tls_context=get_server_context())
+            tls_context=get_server_context(),
+        )
 
 
-class RequireTLSAuthDecodingController(Controller):
+class RequireTLSAuthDecodingController(SimpleController):
     def factory(self):
         return SMTPProtocol(
             self.handler,
             decode_data=True,
             auth_require_tls=True,
-            tls_context=get_server_context())
+            tls_context=get_server_context(),
+        )
 
 
 class HandshakeFailingHandler:
@@ -50,216 +62,222 @@ class HandshakeFailingHandler:
         return False
 
 
-class EOFingHandler:
-    sess: Sess_ = None
-    ssl_existed: bool = None
-    result = None
-
-    async def handle_NOOP(self, server: SMTPProtocol, session: Sess_,
-                          envelope, arg):
-        # First NOOP records the session, second NOOP triggers eof_received()
-        if self.sess is None:
-            self.sess = session
-        else:
-            self.ssl_existed = session.ssl is not None
-            self.result = server.eof_received()
-        return "250 OK"
+# endregion
 
 
-class TestTLSEnding(unittest.TestCase):
-    def test_eof_received(self):
-        # Adapted from 54ff1fa9 + fc65a84e of PR #202
-        #
-        # I don't like this. It's too intimately involved with the innards of
-        # the SMTP class. But for the life of me, I can't figure out why
-        # coverage there fail intermittently.
-        #
-        # I suspect it's a race condition, but with what, and how to prevent
-        # that from happening, that's ... a mystery.
-        #
-        handler = EOFingHandler()
-        controller = TLSController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, response = client.ehlo("example.com")
-            self.assertEqual(code, 250)
-            self.assertIn("starttls", client.esmtp_features)
-            code, response = client.starttls()
-            self.assertEqual(code, 220)
-            # Ensure that Server object 'realizes' it's in TLS mode
-            code, response = client.ehlo("example.com")
-            self.assertEqual(code, 250)
-            client.noop()
-            self.assertIsNotNone(handler.sess.ssl)
-            client.noop()
-            self.assertTrue(handler.ssl_existed)
-            self.assertFalse(handler.result)
+# region #### Fixtures ###############################################################
 
 
-class TestStartTLS(unittest.TestCase):
-    def test_starttls(self):
-        handler = ReceivingHandler()
-        controller = TLSController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            self.assertIn('starttls', client.esmtp_features)
-            code, response = client.starttls()
-            self.assertEqual(code, 220)
-            client.send_message(
-                MIMEText('hi'),
-                'sender@example.com',
-                'rcpt1@example.com')
-        self.assertEqual(len(handler.box), 1)
-
-    def test_failed_handshake(self):
-        controller = TLSController(HandshakeFailingHandler())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.ehlo('example.com')
-            code, response = client.starttls()
-            self.assertEqual(code, 220)
-            code, response = client.mail('sender@example.com')
-            self.assertEqual(code, 554)
-            code, response = client.rcpt('rcpt@example.com')
-            self.assertEqual(code, 554)
-
-    def test_disabled_tls(self):
-        controller = Controller(Sink)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('STARTTLS')
-            self.assertEqual(code, 454)
-
-    def test_tls_bad_syntax(self):
-        controller = TLSController(Sink)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('STARTTLS', 'TRUE')
-            self.assertEqual(code, 501)
-
-    def test_help_after_starttls(self):
-        controller = TLSController(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            # Don't get tricked by smtplib processing of the response.
-            code, response = client.docmd('HELP')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, SUPPORTED_COMMANDS_TLS)
+@pytest.fixture
+def tls_controller(request) -> TLSController:
+    handler = _get_handler(request)
+    controller = TLSController(handler, hostname=SRV_ADDR.ip, port=SRV_ADDR.port)
+    controller.start()
+    #
+    yield controller
+    #
+    # Some test cases need to .stop() the controller inside themselves
+    # in such cases, we must suppress Controller's raise of AssertionError
+    # because Controller doesn't like .stop() to be invoked more than once
+    with suppress(AssertionError):
+        controller.stop()
 
 
-class TestTLSForgetsSessionData(unittest.TestCase):
-    def setUp(self):
-        controller = TLSController(Sink)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
-
-    def test_forget_ehlo(self):
-        with SMTP(*self.address) as client:
-            client.starttls()
-            code, response = client.mail('sender@example.com')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Error: send HELO first')
-
-    def test_forget_mail(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            client.mail('sender@example.com')
-            client.starttls()
-            client.ehlo('example.com')
-            code, response = client.rcpt('rcpt@example.com')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Error: need MAIL command')
-
-    def test_forget_rcpt(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            client.mail('sender@example.com')
-            client.rcpt('rcpt@example.com')
-            client.starttls()
-            client.ehlo('example.com')
-            client.mail('sender@example.com')
-            code, response = client.docmd('DATA')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Error: need RCPT command')
+@pytest.fixture
+def tls_req_controller(request) -> TLSController:
+    handler = _get_handler(request)
+    controller = TLSRequiredController(
+        handler, hostname=SRV_ADDR.ip, port=SRV_ADDR.port
+    )
+    controller.start()
+    #
+    yield controller
+    #
+    controller.stop()
 
 
-class TestRequireTLS(unittest.TestCase):
-    def setUp(self):
-        controller = TLSRequiredController(Sink)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
-
-    def test_hello_fails(self):
-        with SMTP(*self.address) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 530)
-
-    def test_help_fails(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('HELP', 'HELO')
-            self.assertEqual(code, 530)
-
-    def test_ehlo(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            self.assertIn('starttls', client.esmtp_features)
-
-    def test_mail_fails(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.mail('sender@exapmle.com')
-            self.assertEqual(code, 530)
-
-    def test_rcpt_fails(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.rcpt('sender@exapmle.com')
-            self.assertEqual(code, 530)
-
-    def test_vrfy_fails(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.vrfy('sender@exapmle.com')
-            self.assertEqual(code, 530)
-
-    def test_data_fails(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('DATA')
-            self.assertEqual(code, 530)
+@pytest.fixture
+def auth_req_tls_controller(request) -> RequireTLSAuthDecodingController:
+    handler = _get_handler(request)
+    controller = RequireTLSAuthDecodingController(
+        handler, hostname=SRV_ADDR.ip, port=SRV_ADDR.port
+    )
+    controller.start()
+    #
+    yield controller
+    #
+    controller.stop()
 
 
-class TestRequireTLSAUTH(unittest.TestCase):
-    def setUp(self):
-        controller = RequireTLSAuthDecodingController(Sink)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
+@pytest.fixture
+def simple_controller() -> SimpleController:
+    handler = Sink()
+    controller = SimpleController(handler, hostname=SRV_ADDR.ip, port=SRV_ADDR.port)
+    controller.start()
+    #
+    yield controller
+    #
+    controller.stop()
 
-    def test_auth_notls(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd("AUTH ")
-            self.assertEqual(code, 538)
-            self.assertEqual(response,
-                             b"5.7.11 Encryption required for requested "
-                             b"authentication mechanism")
 
-    def test_auth_tls(self):
-        with SMTP_with_asserts(self, *self.address) as client:
-            client.starttls()
-            client.ehlo('example.com')
-            client.assert_auth_invalid('AUTH PLAIN AHRlc3QAdGVzdA==')
+@pytest.fixture
+def client() -> SMTP:
+    with SMTP(*SRV_ADDR) as client:
+        yield client
+
+
+# endregion
+
+
+def test_disabled_tls(simple_controller, client):
+    code, _ = client.ehlo("example.com")
+    assert code == 250
+    resp = client.docmd("STARTTLS")
+    assert resp == (454, b"TLS not available")
+
+
+@pytest.mark.usefixtures("tls_controller")
+class TestStartTLSNieuw:
+    @pytest.mark.handler_data(class_=ReceivingHandler)
+    def test_starttls(self, tls_controller, client):
+        sender = "sender@example.com"
+        recipients = ["rcpt1@example.com"]
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        assert "starttls" in client.esmtp_features
+        resp = client.starttls()
+        assert resp == (220, b"Ready to start TLS")
+        client.send_message(MIMEText("hi"), sender, recipients)
+        handler: ReceivingHandler = tls_controller.handler
+        assert len(handler.box) == 1
+        assert handler.box[0].mail_from == sender
+        assert handler.box[0].rcpt_tos == recipients
+
+    @pytest.mark.handler_data(class_=HandshakeFailingHandler)
+    def test_failed_handshake(self, client):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.starttls()
+        assert resp == S.S220_READY_TLS
+        resp = client.mail("sender@example.com")
+        assert resp == S.S554_LACK_SECURITY
+        resp = client.rcpt("rcpt@example.com")
+        assert resp == S.S554_LACK_SECURITY
+
+    def test_tls_bad_syntax(self, client):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.docmd("STARTTLS", "TRUE")
+        assert resp == (501, b"Syntax: STARTTLS")
+
+    def test_help_after_starttls(self, client):
+        resp = client.docmd("HELP")
+        assert resp == (250, SUPPORTED_COMMANDS_TLS)
+
+    def test_helo_starttls(self, tls_controller, client):
+        code, _ = client.helo("example.com")
+        assert code == 250
+        # Entering portion of code where hang is possible (upon assertion fail), so
+        # we must wrap with "try..finally".
+        try:
+            resp = client.docmd("STARTTLS")
+            assert resp == S.S220_READY_TLS
+        finally:
+            tls_controller.stop()
+
+
+@pytest.mark.usefixtures("tls_controller")
+class TestTLSForgetsSessionDataNieuw:
+    def test_forget_ehlo(self, client):
+        resp = client.starttls()
+        assert resp == S.S220_READY_TLS
+        resp = client.mail("sender@example.com")
+        assert resp == S.S530_HELO_FIRST
+
+    def test_forget_mail(self, client):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.mail("sender@example.com")
+        assert resp == S.S250_OK
+        resp = client.starttls()
+        assert resp == S.S220_READY_TLS
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.rcpt("rcpt@example.com")
+        assert resp == (503, b"Error: need MAIL command")
+
+    def test_forget_rcpt(self, client):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.mail("sender@example.com")
+        assert resp == S.S250_OK
+        resp = client.rcpt("rcpt@example.com")
+        assert resp == S.S250_OK
+        resp = client.starttls()
+        assert resp == S.S220_READY_TLS
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.mail("sender@example.com")
+        assert resp == S.S250_OK
+        resp = client.docmd("DATA")
+        assert resp == (503, b"Error: need RCPT command")
+
+
+@pytest.mark.usefixtures("tls_req_controller")
+class TestRequireTLSNieuw:
+    def test_helo_fails(self, client):
+        resp = client.helo("example.com")
+        assert resp == S.S530_STARTTLS_FIRST
+
+    def test_help_fails(self, client):
+        resp = client.docmd("HELP", "HELO")
+        assert resp == S.S530_STARTTLS_FIRST
+
+    def test_ehlo(self, client):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        assert "starttls" in client.esmtp_features
+
+    def test_mail_fails(self, client):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.mail("sender@example.com")
+        assert resp == S.S530_STARTTLS_FIRST
+
+    def test_rcpt_fails(self, client):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.rcpt("recipient@example.com")
+        assert resp == S.S530_STARTTLS_FIRST
+
+    def test_vrfy_fails(self, client):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.vrfy("sender@exapmle.com")
+        assert resp == S.S530_STARTTLS_FIRST
+
+    def test_data_fails(self, client):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.docmd("DATA")
+        assert resp == S.S530_STARTTLS_FIRST
+
+
+@pytest.mark.usefixtures("auth_req_tls_controller")
+class TestRequireTLSAUTHNieuw:
+    def test_auth_notls(self, client):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.docmd("AUTH ")
+        assert resp == (
+            538,
+            b"5.7.11 Encryption required for requested authentication mechanism",
+        )
+
+    def test_auth_tls(self, client):
+        resp = client.starttls()
+        assert resp == (220, b"Ready to start TLS")
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.docmd("AUTH PLAIN AHRlc3QAdGVzdA==")
+        assert resp == S.S535_AUTH_INVALID
