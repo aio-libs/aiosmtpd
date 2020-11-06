@@ -1,49 +1,55 @@
 """Test SMTP over SSL/TLS."""
 
-import ssl
+import pytest
 import socket
-import unittest
-import pkg_resources
 
-from aiosmtpd.controller import Controller as BaseController
+from aiosmtpd.controller import Controller
 from aiosmtpd.smtp import SMTP as SMTPProtocol
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
-    get_server_context
+    get_client_context,
+    get_server_context,
 )
 from email.mime.text import MIMEText
 from smtplib import SMTP_SSL
 
 
-class Controller(BaseController):
+class SimpleController(Controller):
     def factory(self):
         return SMTPProtocol(self.handler)
 
 
-def get_client_context():
-    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-    context.check_hostname = False
-    context.load_verify_locations(
-        cafile=pkg_resources.resource_filename(
-            'aiosmtpd.tests.certs', 'server.crt'))
-    return context
+@pytest.fixture
+def ssl_controller() -> Controller:
+    context = get_server_context()
+    handler = ReceivingHandler()
+    controller = SimpleController(handler, ssl_context=context)
+    controller.start()
+    #
+    yield controller
+    #
+    controller.stop()
 
 
-class TestSMTPS(unittest.TestCase):
-    def setUp(self):
-        self.handler = ReceivingHandler()
-        controller = Controller(self.handler, ssl_context=get_server_context())
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
+@pytest.fixture
+def client(ssl_controller) -> SMTP_SSL:
+    context = get_client_context()
+    c = ssl_controller
+    with SMTP_SSL(c.hostname, c.port, context=context) as client:
+        yield client
 
-    def test_smtps(self):
-        with SMTP_SSL(*self.address, context=get_client_context()) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, socket.getfqdn().encode('utf-8'))
-            client.send_message(
-                MIMEText('hi'), 'sender@example.com', 'rcpt1@example.com')
-        self.assertEqual(len(self.handler.box), 1)
-        envelope = self.handler.box[0]
-        self.assertEqual(envelope.mail_from, 'sender@example.com')
+
+class TestSMTPSNieuw:
+    def test_smtps(self, ssl_controller, client):
+        sender = "sender@example.com"
+        recipients = ["rcpt1@example.com"]
+        code, mesg = client.helo("example.com")
+        assert code == 250
+        assert mesg == socket.getfqdn().encode("utf-8")
+        results = client.send_message(MIMEText("hi"), sender, recipients)
+        assert results == {}
+        handler: ReceivingHandler = ssl_controller.handler
+        assert len(handler.box) == 1
+        envelope = handler.box[0]
+        assert envelope.mail_from == sender
+        assert envelope.rcpt_tos == recipients

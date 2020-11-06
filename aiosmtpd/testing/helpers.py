@@ -120,13 +120,23 @@ class SMTP_with_asserts(smtplib.SMTP):
         return resp_text
 
 
-def get_server_context():
-    tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    tls_context.load_cert_chain(
+def get_server_context() -> ssl.SSLContext:
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    context.check_hostname = False
+    context.load_cert_chain(
         resource_filename('aiosmtpd.tests.certs', 'server.crt'),
         resource_filename('aiosmtpd.tests.certs', 'server.key'),
     )
-    return tls_context
+    return context
+
+
+def get_client_context() -> ssl.SSLContext:
+    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    context.check_hostname = False
+    context.load_verify_locations(
+        resource_filename("aiosmtpd.tests.certs", "server.crt")
+    )
+    return context
 
 
 class ExitStackWithMock(ExitStack):
