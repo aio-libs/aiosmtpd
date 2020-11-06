@@ -6,8 +6,7 @@ import socket
 import struct
 
 from aiosmtpd.controller import Controller
-from aiosmtpd.smtp import Envelope
-from contextlib import ExitStack
+from aiosmtpd.smtp import Envelope, SMTP as Server
 from pkg_resources import resource_filename
 from typing import List, Optional, Tuple
 
@@ -75,3 +74,8 @@ class ReceivingHandler:
     async def handle_DATA(self, server, session, envelope):
         self.box.append(envelope)
         return '250 OK'
+
+
+class DecodingController(Controller):
+    def factory(self):
+        return Server(self.handler, decode_data=True)
