@@ -20,9 +20,8 @@ from aiosmtpd.testing.helpers import (
     SUPPORTED_COMMANDS_NOTLS,
     reset_connection,
 )
-from .conftest import _get_controller, _get_handler
+from .conftest import _get_controller, _get_handler, _get_marker_data, SRV_ADDR
 from base64 import b64encode
-from collections import namedtuple
 from contextlib import suppress
 from smtplib import SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected
 from textwrap import dedent
@@ -30,13 +29,9 @@ from typing import AnyStr, List
 from unittest.mock import MagicMock
 
 
-IPPort = namedtuple("IPPort", ("ip", "port"))
-
-
 CRLF = "\r\n"
 BCRLF = b"\r\n"
 MAIL_LOG = logging.getLogger("mail.log")
-SRV_ADDR = IPPort("localhost", 8025)
 
 ASYNCIO_CATCHUP_DELAY = float(os.environ.get("ASYNCIO_CATCHUP_DELAY", 0.1))
 """
@@ -55,7 +50,7 @@ def authenticator(mechanism, login, password):
         return False
 
 
-class DecodingController(Controller):
+class DecodingAuthNoTLSController(Controller):
     def factory(self):
         return Server(
             self.handler,
@@ -253,30 +248,9 @@ def get_protocol(temp_event_loop, transport_resp):
 
 
 @pytest.fixture
-def standard_controller(request) -> Controller:
-    marker = request.node.get_closest_marker("controller_data")
-    if marker:
-        nostart = marker.kwargs.get("nostart", False)
-    else:
-        nostart = False
+def decoding_authnotls_controller(request) -> DecodingAuthNoTLSController:
     handler = _get_handler(request)
-    controller = Controller(handler)
-    if not nostart:
-        controller.start()
-    #
-    yield controller
-    #
-    # Some test cases need to .stop() the controller inside themselves
-    # in such cases, we must suppress Controller's raise of AssertionError
-    # because Controller doesn't like .stop() to be invoked more than once
-    with suppress(AssertionError):
-        controller.stop()
-
-
-@pytest.fixture
-def decoding_controller(request) -> DecodingController:
-    handler = _get_handler(request)
-    controller = DecodingController(handler)
+    controller = DecodingAuthNoTLSController(handler)
     controller.start()
     #
     yield controller
@@ -349,8 +323,8 @@ def require_auth_controller() -> Controller:
 
 @pytest.fixture
 def sized_controller(request) -> Controller:
-    marker = request.node.get_closest_marker("controller_data")
-    size = marker.kwargs.get("size", None)
+    markerdata = _get_marker_data(request, "controller_data")
+    size = markerdata.get("size", None)
     handler = Sink()
     controller = SizedController(handler, size=size)
     controller.start()
@@ -376,7 +350,7 @@ def auth_peeker_controller() -> Controller:
 @pytest.fixture
 def envelope_storing_handler() -> StoreEnvelopeOnVRFYHandler:
     handler = StoreEnvelopeOnVRFYHandler()
-    controller = DecodingController(handler)
+    controller = DecodingAuthNoTLSController(handler)
     controller.start()
     #
     yield handler
@@ -493,9 +467,9 @@ class TestProtocolNieuw:
         assert handler.box[0].content == b""
 
 
-# Because decoding_controller has a scope of "function", this fixture will
+# Because decoding_authnotls_controller has a scope of "function", this fixture will
 # be automagically started and teardown-ed on each test case func
-@pytest.mark.usefixtures("decoding_controller")
+@pytest.mark.usefixtures("decoding_authnotls_controller")
 class TestSMTPNieuw(_CommonMethods):
     valid_mailfrom_addresses = [
         # no space between colon and address
@@ -614,7 +588,7 @@ class TestSMTPNieuw(_CommonMethods):
         code, _ = client.noop()
         assert code == 250
 
-    def test_noop_with_art(self, decoding_controller, client):
+    def test_noop_with_arg(self, decoding_authnotls_controller, client):
         # smtplib.SMTP.noop() doesn't accept args
         code, _ = client.docmd("NOOP ok")
         assert code == 250
@@ -903,7 +877,7 @@ class TestSMTPNieuw(_CommonMethods):
         resp = client.docmd("DATA")
         assert resp == (503, b"Error: need RCPT command")
 
-    def test_data_354(self, decoding_controller, client):
+    def test_data_354(self, decoding_authnotls_controller, client):
         self._helo(client)
         resp = client.docmd("MAIL FROM: <alice@example.org>")
         assert resp == (250, b"OK")
@@ -916,7 +890,7 @@ class TestSMTPNieuw(_CommonMethods):
             resp = client.docmd("DATA")
             assert resp == (354, b"End data with <CR><LF>.<CR><LF>")
         finally:
-            decoding_controller.stop()
+            decoding_authnotls_controller.stop()
 
     def test_data_invalid_params(self, client):
         self._helo(client)
@@ -948,9 +922,9 @@ class TestSMTPNonDecoding(_CommonMethods):
         assert resp == (501, b"Error: BODY can only be one of 7BIT, 8BITMIME")
 
 
-# Because decoding_controller has a scope of "function", this fixture will
+# Because decoding_authnotls_controller has a scope of "function", this fixture will
 # be automagically started and teardown-ed on each test case func
-@pytest.mark.usefixtures("decoding_controller")
+@pytest.mark.usefixtures("decoding_authnotls_controller")
 class TestSMTPAuthNieuw(_CommonMethods):
     def test_auth_no_ehlo(self, client):
         resp = client.docmd("AUTH")
@@ -1283,17 +1257,17 @@ class TestSMTPWithControllerNieuw(_CommonMethods):
         assert receiving_handler.box[0].mail_from == sender
         assert receiving_handler.box[0].rcpt_tos == [recipient]
 
-    def test_mail_with_unrequited_smtputf8(self, standard_controller, client):
+    def test_mail_with_unrequited_smtputf8(self, base_controller, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == (250, b"OK")
 
-    def test_mail_with_incompatible_smtputf8(self, standard_controller, client):
+    def test_mail_with_incompatible_smtputf8(self, base_controller, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com> SMTPUTF8=YES")
         assert resp == (501, b"Error: SMTPUTF8 takes no arguments")
 
-    def test_mail_invalid_body(self, standard_controller, client):
+    def test_mail_invalid_body(self, base_controller, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com> BODY 9BIT")
         assert resp == (501, b"Error: BODY can only be one of 7BIT, 8BITMIME")
@@ -1333,7 +1307,7 @@ class TestSMTPWithControllerNieuw(_CommonMethods):
         assert excinfo.value.smtp_code == 552
         assert excinfo.value.smtp_error == b"Error: Too much mail data"
 
-    @pytest.mark.controller_data(class_=DecodingController)
+    @pytest.mark.controller_data(class_=DecodingAuthNoTLSController)
     def test_dots_escaped(self, receiving_handler, client):
         self._helo(client)
         mail = CRLF.join(["Test", ".", "mail"])
@@ -1382,8 +1356,8 @@ class TestSMTPWithControllerNieuw(_CommonMethods):
         assert isinstance(handler.error, exception_type)
 
     @pytest.mark.handler_data(class_=ReceivingHandler)
-    def test_bad_encodings(self, decoding_controller, client):
-        handler: ReceivingHandler = decoding_controller.handler
+    def test_bad_encodings(self, decoding_authnotls_controller, client):
+        handler: ReceivingHandler = decoding_authnotls_controller.handler
         self._helo(client)
         mail_from = b"anne\xFF@example.com"
         mail_to = b"bart\xFF@example.com"
@@ -1407,8 +1381,8 @@ class TestCustomizationNieuw(_CommonMethods):
         resp = client.helo("example.com")
         assert resp == (250, bytes("custom.localhost", "utf-8"))
 
-    def test_default_greeting(self, standard_controller, client):
-        controller = standard_controller
+    def test_default_greeting(self, base_controller, client):
+        controller = base_controller
         code, mesg = client.connect(controller.hostname, controller.port)
         assert code == 220
         # The hostname prefix is unpredictable
@@ -1428,7 +1402,7 @@ class TestClientCrashNieuw(_CommonMethods):
     # test_connection_reset_* test cases seem to be testing smtplib.SMTP behavior
     # instead of aiosmtpd.smtp.SMTP behavior. Maybe we can remove these?
 
-    def test_connection_reset_during_DATA(self, standard_controller, client):
+    def test_connection_reset_during_DATA(self, base_controller, client):
         self._helo(client)
         client.docmd("MAIL FROM: <anne@example.com>")
         client.docmd("RCPT TO: <bart@example.com>")
@@ -1443,7 +1417,7 @@ class TestClientCrashNieuw(_CommonMethods):
         with pytest.raises(SMTPServerDisconnected):
             client.noop()
 
-    def test_connection_reset_during_command(self, standard_controller, client):
+    def test_connection_reset_during_command(self, base_controller, client):
         self._helo(client)
         # Start sending a command but reset the connection before that
         # completes, i.e. before the \r\n
@@ -1497,7 +1471,7 @@ class TestClientCrashNieuw(_CommonMethods):
         # Should be called at least once. (In practice, almost certainly just once.)
         assert spy.call_count > 0
 
-    def test_close_in_command(self, standard_controller, client):
+    def test_close_in_command(self, base_controller, client):
         #
         # What exactly are we testing in this test case, actually?
         #
