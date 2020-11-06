@@ -5,12 +5,12 @@ import logging
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
 from aiosmtpd.smtp import SMTP as Server
-from .conftest import _get_handler
+from .conftest import DecodingController
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
 from pathlib import Path
-from smtplib import SMTP, SMTPDataError, SMTPRecipientsRefused
+from smtplib import SMTPDataError, SMTPRecipientsRefused
 from textwrap import dedent
 
 
@@ -19,11 +19,6 @@ SERVER_ADDRESS = ("localhost", 8025)
 
 
 # region ##### Support Classes ###############################################
-
-
-class DecodingController(Controller):
-    def factory(self):
-        return Server(self.handler, decode_data=True)
 
 
 class AUTHDecodingController(Controller):
@@ -140,12 +135,6 @@ class AsyncDeprecatedHandler:
 
 
 @pytest.fixture
-def client() -> SMTP:
-    with SMTP(*SERVER_ADDRESS) as client:
-        yield client
-
-
-@pytest.fixture
 def debugging_controller() -> Controller:
     stream = StringIO()
     handler = Debugging(stream)
@@ -227,29 +216,7 @@ def proxy_decoding_controller(upstream_controller) -> Controller:
 
 
 @pytest.fixture
-def base_controller(request) -> Controller:
-    handler = _get_handler(request)
-    controller = Controller(handler)
-    controller.start()
-    #
-    yield controller
-    #
-    controller.stop()
-
-
-@pytest.fixture
-def decoding_controller(request) -> Controller:
-    handler = _get_handler(request)
-    controller = DecodingController(handler)
-    controller.start()
-    #
-    yield controller
-    #
-    controller.stop()
-
-
-@pytest.fixture
-def contr_auth_decoding() -> Controller:
+def auth_decoding_controller() -> Controller:
     handler = AUTHHandler()
     controller = AUTHDecodingController(handler)
     controller.start()
@@ -798,8 +765,8 @@ class TestHooks:
         assert excinfo.value.smtp_code == 599
         assert excinfo.value.smtp_error == b"Not today"
 
-    def test_hook_AUTH(self, contr_auth_decoding, client):
-        assert isinstance(contr_auth_decoding.handler, AUTHHandler)
+    def test_hook_AUTH(self, auth_decoding_controller, client):
+        assert isinstance(auth_decoding_controller.handler, AUTHHandler)
         client.ehlo("me")
         resp = client.login("test", "test")
         assert resp == (235, b"Authentication successful")
