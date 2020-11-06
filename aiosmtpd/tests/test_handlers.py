@@ -83,7 +83,7 @@ class RCPTHandler:
         return "250 OK"
 
 
-class DATAHandler:
+class ErroringDataHandler:
     async def handle_DATA(self, server, session, envelope):
         return "599 Not today"
 
@@ -146,7 +146,7 @@ def client() -> SMTP:
 
 
 @pytest.fixture
-def contr_debugging() -> Controller:
+def debugging_controller() -> Controller:
     stream = StringIO()
     handler = Debugging(stream)
     controller = Controller(handler)
@@ -159,7 +159,7 @@ def contr_debugging() -> Controller:
 
 
 @pytest.fixture
-def contr_debugging_decoding() -> Controller:
+def debugging_decoding_controller() -> Controller:
     stream = StringIO()
     handler = Debugging(stream)
     controller = DecodingController(handler)
@@ -178,7 +178,7 @@ def temp_maildir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def contr_mailbox(temp_maildir) -> Controller:
+def mailbox_controller(temp_maildir) -> Controller:
     handler = Mailbox(temp_maildir)
     controller = Controller(handler)
     controller.start()
@@ -194,7 +194,7 @@ def fake_parser() -> FakeParser:
 
 
 @pytest.fixture
-def contr_upstream() -> Controller:
+def upstream_controller() -> Controller:
     upstream_handler = DataHandler()
     upstream_controller = Controller(upstream_handler, port=9025)
     upstream_controller.start()
@@ -205,8 +205,8 @@ def contr_upstream() -> Controller:
 
 
 @pytest.fixture
-def contr_proxy(contr_upstream) -> Controller:
-    proxy_handler = Proxy(contr_upstream.hostname, contr_upstream.port)
+def proxy_controller(upstream_controller) -> Controller:
+    proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
     proxy_controller = Controller(proxy_handler)
     proxy_controller.start()
     #
@@ -216,8 +216,8 @@ def contr_proxy(contr_upstream) -> Controller:
 
 
 @pytest.fixture
-def contr_proxy_decoding(contr_upstream) -> Controller:
-    proxy_handler = Proxy(contr_upstream.hostname, contr_upstream.port)
+def proxy_decoding_controller(upstream_controller) -> Controller:
+    proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
     proxy_controller = DecodingController(proxy_handler)
     proxy_controller.start()
     #
@@ -227,7 +227,7 @@ def contr_proxy_decoding(contr_upstream) -> Controller:
 
 
 @pytest.fixture
-def paramzd_contr_handled(request) -> Controller:
+def base_controller(request) -> Controller:
     handler = _get_handler(request)
     controller = Controller(handler)
     controller.start()
@@ -238,7 +238,7 @@ def paramzd_contr_handled(request) -> Controller:
 
 
 @pytest.fixture
-def paramzd_contr_handled_decoding(request) -> Controller:
+def decoding_controller(request) -> Controller:
     handler = _get_handler(request)
     controller = DecodingController(handler)
     controller.start()
@@ -260,7 +260,7 @@ def contr_auth_decoding() -> Controller:
 
 
 @pytest.fixture
-def contr_deprecated_hook() -> DeprecatedHookController:
+def deprecated_hook_controller() -> DeprecatedHookController:
     controller = DeprecatedHookController(Sink())
     controller.start()
     #
@@ -273,7 +273,7 @@ def contr_deprecated_hook() -> DeprecatedHookController:
 
 
 class TestDebugging:
-    def test_debugging(self, contr_debugging_decoding, client):
+    def test_debugging(self, debugging_decoding_controller, client):
         peer = client.sock.getsockname()
         client.sendmail(
             "anne@example.com",
@@ -288,7 +288,7 @@ class TestDebugging:
                 """
             ),
         )
-        handler = contr_debugging_decoding.handler
+        handler = debugging_decoding_controller.handler
         assert isinstance(handler, Debugging)
         text = handler.stream.getvalue()
         assert text == dedent(
@@ -306,7 +306,7 @@ class TestDebugging:
             """
         )
 
-    def test_debugging_bytes(self, contr_debugging_decoding, client):
+    def test_debugging_bytes(self, debugging_decoding_controller, client):
         peer = client.sock.getsockname()
         client.sendmail(
             "anne@example.com",
@@ -321,7 +321,7 @@ class TestDebugging:
                 """
             ),
         )
-        handler = contr_debugging_decoding.handler
+        handler = debugging_decoding_controller.handler
         assert isinstance(handler, Debugging)
         text = handler.stream.getvalue()
         assert text == dedent(
@@ -339,7 +339,7 @@ class TestDebugging:
             """
         )
 
-    def test_debugging_without_options(self, contr_debugging, client):
+    def test_debugging_without_options(self, debugging_controller, client):
         # Prevent ESMTP options.
         client.helo()
         peer = client.sock.getsockname()
@@ -356,7 +356,7 @@ class TestDebugging:
                 """
             ),
         )
-        handler = contr_debugging.handler
+        handler = debugging_controller.handler
         assert isinstance(handler, Debugging)
         text = handler.stream.getvalue()
         assert text == dedent(
@@ -372,7 +372,7 @@ class TestDebugging:
             """
         )
 
-    def test_debugging_with_options(self, contr_debugging, client):
+    def test_debugging_with_options(self, debugging_controller, client):
         peer = client.sock.getsockname()
         client.sendmail(
             "anne@example.com",
@@ -388,7 +388,7 @@ class TestDebugging:
             ),
             mail_options=["BODY=7BIT"],
         )
-        handler = contr_debugging.handler
+        handler = debugging_controller.handler
         assert isinstance(handler, Debugging)
         text = handler.stream.getvalue()
         assert text == dedent(
@@ -408,8 +408,9 @@ class TestDebugging:
 
 
 class TestMessage:
-    def test_message_Data(self, paramzd_contr_handled, client):
-        handler = paramzd_contr_handled.handler
+    @pytest.mark.handler_data(class_=DataHandler)
+    def test_message_Data(self, base_controller, client):
+        handler = base_controller.handler
         assert isinstance(handler, DataHandler)
         # In this test, the message content comes in as a bytes.
         client.sendmail(
@@ -431,8 +432,9 @@ class TestMessage:
         assert isinstance(handler.content, bytes)
         assert isinstance(handler.original_content, bytes)
 
-    def test_message_decoded_Data(self, paramzd_contr_handled_decoding, client):
-        handler = paramzd_contr_handled_decoding.handler
+    @pytest.mark.handler_data(class_=DataHandler)
+    def test_message_decoded_Data(self, decoding_controller, client):
+        handler = decoding_controller.handler
         assert isinstance(handler, DataHandler)
         # In this test, the message content comes in as a string.
         client.sendmail(
@@ -453,8 +455,9 @@ class TestMessage:
         assert isinstance(handler.content, str)
         assert isinstance(handler.original_content, bytes)
 
-    def test_message_AsyncMessage(self, paramzd_contr_handled, client):
-        handler = paramzd_contr_handled.handler
+    @pytest.mark.handler_data(class_=AsyncMessageHandler)
+    def test_message_AsyncMessage(self, base_controller, client):
+        handler = base_controller.handler
         assert isinstance(handler, AsyncMessageHandler)
         # In this test, the message data comes in as bytes.
         client.sendmail(
@@ -478,8 +481,9 @@ class TestMessage:
         assert handled_message["X-MailFrom"] == "anne@example.com"
         assert handled_message["X-RcptTo"] == "bart@example.com"
 
-    def test_message_decoded_AsyncMessage(self, paramzd_contr_handled_decoding, client):
-        handler = paramzd_contr_handled_decoding.handler
+    @pytest.mark.handler_data(class_=AsyncMessageHandler)
+    def test_message_decoded_AsyncMessage(self, decoding_controller, client):
+        handler = decoding_controller.handler
         assert isinstance(handler, AsyncMessageHandler)
         # With a server that decodes the data, the messages come in as
         # strings.  There's no difference in the message seen by the
@@ -508,7 +512,7 @@ class TestMessage:
 
 
 class TestMailbox:
-    def test_mailbox(self, temp_maildir, contr_mailbox, client):
+    def test_mailbox(self, temp_maildir, mailbox_controller, client):
         client.sendmail(
             "aperson@example.com",
             ["bperson@example.com"],
@@ -560,7 +564,7 @@ class TestMailbox:
             "<cat>",
         ]
 
-    def test_mailbox_reset(self, temp_maildir, contr_mailbox, client):
+    def test_mailbox_reset(self, temp_maildir, mailbox_controller, client):
         client.sendmail(
             "aperson@example.com",
             ["bperson@example.com"],
@@ -575,7 +579,7 @@ class TestMailbox:
                 """
             ),
         )
-        contr_mailbox.handler.reset()
+        mailbox_controller.handler.reset()
         mailbox = Maildir(temp_maildir)
         assert list(mailbox) == []
 
@@ -664,15 +668,15 @@ class TestProxy:
     # differently for each different test, the controller of the proxy is
     # created in the individual tests, not in the setup.
 
-    def test_deliver_bytes(self, contr_upstream, contr_proxy, client):
+    def test_deliver_bytes(self, upstream_controller, proxy_controller, client):
         client.sendmail("anne@example.com", ["bart@example.com"], self.source)
-        upstream = contr_upstream.handler
+        upstream = upstream_controller.handler
         assert upstream.content == self.expected
         assert upstream.original_content == self.expected
 
-    def test_deliver_str(self, contr_upstream, contr_proxy_decoding, client):
+    def test_deliver_str(self, upstream_controller, proxy_decoding_controller, client):
         client.sendmail("anne@example.com", ["bart@example.com"], self.source)
-        upstream = contr_upstream.handler
+        upstream = upstream_controller.handler
         assert upstream.content == self.expected
         assert upstream.original_content == self.expected
 
@@ -695,7 +699,7 @@ class TestProxyMocked:
         mock().sendmail.side_effect = SMTPRecipientsRefused(self.BAD_BART)
 
     def test_recipients_refused(
-        self, caplog, patch_smtp_refused, contr_proxy_decoding, client
+        self, caplog, patch_smtp_refused, proxy_decoding_controller, client
     ):
         logger_name = "mail.debug"
         caplog.set_level(logging.INFO, logger=logger_name)
@@ -718,7 +722,9 @@ class TestProxyMocked:
         mock().sendmail.side_effect = OSError
         yield
 
-    def test_oserror(self, caplog, patch_smtp_oserror, contr_proxy_decoding, client):
+    def test_oserror(
+        self, caplog, patch_smtp_oserror, proxy_decoding_controller, client
+    ):
         logger_name = "mail.debug"
         caplog.set_level(logging.INFO, logger=logger_name)
         client.sendmail("anne@example.com", ["bart@example.com"], self.SOURCE)
@@ -730,26 +736,30 @@ class TestProxyMocked:
 
 
 class TestHooks:
-    def test_hook_HELO(self, paramzd_contr_handled, client):
-        assert isinstance(paramzd_contr_handled.handler, HELOHandler)
+    @pytest.mark.handler_data(class_=HELOHandler)
+    def test_hook_HELO(self, base_controller, client):
+        assert isinstance(base_controller.handler, HELOHandler)
         resp = client.helo("me")
         assert resp == (250, b"geddy.example.com")
 
-    def test_hook_EHLO(self, paramzd_contr_handled, client):
-        assert isinstance(paramzd_contr_handled.handler, EHLOHandler)
+    @pytest.mark.handler_data(class_=EHLOHandler)
+    def test_hook_EHLO(self, base_controller, client):
+        assert isinstance(base_controller.handler, EHLOHandler)
         code, mesg = client.ehlo("me")
         lines = mesg.decode("utf-8").splitlines()
         assert code == 250
         assert lines[-1] == "alex.example.com"
 
-    def test_hook_MAIL(self, paramzd_contr_handled, client):
-        assert isinstance(paramzd_contr_handled.handler, MAILHandler)
+    @pytest.mark.handler_data(class_=MAILHandler)
+    def test_hook_MAIL(self, base_controller, client):
+        assert isinstance(base_controller.handler, MAILHandler)
         client.helo("me")
         resp = client.mail("anne@example.com")
         assert resp == (250, b"Yeah, sure")
 
-    def test_hook_RCPT(self, paramzd_contr_handled, client):
-        assert isinstance(paramzd_contr_handled.handler, RCPTHandler)
+    @pytest.mark.handler_data(class_=RCPTHandler)
+    def test_hook_RCPT(self, base_controller, client):
+        assert isinstance(base_controller.handler, RCPTHandler)
         client.helo("me")
         with pytest.raises(SMTPRecipientsRefused) as excinfo:
             client.sendmail(
@@ -768,8 +778,9 @@ class TestHooks:
             "bart@example.com": (550, b"Rejected"),
         }
 
-    def test_hook_DATA(self, paramzd_contr_handled, client):
-        assert isinstance(paramzd_contr_handled.handler, DATAHandler)
+    @pytest.mark.handler_data(class_=ErroringDataHandler)
+    def test_hook_DATA(self, base_controller, client):
+        assert isinstance(base_controller.handler, ErroringDataHandler)
         with pytest.raises(SMTPDataError) as excinfo:
             client.sendmail(
                 "anne@example.com",
@@ -793,8 +804,9 @@ class TestHooks:
         resp = client.login("test", "test")
         assert resp == (235, b"Authentication successful")
 
-    def test_hook_NoHooks(self, paramzd_contr_handled, client):
-        assert isinstance(paramzd_contr_handled.handler, NoHooksHandler)
+    @pytest.mark.handler_data(class_=NoHooksHandler)
+    def test_hook_NoHooks(self, base_controller, client):
+        assert isinstance(base_controller.handler, NoHooksHandler)
         client.helo("me")
         client.mail("anne@example.com")
         client.rcpt(["bart@example.cm"])
@@ -834,21 +846,23 @@ class TestDeprecation:
             == "Use handler.handle_DATA() instead of .process_message()"
         )
 
-    def test_process_message_Deprecated(self, paramzd_contr_handled, client):
+    @pytest.mark.handler_data(class_=DeprecatedHandler)
+    def test_process_message_Deprecated(self, base_controller, client):
         """handler.process_message is Deprecated"""
-        handler = paramzd_contr_handled.handler
+        handler = base_controller.handler
         assert isinstance(handler, DeprecatedHandler)
-        controller = paramzd_contr_handled
+        controller = base_controller
         self._process_message_testing(controller, client)
 
-    def test_process_message_AsyncDeprecated(self, paramzd_contr_handled, client):
+    @pytest.mark.handler_data(class_=AsyncDeprecatedHandler)
+    def test_process_message_AsyncDeprecated(self, base_controller, client):
         """handler.process_message is Deprecated"""
-        handler = paramzd_contr_handled.handler
+        handler = base_controller.handler
         assert isinstance(handler, AsyncDeprecatedHandler)
-        controller = paramzd_contr_handled
+        controller = base_controller
         self._process_message_testing(controller, client)
 
-    def test_ehlo_hook_warn(self, contr_deprecated_hook, client):
+    def test_ehlo_hook_warn(self, deprecated_hook_controller, client):
         """SMTP.ehlo_hook is Deprecated"""
         with pytest.warns(DeprecationWarning) as record:
             client.ehlo("example.com")
@@ -858,7 +872,7 @@ class TestDeprecation:
             == "Use handler.handle_EHLO() instead of .ehlo_hook()"
         )
 
-    def test_rset_hook(self, contr_deprecated_hook, client):
+    def test_rset_hook(self, deprecated_hook_controller, client):
         """SMTP.rset_hook is Deprecated"""
         with pytest.warns(DeprecationWarning) as record:
             client.rset()
