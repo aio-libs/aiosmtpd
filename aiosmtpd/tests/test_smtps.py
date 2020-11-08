@@ -35,21 +35,20 @@ def ssl_controller() -> Controller:
 
 
 @pytest.fixture
-def client(ssl_controller) -> SMTP_SSL:
+def smtps_client() -> SMTP_SSL:
     context = get_client_context()
-    c = ssl_controller
-    with SMTP_SSL(c.hostname, c.port, context=context) as client:
+    with SMTP_SSL(SRV_ADDR.host, SRV_ADDR.port, context=context) as client:
         yield client
 
 
 class TestSMTPSNieuw:
-    def test_smtps(self, ssl_controller, client):
+    def test_smtps(self, ssl_controller, smtps_client):
         sender = "sender@example.com"
         recipients = ["rcpt1@example.com"]
-        code, mesg = client.helo("example.com")
+        code, mesg = smtps_client.helo("example.com")
         assert code == 250
         assert mesg == socket.getfqdn().encode("utf-8")
-        results = client.send_message(MIMEText("hi"), sender, recipients)
+        results = smtps_client.send_message(MIMEText("hi"), sender, recipients)
         assert results == {}
         handler: ReceivingHandler = ssl_controller.handler
         assert len(handler.box) == 1
