@@ -21,7 +21,7 @@ class SimpleController(Controller):
 
 
 @pytest.fixture
-def ssl_controller() -> Controller:
+def ssl_controller() -> SimpleController:
     context = get_server_context()
     handler = ReceivingHandler()
     controller = SimpleController(handler, ssl_context=context)

@@ -8,10 +8,11 @@ import struct
 from aiosmtpd.controller import Controller
 from aiosmtpd.smtp import Envelope, SMTP as Server
 from pkg_resources import resource_filename
+from smtplib import SMTP as SMTP_Client
 from typing import List
 
 
-def reset_connection(client):
+def reset_connection(client: SMTP_Client):
     # Close the connection with a TCP RST instead of a TCP FIN.  client must
     # be a smtplib.SMTP instance.
     #

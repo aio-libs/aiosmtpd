@@ -15,7 +15,7 @@ class LMTPController(Controller):
 
 
 @pytest.fixture(autouse=True)
-def lmtp_controller():
+def lmtp_controller() -> LMTPController:
     controller = LMTPController(Sink)
     controller.start()
     Global.set_addr_from(controller)

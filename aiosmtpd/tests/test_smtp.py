@@ -27,7 +27,7 @@ from base64 import b64encode
 from contextlib import suppress
 from smtplib import SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected
 from textwrap import dedent
-from typing import AnyStr, List
+from typing import AnyStr, Callable, List, Tuple
 from unittest.mock import MagicMock
 
 
@@ -45,7 +45,7 @@ to be increased for slow and/or overburdened test systems.
 # region ##### Test Harness Functions & Classes #######################################
 
 
-def authenticator(mechanism, login, password):
+def authenticator(mechanism, login, password) -> bool:
     if login and login.decode() == "goodlogin":
         return True
     else:
@@ -229,7 +229,7 @@ class ExposingController(Controller):
 
 
 @pytest.fixture
-def transport_resp(mocker):
+def transport_resp(mocker) -> Tuple[MagicMock, List]:
     responses = []
     mocked = mocker.Mock()
     mocked.write = responses.append
@@ -238,10 +238,10 @@ def transport_resp(mocker):
 
 
 @pytest.fixture
-def get_protocol(temp_event_loop, transport_resp):
+def get_protocol(temp_event_loop, transport_resp) -> Callable[..., Server]:
     transport, _ = transport_resp
 
-    def getter(*args, **kwargs):
+    def getter(*args, **kwargs) -> Server:
         proto = Server(*args, loop=temp_event_loop, **kwargs)
         proto.connection_made(transport)
         return proto
