@@ -20,7 +20,7 @@ from aiosmtpd.testing.helpers import (
     SUPPORTED_COMMANDS_NOTLS,
     reset_connection,
 )
-from .conftest import _get_controller, _get_handler, _get_marker_data, SRV_ADDR
+from .conftest import SRV_ADDR
 from base64 import b64encode
 from contextlib import suppress
 from smtplib import SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected
@@ -248,8 +248,8 @@ def get_protocol(temp_event_loop, transport_resp):
 
 
 @pytest.fixture
-def decoding_authnotls_controller(request) -> DecodingAuthNoTLSController:
-    handler = _get_handler(request)
+def decoding_authnotls_controller(get_handler) -> DecodingAuthNoTLSController:
+    handler = get_handler()
     controller = DecodingAuthNoTLSController(handler)
     controller.start()
     #
@@ -278,8 +278,8 @@ def exposing_controller() -> ExposingController:
 
 
 @pytest.fixture
-def strictascii_controller(request) -> StrictASCIIController:
-    handler = _get_handler(request)
+def strictascii_controller(get_handler) -> StrictASCIIController:
+    handler = get_handler()
     controller = StrictASCIIController(handler)
     controller.start()
     #
@@ -300,9 +300,9 @@ def sleeping_nodecode_controller() -> NoDecodeController:
 
 
 @pytest.fixture
-def controller_with_sink(request) -> Controller:
+def controller_with_sink(get_controller) -> Controller:
     handler = Sink()
-    controller = _get_controller(request, handler, None)
+    controller = get_controller(handler, None)
     controller.start()
     #
     yield controller
@@ -322,8 +322,12 @@ def require_auth_controller() -> Controller:
 
 
 @pytest.fixture
-def sized_controller(request) -> Controller:
-    markerdata = _get_marker_data(request, "controller_data")
+def sized_controller(request) -> SizedController:
+    marker = request.node.get_closest_marker("controller_data")
+    if marker:
+        markerdata = marker.kwargs or {}
+    else:
+        markerdata = {}
     size = markerdata.get("size", None)
     handler = Sink()
     controller = SizedController(handler, size=size)
@@ -359,8 +363,8 @@ def envelope_storing_handler() -> StoreEnvelopeOnVRFYHandler:
 
 
 @pytest.fixture
-def error_controller(request) -> Controller:
-    handler = _get_handler(request)
+def error_controller(get_handler) -> Controller:
+    handler = get_handler()
     controller = ErrorController(handler)
     controller.start()
     #
@@ -370,9 +374,9 @@ def error_controller(request) -> Controller:
 
 
 @pytest.fixture
-def receiving_handler(request) -> ReceivingHandler:
+def receiving_handler(get_controller) -> ReceivingHandler:
     handler = ReceivingHandler()
-    controller = _get_controller(request, handler)
+    controller = get_controller(handler)
     controller.start()
     #
     yield handler

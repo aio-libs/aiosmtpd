@@ -5,7 +5,7 @@ import logging
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
 from aiosmtpd.smtp import SMTP as Server
-from .conftest import DecodingController
+from .conftest import DecodingController, SRV_ADDR
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
@@ -15,7 +15,6 @@ from textwrap import dedent
 
 
 CRLF = "\r\n"
-SERVER_ADDRESS = ("localhost", 8025)
 
 
 # region ##### Support Classes ###############################################
@@ -138,7 +137,7 @@ class AsyncDeprecatedHandler:
 def debugging_controller() -> Controller:
     stream = StringIO()
     handler = Debugging(stream)
-    controller = Controller(handler)
+    controller = Controller(handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port)
     controller.start()
     #
     yield controller
@@ -151,7 +150,7 @@ def debugging_controller() -> Controller:
 def debugging_decoding_controller() -> Controller:
     stream = StringIO()
     handler = Debugging(stream)
-    controller = DecodingController(handler)
+    controller = DecodingController(handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port)
     controller.start()
     #
     yield controller
@@ -169,7 +168,7 @@ def temp_maildir(tmp_path: Path) -> Path:
 @pytest.fixture
 def mailbox_controller(temp_maildir) -> Controller:
     handler = Mailbox(temp_maildir)
-    controller = Controller(handler)
+    controller = Controller(handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port)
     controller.start()
     #
     yield controller
@@ -185,7 +184,9 @@ def fake_parser() -> FakeParser:
 @pytest.fixture
 def upstream_controller() -> Controller:
     upstream_handler = DataHandler()
-    upstream_controller = Controller(upstream_handler, port=9025)
+    upstream_controller = Controller(
+        upstream_handler, hostname=SRV_ADDR.host, port=9025
+    )
     upstream_controller.start()
     #
     yield upstream_controller
@@ -196,7 +197,9 @@ def upstream_controller() -> Controller:
 @pytest.fixture
 def proxy_controller(upstream_controller) -> Controller:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
-    proxy_controller = Controller(proxy_handler)
+    proxy_controller = Controller(
+        proxy_handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port
+    )
     proxy_controller.start()
     #
     yield proxy_controller
@@ -207,7 +210,9 @@ def proxy_controller(upstream_controller) -> Controller:
 @pytest.fixture
 def proxy_decoding_controller(upstream_controller) -> Controller:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
-    proxy_controller = DecodingController(proxy_handler)
+    proxy_controller = DecodingController(
+        proxy_handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port
+    )
     proxy_controller.start()
     #
     yield proxy_controller
@@ -218,7 +223,9 @@ def proxy_decoding_controller(upstream_controller) -> Controller:
 @pytest.fixture
 def auth_decoding_controller() -> Controller:
     handler = AUTHHandler()
-    controller = AUTHDecodingController(handler)
+    controller = AUTHDecodingController(
+        handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port
+    )
     controller.start()
     #
     yield controller

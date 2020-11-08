@@ -9,14 +9,10 @@ from aiosmtpd.testing.helpers import (
     get_server_context,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-from .conftest import _get_handler
-from collections import namedtuple
+from .conftest import SRV_ADDR
 from contextlib import suppress
 from email.mime.text import MIMEText
 from smtplib import SMTP
-
-
-SRV_ADDR = namedtuple("IPPort", ("ip", "port"))("localhost", 8025)
 
 
 # region #### Harness Classes & Functions #############################################
@@ -69,9 +65,9 @@ class HandshakeFailingHandler:
 
 
 @pytest.fixture
-def tls_controller(request) -> TLSController:
-    handler = _get_handler(request)
-    controller = TLSController(handler, hostname=SRV_ADDR.ip, port=SRV_ADDR.port)
+def tls_controller(get_handler) -> TLSController:
+    handler = get_handler()
+    controller = TLSController(handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port)
     controller.start()
     #
     yield controller
@@ -84,10 +80,10 @@ def tls_controller(request) -> TLSController:
 
 
 @pytest.fixture
-def tls_req_controller(request) -> TLSController:
-    handler = _get_handler(request)
+def tls_req_controller(get_handler) -> TLSController:
+    handler = get_handler()
     controller = TLSRequiredController(
-        handler, hostname=SRV_ADDR.ip, port=SRV_ADDR.port
+        handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port
     )
     controller.start()
     #
@@ -97,10 +93,10 @@ def tls_req_controller(request) -> TLSController:
 
 
 @pytest.fixture
-def auth_req_tls_controller(request) -> RequireTLSAuthDecodingController:
-    handler = _get_handler(request)
+def auth_req_tls_controller(get_handler) -> RequireTLSAuthDecodingController:
+    handler = get_handler()
     controller = RequireTLSAuthDecodingController(
-        handler, hostname=SRV_ADDR.ip, port=SRV_ADDR.port
+        handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port
     )
     controller.start()
     #
@@ -112,7 +108,7 @@ def auth_req_tls_controller(request) -> RequireTLSAuthDecodingController:
 @pytest.fixture
 def simple_controller() -> SimpleController:
     handler = Sink()
-    controller = SimpleController(handler, hostname=SRV_ADDR.ip, port=SRV_ADDR.port)
+    controller = SimpleController(handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port)
     controller.start()
     #
     yield controller

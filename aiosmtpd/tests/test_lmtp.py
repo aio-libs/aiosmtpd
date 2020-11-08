@@ -3,6 +3,7 @@
 import pytest
 import socket
 
+from .conftest import SRV_ADDR
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.lmtp import LMTP
@@ -16,7 +17,7 @@ class LMTPController(Controller):
 
 @pytest.fixture(autouse=True)
 def lmtp_controller():
-    controller = LMTPController(Sink)
+    controller = LMTPController(Sink, hostname=SRV_ADDR.host, port=SRV_ADDR.port)
     controller.start()
     #
     yield controller
