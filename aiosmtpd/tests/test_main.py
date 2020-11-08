@@ -55,7 +55,12 @@ def autostop_loop(temp_event_loop) -> asyncio.AbstractEventLoop:
 def nobody_uid() -> int:
     if pwd is None:
         pytest.skip("No pwd module available")
-    yield pwd.getpwnam("nobody").pw_uid
+    try:
+        pw = pwd.getpwnam("nobody")
+    except KeyError:
+        pytest.skip("'nobody' not available")
+    else:
+        yield pw.pw_uid
 
 
 @pytest.fixture
