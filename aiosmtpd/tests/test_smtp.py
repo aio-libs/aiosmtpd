@@ -668,7 +668,9 @@ class TestSMTP(_CommonMethods):
         assert resp == S.S503_HELO_FIRST
 
     @pytest.mark.parametrize(
-        "address", valid_mailfrom_addresses, ids=range(len(valid_mailfrom_addresses))
+        "address",
+        valid_mailfrom_addresses,
+        ids=list(range(len(valid_mailfrom_addresses))),
     )
     def test_mail_valid_addresses(self, client, address):
         self._ehlo(client)
@@ -756,7 +758,9 @@ class TestSMTP(_CommonMethods):
         assert resp == S.S250_OK
 
     @pytest.mark.parametrize(
-        "address", invalid_email_addresses, ids=range(len(invalid_email_addresses))
+        "address",
+        invalid_email_addresses,
+        ids=list(range(len(invalid_email_addresses))),
     )
     def test_mail_smtp_malformed(self, client, address):
         self._helo(client)
@@ -810,7 +814,7 @@ class TestSMTP(_CommonMethods):
         assert resp == (555, b"RCPT TO parameters not recognized or not implemented")
 
     @pytest.mark.parametrize(
-        "address", valid_rcptto_addresses, ids=range(len(valid_rcptto_addresses))
+        "address", valid_rcptto_addresses, ids=list(range(len(valid_rcptto_addresses)))
     )
     def test_rcpt_valid(self, client, address):
         self._ehlo(client)
@@ -820,7 +824,9 @@ class TestSMTP(_CommonMethods):
         assert resp == S.S250_OK
 
     @pytest.mark.parametrize(
-        "address", invalid_email_addresses, ids=range(len(invalid_email_addresses))
+        "address",
+        invalid_email_addresses,
+        ids=list(range(len(invalid_email_addresses))),
     )
     def test_rcpt_malformed(self, client, address):
         self._ehlo(client)
@@ -852,7 +858,9 @@ class TestSMTP(_CommonMethods):
         assert resp == S.S250_OK
 
     @pytest.mark.parametrize(
-        "address", invalid_email_addresses, ids=range(len(invalid_email_addresses))
+        "address",
+        invalid_email_addresses,
+        ids=list(range(len(invalid_email_addresses))),
     )
     def test_mail_esmtp_malformed(self, client, address):
         self._ehlo(client)
