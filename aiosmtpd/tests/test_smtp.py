@@ -6,6 +6,7 @@ import pytest
 import socket
 import asyncio
 import logging
+import itertools
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
@@ -663,7 +664,7 @@ class TestSMTPNieuw(_CommonMethods):
         assert resp == S.S503_HELO_FIRST
 
     @pytest.mark.parametrize(
-        "address", valid_mailfrom_addresses, ids=range(len(valid_mailfrom_addresses))
+        "address", valid_mailfrom_addresses, ids=itertools.count()
     )
     def test_mail_valid_addresses(self, client, address):
         self._ehlo(client)
@@ -751,7 +752,7 @@ class TestSMTPNieuw(_CommonMethods):
         assert resp == S.S250_OK
 
     @pytest.mark.parametrize(
-        "address", invalid_email_addresses, ids=range(len(invalid_email_addresses))
+        "address", invalid_email_addresses, ids=itertools.count()
     )
     def test_mail_smtp_malformed(self, client, address):
         self._helo(client)
@@ -805,7 +806,7 @@ class TestSMTPNieuw(_CommonMethods):
         assert resp == (555, b"RCPT TO parameters not recognized or not implemented")
 
     @pytest.mark.parametrize(
-        "address", valid_rcptto_addresses, ids=range(len(valid_rcptto_addresses))
+        "address", valid_rcptto_addresses, ids=itertools.count()
     )
     def test_rcpt_valid(self, client, address):
         self._ehlo(client)
@@ -815,7 +816,7 @@ class TestSMTPNieuw(_CommonMethods):
         assert resp == S.S250_OK
 
     @pytest.mark.parametrize(
-        "address", invalid_email_addresses, ids=range(len(invalid_email_addresses))
+        "address", invalid_email_addresses, ids=itertools.count()
     )
     def test_rcpt_malformed(self, client, address):
         self._ehlo(client)
