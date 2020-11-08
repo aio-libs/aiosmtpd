@@ -43,7 +43,7 @@ def get_controller(request) -> Callable[..., Controller]:
                 f"Fixture '{request.fixturename}' needs controller_data to specify "
                 f"what class to use"
             )
-        ip_port: HostPort = markerdata.get("ip_port", HostPort())
+        ip_port: HostPort = markerdata.get("host_port", HostPort())
         return class_(
             handler,
             hostname=ip_port.host,
