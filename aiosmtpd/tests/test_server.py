@@ -4,6 +4,7 @@ import os
 import pytest
 import socket
 
+from .conftest import Global
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
@@ -32,13 +33,27 @@ class TestServerNieuw:
         assert server.max_command_size_limit == 1024
 
     @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
-    def test_socket_error(self, base_controller):
-        contr2 = Controller(Sink(), port=8025)
+    def test_socket_error_dupe(self, base_controller, client):
+        contr2 = Controller(
+            Sink(), hostname=Global.SrvAddr.host, port=Global.SrvAddr.port
+        )
         try:
             with pytest.raises(socket.error):
                 contr2.start()
         finally:
             contr2.stop()
+
+    @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
+    def test_socket_error_default(self):
+        contr1 = Controller(Sink())
+        contr2 = Controller(Sink())
+        try:
+            with pytest.raises(socket.error):
+                contr1.start()
+                contr2.start()
+        finally:
+            contr2.stop()
+            contr1.stop()
 
     def test_server_attribute(self):
         controller = Controller(Sink())
