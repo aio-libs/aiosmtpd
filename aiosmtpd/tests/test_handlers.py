@@ -86,7 +86,7 @@ class ErroringDataHandler:
 class AUTHHandler:
     async def handle_AUTH(self, server, session, envelope, args):
         server.authenticates = True
-        return "235 Authentication successful"
+        return f"{S.S235_AUTH_SUCCESS.code} {S.S235_AUTH_SUCCESS.mesg.decode()}"
 
 
 class NoHooksHandler:
