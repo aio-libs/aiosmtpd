@@ -8,10 +8,7 @@ import struct
 from aiosmtpd.controller import Controller
 from aiosmtpd.smtp import Envelope, SMTP as Server
 from pkg_resources import resource_filename
-from typing import List, Optional, Tuple
-
-
-SMTPResponse = Tuple[int, bytes]
+from typing import List
 
 
 def reset_connection(client):
