@@ -149,6 +149,15 @@ class TestStartTLS:
         assert handler.box[0].mail_from == sender
         assert handler.box[0].rcpt_tos == recipients
 
+    def test_starttls_quit(self, tls_controller, client):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.starttls()
+        assert resp == S.S220_READY_TLS
+        resp = client.quit()
+        assert resp == S.S221_BYE
+        client.close()
+
     @pytest.mark.handler_data(class_=HandshakeFailingHandler)
     def test_failed_handshake(self, client):
         code, _ = client.ehlo("example.com")
