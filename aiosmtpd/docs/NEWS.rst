@@ -2,6 +2,13 @@
  NEWS for aiosmtpd
 ===================
 
+aiosmtpd-next
+=============
+
+* Convert all test cases to pytest (Closes #198)
+* Travis now tests on Python 3.9 as well
+
+
 1.2.2 (2020-11-08)
 ==================
 
