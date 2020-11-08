@@ -7,7 +7,6 @@ from .conftest import SRV_ADDR
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.lmtp import LMTP
-from smtplib import SMTP
 
 
 class LMTPController(Controller):
@@ -25,33 +24,24 @@ def lmtp_controller():
     controller.stop()
 
 
-@pytest.fixture
-def client(lmtp_controller: LMTPController):
-    client = SMTP(lmtp_controller.hostname, lmtp_controller.port)
-    #
-    yield client
-    #
-    client.quit()
-
-
-def test_lhlo(client):
+def test_lhlo(lmtp_controller, client):
     resp = client.docmd("LHLO example.com")
     assert resp == (250, bytes(socket.getfqdn(), 'utf-8'))
 
 
-def test_helo(client):
+def test_helo(lmtp_controller, client):
     # HELO and EHLO are not valid LMTP commands.
     resp = client.helo('example.com')
     assert resp == (500, b'Error: command "HELO" not recognized')
 
 
-def test_ehlo(client):
+def test_ehlo(lmtp_controller, client):
     # HELO and EHLO are not valid LMTP commands.
     resp = client.ehlo('example.com')
     assert resp == (500, b'Error: command "EHLO" not recognized')
 
 
-def test_help(client):
+def test_help(lmtp_controller, client):
     # https://github.com/aio-libs/aiosmtpd/issues/113
     resp = client.docmd("HELP")
     assert resp == (250,
