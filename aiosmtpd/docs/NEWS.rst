@@ -2,23 +2,23 @@
  NEWS for aiosmtpd
 ===================
 
-aiosmtpd-next
-=============
+1.2.2 (2020-11-08)
+==================
 
 Added
 -----
 * **Apache License version 2.0**
 * Support for SMTP ``AUTH``, with AUTH hooks feature
-* Built-in implementation for ``AUTH PLAIN`` and ``AUTH LOGIN`` logic (fixes #102)
+* Built-in implementation for ``AUTH PLAIN`` and ``AUTH LOGIN`` logic (Closes #102)
 * Feature to inject keyword args during server class instantiation in ``Controller.factory``
-  (potentially fixes #194, #179)
-* Support for Python 3.8 and 3.9.0 (also fixes #188)
+  (potentially Closes #194, #179)
+* Support for Python 3.8 and 3.9.0 (also Closes #188)
 
 Fixed/Improved
 --------------
 * Don't strip last ``\r\n`` prior to terminating dot.
 * Slight improvement to make Test Suite more maintainable
-* No more failures/DeprecationWarnings for Python 3.8 (fixes #167)
+* No more failures/DeprecationWarnings for Python 3.8 (Closes #167)
 * Faster ``_handle_client()`` processing
 * Faster method access for ``smtp_*``, ``handle_*``, and ``auth_*`` hooks
 
