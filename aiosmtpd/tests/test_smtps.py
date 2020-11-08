@@ -1,7 +1,6 @@
 """Test SMTP over SSL/TLS."""
 
 import pytest
-import socket
 
 from .conftest import SRV_ADDR
 from aiosmtpd.controller import Controller
@@ -11,6 +10,7 @@ from aiosmtpd.testing.helpers import (
     get_client_context,
     get_server_context,
 )
+from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from email.mime.text import MIMEText
 from smtplib import SMTP_SSL
 
@@ -45,9 +45,8 @@ class TestSMTPSNieuw:
     def test_smtps(self, ssl_controller, smtps_client):
         sender = "sender@example.com"
         recipients = ["rcpt1@example.com"]
-        code, mesg = smtps_client.helo("example.com")
-        assert code == 250
-        assert mesg == socket.getfqdn().encode("utf-8")
+        resp = smtps_client.helo("example.com")
+        assert resp == S.S250_FQDN
         results = smtps_client.send_message(MIMEText("hi"), sender, recipients)
         assert results == {}
         handler: ReceivingHandler = ssl_controller.handler

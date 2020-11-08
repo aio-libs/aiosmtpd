@@ -5,6 +5,7 @@ import logging
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
 from aiosmtpd.smtp import SMTP as Server
+from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from .conftest import DecodingController, SRV_ADDR
 from io import StringIO
 from mailbox import Maildir
@@ -776,7 +777,7 @@ class TestHooks:
         assert isinstance(auth_decoding_controller.handler, AUTHHandler)
         client.ehlo("me")
         resp = client.login("test", "test")
-        assert resp == (235, b"Authentication successful")
+        assert resp == S.S235_AUTH_SUCCESS
 
     @pytest.mark.handler_data(class_=NoHooksHandler)
     def test_hook_NoHooks(self, base_controller, client):

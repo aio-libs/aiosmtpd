@@ -142,7 +142,7 @@ class TestStartTLSNieuw:
         assert code == 250
         assert "starttls" in client.esmtp_features
         resp = client.starttls()
-        assert resp == (220, b"Ready to start TLS")
+        assert resp == S.S220_READY_TLS
         client.send_message(MIMEText("hi"), sender, recipients)
         handler: ReceivingHandler = tls_controller.handler
         assert len(handler.box) == 1
@@ -188,7 +188,7 @@ class TestTLSForgetsSessionDataNieuw:
         resp = client.starttls()
         assert resp == S.S220_READY_TLS
         resp = client.mail("sender@example.com")
-        assert resp == S.S530_HELO_FIRST
+        assert resp == S.S503_HELO_FIRST
 
     def test_forget_mail(self, client):
         code, _ = client.ehlo("example.com")

@@ -20,6 +20,7 @@ from aiosmtpd.testing.helpers import (
     SUPPORTED_COMMANDS_NOTLS,
     reset_connection,
 )
+from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from .conftest import SRV_ADDR
 from base64 import b64encode
 from contextlib import suppress
@@ -538,18 +539,18 @@ class TestSMTPNieuw(_CommonMethods):
     @pytest.mark.parametrize("data", [b"\x80FAIL\r\n", b"\x80 FAIL\r\n"])
     def test_binary(self, client, data):
         client.sock.send(data)
-        assert client.getreply() == (500, b"Error: bad syntax")
+        assert client.getreply() == S.S500_BAD_SYNTAX
 
     def test_helo(self, client):
         resp = client.helo("example.com")
-        assert resp == (250, bytes(socket.getfqdn(), "utf-8"))
+        assert resp == S.S250_FQDN
 
     def test_close_then_continue(self, client):
         self._helo(client)
         client.close()
         client.connect(*SRV_ADDR)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
-        assert resp == (503, b"Error: send HELO first")
+        assert resp == S.S503_HELO_FIRST
 
     def test_helo_no_hostname(self, client):
         client.local_hostname = ""
@@ -578,7 +579,7 @@ class TestSMTPNieuw(_CommonMethods):
     def test_ehlo_no_hostname(self, client):
         client.local_hostname = ""
         resp = client.ehlo("")
-        assert resp == (501, b"Syntax: EHLO hostname")
+        assert resp == S.S501_SYNTAX_EHLO
 
     def test_helo_then_ehlo(self, client):
         self._helo(client, "example.com")
@@ -599,11 +600,11 @@ class TestSMTPNieuw(_CommonMethods):
 
     def test_quit(self, client):
         resp = client.quit()
-        assert resp == (221, b"Bye")
+        assert resp == S.S221_BYE
 
     def test_quit_with_args(self, client):
         resp = client.docmd("QUIT oops")
-        assert resp == (501, b"Syntax: QUIT")
+        assert resp == S.S501_SYNTAX_QUIT
 
     def test_help(self, client):
         resp = client.docmd("HELP")
@@ -659,7 +660,7 @@ class TestSMTPNieuw(_CommonMethods):
     )
     def test_no_helo(self, client, command):
         resp = client.docmd(command)
-        assert resp == (503, b"Error: send HELO first")
+        assert resp == S.S503_HELO_FIRST
 
     @pytest.mark.parametrize(
         "address", valid_mailfrom_addresses, ids=range(len(valid_mailfrom_addresses))
@@ -667,7 +668,7 @@ class TestSMTPNieuw(_CommonMethods):
     def test_mail_valid_addresses(self, client, address):
         self._ehlo(client)
         resp = client.docmd(f"MAIL FROM:{address}")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
 
     @pytest.mark.parametrize(
         "command",
@@ -697,12 +698,12 @@ class TestSMTPNieuw(_CommonMethods):
     def test_mail_params_esmtp(self, client, param):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com> " + param)
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
 
     def test_mail_from_twice(self, client):
         self._helo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == (503, b"Error: nested MAIL command")
 
@@ -745,9 +746,9 @@ class TestSMTPNieuw(_CommonMethods):
     def test_27931fix_smtp(self, client):
         self._helo(client)
         resp = client.docmd('MAIL FROM: <""@example.com>')
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         resp = client.docmd('RCPT TO: <""@example.org>')
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
 
     @pytest.mark.parametrize(
         "address", invalid_email_addresses, ids=range(len(invalid_email_addresses))
@@ -755,7 +756,7 @@ class TestSMTPNieuw(_CommonMethods):
     def test_mail_smtp_malformed(self, client, address):
         self._helo(client)
         resp = client.docmd(f"MAIL FROM: {address}")
-        assert resp == (553, b"5.1.3 Error: malformed address")
+        assert resp == S.S553_MALFORMED
 
     def test_rcpt_no_mail(self, client):
         self._helo(client)
@@ -775,7 +776,7 @@ class TestSMTPNieuw(_CommonMethods):
     def test_rcpt_smtp_errsyntax(self, client, command):
         self._helo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         resp = client.docmd(command)
         assert resp == (501, b"Syntax: RCPT TO: <address>")
 
@@ -792,14 +793,14 @@ class TestSMTPNieuw(_CommonMethods):
     def test_rcpt_esmtp_errsyntax(self, client, command):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         resp = client.docmd(command)
         assert resp == (501, b"Syntax: RCPT TO: <address> [SP <mail-parameters>]")
 
     def test_rcpt_unknown_params(self, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         resp = client.docmd("RCPT TO: <bart@example.com> FOOBAR")
         assert resp == (555, b"RCPT TO parameters not recognized or not implemented")
 
@@ -809,9 +810,9 @@ class TestSMTPNieuw(_CommonMethods):
     def test_rcpt_valid(self, client, address):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         resp = client.docmd(f"RCPT TO: {address}")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
 
     @pytest.mark.parametrize(
         "address", invalid_email_addresses, ids=range(len(invalid_email_addresses))
@@ -819,9 +820,9 @@ class TestSMTPNieuw(_CommonMethods):
     def test_rcpt_malformed(self, client, address):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         resp = client.docmd(f"RCPT TO: {address}")
-        assert resp == (553, b"5.1.3 Error: malformed address")
+        assert resp == S.S553_MALFORMED
 
     # This was a bug, and it's already fixed since 3.6 (see bpo below)
     # Since we now only support >=3.6, there is no point emulating this bug
@@ -841,9 +842,9 @@ class TestSMTPNieuw(_CommonMethods):
     def test_27931fix_esmtp(self, client):
         self._ehlo(client)
         resp = client.docmd('MAIL FROM: <""@example.com> SIZE=28113')
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         resp = client.docmd('RCPT TO: <""@example.org>')
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
 
     @pytest.mark.parametrize(
         "address", invalid_email_addresses, ids=range(len(invalid_email_addresses))
@@ -851,11 +852,11 @@ class TestSMTPNieuw(_CommonMethods):
     def test_mail_esmtp_malformed(self, client, address):
         self._ehlo(client)
         resp = client.docmd(f"MAIL FROM: {address} SIZE=28113")
-        assert resp == (553, b"5.1.3 Error: malformed address")
+        assert resp == S.S553_MALFORMED
 
     def test_rset(self, client):
         resp = client.rset()
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
 
     def test_rset_with_arg(self, client):
         resp = client.docmd("RSET FOO")
@@ -884,9 +885,9 @@ class TestSMTPNieuw(_CommonMethods):
     def test_data_354(self, decoding_authnotls_controller, client):
         self._helo(client)
         resp = client.docmd("MAIL FROM: <alice@example.org>")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         resp = client.docmd("RCPT TO: <bob@example.org>")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         # Note: We NEED to manually stop the controller if we must abort while
         # in DATA phase. For reasons unclear, if we don't do that we'll hang
         # the test case should the assertion fail
@@ -899,9 +900,9 @@ class TestSMTPNieuw(_CommonMethods):
     def test_data_invalid_params(self, client):
         self._helo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         resp = client.docmd("RCPT TO: <anne@example.com>")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         resp = client.docmd("DATA FOOBAR")
         assert resp == (501, b"Syntax: DATA")
 
@@ -958,25 +959,25 @@ class TestSMTPAuthNieuw(_CommonMethods):
     def test_auth_success(self, client):
         self._ehlo(client)
         resp = client.login("goodlogin", "goodpasswd", initial_response_ok=False)
-        assert resp == (235, b"2.7.0 Authentication successful")
+        assert resp == S.S235_AUTH_SUCCESS
 
     def test_auth_good_credentials(self, client):
         self._ehlo(client)
         resp = client.docmd(
             "AUTH PLAIN " + b64encode(b"\0goodlogin\0goodpasswd").decode()
         )
-        assert resp == (235, b"2.7.0 Authentication successful")
+        assert resp == S.S235_AUTH_SUCCESS
 
     def test_auth_already_authenticated(self, client):
         self._ehlo(client)
         resp = client.docmd(
             "AUTH PLAIN " + b64encode(b"\0goodlogin\0goodpasswd").decode()
         )
-        assert resp == (235, b"2.7.0 Authentication successful")
+        assert resp == S.S235_AUTH_SUCCESS
         resp = client.docmd("AUTH")
         assert resp == (503, b"Already authenticated")
         resp = client.docmd("MAIL FROM: <anne@example.com>")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
 
     def test_auth_bad_base64_encoding(self, client):
         self._ehlo(client)
@@ -993,7 +994,7 @@ class TestSMTPAuthNieuw(_CommonMethods):
         resp = client.docmd(
             "AUTH PLAIN " + b64encode(b"\0badlogin\0badpasswd").decode()
         )
-        assert resp == (535, b"5.7.8 Authentication credentials invalid")
+        assert resp == S.S535_AUTH_INVALID
 
     def _auth_two_steps(self, client):
         self._ehlo(client)
@@ -1003,12 +1004,12 @@ class TestSMTPAuthNieuw(_CommonMethods):
     def test_auth_two_steps_good_credentials(self, client):
         self._auth_two_steps(client)
         resp = client.docmd(b64encode(b"\0goodlogin\0goodpasswd").decode())
-        assert resp == (235, b"2.7.0 Authentication successful")
+        assert resp == S.S235_AUTH_SUCCESS
 
     def test_auth_two_steps_bad_credentials(self, client):
         self._auth_two_steps(client)
         resp = client.docmd(b64encode(b"\0badlogin\0badpasswd").decode())
-        assert resp == (535, b"5.7.8 Authentication credentials invalid")
+        assert resp == S.S535_AUTH_INVALID
 
     def test_auth_two_steps_abort(self, client):
         self._auth_two_steps(client)
@@ -1023,19 +1024,19 @@ class TestSMTPAuthNieuw(_CommonMethods):
     def test_auth_no_credentials(self, client):
         self._ehlo(client)
         resp = client.docmd("AUTH PLAIN =")
-        assert resp == (535, b"5.7.8 Authentication credentials invalid")
+        assert resp == S.S535_AUTH_INVALID
 
     def test_auth_two_steps_no_credentials(self, client):
         self._auth_two_steps(client)
         resp = client.docmd("=")
-        assert resp == (535, b"5.7.8 Authentication credentials invalid")
+        assert resp == S.S535_AUTH_INVALID
 
     def test_auth_login_no_credentials(self, client):
         self._auth_login_noarg(client)
         resp = client.docmd("=")
         assert resp == (334, b"UGFzc3dvcmQA")
         resp = client.docmd("=")
-        assert resp == (535, b"5.7.8 Authentication credentials invalid")
+        assert resp == S.S535_AUTH_INVALID
 
 
 @pytest.mark.usefixtures("auth_peeker_controller")
@@ -1055,7 +1056,7 @@ class TestSMTPAuthMechanisms(_CommonMethods):
     def test_auth_custom_mechanism(self, client):
         self._ehlo(client)
         resp = client.docmd("AUTH NULL")
-        assert resp == (235, b"2.7.0 Authentication successful")
+        assert resp == S.S235_AUTH_SUCCESS
 
     def test_auth_plain_null_credential(self, auth_peeker_controller, client):
         assert isinstance(auth_peeker_controller, DecodingControllerPeekAuth)
@@ -1063,13 +1064,13 @@ class TestSMTPAuthMechanisms(_CommonMethods):
         resp = client.docmd("AUTH PLAIN")
         assert resp == (334, b"")
         resp = client.docmd("=")
-        assert resp == (235, b"2.7.0 Authentication successful")
+        assert resp == S.S235_AUTH_SUCCESS
         peeker = auth_peeker_controller.handler
         assert isinstance(peeker, PeekerHandler)
         assert peeker.login is None
         assert peeker.password is None
         resp = client.mail("alice@example.com")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         assert peeker._sess.login_data == b""
 
     def test_auth_login_null_credential(self, auth_peeker_controller, client):
@@ -1078,13 +1079,13 @@ class TestSMTPAuthMechanisms(_CommonMethods):
         resp = client.docmd("=")
         assert resp == (334, b"UGFzc3dvcmQA")
         resp = client.docmd("=")
-        assert resp == (235, b"2.7.0 Authentication successful")
+        assert resp == S.S235_AUTH_SUCCESS
         peeker = auth_peeker_controller.handler
         assert isinstance(peeker, PeekerHandler)
         assert peeker.login is None
         assert peeker.password is None
         resp = client.mail("alice@example.com")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         assert peeker._sess.login_data == b""
 
     def test_auth_login_abort_login(self, client):
@@ -1123,30 +1124,30 @@ class TestSMTPRequiredAuthenticationNieuw(_CommonMethods):
     def _login(self, client: SMTP):
         self._ehlo(client)
         resp = client.login("goodlogin", "goodpasswd")
-        assert resp == (235, b"2.7.0 Authentication successful")
+        assert resp == S.S235_AUTH_SUCCESS
 
     def test_help_unauthenticated(self, client):
         resp = client.docmd("HELP")
-        assert resp == (530, b"5.7.0 Authentication required")
+        assert resp == S.S530_AUTH_REQUIRED
 
     def test_vrfy_unauthenticated(self, client):
         resp = client.docmd("VRFY <anne@example.com>")
-        assert resp == (530, b"5.7.0 Authentication required")
+        assert resp == S.S530_AUTH_REQUIRED
 
     def test_mail_unauthenticated(self, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
-        assert resp == (530, b"5.7.0 Authentication required")
+        assert resp == S.S530_AUTH_REQUIRED
 
     def test_rcpt_unauthenticated(self, client):
         self._ehlo(client)
         resp = client.docmd("RCPT TO: <anne@example.com>")
-        assert resp == (530, b"5.7.0 Authentication required")
+        assert resp == S.S530_AUTH_REQUIRED
 
     def test_data_unauthenticated(self, client):
         self._ehlo(client)
         resp = client.docmd("DATA")
-        assert resp == (530, b"5.7.0 Authentication required")
+        assert resp == S.S530_AUTH_REQUIRED
 
     def test_help_authenticated(self, client):
         self._login(client)
@@ -1164,7 +1165,7 @@ class TestSMTPRequiredAuthenticationNieuw(_CommonMethods):
     def test_mail_authenticated(self, client):
         self._login(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
-        assert resp, (250, b"OK")
+        assert resp, S.S250_OK
 
     def test_rcpt_nomail_authenticated(self, client):
         self._login(client)
@@ -1253,18 +1254,18 @@ class TestSMTPWithControllerNieuw(_CommonMethods):
         recipient = "bart\xCB@example.com"
         self._ehlo(client)
         client.send(f"MAIL FROM: <{sender}> SMTPUTF8\r\n".encode("utf-8"))
-        assert client.getreply() == (250, b"OK")
+        assert client.getreply() == S.S250_OK
         client.send(f"RCPT TO: <{recipient}>\r\n".encode("utf-8"))
-        assert client.getreply() == (250, b"OK")
+        assert client.getreply() == S.S250_OK
         resp = client.data("")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
         assert receiving_handler.box[0].mail_from == sender
         assert receiving_handler.box[0].rcpt_tos == [recipient]
 
     def test_mail_with_unrequited_smtputf8(self, base_controller, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
-        assert resp == (250, b"OK")
+        assert resp == S.S250_OK
 
     def test_mail_with_incompatible_smtputf8(self, base_controller, client):
         self._ehlo(client)
@@ -1367,9 +1368,9 @@ class TestSMTPWithControllerNieuw(_CommonMethods):
         mail_to = b"bart\xFF@example.com"
         self._ehlo(client, "test")
         client.send(b"MAIL FROM:" + mail_from + b"\r\n")
-        assert client.getreply() == (250, b"OK")
+        assert client.getreply() == S.S250_OK
         client.send(b"RCPT TO:" + mail_to + b"\r\n")
-        assert client.getreply() == (250, b"OK")
+        assert client.getreply() == S.S250_OK
         client.data("Test mail")
         assert len(handler.box) == 1
         envelope = handler.box[0]
