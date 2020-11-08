@@ -25,19 +25,20 @@ def reset_connection(client):
     # };
     #
     # Is this correct for Windows/Cygwin and macOS?
-    struct_format = 'hh' if sys.platform == 'win32' else 'ii'
+    struct_format = "hh" if sys.platform == "win32" else "ii"
     l_onoff = 1
     l_linger = 0
     client.sock.setsockopt(
         socket.SOL_SOCKET,
         socket.SO_LINGER,
-        struct.pack(struct_format, l_onoff, l_linger))
+        struct.pack(struct_format, l_onoff, l_linger),
+    )
     client.close()
 
 
 SUPPORTED_COMMANDS_TLS: bytes = (
-    b'Supported commands: AUTH DATA EHLO HELO HELP MAIL '
-    b'NOOP QUIT RCPT RSET STARTTLS VRFY'
+    b"Supported commands: AUTH DATA EHLO HELO HELP MAIL "
+    b"NOOP QUIT RCPT RSET STARTTLS VRFY"
 )
 
 SUPPORTED_COMMANDS_NOTLS = SUPPORTED_COMMANDS_TLS.replace(b" STARTTLS", b"")
@@ -47,8 +48,8 @@ def get_server_context() -> ssl.SSLContext:
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     context.check_hostname = False
     context.load_cert_chain(
-        resource_filename('aiosmtpd.tests.certs', 'server.crt'),
-        resource_filename('aiosmtpd.tests.certs', 'server.key'),
+        resource_filename("aiosmtpd.tests.certs", "server.crt"),
+        resource_filename("aiosmtpd.tests.certs", "server.key"),
     )
     return context
 
@@ -70,7 +71,7 @@ class ReceivingHandler:
 
     async def handle_DATA(self, server, session, envelope):
         self.box.append(envelope)
-        return '250 OK'
+        return "250 OK"
 
 
 class DecodingController(Controller):

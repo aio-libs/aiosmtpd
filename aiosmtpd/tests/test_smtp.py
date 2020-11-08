@@ -668,9 +668,7 @@ class TestSMTPNieuw(_CommonMethods):
         resp = client.docmd(command)
         assert resp == S.S503_HELO_FIRST
 
-    @pytest.mark.parametrize(
-        "address", valid_mailfrom_addresses, ids=itertools.count()
-    )
+    @pytest.mark.parametrize("address", valid_mailfrom_addresses, ids=itertools.count())
     def test_mail_valid_addresses(self, client, address):
         self._ehlo(client)
         resp = client.docmd(f"MAIL FROM:{address}")
@@ -756,9 +754,7 @@ class TestSMTPNieuw(_CommonMethods):
         resp = client.docmd('RCPT TO: <""@example.org>')
         assert resp == S.S250_OK
 
-    @pytest.mark.parametrize(
-        "address", invalid_email_addresses, ids=itertools.count()
-    )
+    @pytest.mark.parametrize("address", invalid_email_addresses, ids=itertools.count())
     def test_mail_smtp_malformed(self, client, address):
         self._helo(client)
         resp = client.docmd(f"MAIL FROM: {address}")
@@ -810,9 +806,7 @@ class TestSMTPNieuw(_CommonMethods):
         resp = client.docmd("RCPT TO: <bart@example.com> FOOBAR")
         assert resp == (555, b"RCPT TO parameters not recognized or not implemented")
 
-    @pytest.mark.parametrize(
-        "address", valid_rcptto_addresses, ids=itertools.count()
-    )
+    @pytest.mark.parametrize("address", valid_rcptto_addresses, ids=itertools.count())
     def test_rcpt_valid(self, client, address):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
@@ -820,9 +814,7 @@ class TestSMTPNieuw(_CommonMethods):
         resp = client.docmd(f"RCPT TO: {address}")
         assert resp == S.S250_OK
 
-    @pytest.mark.parametrize(
-        "address", invalid_email_addresses, ids=itertools.count()
-    )
+    @pytest.mark.parametrize("address", invalid_email_addresses, ids=itertools.count())
     def test_rcpt_malformed(self, client, address):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")

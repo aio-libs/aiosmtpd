@@ -83,9 +83,7 @@ def tls_controller(get_handler) -> TLSController:
 @pytest.fixture
 def tls_req_controller(get_handler) -> TLSController:
     handler = get_handler()
-    controller = TLSRequiredController(
-        handler
-    )
+    controller = TLSRequiredController(handler)
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -97,9 +95,7 @@ def tls_req_controller(get_handler) -> TLSController:
 @pytest.fixture
 def auth_req_tls_controller(get_handler) -> RequireTLSAuthDecodingController:
     handler = get_handler()
-    controller = RequireTLSAuthDecodingController(
-        handler
-    )
+    controller = RequireTLSAuthDecodingController(handler)
     controller.start()
     Global.set_addr_from(controller)
     #

@@ -188,9 +188,7 @@ def fake_parser() -> FakeParser:
 @pytest.fixture
 def upstream_controller() -> Controller:
     upstream_handler = DataHandler()
-    upstream_controller = Controller(
-        upstream_handler, port=9025
-    )
+    upstream_controller = Controller(upstream_handler, port=9025)
     upstream_controller.start()
     #
     yield upstream_controller
@@ -201,9 +199,7 @@ def upstream_controller() -> Controller:
 @pytest.fixture
 def proxy_controller(upstream_controller) -> Controller:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
-    proxy_controller = Controller(
-        proxy_handler
-    )
+    proxy_controller = Controller(proxy_handler)
     proxy_controller.start()
     Global.set_addr_from(proxy_controller)
     #
@@ -215,9 +211,7 @@ def proxy_controller(upstream_controller) -> Controller:
 @pytest.fixture
 def proxy_decoding_controller(upstream_controller) -> Controller:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
-    proxy_controller = DecodingController(
-        proxy_handler
-    )
+    proxy_controller = DecodingController(proxy_handler)
     proxy_controller.start()
     Global.set_addr_from(proxy_controller)
     #
@@ -229,9 +223,7 @@ def proxy_decoding_controller(upstream_controller) -> Controller:
 @pytest.fixture
 def auth_decoding_controller() -> Controller:
     handler = AUTHHandler()
-    controller = AUTHDecodingController(
-        handler
-    )
+    controller = AUTHDecodingController(handler)
     controller.start()
     Global.set_addr_from(controller)
     #

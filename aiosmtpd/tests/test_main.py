@@ -11,8 +11,8 @@ try:
 except ImportError:
     pwd = None
 
-HAS_SETUID = hasattr(os, 'setuid')
-MAIL_LOG = logging.getLogger('mail.log')
+HAS_SETUID = hasattr(os, "setuid")
+MAIL_LOG = logging.getLogger("mail.log")
 
 
 class FromCliHandler:
@@ -29,6 +29,7 @@ class NullHandler:
 
 
 # region ##### Fixtures #######################################################
+
 
 @pytest.fixture(autouse=True)
 def save_log_level():
@@ -78,25 +79,24 @@ def setuid(mocker):
 
 
 class TestMain:
-
     def test_setuid(self, nobody_uid, mocker, autostop_loop):
         mock = mocker.patch("os.setuid")
         main(args=())
         mock.assert_called_with(nobody_uid)
 
-    def test_suid_permission_error(self,
-                                   nobody_uid, mocker, capsys, autostop_loop):
+    def test_suid_permission_error(self, nobody_uid, mocker, capsys, autostop_loop):
         mock = mocker.patch("os.setuid", side_effect=PermissionError)
         with pytest.raises(SystemExit) as excinfo:
             main(args=())
         assert excinfo.value.code == 1
         mock.assert_called_with(nobody_uid)
-        assert capsys.readouterr().err == \
-            'Cannot setuid "nobody"; try running with -n option.\n'
+        assert (
+            capsys.readouterr().err
+            == 'Cannot setuid "nobody"; try running with -n option.\n'
+        )
 
-    def test_setuid_no_pwd_module(self,
-                                  nobody_uid, mocker, capsys, autostop_loop):
-        mocker.patch('aiosmtpd.main.pwd', None)
+    def test_setuid_no_pwd_module(self, nobody_uid, mocker, capsys, autostop_loop):
+        mocker.patch("aiosmtpd.main.pwd", None)
         with pytest.raises(SystemExit) as excinfo:
             main(args=())
         assert excinfo.value.code == 1
@@ -105,8 +105,10 @@ class TestMain:
         # gets mixed up into stderr causing test fail.
         # Therefore, we use assertIn instead of assertEqual here, because
         # the string DOES appear in stderr, just buried.
-        assert 'Cannot import module "pwd"; try running with -n option.\n' \
+        assert (
+            'Cannot import module "pwd"; try running with -n option.\n'
             in capsys.readouterr().err
+        )
 
     def test_n(self, setuid, autostop_loop):
         with pytest.raises(RuntimeError):
@@ -138,44 +140,39 @@ class TestMain:
 
 
 class TestParseArgs:
-
     def test_handler_from_cli(self):
         parser, args = parseargs(
-            ('-c', 'aiosmtpd.tests.test_main.FromCliHandler', '--', 'FOO')
+            ("-c", "aiosmtpd.tests.test_main.FromCliHandler", "--", "FOO")
         )
         assert isinstance(args.handler, FromCliHandler)
         assert args.handler.called == "FOO"
 
     def test_handler_no_from_cli(self):
-        parser, args = parseargs(
-            ('-c', 'aiosmtpd.tests.test_main.NullHandler'))
+        parser, args = parseargs(("-c", "aiosmtpd.tests.test_main.NullHandler"))
         assert isinstance(args.handler, NullHandler)
 
     def test_handler_from_cli_exception(self):
         with pytest.raises(TypeError):
-            parseargs(
-                ('-c', 'aiosmtpd.tests.test_main.FromCliHandler',
-                 'FOO', 'BAR')
-            )
+            parseargs(("-c", "aiosmtpd.tests.test_main.FromCliHandler", "FOO", "BAR"))
 
     def test_handler_no_from_cli_exception(self, capsys):
         with pytest.raises(SystemExit) as excinfo:
-            parseargs(
-                ('-c', 'aiosmtpd.tests.test_main.NullHandler',
-                 'FOO', 'BAR'))
+            parseargs(("-c", "aiosmtpd.tests.test_main.NullHandler", "FOO", "BAR"))
         assert excinfo.value.code == 2
-        assert 'Handler class aiosmtpd.tests.test_main takes no arguments' \
+        assert (
+            "Handler class aiosmtpd.tests.test_main takes no arguments"
             in capsys.readouterr().err
+        )
 
     @pytest.mark.parametrize(
         "args, exp_host, exp_port",
         [
             ((), "localhost", 8025),
-            (('-l', 'foo:25'), "foo", 25),
-            (('--listen', 'foo:25'), "foo", 25),
-            (('-l', 'foo'), "foo", 8025),
-            (('-l', ':25'), "localhost", 25),
-            (('-l', '::0:25'), "::0", 25)
+            (("-l", "foo:25"), "foo", 25),
+            (("--listen", "foo:25"), "foo", 25),
+            (("-l", "foo"), "foo", 8025),
+            (("-l", ":25"), "localhost", 25),
+            (("-l", "::0:25"), "::0", 25),
         ],
     )
     def test_host_port(self, args, exp_host, exp_port):
@@ -185,10 +182,9 @@ class TestParseArgs:
 
     def test_bad_port_number(self, capsys):
         with pytest.raises(SystemExit) as excinfo:
-            parseargs(('-l', ':foo'))
+            parseargs(("-l", ":foo"))
         assert excinfo.value.code == 2
-        assert 'Invalid port number: foo' \
-            in capsys.readouterr().err
+        assert "Invalid port number: foo" in capsys.readouterr().err
 
     @pytest.mark.parametrize("opt", ["--version", "-v"])
     def test_version(self, capsys, mocker, opt):
@@ -196,15 +192,16 @@ class TestParseArgs:
         with pytest.raises(SystemExit) as excinfo:
             parseargs((opt,))
         assert excinfo.value.code == 0
-        assert capsys.readouterr().out == f'smtpd {__version__}\n'
+        assert capsys.readouterr().out == f"smtpd {__version__}\n"
 
 
 class TestSigint:
-
     def test_keyboard_interrupt(self, temp_event_loop):
         """main() must close loop gracefully on KeyboardInterrupt."""
+
         def interrupt():
             raise KeyboardInterrupt
+
         temp_event_loop.call_later(1.0, interrupt)
         try:
             main(("-n",))

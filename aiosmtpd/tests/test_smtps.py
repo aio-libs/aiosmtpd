@@ -24,9 +24,7 @@ class SimpleController(Controller):
 def ssl_controller() -> Controller:
     context = get_server_context()
     handler = ReceivingHandler()
-    controller = SimpleController(
-        handler, ssl_context=context
-    )
+    controller = SimpleController(handler, ssl_context=context)
     controller.start()
     Global.set_addr_from(controller)
     #
