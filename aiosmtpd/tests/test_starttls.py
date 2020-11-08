@@ -133,7 +133,7 @@ def test_disabled_tls(simple_controller, client):
 
 
 @pytest.mark.usefixtures("tls_controller")
-class TestStartTLSNieuw:
+class TestStartTLS:
     @pytest.mark.handler_data(class_=ReceivingHandler)
     def test_starttls(self, tls_controller, client):
         sender = "sender@example.com"
@@ -183,7 +183,7 @@ class TestStartTLSNieuw:
 
 
 @pytest.mark.usefixtures("tls_controller")
-class TestTLSForgetsSessionDataNieuw:
+class TestTLSForgetsSessionData:
     def test_forget_ehlo(self, client):
         resp = client.starttls()
         assert resp == S.S220_READY_TLS
@@ -220,7 +220,7 @@ class TestTLSForgetsSessionDataNieuw:
 
 
 @pytest.mark.usefixtures("tls_req_controller")
-class TestRequireTLSNieuw:
+class TestRequireTLS:
     def test_helo_fails(self, client):
         resp = client.helo("example.com")
         assert resp == S.S530_STARTTLS_FIRST
@@ -260,7 +260,7 @@ class TestRequireTLSNieuw:
 
 
 @pytest.mark.usefixtures("auth_req_tls_controller")
-class TestRequireTLSAUTHNieuw:
+class TestRequireTLSAUTH:
     def test_auth_notls(self, client):
         code, _ = client.ehlo("example.com")
         assert code == 250

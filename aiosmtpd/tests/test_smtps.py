@@ -40,7 +40,7 @@ def smtps_client() -> SMTP_SSL:
         yield client
 
 
-class TestSMTPSNieuw:
+class TestSMTPS:
     def test_smtps(self, ssl_controller, smtps_client):
         sender = "sender@example.com"
         recipients = ["rcpt1@example.com"]

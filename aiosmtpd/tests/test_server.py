@@ -17,7 +17,7 @@ def in_wsl():
     return os.environ.get("PLATFORM") == "wsl"
 
 
-class TestServerNieuw:
+class TestServer:
     def test_smtp_utf8(self, base_controller, client):
         code, mesg = client.ehlo("example.com")
         assert code == 250

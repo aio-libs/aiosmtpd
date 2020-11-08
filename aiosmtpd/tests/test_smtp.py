@@ -425,7 +425,7 @@ class _CommonMethods:
         assert resp == (334, b"VXNlciBOYW1lAA==")
 
 
-class TestProtocolNieuw:
+class TestProtocol:
     def test_honors_mail_delimiters(
         self, temp_event_loop, transport_resp, get_protocol
     ):
@@ -481,7 +481,7 @@ class TestProtocolNieuw:
 # Because decoding_authnotls_controller has a scope of "function", this fixture will
 # be automagically started and teardown-ed on each test case func
 @pytest.mark.usefixtures("decoding_authnotls_controller")
-class TestSMTPNieuw(_CommonMethods):
+class TestSMTP(_CommonMethods):
     valid_mailfrom_addresses = [
         # no space between colon and address
         "anne@example.com",
@@ -928,7 +928,7 @@ class TestSMTPNonDecoding(_CommonMethods):
 # Because decoding_authnotls_controller has a scope of "function", this fixture will
 # be automagically started and teardown-ed on each test case func
 @pytest.mark.usefixtures("decoding_authnotls_controller")
-class TestSMTPAuthNieuw(_CommonMethods):
+class TestSMTPAuth(_CommonMethods):
     def test_auth_no_ehlo(self, client):
         resp = client.docmd("AUTH")
         assert resp == (503, b"Error: send EHLO first")
@@ -1118,7 +1118,7 @@ def test_warn_auth(require_auth_controller):
 
 
 @pytest.mark.usefixtures("require_auth_controller", "suppress_userwarning")
-class TestSMTPRequiredAuthenticationNieuw(_CommonMethods):
+class TestSMTPRequiredAuthentication(_CommonMethods):
     def _login(self, client: SMTP):
         self._ehlo(client)
         resp = client.login("goodlogin", "goodpasswd")
@@ -1171,7 +1171,7 @@ class TestSMTPRequiredAuthenticationNieuw(_CommonMethods):
         assert resp == (503, b"Error: need MAIL command")
 
 
-class TestResetCommandsNieuw:
+class TestResetCommands:
     """Test that sender and recipients are reset on RSET, HELO, and EHLO.
 
     The tests below issue each command twice with different addresses and
@@ -1240,7 +1240,7 @@ class TestResetCommandsNieuw:
             assert len(handler.envelope.rcpt_tos) == 0
 
 
-class TestSMTPWithControllerNieuw(_CommonMethods):
+class TestSMTPWithController(_CommonMethods):
     @pytest.mark.controller_data(size=9999)
     def test_mail_with_size_too_large(self, sized_controller, client):
         self._ehlo(client)
@@ -1378,7 +1378,7 @@ class TestSMTPWithControllerNieuw(_CommonMethods):
         assert mail_to2 == mail_to
 
 
-class TestCustomizationNieuw(_CommonMethods):
+class TestCustomization(_CommonMethods):
     @pytest.mark.controller_data(class_=CustomHostnameController)
     def test_custom_hostname(self, controller_with_sink, client):
         resp = client.helo("example.com")
@@ -1400,7 +1400,7 @@ class TestCustomizationNieuw(_CommonMethods):
         assert mesg.endswith(b"Identifying SMTP v2112")
 
 
-class TestClientCrashNieuw(_CommonMethods):
+class TestClientCrash(_CommonMethods):
 
     # test_connection_reset_* test cases seem to be testing smtplib.SMTP behavior
     # instead of aiosmtpd.smtp.SMTP behavior. Maybe we can remove these?
@@ -1561,7 +1561,7 @@ class TestClientCrashNieuw(_CommonMethods):
 
 
 @pytest.mark.usefixtures("strictascii_controller")
-class TestStrictASCIINieuw(_CommonMethods):
+class TestStrictASCII(_CommonMethods):
     def test_ehlo(self, client):
         blines = self._ehlo(client)
         assert b"SMTPUTF8" not in blines
@@ -1592,7 +1592,7 @@ class TestStrictASCIINieuw(_CommonMethods):
         assert excinfo.value.smtp_error == b"Error: strict ASCII mode"
 
 
-class TestSleepingHandlerNieuw(_CommonMethods):
+class TestSleepingHandler(_CommonMethods):
     # What is the point here?
 
     def test_close_after_helo(self, sleeping_nodecode_controller, client):
@@ -1620,7 +1620,7 @@ class TestSleepingHandlerNieuw(_CommonMethods):
         assert writer.transport.is_closing()
 
 
-class TestTimeoutNieuw(_CommonMethods):
+class TestTimeout(_CommonMethods):
     @pytest.mark.controller_data(class_=TimeoutController)
     def test_timeout(self, controller_with_sink, client):
         # This one is rapid, it must succeed
