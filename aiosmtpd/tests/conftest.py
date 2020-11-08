@@ -15,7 +15,12 @@ class HostPort(NamedTuple):
     port: int = 8025
 
 
-SRV_ADDR = HostPort()
+class Global:
+    SrvAddr: HostPort = HostPort()
+
+    @classmethod
+    def set_addr_from(cls, contr: Controller):
+        cls.SrvAddr = HostPort(contr.hostname, contr.port)
 
 
 @pytest.fixture
@@ -38,7 +43,7 @@ def get_controller(request) -> Callable[..., Controller]:
                 f"Fixture '{request.fixturename}' needs controller_data to specify "
                 f"what class to use"
             )
-        ip_port: HostPort = markerdata.get("ip_port", SRV_ADDR)
+        ip_port: HostPort = markerdata.get("ip_port", HostPort())
         return class_(
             handler,
             hostname=ip_port.host,
@@ -80,6 +85,7 @@ def base_controller(get_handler, get_controller) -> Controller:
     handler = get_handler()
     controller = get_controller(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -95,6 +101,7 @@ def decoding_controller(get_handler) -> DecodingController:
     handler = get_handler()
     controller = DecodingController(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -112,6 +119,6 @@ def client(request) -> SMTPClient:
         markerdata = marker.kwargs or {}
     else:
         markerdata = {}
-    addrport = markerdata.get("connect_to", SRV_ADDR)
+    addrport = markerdata.get("connect_to", Global.SrvAddr)
     with SMTPClient(*addrport) as client:
         yield client

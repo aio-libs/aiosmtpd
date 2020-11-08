@@ -6,7 +6,7 @@ from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
 from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-from .conftest import DecodingController, SRV_ADDR
+from .conftest import DecodingController, Global
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
@@ -138,8 +138,9 @@ class AsyncDeprecatedHandler:
 def debugging_controller() -> Controller:
     stream = StringIO()
     handler = Debugging(stream)
-    controller = Controller(handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port)
+    controller = Controller(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -151,8 +152,9 @@ def debugging_controller() -> Controller:
 def debugging_decoding_controller() -> Controller:
     stream = StringIO()
     handler = Debugging(stream)
-    controller = DecodingController(handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port)
+    controller = DecodingController(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -169,8 +171,9 @@ def temp_maildir(tmp_path: Path) -> Path:
 @pytest.fixture
 def mailbox_controller(temp_maildir) -> Controller:
     handler = Mailbox(temp_maildir)
-    controller = Controller(handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port)
+    controller = Controller(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -186,7 +189,7 @@ def fake_parser() -> FakeParser:
 def upstream_controller() -> Controller:
     upstream_handler = DataHandler()
     upstream_controller = Controller(
-        upstream_handler, hostname=SRV_ADDR.host, port=9025
+        upstream_handler, port=9025
     )
     upstream_controller.start()
     #
@@ -199,9 +202,10 @@ def upstream_controller() -> Controller:
 def proxy_controller(upstream_controller) -> Controller:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
     proxy_controller = Controller(
-        proxy_handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port
+        proxy_handler
     )
     proxy_controller.start()
+    Global.set_addr_from(proxy_controller)
     #
     yield proxy_controller
     #
@@ -212,9 +216,10 @@ def proxy_controller(upstream_controller) -> Controller:
 def proxy_decoding_controller(upstream_controller) -> Controller:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
     proxy_controller = DecodingController(
-        proxy_handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port
+        proxy_handler
     )
     proxy_controller.start()
+    Global.set_addr_from(proxy_controller)
     #
     yield proxy_controller
     #
@@ -225,9 +230,10 @@ def proxy_decoding_controller(upstream_controller) -> Controller:
 def auth_decoding_controller() -> Controller:
     handler = AUTHHandler()
     controller = AUTHDecodingController(
-        handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port
+        handler
     )
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -238,6 +244,7 @@ def auth_decoding_controller() -> Controller:
 def deprecated_hook_controller() -> DeprecatedHookController:
     controller = DeprecatedHookController(Sink())
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #

@@ -9,7 +9,7 @@ from aiosmtpd.testing.helpers import (
     get_server_context,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-from .conftest import SRV_ADDR
+from .conftest import Global
 from contextlib import suppress
 from email.mime.text import MIMEText
 from smtplib import SMTP
@@ -67,8 +67,9 @@ class HandshakeFailingHandler:
 @pytest.fixture
 def tls_controller(get_handler) -> TLSController:
     handler = get_handler()
-    controller = TLSController(handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port)
+    controller = TLSController(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -83,9 +84,10 @@ def tls_controller(get_handler) -> TLSController:
 def tls_req_controller(get_handler) -> TLSController:
     handler = get_handler()
     controller = TLSRequiredController(
-        handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port
+        handler
     )
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -96,9 +98,10 @@ def tls_req_controller(get_handler) -> TLSController:
 def auth_req_tls_controller(get_handler) -> RequireTLSAuthDecodingController:
     handler = get_handler()
     controller = RequireTLSAuthDecodingController(
-        handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port
+        handler
     )
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -108,8 +111,9 @@ def auth_req_tls_controller(get_handler) -> RequireTLSAuthDecodingController:
 @pytest.fixture
 def simple_controller() -> SimpleController:
     handler = Sink()
-    controller = SimpleController(handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port)
+    controller = SimpleController(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -118,7 +122,7 @@ def simple_controller() -> SimpleController:
 
 @pytest.fixture
 def client() -> SMTP:
-    with SMTP(*SRV_ADDR) as client:
+    with SMTP(*Global.SrvAddr) as client:
         yield client
 
 

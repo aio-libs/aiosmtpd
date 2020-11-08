@@ -2,7 +2,7 @@
 
 import pytest
 
-from .conftest import SRV_ADDR
+from .conftest import Global
 from aiosmtpd.controller import Controller
 from aiosmtpd.smtp import SMTP as SMTPProtocol
 from aiosmtpd.testing.helpers import (
@@ -25,9 +25,10 @@ def ssl_controller() -> Controller:
     context = get_server_context()
     handler = ReceivingHandler()
     controller = SimpleController(
-        handler, hostname=SRV_ADDR.host, port=SRV_ADDR.port, ssl_context=context
+        handler, ssl_context=context
     )
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -37,7 +38,7 @@ def ssl_controller() -> Controller:
 @pytest.fixture
 def smtps_client() -> SMTP_SSL:
     context = get_client_context()
-    with SMTP_SSL(SRV_ADDR.host, SRV_ADDR.port, context=context) as client:
+    with SMTP_SSL(*Global.SrvAddr, context=context) as client:
         yield client
 
 

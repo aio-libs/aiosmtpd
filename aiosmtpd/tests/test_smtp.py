@@ -22,7 +22,7 @@ from aiosmtpd.testing.helpers import (
     reset_connection,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-from .conftest import SRV_ADDR
+from .conftest import Global
 from base64 import b64encode
 from contextlib import suppress
 from smtplib import SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected
@@ -254,6 +254,7 @@ def decoding_authnotls_controller(get_handler) -> DecodingAuthNoTLSController:
     handler = get_handler()
     controller = DecodingAuthNoTLSController(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -269,6 +270,7 @@ def exposing_controller() -> ExposingController:
     handler = Sink()
     controller = ExposingController(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -284,6 +286,7 @@ def strictascii_controller(get_handler) -> StrictASCIIController:
     handler = get_handler()
     controller = StrictASCIIController(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -295,6 +298,7 @@ def sleeping_nodecode_controller() -> NoDecodeController:
     handler = SleepingHeloHandler()
     controller = NoDecodeController(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -306,6 +310,7 @@ def controller_with_sink(get_controller) -> Controller:
     handler = Sink()
     controller = get_controller(handler, None)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -317,6 +322,7 @@ def require_auth_controller() -> Controller:
     handler = Sink()
     controller = RequiredAuthDecodingController(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -334,6 +340,7 @@ def sized_controller(request) -> SizedController:
     handler = Sink()
     controller = SizedController(handler, size=size)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -347,6 +354,7 @@ def auth_peeker_controller() -> Controller:
         handler, server_kwargs={"auth_exclude_mechanism": ["DONT"]}
     )
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -358,6 +366,7 @@ def envelope_storing_handler() -> StoreEnvelopeOnVRFYHandler:
     handler = StoreEnvelopeOnVRFYHandler()
     controller = DecodingAuthNoTLSController(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield handler
     #
@@ -369,6 +378,7 @@ def error_controller(get_handler) -> Controller:
     handler = get_handler()
     controller = ErrorController(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield controller
     #
@@ -380,16 +390,11 @@ def receiving_handler(get_controller) -> ReceivingHandler:
     handler = ReceivingHandler()
     controller = get_controller(handler)
     controller.start()
+    Global.set_addr_from(controller)
     #
     yield handler
     #
     controller.stop()
-
-
-@pytest.fixture
-def client():
-    with SMTP(*SRV_ADDR) as smtp_client:
-        yield smtp_client
 
 
 @pytest.fixture
@@ -549,7 +554,7 @@ class TestSMTPNieuw(_CommonMethods):
     def test_close_then_continue(self, client):
         self._helo(client)
         client.close()
-        client.connect(*SRV_ADDR)
+        client.connect(*Global.SrvAddr)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == S.S503_HELO_FIRST
 
@@ -1110,7 +1115,7 @@ class TestSMTPAuthMechanisms(_CommonMethods):
 
 def test_warn_auth(require_auth_controller):
     with pytest.warns(UserWarning) as record:
-        with SMTP(*SRV_ADDR) as _:
+        with SMTP(*Global.SrvAddr) as _:
             pass
     assert len(record) == 1
     assert (
