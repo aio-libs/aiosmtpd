@@ -17,7 +17,7 @@ Python 3.""",
     long_description_content_type="text/x-rst",
     url='http://aiosmtpd.readthedocs.io/',
     keywords='email',
-    packages=find_packages(),
+    packages=find_packages(exclude=['examples']),
     include_package_data=True,
     license='http://www.apache.org/licenses/LICENSE-2.0',
     install_requires=[
