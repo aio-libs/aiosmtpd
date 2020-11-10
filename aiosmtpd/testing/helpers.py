@@ -37,14 +37,6 @@ def reset_connection(client: SMTP_Client):
     client.close()
 
 
-SUPPORTED_COMMANDS_TLS: bytes = (
-    b"Supported commands: AUTH DATA EHLO HELO HELP MAIL "
-    b"NOOP QUIT RCPT RSET STARTTLS VRFY"
-)
-
-SUPPORTED_COMMANDS_NOTLS = SUPPORTED_COMMANDS_TLS.replace(b" STARTTLS", b"")
-
-
 def get_server_context() -> ssl.SSLContext:
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     context.check_hostname = False

@@ -5,7 +5,6 @@ from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as SMTPProtocol
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
-    SUPPORTED_COMMANDS_TLS,
     get_server_context,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
@@ -129,7 +128,7 @@ def test_disabled_tls(simple_controller, client):
     code, _ = client.ehlo("example.com")
     assert code == 250
     resp = client.docmd("STARTTLS")
-    assert resp == (454, b"TLS not available")
+    assert resp == S.S454_TLS_NA
 
 
 @pytest.mark.usefixtures("tls_controller")
@@ -173,15 +172,15 @@ class TestStartTLS:
         code, _ = client.ehlo("example.com")
         assert code == 250
         resp = client.docmd("STARTTLS", "TRUE")
-        assert resp == (501, b"Syntax: STARTTLS")
+        assert resp == S.S501_SYNTAX_STARTTLS
 
     def test_help_after_starttls(self, client):
         resp = client.docmd("HELP")
-        assert resp == (250, SUPPORTED_COMMANDS_TLS)
+        assert resp == S.S250_SUPPCMD_TLS
 
     def test_helo_starttls(self, tls_controller, client):
-        code, _ = client.helo("example.com")
-        assert code == 250
+        resp = client.helo("example.com")
+        assert resp == S.S250_FQDN
         # Entering portion of code where hang is possible (upon assertion fail), so
         # we must wrap with "try..finally".
         try:
@@ -209,7 +208,7 @@ class TestTLSForgetsSessionData:
         code, _ = client.ehlo("example.com")
         assert code == 250
         resp = client.rcpt("rcpt@example.com")
-        assert resp == (503, b"Error: need MAIL command")
+        assert resp == S.S503_MAIL_NEEDED
 
     def test_forget_rcpt(self, client):
         code, _ = client.ehlo("example.com")
@@ -225,7 +224,7 @@ class TestTLSForgetsSessionData:
         resp = client.mail("sender@example.com")
         assert resp == S.S250_OK
         resp = client.docmd("DATA")
-        assert resp == (503, b"Error: need RCPT command")
+        assert resp == S.S503_RCPT_NEEDED
 
 
 @pytest.mark.usefixtures("tls_req_controller")
