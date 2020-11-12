@@ -70,6 +70,7 @@ class SMTP_STATUS_CODES:
     S250_SYNTAX_QUIT = StatusCode(250, b"Syntax: QUIT")
     S250_SYNTAX_RCPT = StatusCode(250, b"Syntax: RCPT TO: <address>")
     S250_SYNTAX_RSET = StatusCode(250, b"Syntax: RSET")
+    S250_SYNTAX_STARTTLS = StatusCode(250, b"Syntax: STARTTLS")
     S250_SYNTAX_VRFY = StatusCode(250, b"Syntax: VRFY <address>")
 
     S250_SYNTAX_MAIL_E = StatusCode(
@@ -90,6 +91,11 @@ class SMTP_STATUS_CODES:
 
     S354_DATA_ENDWITH = StatusCode(354, b"End data with <CR><LF>.<CR><LF>")
 
+    S450_DEST_GREYLIST = StatusCode(
+        450, b"4.2.0 Recipient address rejected: Greylisted"
+    )
+    S450_SERVICE_UNAVAIL = StatusCode(450, b"4.3.2 Service currently unavailable")
+    S452_TOO_MANY_CONN = StatusCode(452, b"4.7.0 Too many connections")
     S454_TLS_NA = StatusCode(454, b"TLS not available")
 
     S500_BAD_SYNTAX = StatusCode(500, b"Error: bad syntax")
@@ -119,7 +125,7 @@ class SMTP_STATUS_CODES:
     S501_SYNTAX_RCPT = StatusCode(501, S250_SYNTAX_RCPT.mesg)
     S501_SYNTAX_RCPT_E = StatusCode(501, S250_SYNTAX_RCPT_E.mesg)
     S501_SYNTAX_RSET = StatusCode(501, S250_SYNTAX_RSET.mesg)
-    S501_SYNTAX_STARTTLS = StatusCode(501, b"Syntax: STARTTLS")
+    S501_SYNTAX_STARTTLS = StatusCode(501, S250_SYNTAX_STARTTLS.mesg)
     S501_SYNTAX_VRFY = StatusCode(501, S250_SYNTAX_VRFY.mesg)
 
     S501_TOO_FEW = StatusCode(501, b"Not enough value")
@@ -138,13 +144,18 @@ class SMTP_STATUS_CODES:
     S504_AUTH_UNRECOG = StatusCode(504, b"5.5.4 Unrecognized authentication type")
     S530_STARTTLS_FIRST = StatusCode(530, b"Must issue a STARTTLS command first")
     S530_AUTH_REQUIRED = StatusCode(530, b"5.7.0 Authentication required")
+    S535_AUTH_INVALID = StatusCode(535, b"5.7.8 Authentication credentials invalid")
+
+    S550_DEST_UNKNOWN = StatusCode(
+        550, b"5.1.1 Recipient address rejected: User unknown"
+    )
+    S550_NO_RELAY = StatusCode(550, b"5.7.1 Unable to relay")
     S552_EXCEED_SIZE = StatusCode(
         552, b"Error: message size exceeds fixed maximum message size"
     )
     S552_TOO_MUCH = StatusCode(552, b"Error: Too much mail data")
     S553_MALFORMED = StatusCode(553, b"5.1.3 Error: malformed address")
     S554_LACK_SECURITY = StatusCode(554, b"Command refused due to lack of security")
-    S535_AUTH_INVALID = StatusCode(535, b"5.7.8 Authentication credentials invalid")
 
     S555_MAIL_PARAMS_UNRECOG = StatusCode(
         555,

@@ -133,6 +133,14 @@ def test_disabled_tls(simple_controller, client):
 
 @pytest.mark.usefixtures("tls_controller")
 class TestStartTLS:
+    def test_help_starttls(self, tls_controller, client):
+        resp = client.docmd("HELP STARTTLS")
+        assert resp == S.S250_SYNTAX_STARTTLS
+
+    def test_starttls_arg(self, tls_controller, client):
+        resp = client.docmd("STARTTLS arg")
+        assert resp == S.S501_SYNTAX_STARTTLS
+
     @pytest.mark.handler_data(class_=ReceivingHandler)
     def test_starttls(self, tls_controller, client):
         sender = "sender@example.com"

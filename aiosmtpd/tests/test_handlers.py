@@ -43,7 +43,7 @@ class DataHandler:
     async def handle_DATA(self, server, session, envelope):
         self.content = envelope.content
         self.original_content = envelope.original_content
-        return "250 OK"
+        return S.S250_OK.to_str()
 
 
 class AsyncMessageHandler(AsyncMessage):
