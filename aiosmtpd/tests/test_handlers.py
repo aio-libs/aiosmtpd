@@ -679,16 +679,23 @@ class TestProxyMocked:
         caplog.set_level(logging.INFO, logger=logger_name)
         client.sendmail("anne@example.com", ["bart@example.com"], self.SOURCE)
         # The log contains information about what happened in the proxy.
-        assert caplog.record_tuples[-2] == (
-            logger_name,
-            logging.INFO,
-            "got SMTPRecipientsRefused",
-        )
-        assert caplog.record_tuples[-1] == (
-            logger_name,
-            logging.INFO,
-            f"we got some refusals: {self.BAD_BART}",
-        )
+        # We need to scan back before sometimes asyncio will emit a warning
+        l1 = l2 = -1
+        for l1, rt in enumerate(reversed(caplog.record_tuples)):
+            if rt == (logger_name, logging.INFO, "got SMTPRecipientsRefused"):
+                break
+        else:
+            pytest.fail("Can't find first log entry")
+        for l2, rt in enumerate(reversed(caplog.record_tuples)):
+            if rt == (
+                logger_name,
+                logging.INFO,
+                f"we got some refusals: {self.BAD_BART}",
+            ):
+                break
+        else:
+            pytest.fail("Can't find second log entry")
+        assert l2 < l1, "Log entries in wrong order"
 
     @pytest.fixture
     def patch_smtp_oserror(self, mocker):
@@ -702,11 +709,16 @@ class TestProxyMocked:
         logger_name = "mail.debug"
         caplog.set_level(logging.INFO, logger=logger_name)
         client.sendmail("anne@example.com", ["bart@example.com"], self.SOURCE)
-        assert caplog.record_tuples[-1] == (
-            logger_name,
-            logging.INFO,
-            "we got some refusals: {'bart@example.com': (-1, 'ignore')}",
-        )
+        l1 = -1
+        for l1, rt in enumerate(reversed(caplog.record_tuples)):
+            if rt == (
+                logger_name,
+                logging.INFO,
+                "we got some refusals: {'bart@example.com': (-1, 'ignore')}",
+            ):
+                break
+        else:
+            pytest.fail("Can't find log entry")
 
 
 class TestHooks:
