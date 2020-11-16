@@ -25,7 +25,15 @@ class TestLMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             code, response = client.docmd('LHLO', 'example.com')
             self.assertEqual(code, 250)
-            self.assertEqual(response, bytes(socket.getfqdn(), 'utf-8'))
+            lines = response.splitlines()
+            expecteds = (
+                bytes(socket.getfqdn(), 'utf-8'),
+                b'SIZE 33554432',
+                b'8BITMIME',
+                b'HELP',
+            )
+            for actual, expected in zip(lines, expecteds):
+                self.assertEqual(actual, expected)
 
     def test_helo(self):
         # HELO and EHLO are not valid LMTP commands.

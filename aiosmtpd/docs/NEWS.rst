@@ -2,6 +2,13 @@
  NEWS for aiosmtpd
 ===================
 
+aiosmtpd-next
+=============
+
+Fixed/Improved
+--------------
+* LMTP servers now correctly advertise extensions in reply to ``LHLO``.
+
 1.2.2 (2020-11-08)
 ==================
 
