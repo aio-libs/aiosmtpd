@@ -1,4 +1,5 @@
 import pytest
+import socket
 import asyncio
 import inspect
 
@@ -17,10 +18,23 @@ class HostPort(NamedTuple):
 
 class Global:
     SrvAddr: HostPort = HostPort()
+    FQDN: str = socket.getfqdn()
 
     @classmethod
     def set_addr_from(cls, contr: Controller):
         cls.SrvAddr = HostPort(contr.hostname, contr.port)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def cache_fqdn(session_mocker):
+    """
+    This fixture "caches" the socket.getfqdn() call. VERY necessary to prevent
+    situations where quick repeated getfqdn() causes extreme slowdown. Probably due to
+    the DNS server thinking it was an attack or something.
+    """
+    session_mocker.patch("socket.getfqdn", return_value=Global.FQDN)
+    #
+    yield
 
 
 @pytest.fixture
