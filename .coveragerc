@@ -9,6 +9,7 @@ omit =
     .tox/*/Lib/site-packages/*
     .tox/Lib/site-packages/*
     .tox/*/site-packages/*
+     */helpers/pycharm/*
 
 [paths]
 source =
@@ -21,3 +22,12 @@ exclude_lines =
     pragma: skipif_${PY_39}_py39
     pragma: skipon_${INTERP}
     pragma: skipif_${PY_36}_py36
+fail_under = 100
+show_missing = true
+
+[html]
+directory = htmlcov/${TOX_ENV_NAME}
+title = aiosmtpd coverage for ${TOX_ENV_NAME}
+
+[xml]
+output = coverage-${INTERP}.xml
