@@ -679,7 +679,10 @@ class TestProxyMocked:
         caplog.set_level(logging.INFO, logger=logger_name)
         client.sendmail("anne@example.com", ["bart@example.com"], self.SOURCE)
         # The log contains information about what happened in the proxy.
-        # We need to scan back before sometimes asyncio will emit a warning
+        # Ideally it would be the newest 2 log records. However, sometimes asyncio
+        # will emit a log entry right afterwards or inbetween causing test fail if we
+        # just checked [-1] and [-2]. Therefore we need to scan backwards and simply
+        # note the two log entries' relative position
         l1 = l2 = -1
         for l1, rt in enumerate(reversed(caplog.record_tuples)):
             if rt == (logger_name, logging.INFO, "got SMTPRecipientsRefused"):
