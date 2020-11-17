@@ -2,9 +2,11 @@
 
 import re
 import pytest
+import socket
 
 from aiosmtpd.testing import statuscodes
 from itertools import combinations
+from unittest.mock import MagicMock
 
 
 ENFORCE_ENHANCED_STATUS_CODES = False
@@ -30,45 +32,54 @@ STATUS_CODES = {
 }
 
 
-def test_statuscodes_elemtype():
-    """Ensure status codes are instances of StatusCode"""
-    for key, value in STATUS_CODES.items():
-        assert isinstance(value, statuscodes.StatusCode)
+class TestStatusCodes:
+    def test_elemtype(self):
+        """Ensure status codes are instances of StatusCode"""
+        for key, value in STATUS_CODES.items():
+            assert isinstance(value, statuscodes.StatusCode)
+
+    def test_nameval(self):
+        """Ensure each status code constant has SMTP Code embedded in the name"""
+        for key, value in STATUS_CODES.items():
+            assert int(key[1:4]) == value.code
+
+    def test_enhanced(self):
+        """Compliance with RFC 2034 § 4"""
+        for key, value in STATUS_CODES.items():
+            assert isinstance(value, statuscodes.StatusCode)
+            m = RE_ESC.match(value.mesg)
+            if ENFORCE_ENHANCED_STATUS_CODES:
+                assert m is not None, f"{key} does not have Enhanced Status Code"
+            elif m is None:
+                continue
+            esc1, dot, rest = m.group().partition(b".")
+            # noinspection PyTypeChecker
+            assert str(value.code // 100) == esc1.decode(), (
+                f"{key}: First digit of Enhanced Status Code different from first digit "
+                f"of Standard Status Code"
+            )
+
+    def test_commands(self):
+        """
+        Ensure lists in statuscodes are individual objects, so changes in one list won't
+        affect the other lists
+        """
+        lists = [
+            statuscodes._COMMON_COMMANDS,
+            statuscodes.SUPPORTED_COMMANDS_NOTLS,
+            statuscodes.SUPPORTED_COMMANDS_TLS,
+            statuscodes.SUPPORTED_COMMANDS_LMTP,
+        ]
+        for one, two in combinations(lists, 2):
+            assert one is not two
 
 
-def test_statuscode_nameval():
-    """Ensure each status code constant has SMTP Code embedded in the name"""
-    for key, value in STATUS_CODES.items():
-        assert int(key[1:4]) == value.code
-
-
-def test_statuscode_enhanced():
-    """Compliance with RFC 2034 § 4"""
-    for key, value in STATUS_CODES.items():
-        assert isinstance(value, statuscodes.StatusCode)
-        m = RE_ESC.match(value.mesg)
-        if ENFORCE_ENHANCED_STATUS_CODES:
-            assert m is not None, f"{key} does not have Enhanced Status Code"
-        elif m is None:
-            continue
-        esc1, dot, rest = m.group().partition(b".")
-        # noinspection PyTypeChecker
-        assert str(value.code // 100) == esc1.decode(), (
-            f"{key}: First digit of Enhanced Status Code different from first digit "
-            f"of Standard Status Code"
-        )
-
-
-def test_commands():
-    """
-    Ensure lists in statuscodes are individual objects, so changes in one list won't
-    affect the other lists
-    """
-    lists = [
-        statuscodes._COMMON_COMMANDS,
-        statuscodes.SUPPORTED_COMMANDS_NOTLS,
-        statuscodes.SUPPORTED_COMMANDS_TLS,
-        statuscodes.SUPPORTED_COMMANDS_LMTP,
-    ]
-    for one, two in combinations(lists, 2):
-        assert one is not two
+class TestHarness:
+    def test_fqdn_cached(self):
+        """
+        Ensure that socket.getfqdn has been mocked
+        """
+        assert isinstance(socket.getfqdn, MagicMock)
+        fqdn = socket.getfqdn()
+        assert isinstance(fqdn, str)
+        assert socket.getfqdn() != fqdn, "socket.getfqdn() changed between calls!"
