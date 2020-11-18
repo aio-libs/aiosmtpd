@@ -17,6 +17,7 @@ TOX_ENV_NAME = os.environ.get("TOX_ENV_NAME", None)
 
 # region #### Helper funcs ############################################################
 
+
 def deldir(targ: Path):
     if not targ.exists():
         return
@@ -29,10 +30,12 @@ def deldir(targ: Path):
             pp.rmdir()
     targ.rmdir()
 
+
 # endregion
 
 
 # region #### Functional blocks #######################################################
+
 
 def dump_env():
     os.makedirs("_dynamic", exist_ok=True)
@@ -41,7 +44,7 @@ def dump_env():
 
 
 def moveprof():
-    # Move profiling files to per-testenv dirs
+    """Move profiling files to per-testenv dirs"""
     profpath = Path("prof")
     prof_files = [
         f
@@ -58,34 +61,48 @@ def moveprof():
         f.rename(targpath / f.name)
 
 
-def pycache_clean():
-    # Cleanup __pycache__ dirs (if any)
+def pycache_clean(verbose=False):
+    """Cleanup __pycache__ dirs & bytecode files (if any)"""
     aiosmtpdpath = Path(".")
     for f in aiosmtpdpath.rglob("*.py[co]"):
+        if verbose:
+            print(".", end="")
         f.unlink()
     for d in aiosmtpdpath.rglob("__pycache__"):
+        if verbose:
+            print(".", end="")
         d.rmdir()
+    if verbose:
+        print()
 
 
 def superclean():
+    """Remove work dirs & files. They are .gitignore'd anyways."""
     print(f"{BOLD}Removing work dirs ... {NORM}", end="")
-    for dd in (".tox", "_dynamic", "aiosmtpd.egg-info", "htmlcov", "build"):
+    for dd in (".pytest-cache", ".tox", "_dynamic", "aiosmtpd.egg-info", "build",
+               "htmlcov", "prof"):
         print(dd, end=" ")
         deldir(Path(dd))
-    print(f"{BOLD}\nRemoving work files...{NORM}")
+    print(f"\n{BOLD}Removing work files ...{NORM}", end="")
     for fn in (".coverage", "coverage.xml", "diffcov.html"):
+        print(".", end="")
         fp = Path(fn)
         if fp.exists():
             fp.unlink()
     for fp in Path(".").glob("coverage-*.xml"):
+        print(".", end="")
         fp.unlink()
     for fp in Path(".").glob("diffcov-*.html"):
+        print(".", end="")
         fp.unlink()
+    print()
+
 
 # endregion
 
 
 # region #### Dispatchers #############################################################
+
 
 def dispatch_setup():
     dump_env()
@@ -99,8 +116,8 @@ def dispatch_cleanup():
 def dispatch_superclean():
     if TOX_ENV_NAME is not None:
         raise RuntimeError("Do NOT run this inside tox!")
-    print(f"{BOLD}Running pycache cleanup...{NORM}")
-    pycache_clean()
+    print(f"{BOLD}Running pycache cleanup ...{NORM}", end="")
+    pycache_clean(verbose=True)
     superclean()
 
 
@@ -115,7 +132,7 @@ def get_opts(argv):
     return parser.parse_args(argv)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print(f"{FG_CYAN}Python interpreter details:")
     print(sys.version)
     print(sys.executable)
