@@ -22,12 +22,16 @@ def deldir(targ: Path):
     if not targ.exists():
         return
     for pp in reversed(sorted(targ.rglob("*"))):
-        if not pp.is_dir():
+        if pp.is_symlink():
+            pp.unlink()
+        elif pp.is_file():
             pp.chmod(0o600)
             pp.unlink()
-        else:
+        elif pp.is_dir():
             pp.chmod(0o700)
             pp.rmdir()
+        else:
+            raise RuntimeError(f"Don't know how to handle '{pp}'")
     targ.rmdir()
 
 
@@ -66,11 +70,11 @@ def pycache_clean(verbose=False):
     aiosmtpdpath = Path(".")
     for f in aiosmtpdpath.rglob("*.py[co]"):
         if verbose:
-            print(".", end="")
+            print(".", end="", flush=True)
         f.unlink()
     for d in aiosmtpdpath.rglob("__pycache__"):
         if verbose:
-            print(".", end="")
+            print(".", end="", flush=True)
         d.rmdir()
     if verbose:
         print()
@@ -81,19 +85,19 @@ def superclean():
     print(f"{BOLD}Removing work dirs ... {NORM}", end="")
     for dd in (".pytest-cache", ".tox", "_dynamic", "aiosmtpd.egg-info", "build",
                "htmlcov", "prof"):
-        print(dd, end=" ")
+        print(dd, end=" ", flush=True)
         deldir(Path(dd))
     print(f"\n{BOLD}Removing work files ...{NORM}", end="")
     for fn in (".coverage", "coverage.xml", "diffcov.html"):
-        print(".", end="")
+        print(".", end="", flush=True)
         fp = Path(fn)
         if fp.exists():
             fp.unlink()
     for fp in Path(".").glob("coverage-*.xml"):
-        print(".", end="")
+        print(".", end="", flush=True)
         fp.unlink()
     for fp in Path(".").glob("diffcov-*.html"):
-        print(".", end="")
+        print(".", end="", flush=True)
         fp.unlink()
     print()
 
