@@ -221,12 +221,15 @@ The Mailbox handler
 A convenient handler is the ``Mailbox`` handler, which stores incoming
 messages into a maildir::
 
+    >>> from contextlib import ExitStack
+    >>> from tempfile import TemporaryDirectory
+    >>> # Clean up the temporary directory at the end of this doctest.
+    >>> resources = ExitStack()
+    >>> tempdir = resources.enter_context(TemporaryDirectory())
+
     >>> import os
     >>> from aiosmtpd.controller import Controller
     >>> from aiosmtpd.handlers import Mailbox
-    >>> from tempfile import TemporaryDirectory
-    >>> # Clean up the temporary directory at the end of this doctest.
-    >>> tempdir = resources.enter_context(TemporaryDirectory())
 
     >>> maildir_path = os.path.join(tempdir, 'maildir')
     >>> controller = Controller(Mailbox(maildir_path))
@@ -284,6 +287,7 @@ We open up the mailbox again, and all three messages are waiting for us.
     <bee> Cate Person <cate@example.com> Dave Person <dave@example.com>
     <cat> Elle Person <elle@example.com> Fred Person <fred@example.com>
 
+    >>> resources.close()
 
 
 .. _ArgumentParser: https://docs.python.org/3/library/argparse.html#argumentparser-objects

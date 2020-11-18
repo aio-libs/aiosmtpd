@@ -46,6 +46,8 @@ Now let's run this server in a controller::
 
 ..
     >>> # Arrange for the controller to be stopped at the end of this doctest.
+    >>> from contextlib import ExitStack
+    >>> resources = ExitStack()
     >>> ignore = resources.callback(controller.stop)
 
 We can now connect to this server with an ``SMTP`` client.
@@ -72,6 +74,8 @@ And we can get more detailed help on the new command.
 
     >>> print(client.help('PING').decode('utf-8'))
     Syntax: PING [ignored]
+
+    >>> resources.close()
 
 
 Server hooks
