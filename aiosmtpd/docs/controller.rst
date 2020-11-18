@@ -43,7 +43,9 @@ to the console.  Start by implementing a handler as follows::
     ...         print('Message from %s' % envelope.mail_from)
     ...         print('Message for %s' % envelope.rcpt_tos)
     ...         print('Message data:\n')
-    ...         print(envelope.content.decode('utf8', errors='replace'))
+    ...         for ln in envelope.content.decode('utf8', errors='replace').splitlines():
+    ...             print(f'> {ln}'.strip())
+    ...         print()
     ...         print('End of message')
     ...         return '250 Message accepted for delivery'
 
@@ -77,12 +79,12 @@ Connect to the server and send a message, which then gets printed by
     Message for ['b@example.com']
     Message data:
     <BLANKLINE>
-    From: Anne Person <anne@example.com>
-    To: Bart Person <bart@example.com>
-    Subject: A test
-    Message-ID: <ant>
-    <BLANKLINE>
-    Hi Bart, this is Anne.
+    > From: Anne Person <anne@example.com>
+    > To: Bart Person <bart@example.com>
+    > Subject: A test
+    > Message-ID: <ant>
+    >
+    > Hi Bart, this is Anne.
     <BLANKLINE>
     End of message
 
@@ -209,6 +211,25 @@ Controller API
 
       During the transition period, ``enable_SMTPUTF8`` *if set* will be transferred
       into ``server_kwargs`` automatically, overriding any similar flag in the dict.
+      *If not set*, then if ``server_kwargs`` does not contain the ``enable_SMTPUTF8``
+      it will be set to True.
+
+      >>> from aiosmtpd.handlers import Sink
+      >>> controller = Controller(Sink())
+      >>> controller.server_kwargs["enable_SMTPUTF8"]
+      True
+
+      >>> controller = Controller(Sink(), enable_SMTPUTF8=False)
+      >>> controller.server_kwargs["enable_SMTPUTF8"]
+      False
+
+      >>> controller = Controller(Sink(), server_kwargs=dict(enable_SMTPUTF8=False))
+      >>> controller.server_kwargs["enable_SMTPUTF8"]
+      False
+
+      >>> controller = Controller(Sink(), enable_SMTPUTF8=True, server_kwargs=dict(enable_SMTPUTF8=False))
+      >>> controller.server_kwargs["enable_SMTPUTF8"]
+      True
 
    :boldital:`ssl_context` is an ``SSLContext`` that will be used by the loop's
    server. It is passed directly to the :meth:`AbstractEventLoop.create_server`
