@@ -34,7 +34,13 @@ Relevant RFCs
   Internationalized Email
 * `RFC 4954 <http://www.faqs.org/rfcs/rfc4954.html>`__ - SMTP Service Extension
   for Authentication
-
+* `RFC 5322 <https://tools.ietf.org/html/rfc5322>`__ - Internet Message Format
+* `RFC 3696 <https://tools.ietf.org/html/rfc3696>`__ - Application Techniques
+  for Checking and Transformation of Names
+* `RFC 2034 <https://tools.ietf.org/html/rfc2034>`__ - SMTP Service Extension for
+  Returning Enhanced Error Codes
+* `RFC 1870 <https://tools.ietf.org/html/rfc1870>`__ - SMTP Service Extension
+  for Message Size Declaration
 
 Other references
 ================

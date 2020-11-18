@@ -11,7 +11,8 @@ from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 
 class LMTPController(Controller):
     def factory(self):
-        return LMTP(self.handler)
+        self.smtpd = LMTP(self.handler)
+        return self.smtpd
 
 
 @pytest.fixture(scope="module", autouse=True)

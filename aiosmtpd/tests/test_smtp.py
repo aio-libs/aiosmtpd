@@ -1,6 +1,5 @@
 """Test the SMTP protocol."""
 
-import os
 import time
 import pytest
 import socket
@@ -8,7 +7,6 @@ import asyncio
 import logging
 import itertools
 
-from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import (
     MISSING,
@@ -21,7 +19,7 @@ from aiosmtpd.testing.helpers import (
     reset_connection,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-from .conftest import Global
+from .conftest import ASYNCIO_CATCHUP_DELAY, ExposingController, Global
 from base64 import b64encode
 from contextlib import suppress
 from smtplib import SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected
@@ -34,14 +32,8 @@ CRLF = "\r\n"
 BCRLF = b"\r\n"
 MAIL_LOG = logging.getLogger("mail.log")
 
-ASYNCIO_CATCHUP_DELAY = float(os.environ.get("ASYNCIO_CATCHUP_DELAY", 0.1))
-"""
-Delay (in seconds) to give asyncio event loop time to catch up and do things. May need
-to be increased for slow and/or overburdened test systems.
-"""
 
-
-# region ##### Test Harness Functions & Classes #######################################
+# region #### Test Helpers ############################################################
 
 
 def authenticator(mechanism, login, password) -> bool:
@@ -51,15 +43,22 @@ def authenticator(mechanism, login, password) -> bool:
         return False
 
 
-class DecodingAuthNoTLSController(Controller):
-    def factory(self):
-        return Server(
-            self.handler,
-            decode_data=True,
-            enable_SMTPUTF8=True,
-            auth_require_tls=False,
-            auth_callback=authenticator,
-        )
+class UndescribableError(Exception):
+    def __str__(self):
+        raise Exception()
+
+
+class ErrorSMTP(Server):
+    exception_type = ValueError
+
+    async def smtp_HELO(self, hostname):
+        raise self.exception_type("test")
+
+
+# endregion
+
+
+# region #### Special-Purpose Handlers ################################################
 
 
 class PeekerHandler:
@@ -85,42 +84,6 @@ class PeekerHandler:
         return MISSING
 
 
-class DecodingControllerPeekAuth(Controller):
-    def factory(self):
-        return Server(
-            self.handler,
-            decode_data=True,
-            enable_SMTPUTF8=True,
-            auth_require_tls=False,
-            auth_callback=self.handler.authenticate,
-            **self.server_kwargs,
-        )
-
-
-class NoDecodeController(Controller):
-    def factory(self):
-        return Server(self.handler, decode_data=False)
-
-
-class TimeoutController(Controller):
-    Delay: float = 1.0
-
-    def factory(self):
-        return Server(self.handler, timeout=self.Delay)
-
-
-class RequiredAuthDecodingController(Controller):
-    def factory(self):
-        return Server(
-            self.handler,
-            decode_data=True,
-            enable_SMTPUTF8=True,
-            auth_require_tls=False,
-            auth_callback=authenticator,
-            auth_required=True,
-        )
-
-
 class StoreEnvelopeOnVRFYHandler:
     """Saves envelope for later inspection when handling VRFY."""
 
@@ -129,33 +92,6 @@ class StoreEnvelopeOnVRFYHandler:
     async def handle_VRFY(self, server, session, envelope, addr):
         self.envelope = envelope
         return S.S250_OK.to_str()
-
-
-class SizedController(Controller):
-    def __init__(self, handler, size):
-        self.size = size
-        super().__init__(handler)
-
-    def factory(self):
-        return Server(self.handler, data_size_limit=self.size)
-
-
-class StrictASCIIController(Controller):
-    def factory(self):
-        return Server(self.handler, enable_SMTPUTF8=False, decode_data=True)
-
-
-class CustomHostnameController(Controller):
-    custom_name = "custom.localhost"
-
-    def factory(self):
-        return Server(self.handler, hostname=self.custom_name)
-
-
-class CustomIdentController(Controller):
-    def factory(self):
-        server = Server(self.handler, ident="Identifying SMTP v2112")
-        return server
 
 
 class ErroringHandler:
@@ -183,29 +119,12 @@ class ErroringErrorHandler:
         raise ValueError("ErroringErrorHandler test")
 
 
-class UndescribableError(Exception):
-    def __str__(self):
-        raise Exception()
-
-
 class UndescribableErrorHandler:
     error = None
 
     async def handle_exception(self, error):
         self.error = error
         raise UndescribableError()
-
-
-class ErrorSMTP(Server):
-    exception_type = ValueError
-
-    async def smtp_HELO(self, hostname):
-        raise self.exception_type("test")
-
-
-class ErrorController(Controller):
-    def factory(self):
-        return ErrorSMTP(self.handler)
 
 
 class SleepingHeloHandler:
@@ -215,12 +134,39 @@ class SleepingHeloHandler:
         return "250 {}".format(server.hostname)
 
 
-class ExposingController(Controller):
-    smtpd: Server = None
+# endregion
+
+
+# region #### Special-Purpose Controllers #############################################
+
+
+# These are either impractical or impossible to implement using ExposingController
+
+class TimeoutController(ExposingController):
+    Delay: float = 1.0
 
     def factory(self):
-        self.smtpd = super().factory()
-        return self.smtpd
+        return Server(self.handler, timeout=self.Delay)
+
+
+class ErrorController(ExposingController):
+    def factory(self):
+        return ErrorSMTP(self.handler)
+
+
+class CustomHostnameController(ExposingController):
+    custom_name = "custom.localhost"
+
+    def factory(self):
+        return Server(self.handler, hostname=self.custom_name)
+
+
+class CustomIdentController(ExposingController):
+    ident: bytes = b"Identifying SMTP v2112"
+
+    def factory(self):
+        server = Server(self.handler, ident=self.ident.decode())
+        return server
 
 
 # endregion
@@ -251,108 +197,24 @@ def get_protocol(temp_event_loop, transport_resp) -> Callable[..., Server]:
 
 
 @pytest.fixture
-def decoding_authnotls_controller(get_handler) -> DecodingAuthNoTLSController:
-    handler = get_handler()
-    controller = DecodingAuthNoTLSController(handler)
-    controller.start()
-    Global.set_addr_from(controller)
-    #
-    yield controller
-    #
-    # Some test cases need to .stop() the controller inside themselves
-    # in such cases, we must suppress Controller's raise of AssertionError
-    # because Controller doesn't like .stop() to be invoked more than once
-    with suppress(AssertionError):
-        controller.stop()
+def suppress_userwarning():
+    with pytest.warns(UserWarning):
+        yield
+
+
+# region #### Fixtures: Controllers ##################################################
 
 
 @pytest.fixture
-def exposing_controller() -> ExposingController:
-    handler = Sink()
-    controller = ExposingController(handler)
-    controller.start()
-    Global.set_addr_from(controller)
-    #
-    yield controller
-    #
-    # Some test cases need to .stop() the controller inside themselves
-    # in such cases, we must suppress Controller's raise of AssertionError
-    # because Controller doesn't like .stop() to be invoked more than once
-    with suppress(AssertionError):
-        controller.stop()
-
-
-@pytest.fixture
-def strictascii_controller(get_handler) -> StrictASCIIController:
-    handler = get_handler()
-    controller = StrictASCIIController(handler)
-    controller.start()
-    Global.set_addr_from(controller)
-    #
-    yield controller
-    #
-    controller.stop()
-
-
-@pytest.fixture
-def sleeping_nodecode_controller() -> NoDecodeController:
-    handler = SleepingHeloHandler()
-    controller = NoDecodeController(handler)
-    controller.start()
-    Global.set_addr_from(controller)
-    #
-    yield controller
-    #
-    controller.stop()
-
-
-@pytest.fixture
-def controller_with_sink(get_controller) -> Controller:
-    handler = Sink()
-    controller = get_controller(handler, None)
-    controller.start()
-    Global.set_addr_from(controller)
-    #
-    yield controller
-    #
-    controller.stop()
-
-
-@pytest.fixture
-def require_auth_controller() -> Controller:
-    handler = Sink()
-    controller = RequiredAuthDecodingController(handler)
-    controller.start()
-    Global.set_addr_from(controller)
-    #
-    yield controller
-    #
-    controller.stop()
-
-
-@pytest.fixture
-def sized_controller(request) -> SizedController:
-    marker = request.node.get_closest_marker("controller_data")
-    if marker:
-        markerdata = marker.kwargs or {}
-    else:
-        markerdata = {}
-    size = markerdata.get("size", None)
-    handler = Sink()
-    controller = SizedController(handler, size=size)
-    controller.start()
-    Global.set_addr_from(controller)
-    #
-    yield controller
-    #
-    controller.stop()
-
-
-@pytest.fixture
-def auth_peeker_controller() -> Controller:
+def auth_peeker_controller(get_controller) -> ExposingController:
     handler = PeekerHandler()
-    controller = DecodingControllerPeekAuth(
-        handler, server_kwargs={"auth_exclude_mechanism": ["DONT"]}
+    controller = get_controller(
+        handler,
+        decode_data=True,
+        enable_SMTPUTF8=True,
+        auth_require_tls=False,
+        auth_callback=handler.authenticate,
+        auth_exclude_mechanism=["DONT"],
     )
     controller.start()
     Global.set_addr_from(controller)
@@ -363,15 +225,25 @@ def auth_peeker_controller() -> Controller:
 
 
 @pytest.fixture
-def envelope_storing_handler() -> StoreEnvelopeOnVRFYHandler:
-    handler = StoreEnvelopeOnVRFYHandler()
-    controller = DecodingAuthNoTLSController(handler)
+def decoding_authnotls_controller(get_handler, get_controller) -> ExposingController:
+    handler = get_handler()
+    controller = get_controller(
+        handler,
+        decode_data=True,
+        enable_SMTPUTF8=True,
+        auth_require_tls=False,
+        auth_callback=authenticator,
+    )
     controller.start()
     Global.set_addr_from(controller)
     #
-    yield handler
+    yield controller
     #
-    controller.stop()
+    # Some test cases need to .stop() the controller inside themselves
+    # in such cases, we must suppress Controller's raise of AssertionError
+    # because Controller doesn't like .stop() to be invoked more than once
+    with suppress(AssertionError):
+        controller.stop()
 
 
 @pytest.fixture
@@ -387,22 +259,71 @@ def error_controller(get_handler) -> ErrorController:
 
 
 @pytest.fixture
-def receiving_handler(get_controller) -> ReceivingHandler:
-    handler = ReceivingHandler()
-    controller = get_controller(handler)
+def nodecode_controller(get_handler, get_controller) -> ExposingController:
+    handler = get_handler()
+    controller = get_controller(handler, decode_data=False)
     controller.start()
     Global.set_addr_from(controller)
     #
-    yield handler
+    yield controller
     #
     controller.stop()
 
 
 @pytest.fixture
-def suppress_userwarning():
-    with pytest.warns(UserWarning):
-        yield
+def require_auth_controller(get_controller) -> ExposingController:
+    handler = Sink()
+    controller = get_controller(
+        handler,
+        decode_data=True,
+        enable_SMTPUTF8=True,
+        auth_require_tls=False,
+        auth_callback=authenticator,
+        auth_required=True,
+    )
+    controller.start()
+    Global.set_addr_from(controller)
+    #
+    yield controller
+    #
+    controller.stop()
 
+
+@pytest.fixture
+def sized_controller(request, get_controller) -> ExposingController:
+    marker = request.node.get_closest_marker("controller_data")
+    if marker:
+        markerdata = marker.kwargs or {}
+    else:
+        markerdata = {}
+    size = markerdata.get("size", None)
+    handler = Sink()
+    controller = get_controller(handler, data_size_limit=size)
+    controller.start()
+    Global.set_addr_from(controller)
+    #
+    yield controller
+    #
+    controller.stop()
+
+
+@pytest.fixture
+def strictascii_controller(get_handler, get_controller) -> ExposingController:
+    handler = get_handler()
+    controller = get_controller(
+        handler,
+        enable_SMTPUTF8=False,
+        decode_data=True,
+    )
+    controller.start()
+    Global.set_addr_from(controller)
+    #
+    yield controller
+    #
+    controller.stop()
+
+
+# endregion
 
 # endregion
 
@@ -479,8 +400,6 @@ class TestProtocol:
         assert handler.box[0].content == b""
 
 
-# Because decoding_authnotls_controller has a scope of "function", this fixture will
-# be automagically started and teardown-ed on each test case func
 @pytest.mark.usefixtures("decoding_authnotls_controller")
 class TestSMTP(_CommonMethods):
     valid_mailfrom_addresses = [
@@ -917,15 +836,12 @@ class TestSMTP(_CommonMethods):
 
 
 class TestSMTPNonDecoding(_CommonMethods):
-    @pytest.mark.controller_data(class_=NoDecodeController)
-    def test_mail_invalid_body_param(self, controller_with_sink, client):
+    def test_mail_invalid_body_param(self, nodecode_controller, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com> BODY=FOOBAR")
         assert resp == S.S501_MAIL_BODY
 
 
-# Because decoding_authnotls_controller has a scope of "function", this fixture will
-# be automagically started and teardown-ed on each test case func
 @pytest.mark.usefixtures("decoding_authnotls_controller")
 class TestSMTPAuth(_CommonMethods):
     def test_auth_no_ehlo(self, client):
@@ -1056,7 +972,6 @@ class TestSMTPAuthMechanisms(_CommonMethods):
         assert resp == S.S235_AUTH_SUCCESS
 
     def test_auth_plain_null_credential(self, auth_peeker_controller, client):
-        assert isinstance(auth_peeker_controller, DecodingControllerPeekAuth)
         self._ehlo(client)
         resp = client.docmd("AUTH PLAIN")
         assert resp == S.S334_AUTH_EMPTYPROMPT
@@ -1071,7 +986,6 @@ class TestSMTPAuthMechanisms(_CommonMethods):
         assert peeker._sess.login_data == b""
 
     def test_auth_login_null_credential(self, auth_peeker_controller, client):
-        assert isinstance(auth_peeker_controller, DecodingControllerPeekAuth)
         self._auth_login_noarg(client)
         resp = client.docmd("=")
         assert resp == S.S334_AUTH_PASSWORD
@@ -1102,18 +1016,6 @@ class TestSMTPAuthMechanisms(_CommonMethods):
         self._ehlo(client)
         resp = client.docmd("AUTH DONT")
         assert resp == S.S504_AUTH_UNRECOG
-
-
-def test_warn_auth(require_auth_controller):
-    with pytest.warns(UserWarning) as record:
-        with SMTP(*Global.SrvAddr) as _:
-            pass
-    assert len(record) == 1
-    assert (
-        record[0].message.args[0]
-        == "Requiring AUTH while not requiring TLS can lead to "
-        "security vulnerabilities!"
-    )
 
 
 @pytest.mark.usefixtures("require_auth_controller", "suppress_userwarning")
@@ -1191,8 +1093,10 @@ class TestResetCommands:
         for rcpt in rcpt_tos:
             client.rcpt(rcpt)
 
-    def test_helo(self, envelope_storing_handler, client):
-        handler = envelope_storing_handler
+    @pytest.mark.handler_data(class_=StoreEnvelopeOnVRFYHandler)
+    def test_helo(self, decoding_authnotls_controller, client):
+        handler = decoding_authnotls_controller.handler
+        assert isinstance(handler, StoreEnvelopeOnVRFYHandler)
         # Each time through the loop, the HELO will reset the envelope.
         for data in self.expected_envelope_data:
             client.helo("example.com")
@@ -1205,8 +1109,10 @@ class TestResetCommands:
             assert handler.envelope.mail_from == data["mail_from"]
             assert handler.envelope.rcpt_tos == data["rcpt_tos"]
 
-    def test_ehlo(self, envelope_storing_handler, client):
-        handler = envelope_storing_handler
+    @pytest.mark.handler_data(class_=StoreEnvelopeOnVRFYHandler)
+    def test_ehlo(self, decoding_authnotls_controller, client):
+        handler = decoding_authnotls_controller.handler
+        assert isinstance(handler, StoreEnvelopeOnVRFYHandler)
         # Each time through the loop, the EHLO will reset the envelope.
         for data in self.expected_envelope_data:
             client.ehlo("example.com")
@@ -1219,8 +1125,10 @@ class TestResetCommands:
             assert handler.envelope.mail_from == data["mail_from"]
             assert handler.envelope.rcpt_tos == data["rcpt_tos"]
 
-    def test_rset(self, envelope_storing_handler, client):
-        handler = envelope_storing_handler
+    @pytest.mark.handler_data(class_=StoreEnvelopeOnVRFYHandler)
+    def test_rset(self, decoding_authnotls_controller, client):
+        handler = decoding_authnotls_controller.handler
+        assert isinstance(handler, StoreEnvelopeOnVRFYHandler)
         client.helo("example.com")
         # Each time through the loop, the RSET will reset the envelope.
         for data in self.expected_envelope_data:
@@ -1243,7 +1151,10 @@ class TestSMTPWithController(_CommonMethods):
         resp = client.docmd("MAIL FROM: <anne@example.com> SIZE=10000")
         assert resp == S.S552_EXCEED_SIZE
 
-    def test_mail_with_compatible_smtputf8(self, receiving_handler, client):
+    @pytest.mark.handler_data(class_=ReceivingHandler)
+    def test_mail_with_compatible_smtputf8(self, plain_controller, client):
+        receiving_handler = plain_controller.handler
+        assert isinstance(receiving_handler, ReceivingHandler)
         sender = "anne\xCB@example.com"
         recipient = "bart\xCB@example.com"
         self._ehlo(client)
@@ -1256,17 +1167,17 @@ class TestSMTPWithController(_CommonMethods):
         assert receiving_handler.box[0].mail_from == sender
         assert receiving_handler.box[0].rcpt_tos == [recipient]
 
-    def test_mail_with_unrequited_smtputf8(self, base_controller, client):
+    def test_mail_with_unrequited_smtputf8(self, plain_controller, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == S.S250_OK
 
-    def test_mail_with_incompatible_smtputf8(self, base_controller, client):
+    def test_mail_with_incompatible_smtputf8(self, plain_controller, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com> SMTPUTF8=YES")
         assert resp == S.S501_SMTPUTF8_NOARG
 
-    def test_mail_invalid_body(self, base_controller, client):
+    def test_mail_invalid_body(self, plain_controller, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com> BODY 9BIT")
         assert resp == S.S501_MAIL_BODY
@@ -1306,13 +1217,15 @@ class TestSMTPWithController(_CommonMethods):
         assert excinfo.value.smtp_code == 552
         assert excinfo.value.smtp_error == S.S552_TOO_MUCH.mesg
 
-    @pytest.mark.controller_data(class_=DecodingAuthNoTLSController)
-    def test_dots_escaped(self, receiving_handler, client):
+    @pytest.mark.handler_data(class_=ReceivingHandler)
+    def test_dots_escaped(self, decoding_authnotls_controller, client):
+        receiving_handler = decoding_authnotls_controller.handler
+        assert isinstance(receiving_handler, ReceivingHandler)
         self._helo(client)
         mail = CRLF.join(["Test", ".", "mail"])
         client.sendmail("anne@example.com", ["bart@example.com"], mail)
         assert len(receiving_handler.box) == 1
-        assert receiving_handler.box[0].content == "Test\r\n.\r\nmail\r\n"
+        assert receiving_handler.box[0].content == mail + CRLF
 
     @pytest.mark.handler_data(class_=ErroringHandler)
     def test_unexpected_errors(self, error_controller, client):
@@ -1376,25 +1289,25 @@ class TestSMTPWithController(_CommonMethods):
 
 class TestCustomization(_CommonMethods):
     @pytest.mark.controller_data(class_=CustomHostnameController)
-    def test_custom_hostname(self, controller_with_sink, client):
+    def test_custom_hostname(self, plain_controller, client):
         code, mesg = client.helo("example.com")
         assert code == 250
         assert mesg == CustomHostnameController.custom_name.encode("ascii")
 
-    def test_default_greeting(self, base_controller, client):
-        controller = base_controller
+    def test_default_greeting(self, plain_controller, client):
+        controller = plain_controller
         code, mesg = client.connect(controller.hostname, controller.port)
         assert code == 220
         # The hostname prefix is unpredictable
         assert mesg.endswith(bytes(GREETING, "utf-8"))
 
     @pytest.mark.controller_data(class_=CustomIdentController)
-    def test_custom_greeting(self, controller_with_sink, client):
-        controller = controller_with_sink
+    def test_custom_greeting(self, plain_controller, client):
+        controller = plain_controller
         code, mesg = client.connect(controller.hostname, controller.port)
         assert code == 220
         # The hostname prefix is unpredictable.
-        assert mesg.endswith(b"Identifying SMTP v2112")
+        assert mesg.endswith(CustomIdentController.ident)
 
 
 class TestClientCrash(_CommonMethods):
@@ -1402,7 +1315,7 @@ class TestClientCrash(_CommonMethods):
     # test_connection_reset_* test cases seem to be testing smtplib.SMTP behavior
     # instead of aiosmtpd.smtp.SMTP behavior. Maybe we can remove these?
 
-    def test_connection_reset_during_DATA(self, base_controller, client):
+    def test_connection_reset_during_DATA(self, plain_controller, client):
         self._helo(client)
         client.docmd("MAIL FROM: <anne@example.com>")
         client.docmd("RCPT TO: <bart@example.com>")
@@ -1417,7 +1330,7 @@ class TestClientCrash(_CommonMethods):
         with pytest.raises(SMTPServerDisconnected):
             client.noop()
 
-    def test_connection_reset_during_command(self, base_controller, client):
+    def test_connection_reset_during_command(self, plain_controller, client):
         self._helo(client)
         # Start sending a command but reset the connection before that
         # completes, i.e. before the \r\n
@@ -1432,11 +1345,11 @@ class TestClientCrash(_CommonMethods):
     # test_connreset_* test cases below _actually_ test aiosmtpd.smtp.SMTP behavior
     # A bit more invasive than I like, but can't be helped.
 
-    def test_connreset_during_DATA(self, mocker, exposing_controller, client):
+    def test_connreset_during_DATA(self, mocker, plain_controller, client):
         # Trigger factory() to produce the smtpd server
         self._helo(client)
         # Monkeypatching
-        smtpd: Server = exposing_controller.smtpd
+        smtpd: Server = plain_controller.smtpd
         spy: MagicMock = mocker.spy(smtpd._writer, "close")
         # Do some stuff
         client.docmd("MAIL FROM: <anne@example.com>")
@@ -1455,13 +1368,13 @@ class TestClientCrash(_CommonMethods):
             # That is okay; we just want to ensure that it's invoked at least once.
             assert spy.call_count > 0
         finally:
-            exposing_controller.stop()
+            plain_controller.stop()
 
-    def test_connreset_during_command(self, mocker, exposing_controller, client):
+    def test_connreset_during_command(self, mocker, plain_controller, client):
         # Trigger factory() to produce the smtpd server
         self._helo(client)
         time.sleep(ASYNCIO_CATCHUP_DELAY)
-        smtpd: Server = exposing_controller.smtpd
+        smtpd: Server = plain_controller.smtpd
         spy: MagicMock = mocker.spy(smtpd._writer, "close")
         # Start sending a command but reset the connection before that
         # completes, i.e. before the \r\n
@@ -1471,7 +1384,7 @@ class TestClientCrash(_CommonMethods):
         # Should be called at least once. (In practice, almost certainly just once.)
         assert spy.call_count > 0
 
-    def test_close_in_command(self, base_controller, client):
+    def test_close_in_command(self, plain_controller, client):
         #
         # What exactly are we testing in this test case, actually?
         #
@@ -1479,22 +1392,23 @@ class TestClientCrash(_CommonMethods):
         client.send("FOO")
         client.close()
 
-    def test_connclose_in_command(self, mocker, exposing_controller, client):
+    def test_connclose_in_command(self, mocker, plain_controller, client):
         # Don't include the CRLF.
         client.send("FOO")
         client.close()
         time.sleep(ASYNCIO_CATCHUP_DELAY)
         # At this point, smtpd's StreamWriter hasn't been initialized. Prolly since
-        # the call is self._reader.readline() and we abort before CRLF is sent
-        writer = exposing_controller.smtpd._writer
+        # the call is self._reader.readline() and we abort before CRLF is sent.
+        # That is why we don't need to 'spy' on writer.close()
+        writer = plain_controller.smtpd._writer
         # transport.is_closing() == True if transport is in the process of closing,
         # and still == True if transport is closed.
         assert writer.transport.is_closing()
 
-    def test_connclose_in_command_2(self, mocker, exposing_controller, client):
+    def test_connclose_in_command_2(self, mocker, plain_controller, client):
         self._helo(client)
         time.sleep(ASYNCIO_CATCHUP_DELAY)
-        smtpd: Server = exposing_controller.smtpd
+        smtpd: Server = plain_controller.smtpd
         writer = smtpd._writer
         spy: MagicMock = mocker.spy(writer, "close")
         # Don't include the CRLF.
@@ -1507,7 +1421,7 @@ class TestClientCrash(_CommonMethods):
         # and still == True if transport is closed.
         assert writer.transport.is_closing()
 
-    def test_close_in_data(self, mocker, exposing_controller, client):
+    def test_close_in_data(self, mocker, plain_controller, client):
         #
         # What exactly are we testing in this test case, actually?
         #
@@ -1526,12 +1440,12 @@ class TestClientCrash(_CommonMethods):
             client.send("FOO")
             client.close()
         finally:
-            exposing_controller.stop()
+            plain_controller.stop()
 
-    def test_connclose_in_data(self, mocker, exposing_controller, client):
+    def test_connclose_in_data(self, mocker, plain_controller, client):
         self._helo(client)
         time.sleep(ASYNCIO_CATCHUP_DELAY)
-        smtpd: Server = exposing_controller.smtpd
+        smtpd: Server = plain_controller.smtpd
         writer = smtpd._writer
         spy: MagicMock = mocker.spy(writer, "close")
 
@@ -1554,7 +1468,22 @@ class TestClientCrash(_CommonMethods):
             # and still == True if transport is closed.
             assert writer.transport.is_closing()
         finally:
-            exposing_controller.stop()
+            plain_controller.stop()
+
+    def test_sockclose_after_helo(self, mocker, plain_controller, client):
+        client.send("HELO example.com\r\n")
+        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        smtpd: Server = plain_controller.smtpd
+        writer = smtpd._writer
+        spy: MagicMock = mocker.spy(writer, "close")
+
+        client.sock.shutdown(socket.SHUT_WR)
+        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        # Check that smtpd._writer.close() invoked at least once
+        assert spy.call_count > 0
+        # transport.is_closing() == True if transport is in the process of closing,
+        # and still == True if transport is closed.
+        assert writer.transport.is_closing()
 
 
 @pytest.mark.usefixtures("strictascii_controller")
@@ -1592,7 +1521,8 @@ class TestStrictASCII(_CommonMethods):
 class TestSleepingHandler(_CommonMethods):
     # What is the point here?
 
-    def test_close_after_helo(self, sleeping_nodecode_controller, client):
+    @pytest.mark.handler_data(class_=SleepingHeloHandler)
+    def test_close_after_helo(self, nodecode_controller, client):
         #
         # What are we actually testing?
         #
@@ -1601,25 +1531,10 @@ class TestSleepingHandler(_CommonMethods):
         with pytest.raises(SMTPServerDisconnected):
             client.getreply()
 
-    def test_sockclose_after_helo(self, mocker, exposing_controller, client):
-        client.send("HELO example.com\r\n")
-        time.sleep(ASYNCIO_CATCHUP_DELAY)
-        smtpd: Server = exposing_controller.smtpd
-        writer = smtpd._writer
-        spy: MagicMock = mocker.spy(writer, "close")
-
-        client.sock.shutdown(socket.SHUT_WR)
-        time.sleep(ASYNCIO_CATCHUP_DELAY)
-        # Check that smtpd._writer.close() invoked at least once
-        assert spy.call_count > 0
-        # transport.is_closing() == True if transport is in the process of closing,
-        # and still == True if transport is closed.
-        assert writer.transport.is_closing()
-
 
 class TestTimeout(_CommonMethods):
     @pytest.mark.controller_data(class_=TimeoutController)
-    def test_timeout(self, controller_with_sink, client):
+    def test_timeout(self, plain_controller, client):
         # This one is rapid, it must succeed
         self._ehlo(client)
         time.sleep(0.1 + TimeoutController.Delay)

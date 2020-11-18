@@ -55,14 +55,14 @@ class TestStatusCodes:
             esc1, dot, rest = m.group().partition(b".")
             # noinspection PyTypeChecker
             assert str(value.code // 100) == esc1.decode(), (
-                f"{key}: First digit of Enhanced Status Code different from first digit "
-                f"of Standard Status Code"
+                f"{key}: First digit of Enhanced Status Code different from "
+                f"first digit of Standard Status Code"
             )
 
     def test_commands(self):
         """
-        Ensure lists in statuscodes are individual objects, so changes in one list won't
-        affect the other lists
+        Ensure lists in statuscodes are individual objects, so changes in one list
+        won't affect the other lists
         """
         lists = [
             statuscodes._COMMON_COMMANDS,
@@ -82,4 +82,4 @@ class TestHarness:
         assert isinstance(socket.getfqdn, MagicMock)
         fqdn = socket.getfqdn()
         assert isinstance(fqdn, str)
-        assert socket.getfqdn() != fqdn, "socket.getfqdn() changed between calls!"
+        assert socket.getfqdn() == fqdn, "socket.getfqdn() changed between calls!"

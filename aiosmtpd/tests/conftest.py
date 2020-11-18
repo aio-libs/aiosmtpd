@@ -1,3 +1,5 @@
+import os
+import ssl
 import pytest
 import socket
 import asyncio
@@ -5,15 +7,30 @@ import inspect
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
+from aiosmtpd.smtp import SMTP as Server
 from contextlib import suppress
 from smtplib import SMTP as SMTPClient
-from ..testing.helpers import DecodingController
-from typing import Any, Callable, Dict, NamedTuple, Optional, Type
+from typing import NamedTuple, Optional, Type
+
+
+# region #### Custom datatypes ########################################################
 
 
 class HostPort(NamedTuple):
     host: str = "localhost"
     port: int = 8025
+
+
+# endregion
+
+
+# region #### Constants & Global Vars #################################################
+
+ASYNCIO_CATCHUP_DELAY = float(os.environ.get("ASYNCIO_CATCHUP_DELAY", 0.1))
+"""
+Delay (in seconds) to give asyncio event loop time to catch up and do things. May need
+to be increased for slow and/or overburdened test systems.
+"""
 
 
 class Global:
@@ -23,6 +40,29 @@ class Global:
     @classmethod
     def set_addr_from(cls, contr: Controller):
         cls.SrvAddr = HostPort(contr.hostname, contr.port)
+
+
+# endregion
+
+
+# region #### Custom Behavior Controllers #############################################
+
+
+class ExposingController(Controller):
+    smtpd: Server
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def factory(self):
+        self.smtpd = super().factory()
+        return self.smtpd
+
+
+# endregion
+
+
+# region #### Optimizing Fixtures #####################################################
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -37,8 +77,14 @@ def cache_fqdn(session_mocker):
     yield
 
 
+# endregion
+
+
+# region #### Common Fixtures #########################################################
+
+
 @pytest.fixture
-def get_controller(request) -> Callable[..., Controller]:
+def get_controller(request):
     marker = request.node.get_closest_marker("controller_data")
     if marker:
         markerdata = marker.kwargs or {}
@@ -47,8 +93,9 @@ def get_controller(request) -> Callable[..., Controller]:
 
     def getter(
         handler,
-        default: Optional[Type[Controller]] = Controller,
-        server_kwargs: Dict[str, Any] = None,
+        default: Optional[Type[Controller]] = ExposingController,
+        ssl_context: ssl.SSLContext = None,
+        **server_kwargs,
     ) -> Controller:
         assert not inspect.isclass(handler)
         class_: Type[Controller] = markerdata.get("class_", default)
@@ -62,6 +109,7 @@ def get_controller(request) -> Callable[..., Controller]:
             handler,
             hostname=ip_port.host,
             port=ip_port.port,
+            ssl_context=ssl_context,
             server_kwargs=server_kwargs,
         )
 
@@ -69,10 +117,10 @@ def get_controller(request) -> Callable[..., Controller]:
 
 
 @pytest.fixture
-def get_handler(request) -> Callable[..., object]:
+def get_handler(request):
     marker = request.node.get_closest_marker("handler_data")
 
-    def getter(default=Sink):
+    def getter(default=Sink) -> object:
         if marker:
             class_ = marker.kwargs.get("class_", default)
         else:
@@ -95,7 +143,13 @@ def temp_event_loop() -> asyncio.AbstractEventLoop:
 
 
 @pytest.fixture
-def base_controller(get_handler, get_controller) -> Controller:
+def plain_controller(get_handler, get_controller) -> ExposingController:
+    """
+    Returns a Controller that was invoked with as few args as allowed. Hence the
+    moniker "plain". By default, uses Sink as the handler class and ExposingController
+    as the controller class, but changeable using pytest.mark.handler_data and
+    .controller_data, respectively.
+    """
     handler = get_handler()
     controller = get_controller(handler)
     controller.start()
@@ -111,9 +165,9 @@ def base_controller(get_handler, get_controller) -> Controller:
 
 
 @pytest.fixture
-def decoding_controller(get_handler) -> DecodingController:
+def decoding_controller(get_handler, get_controller) -> ExposingController:
     handler = get_handler()
-    controller = DecodingController(handler)
+    controller = get_controller(handler, decode_data=True)
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -136,3 +190,6 @@ def client(request) -> SMTPClient:
     addrport = markerdata.get("connect_to", Global.SrvAddr)
     with SMTPClient(*addrport) as client:
         yield client
+
+
+# endregion

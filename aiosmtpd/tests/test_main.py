@@ -78,13 +78,14 @@ def setuid(mocker):
 # endregion
 
 
+@pytest.mark.usefixtures("autostop_loop")
 class TestMain:
-    def test_setuid(self, nobody_uid, mocker, autostop_loop):
+    def test_setuid(self, nobody_uid, mocker):
         mock = mocker.patch("os.setuid")
         main(args=())
         mock.assert_called_with(nobody_uid)
 
-    def test_suid_permission_error(self, nobody_uid, mocker, capsys, autostop_loop):
+    def test_suid_permission_error(self, nobody_uid, mocker, capsys):
         mock = mocker.patch("os.setuid", side_effect=PermissionError)
         with pytest.raises(SystemExit) as excinfo:
             main(args=())
@@ -95,7 +96,7 @@ class TestMain:
             == 'Cannot setuid "nobody"; try running with -n option.\n'
         )
 
-    def test_setuid_no_pwd_module(self, nobody_uid, mocker, capsys, autostop_loop):
+    def test_setuid_no_pwd_module(self, nobody_uid, mocker, capsys):
         mocker.patch("aiosmtpd.main.pwd", None)
         with pytest.raises(SystemExit) as excinfo:
             main(args=())
@@ -110,30 +111,30 @@ class TestMain:
             in capsys.readouterr().err
         )
 
-    def test_n(self, setuid, autostop_loop):
+    def test_n(self, setuid):
         with pytest.raises(RuntimeError):
             main(("-n",))
 
-    def test_nosetuid(self, setuid, autostop_loop):
+    def test_nosetuid(self, setuid):
         with pytest.raises(RuntimeError):
             main(("--nosetuid",))
 
-    def test_debug_0(self, autostop_loop):
+    def test_debug_0(self):
         # For this test, the test runner likely has already set the log level
         # so it may not be logging.ERROR.
         default_level = MAIL_LOG.getEffectiveLevel()
         main(("-n",))
         assert MAIL_LOG.getEffectiveLevel() == default_level
 
-    def test_debug_1(self, autostop_loop):
+    def test_debug_1(self):
         main(("-n", "-d"))
         assert MAIL_LOG.getEffectiveLevel() == logging.INFO
 
-    def test_debug_2(self, autostop_loop):
+    def test_debug_2(self):
         main(("-n", "-dd"))
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
 
-    def test_debug_3(self, autostop_loop):
+    def test_debug_3(self):
         main(("-n", "-ddd"))
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
         assert asyncio.get_event_loop().get_debug()

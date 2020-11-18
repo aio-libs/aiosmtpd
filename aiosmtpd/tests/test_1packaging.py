@@ -1,6 +1,7 @@
 """Test meta / packaging"""
 import aiosmtpd.smtp as a_smtp
 
+# noinspection PyPackageRequirements
 from packaging import version
 
 

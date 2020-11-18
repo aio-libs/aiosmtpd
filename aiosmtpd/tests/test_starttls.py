@@ -1,55 +1,16 @@
 import pytest
 
-from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import SMTP as SMTPProtocol
+from .conftest import ExposingController, Global
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
     get_server_context,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-from .conftest import Global
 from contextlib import suppress
 from email.mime.text import MIMEText
-from smtplib import SMTP
 
 
 # region #### Harness Classes & Functions #############################################
-
-
-class SimpleController(Controller):
-    def factory(self):
-        return SMTPProtocol(self.handler)
-
-
-class TLSRequiredController(SimpleController):
-    def factory(self):
-        return SMTPProtocol(
-            self.handler,
-            decode_data=True,
-            require_starttls=True,
-            tls_context=get_server_context(),
-        )
-
-
-class TLSController(SimpleController):
-    def factory(self):
-        return SMTPProtocol(
-            self.handler,
-            decode_data=True,
-            require_starttls=False,
-            tls_context=get_server_context(),
-        )
-
-
-class RequireTLSAuthDecodingController(SimpleController):
-    def factory(self):
-        return SMTPProtocol(
-            self.handler,
-            decode_data=True,
-            auth_require_tls=True,
-            tls_context=get_server_context(),
-        )
 
 
 class HandshakeFailingHandler:
@@ -64,9 +25,15 @@ class HandshakeFailingHandler:
 
 
 @pytest.fixture
-def tls_controller(get_handler) -> TLSController:
+def tls_controller(get_handler, get_controller) -> ExposingController:
     handler = get_handler()
-    controller = TLSController(handler)
+    # controller = TLSController(handler)
+    controller = get_controller(
+        handler,
+        decode_data=True,
+        require_starttls=False,
+        tls_context=get_server_context(),
+    )
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -80,9 +47,15 @@ def tls_controller(get_handler) -> TLSController:
 
 
 @pytest.fixture
-def tls_req_controller(get_handler) -> TLSController:
+def tls_req_controller(get_handler, get_controller) -> ExposingController:
     handler = get_handler()
-    controller = TLSRequiredController(handler)
+    # controller = TLSRequiredController(handler)
+    controller = get_controller(
+        handler,
+        decode_data=True,
+        require_starttls=True,
+        tls_context=get_server_context(),
+    )
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -92,39 +65,27 @@ def tls_req_controller(get_handler) -> TLSController:
 
 
 @pytest.fixture
-def auth_req_tls_controller(get_handler) -> RequireTLSAuthDecodingController:
+def auth_req_tls_controller(get_handler, get_controller) -> ExposingController:
     handler = get_handler()
-    controller = RequireTLSAuthDecodingController(handler)
+    # controller = RequireTLSAuthDecodingController(handler)
+    controller = get_controller(
+        handler,
+        decode_data=True,
+        auth_require_tls=True,
+        tls_context=get_server_context(),
+    )
     controller.start()
     Global.set_addr_from(controller)
     #
     yield controller
     #
     controller.stop()
-
-
-@pytest.fixture
-def simple_controller() -> SimpleController:
-    handler = Sink()
-    controller = SimpleController(handler)
-    controller.start()
-    Global.set_addr_from(controller)
-    #
-    yield controller
-    #
-    controller.stop()
-
-
-@pytest.fixture
-def client() -> SMTP:
-    with SMTP(*Global.SrvAddr) as client:
-        yield client
 
 
 # endregion
 
 
-def test_disabled_tls(simple_controller, client):
+def test_disabled_tls(plain_controller, client):
     code, _ = client.ehlo("example.com")
     assert code == 250
     resp = client.docmd("STARTTLS")

@@ -18,7 +18,7 @@ def in_wsl():
 
 
 class TestServer:
-    def test_smtp_utf8(self, base_controller, client):
+    def test_smtp_utf8(self, plain_controller, client):
         code, mesg = client.ehlo("example.com")
         assert code == 250
         assert b"SMTPUTF8" in mesg.splitlines()
@@ -32,8 +32,20 @@ class TestServer:
         server.command_size_limits["DATA"] = 1024
         assert server.max_command_size_limit == 1024
 
+    def test_warn_authreq_notls(self):
+        with pytest.warns(UserWarning) as record:
+            Server(Sink(), auth_require_tls=False, auth_required=True)
+        assert len(record) == 1
+        assert (
+            record[0].message.args[0]
+            == "Requiring AUTH while not requiring TLS can lead to "
+            "security vulnerabilities!"
+        )
+
+
+class TestController:
     @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
-    def test_socket_error_dupe(self, base_controller, client):
+    def test_socket_error_dupe(self, plain_controller, client):
         contr2 = Controller(
             Sink(), hostname=Global.SrvAddr.host, port=Global.SrvAddr.port
         )

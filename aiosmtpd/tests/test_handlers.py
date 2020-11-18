@@ -5,8 +5,8 @@ import logging
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
 from aiosmtpd.smtp import SMTP as Server
-from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-from .conftest import DecodingController, Global
+from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S, StatusCode
+from .conftest import ExposingController, Global
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
@@ -19,11 +19,6 @@ CRLF = "\r\n"
 
 
 # region ##### Support Classes ###############################################
-
-
-class AUTHDecodingController(Controller):
-    def factory(self):
-        return Server(self.handler, decode_data=True, auth_require_tls=False)
 
 
 class FakeParser:
@@ -64,18 +59,23 @@ class EHLOHandler:
 
 
 class MAILHandler:
+    ReplacementOptions = ["WAS_HANDLED"]
+    ReturnCode = StatusCode(250, b"Yeah, sure")
+
     async def handle_MAIL(self, server, session, envelope, address, options):
-        envelope.mail_options.extend(options)
-        return "250 Yeah, sure"
+        envelope.mail_options = self.ReplacementOptions
+        return self.ReturnCode.to_str()
 
 
 class RCPTHandler:
+    RejectCode = StatusCode(550, b"Rejected")
+
     async def handle_RCPT(self, server, session, envelope, address, options):
         envelope.rcpt_options.extend(options)
         if address == "bart@example.com":
-            return "550 Rejected"
+            return self.RejectCode.to_str()
         envelope.rcpt_tos.append(address)
-        return "250 OK"
+        return S.S250_OK.to_str()
 
 
 class ErroringDataHandler:
@@ -93,9 +93,7 @@ class NoHooksHandler:
     pass
 
 
-class DeprecatedHookController(Controller):
-
-    smtpd: "DeprecatedHookController.DeprecatedHookServer" = None
+class DeprecatedHookController(ExposingController):
 
     class DeprecatedHookServer(Server):
 
@@ -110,11 +108,8 @@ class DeprecatedHookController(Controller):
         async def rset_hook(self):
             pass
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def factory(self):
-        self.smtpd = DeprecatedHookController.DeprecatedHookServer(self.handler)
+        self.smtpd = self.DeprecatedHookServer(self.handler)
         return self.smtpd
 
 
@@ -135,10 +130,10 @@ class AsyncDeprecatedHandler:
 
 
 @pytest.fixture
-def debugging_controller() -> Controller:
+def debugging_controller() -> ExposingController:
     stream = StringIO()
     handler = Debugging(stream)
-    controller = Controller(handler)
+    controller = ExposingController(handler)
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -149,10 +144,10 @@ def debugging_controller() -> Controller:
 
 
 @pytest.fixture
-def debugging_decoding_controller() -> Controller:
+def debugging_decoding_controller(get_controller) -> Controller:
     stream = StringIO()
     handler = Debugging(stream)
-    controller = DecodingController(handler)
+    controller = get_controller(handler, decode_data=True)
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -209,9 +204,10 @@ def proxy_controller(upstream_controller) -> Controller:
 
 
 @pytest.fixture
-def proxy_decoding_controller(upstream_controller) -> Controller:
+def proxy_decoding_controller(upstream_controller, get_controller) -> Controller:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
-    proxy_controller = DecodingController(proxy_handler)
+    # proxy_controller = DecodingController(proxy_handler)
+    proxy_controller = get_controller(proxy_handler, decode_data=True)
     proxy_controller.start()
     Global.set_addr_from(proxy_controller)
     #
@@ -221,9 +217,9 @@ def proxy_decoding_controller(upstream_controller) -> Controller:
 
 
 @pytest.fixture
-def auth_decoding_controller() -> Controller:
+def auth_decoding_controller(get_controller) -> Controller:
     handler = AUTHHandler()
-    controller = AUTHDecodingController(handler)
+    controller = get_controller(handler, decode_data=True, auth_require_tls=False)
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -383,8 +379,8 @@ class TestDebugging:
 
 class TestMessage:
     @pytest.mark.handler_data(class_=DataHandler)
-    def test_message_Data(self, base_controller, client):
-        handler = base_controller.handler
+    def test_message_Data(self, plain_controller, client):
+        handler = plain_controller.handler
         assert isinstance(handler, DataHandler)
         # In this test, the message content comes in as a bytes.
         client.sendmail(
@@ -430,8 +426,8 @@ class TestMessage:
         assert isinstance(handler.original_content, bytes)
 
     @pytest.mark.handler_data(class_=AsyncMessageHandler)
-    def test_message_AsyncMessage(self, base_controller, client):
-        handler = base_controller.handler
+    def test_message_AsyncMessage(self, plain_controller, client):
+        handler = plain_controller.handler
         assert isinstance(handler, AsyncMessageHandler)
         # In this test, the message data comes in as bytes.
         client.sendmail(
@@ -726,29 +722,33 @@ class TestProxyMocked:
 
 class TestHooks:
     @pytest.mark.handler_data(class_=HELOHandler)
-    def test_hook_HELO(self, base_controller, client):
-        assert isinstance(base_controller.handler, HELOHandler)
+    def test_hook_HELO(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, HELOHandler)
         resp = client.helo("me")
         assert resp == (250, b"geddy.example.com")
 
     @pytest.mark.handler_data(class_=EHLOHandler)
-    def test_hook_EHLO(self, base_controller, client):
-        assert isinstance(base_controller.handler, EHLOHandler)
+    def test_hook_EHLO(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, EHLOHandler)
         code, mesg = client.ehlo("me")
         lines = mesg.decode("utf-8").splitlines()
         assert code == 250
         assert lines[-1] == "alex.example.com"
 
     @pytest.mark.handler_data(class_=MAILHandler)
-    def test_hook_MAIL(self, base_controller, client):
-        assert isinstance(base_controller.handler, MAILHandler)
-        client.helo("me")
-        resp = client.mail("anne@example.com")
-        assert resp == (250, b"Yeah, sure")
+    def test_hook_MAIL(self, plain_controller, client):
+        assert isinstance(plain_controller, ExposingController)
+        handler = plain_controller.handler
+        assert isinstance(handler, MAILHandler)
+        client.ehlo("me")
+        resp = client.mail("anne@example.com", ("BODY=7BIT", "SIZE=2000"))
+        assert resp == MAILHandler.ReturnCode
+        smtpd = plain_controller.smtpd
+        assert smtpd.envelope.mail_options == MAILHandler.ReplacementOptions
 
     @pytest.mark.handler_data(class_=RCPTHandler)
-    def test_hook_RCPT(self, base_controller, client):
-        assert isinstance(base_controller.handler, RCPTHandler)
+    def test_hook_RCPT(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, RCPTHandler)
         client.helo("me")
         with pytest.raises(SMTPRecipientsRefused) as excinfo:
             client.sendmail(
@@ -764,12 +764,12 @@ class TestHooks:
                 ),
             )
         assert excinfo.value.recipients == {
-            "bart@example.com": (550, b"Rejected"),
+            "bart@example.com": RCPTHandler.RejectCode,
         }
 
     @pytest.mark.handler_data(class_=ErroringDataHandler)
-    def test_hook_DATA(self, base_controller, client):
-        assert isinstance(base_controller.handler, ErroringDataHandler)
+    def test_hook_DATA(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, ErroringDataHandler)
         with pytest.raises(SMTPDataError) as excinfo:
             client.sendmail(
                 "anne@example.com",
@@ -794,8 +794,8 @@ class TestHooks:
         assert resp == S.S235_AUTH_SUCCESS
 
     @pytest.mark.handler_data(class_=NoHooksHandler)
-    def test_hook_NoHooks(self, base_controller, client):
-        assert isinstance(base_controller.handler, NoHooksHandler)
+    def test_hook_NoHooks(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, NoHooksHandler)
         client.helo("me")
         client.mail("anne@example.com")
         client.rcpt(["bart@example.cm"])
@@ -836,19 +836,19 @@ class TestDeprecation:
         )
 
     @pytest.mark.handler_data(class_=DeprecatedHandler)
-    def test_process_message_Deprecated(self, base_controller, client):
+    def test_process_message_Deprecated(self, plain_controller, client):
         """handler.process_message is Deprecated"""
-        handler = base_controller.handler
+        handler = plain_controller.handler
         assert isinstance(handler, DeprecatedHandler)
-        controller = base_controller
+        controller = plain_controller
         self._process_message_testing(controller, client)
 
     @pytest.mark.handler_data(class_=AsyncDeprecatedHandler)
-    def test_process_message_AsyncDeprecated(self, base_controller, client):
+    def test_process_message_AsyncDeprecated(self, plain_controller, client):
         """handler.process_message is Deprecated"""
-        handler = base_controller.handler
+        handler = plain_controller.handler
         assert isinstance(handler, AsyncDeprecatedHandler)
-        controller = base_controller
+        controller = plain_controller
         self._process_message_testing(controller, client)
 
     def test_ehlo_hook_warn(self, deprecated_hook_controller, client):

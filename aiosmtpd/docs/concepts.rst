@@ -54,7 +54,7 @@ object is created.
       This dictionary provides additional information about the connection.
       It contains implementation-specific information so its contents may
       change, but it should roughly correspond to the information available
-      through `this method`_.
+      through |asyncio.BaseTransport.get_extra_info|_.
 
    .. attribute:: host_name
 
@@ -85,7 +85,7 @@ The envelope represents state built up during the client's SMTP dialog.  Each
 time the protocol state is reset, a new envelope is created.  E.g. when the
 SMTP ``RSET`` command is sent, the state is reset and a new envelope is
 created.  A new envelope is also created after the ``DATA`` command is
-completed, or in certain error conditions as mandated by `RFC 5321`_.
+completed, or in certain error conditions as mandated by |RFC 5321|_.
 
 .. class:: Envelope
 
@@ -97,8 +97,8 @@ completed, or in certain error conditions as mandated by `RFC 5321`_.
    .. attribute:: mail_options
 
       Defaulting to None, this attribute contains a list of any ESMTP mail
-      options provided by the client, such as those passed in by `the smtplib
-      client`_.
+      options provided by the client, such as those passed in by
+      |smtplib.SMTP.sendmail|_.
 
    .. attribute:: content
 
@@ -123,11 +123,14 @@ completed, or in certain error conditions as mandated by `RFC 5321`_.
 
       Defaulting to the empty list, this attribute will contain the list of
       any recipient options provided by the client, such as those passed in by
-      `the smtplib client`_.
+      |smtplib.SMTP.sendmail|_.
 
 
 .. _peername: https://docs.python.org/3/library/asyncio-protocol.html?highlight=peername#asyncio.BaseTransport.get_extra_info
-.. _`this method`: https://docs.python.org/3/library/asyncio-protocol.html?highlight=get_extra_info#asyncio.BaseTransport.get_extra_info
 .. _ESMTP: http://www.faqs.org/rfcs/rfc1869.html
-.. _`the smtplib client`: https://docs.python.org/3/library/smtplib.html#smtplib.SMTP.sendmail
-.. _`RFC 5321`: http://www.faqs.org/rfcs/rfc5321.html
+.. _asyncio.BaseTransport.get_extra_info: https://docs.python.org/3/library/asyncio-protocol.html?highlight=get_extra_info#asyncio.BaseTransport.get_extra_info
+.. |asyncio.BaseTransport.get_extra_info| replace:: ``asyncio.BaseTransport.get_extra_info``
+.. _RFC 5321: https://tools.ietf.org/html/rfc5321
+.. |RFC 5321| replace:: **RFC 5321**
+.. _smtplib.SMTP.sendmail: https://docs.python.org/3/library/smtplib.html#smtplib.SMTP.sendmail
+.. |smtplib.SMTP.sendmail| replace:: ``smtplib.SMTP.sendmail``
