@@ -5,12 +5,16 @@ import threading
 from aiosmtpd.smtp import SMTP
 from public import public
 from typing import Any, Dict
+# Uncomment next line when we hit 1.3
+# from warnings import warn
 
 
 @public
 class Controller:
+    smtpd: SMTP = None
+
     def __init__(self, handler, loop=None, hostname=None, port=8025, *,
-                 ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None,
+                 ready_timeout=1.0, enable_SMTPUTF8=None, ssl_context=None,
                  server_kwargs: Dict[str, Any] = None):
         """
         `Documentation can be found here
@@ -20,7 +24,6 @@ class Controller:
         self.handler = handler
         self.hostname = '::1' if hostname is None else hostname
         self.port = port
-        self.enable_SMTPUTF8 = enable_SMTPUTF8
         self.ssl_context = ssl_context
         self.loop = asyncio.new_event_loop() if loop is None else loop
         self.server = None
@@ -29,11 +32,21 @@ class Controller:
         self.ready_timeout = os.getenv(
             'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
         self.server_kwargs: Dict[str, Any] = server_kwargs or {}
+        if enable_SMTPUTF8 is not None:
+            # Uncomment next lines when we hit 1.3
+            # warn("enable_SMTPUTF8 will be removed in the future. "
+            #      "Please use server_kwargs instead.", DeprecationWarning)
+            self.server_kwargs["enable_SMTPUTF8"] = enable_SMTPUTF8
+        else:
+            # This line emulates previous behavior of defaulting enable_SMTPUTF8 to
+            # True. Which actually kinda conflicts with SMTP class's default, but it's
+            # explained in the documentation.
+            self.server_kwargs.setdefault("enable_SMTPUTF8", True)
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
-        return SMTP(self.handler, enable_SMTPUTF8=self.enable_SMTPUTF8,
-                    **self.server_kwargs)
+        self.smtpd = SMTP(self.handler, **self.server_kwargs)
+        return self.smtpd
 
     def _run(self, ready_event):
         asyncio.set_event_loop(self.loop)

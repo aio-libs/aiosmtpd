@@ -1,3 +1,6 @@
+.. role:: boldital
+  :class: boldital
+
 .. _controller:
 
 ====================
@@ -157,47 +160,67 @@ The EHLO response does not include the ``SMTPUTF8`` ESMTP option.
 
     >>> controller.stop()
 
+**IMPORTANT NOTE:** In future versions, this option will be deprecated. If you
+need to disable ``SMTPUTF8``, you must pass the ``enable_SMTPUTF8=false`` flag
+inside the ``server_kwargs`` parameter.
+
 
 Controller API
 ==============
 
-.. class:: Controller(handler, loop=None, hostname=None, port=8025, *, ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None, server_kwargs=None)
+.. class:: Controller(handler, loop=None, hostname=None, port=8025, *, ready_timeout=1.0, enable_SMTPUTF8=None, ssl_context=None, server_kwargs=None)
 
-   *handler* is an instance of a :ref:`handler <handlers>` class.
+   **Parameters**
 
-   *loop* is the asyncio event loop to use.  If not given,
+   :boldital:`handler` is an instance of a :ref:`handler <handlers>` class.
+
+   :boldital:`loop` is the asyncio event loop to use.  If not given,
    :meth:`asyncio.new_event_loop()` is called to create the event loop.
 
-   *hostname* is passed to your loop's
+   :boldital:`hostname` is passed to your loop's
    :meth:`AbstractEventLoop.create_server` method as the
    ``host`` parameter,
    except None (default) is translated to '::1'. To bind
    dual-stack locally, use 'localhost'. To bind `dual-stack
    <https://en.wikipedia.org/wiki/IPv6#Dual-stack_IP_implementation>`_
-   on all interfaces, use ''.
+   on all interfaces, use ''. Please note that this parameter does NOT get passed
+   through to the SMTP instance; if you want to give the SMTP instance a custom
+   hostname (e.g., for use in HELO/EHLO greeting), you must pass it through the
+   `server_kwargs` parameter.
 
-   *port* is passed directly to your loop's
+   :boldital:`port` is passed directly to your loop's
    :meth:`AbstractEventLoop.create_server` method.
 
-   *ready_timeout* is float number of seconds that the controller will wait in
+   :boldital:`ready_timeout` is float number of seconds that the controller will wait in
    :meth:`Controller.start` for the subthread to start its server.  You can
    also set the :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` environment variable to
    a float number of seconds, which takes precedence over the *ready_timeout*
    argument value.
 
-   *enable_SMTPUTF8* is a flag which is passed directly to the same named
+   :boldital:`enable_SMTPUTF8` is a flag which is passed directly to the same named
    argument to the ``SMTP`` constructor.  When True, the ESMTP ``SMTPUTF8``
    option is returned to the client in response to ``EHLO``, and UTF-8 content
-   is accepted.
+   is accepted. If not set, this will be treated as True.
 
-   *ssl_context* is an ``SSLContext`` that will be used by the loop's
+      **Deprecation Notice:**
+
+      The ``enable_SMTPUTF8`` parameter will be removed in a future version.
+      Please pass the flag through the ``server_kwargs`` parameter instead.
+
+      During the transition period, ``enable_SMTPUTF8`` *if set* will be transferred
+      into ``server_kwargs`` automatically, overriding any similar flag in the dict.
+
+   :boldital:`ssl_context` is an ``SSLContext`` that will be used by the loop's
    server. It is passed directly to the :meth:`AbstractEventLoop.create_server`
    method. Note that this implies unconditional encryption of the connection,
    and prevents use of the ``STARTTLS`` mechanism.
 
-   *server_kwargs* is a dict that will be passed through as keyword arguments
+   :boldital:`server_kwargs` is a dict that will be passed through as keyword arguments
    to the server's class during server creation in the :meth:`Controller.factory`
-   method.
+   method. Please see the documentation for the :class:`SMTP` class for a list of
+   accepted keyword arguments.
+
+   **Attributes**
 
    .. attribute:: handler
 
@@ -225,6 +248,11 @@ Controller API
       This is the server instance returned by
       :meth:`AbstractEventLoop.create_server` after the server has started.
 
+   .. py:attribute:: smtpd
+
+      The server instance (of class SMTP) created by :meth:`factory` after
+      the controller is started.
+
    .. method:: start()
 
       Start the server in the subthread.  The subthread is always a daemon
@@ -240,10 +268,9 @@ Controller API
 
       You can override this method to create custom instances of the ``SMTP``
       class being controlled.  By default, this creates an ``SMTP`` instance,
-      passing in your handler and setting the ``enable_SMTPUTF8`` flag.
-      Examples of why you would want to override this method include creating
-      an ``LMTP`` server instance instead, or passing in a different set of
-      arguments to the ``SMTP`` constructor.
+      passing in your handler and setting flags from the ``server_kwargs``
+      parameter. Examples of why you would want to override this method include
+      creating an ``LMTP`` server instance instead.
 
 
 .. _`asyncio event loop`: https://docs.python.org/3/library/asyncio-eventloop.html

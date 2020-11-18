@@ -268,6 +268,10 @@ texinfo_documents = [
 #texinfo_no_detailmenu = False
 
 
+def setup(app):
+    app.add_css_file("css/aiosmtpd.css")
+
+
 def index_html():
     import errno
     cwd = os.getcwd()
