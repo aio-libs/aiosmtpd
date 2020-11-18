@@ -292,7 +292,7 @@ def index_html():
                     or str(error) == "symbolic link privilege not held"):
                 # I don't like matching against string, but sometimes this particular
                 # OSError does not have any errno nor winerror.
-                print(f"{YELLOW}WARNING: No privilege to create symnlinks. "
+                print(f"{YELLOW}WARNING: No privilege to create symlinks. "
                       f"You have to make one manually{NORM}")
             elif error.errno == errno.EEXIST:
                 pass
