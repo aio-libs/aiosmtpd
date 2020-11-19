@@ -2,11 +2,10 @@ import sys
 import pytest
 import logging
 
-from aiosmtpd.controller import Controller
+from .conftest import ExposingController, Global
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
 from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S, StatusCode
-from .conftest import ExposingController, Global
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
@@ -94,7 +93,6 @@ class NoHooksHandler:
 
 
 class DeprecatedHookController(ExposingController):
-
     class DeprecatedHookServer(Server):
 
         warnings: list = None
@@ -144,7 +142,9 @@ def debugging_controller() -> ExposingController:
 
 
 @pytest.fixture
-def debugging_decoding_controller(get_controller) -> Controller:
+def debugging_decoding_controller(get_controller) -> ExposingController:
+    # Cannot use decoding_controller fixture because we need to first create the
+    # Debugging handler before creating the controller.
     stream = StringIO()
     handler = Debugging(stream)
     controller = get_controller(handler, decode_data=True)
@@ -164,9 +164,9 @@ def temp_maildir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def mailbox_controller(temp_maildir) -> Controller:
+def mailbox_controller(temp_maildir, get_controller) -> ExposingController:
     handler = Mailbox(temp_maildir)
-    controller = Controller(handler)
+    controller = get_controller(handler)
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -181,9 +181,9 @@ def fake_parser() -> FakeParser:
 
 
 @pytest.fixture
-def upstream_controller() -> Controller:
+def upstream_controller(get_controller) -> ExposingController:
     upstream_handler = DataHandler()
-    upstream_controller = Controller(upstream_handler, port=9025)
+    upstream_controller = get_controller(upstream_handler, port=9025)
     upstream_controller.start()
     #
     yield upstream_controller
@@ -192,9 +192,9 @@ def upstream_controller() -> Controller:
 
 
 @pytest.fixture
-def proxy_controller(upstream_controller) -> Controller:
+def proxy_controller(upstream_controller, get_controller) -> ExposingController:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
-    proxy_controller = Controller(proxy_handler)
+    proxy_controller = get_controller(proxy_handler)
     proxy_controller.start()
     Global.set_addr_from(proxy_controller)
     #
@@ -204,9 +204,10 @@ def proxy_controller(upstream_controller) -> Controller:
 
 
 @pytest.fixture
-def proxy_decoding_controller(upstream_controller, get_controller) -> Controller:
+def proxy_decoding_controller(
+    upstream_controller, get_controller
+) -> ExposingController:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
-    # proxy_controller = DecodingController(proxy_handler)
     proxy_controller = get_controller(proxy_handler, decode_data=True)
     proxy_controller.start()
     Global.set_addr_from(proxy_controller)
@@ -217,7 +218,7 @@ def proxy_decoding_controller(upstream_controller, get_controller) -> Controller
 
 
 @pytest.fixture
-def auth_decoding_controller(get_controller) -> Controller:
+def auth_decoding_controller(get_controller) -> ExposingController:
     handler = AUTHHandler()
     controller = get_controller(handler, decode_data=True, auth_require_tls=False)
     controller.start()
@@ -814,7 +815,7 @@ class TestHooks:
 
 class TestDeprecation:
     def _process_message_testing(self, controller, client):
-        assert isinstance(controller, Controller)
+        assert isinstance(controller, ExposingController)
         with pytest.warns(DeprecationWarning) as record:
             client.sendmail(
                 "anne@example.com",

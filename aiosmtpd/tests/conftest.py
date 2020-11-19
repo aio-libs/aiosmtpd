@@ -49,6 +49,9 @@ class Global:
 
 
 class ExposingController(Controller):
+    """
+    A subclass of Controller that 'exposes' the inner SMTP object for inspection.
+    """
     smtpd: Server
 
     def __init__(self, *args, **kwargs):
@@ -85,6 +88,11 @@ def cache_fqdn(session_mocker):
 
 @pytest.fixture
 def get_controller(request):
+    """
+    Provides a getter that will return an instance of a controller. Default class of
+    the controller is ExposingController, but can be changed via the "class_" parameter
+    of @pytest.mark.controller_data
+    """
     marker = request.node.get_closest_marker("controller_data")
     if marker:
         markerdata = marker.kwargs or {}
@@ -93,22 +101,36 @@ def get_controller(request):
 
     def getter(
         handler,
-        default: Optional[Type[Controller]] = ExposingController,
+        default_class: Optional[Type[Controller]] = ExposingController,
+        hostname: str = None,
+        port: int = None,
         ssl_context: ssl.SSLContext = None,
         **server_kwargs,
     ) -> Controller:
+        """
+        :param handler: The handler object
+        :param default_class: If set to None, then the actual class used to instantiate
+        the controller *must* be provided via pytest.mark.controller_data
+        :param hostname: The hostname (actually, address) for the controller. Defaults
+        to HostPort().host
+        :param port: The port for the controller. Defaults to HostPort().port
+        :param ssl_context: The SSLContext for SMTPS. If provided, will disable
+        STARTTLS
+        """
         assert not inspect.isclass(handler)
-        class_: Type[Controller] = markerdata.get("class_", default)
+        class_: Type[Controller] = markerdata.get("class_", default_class)
         if class_ is None:
             raise RuntimeError(
                 f"Fixture '{request.fixturename}' needs controller_data to specify "
                 f"what class to use"
             )
         ip_port: HostPort = markerdata.get("host_port", HostPort())
+        hostname = ip_port.host if hostname is None else hostname
+        port = ip_port.port if port is None else port
         return class_(
             handler,
-            hostname=ip_port.host,
-            port=ip_port.port,
+            hostname=hostname,
+            port=port,
             ssl_context=ssl_context,
             server_kwargs=server_kwargs,
         )
@@ -118,13 +140,18 @@ def get_controller(request):
 
 @pytest.fixture
 def get_handler(request):
+    """
+    Provides a getter that will return an instance of a handler. Default class of
+    the handler is Sink, but can be changed via the "class_" parameter of
+    @pytest.mark.handler_data
+    """
     marker = request.node.get_closest_marker("handler_data")
 
-    def getter(default=Sink) -> object:
+    def getter(default_class=Sink) -> object:
         if marker:
-            class_ = marker.kwargs.get("class_", default)
+            class_ = marker.kwargs.get("class_", default_class)
         else:
-            class_ = default
+            class_ = default_class
         return class_()
 
     return getter
