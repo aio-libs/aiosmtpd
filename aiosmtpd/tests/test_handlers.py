@@ -4,7 +4,7 @@ import logging
 
 from .conftest import ExposingController, Global
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
-from aiosmtpd.smtp import SMTP as Server
+from aiosmtpd.smtp import SMTP as Server, Session as ServerSession
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S, StatusCode
 from io import StringIO
 from mailbox import Maildir
@@ -185,6 +185,7 @@ def upstream_controller(get_controller) -> ExposingController:
     upstream_handler = DataHandler()
     upstream_controller = get_controller(upstream_handler, port=9025)
     upstream_controller.start()
+    # Notice that we do NOT invoke Global.set_addr_from() here
     #
     yield upstream_controller
     #
@@ -608,48 +609,48 @@ class TestCLI:
 
 
 class TestProxy:
-    source = dedent(
-        """\
-        From: Anne Person <anne@example.com>
-        To: Bart Person <bart@example.com>
-        Subject: A test
+    sender_addr = "anne@example.com"
+    receiver_addr = "bart@example.com"
 
-        Testing
-        """
+    source_lines = [
+        f"From: Anne Person <{sender_addr}>",
+        f"To: Bart Person <{receiver_addr}>",
+        "Subject: A test",
+        "%s",  # Insertion point; see below
+        "Testing",
+        "",
+    ]
+
+    # For "source" we insert an empty string
+    source = "\n".join(source_lines) % ""
+
+    # For "expected" we insert X-Peer with yet another template
+    expected_template = (
+        b"\r\n".join(ln.encode("ascii") for ln in source_lines)
+        % b"X-Peer: %s\r\n"
     )
-
-    # The upstream SMTPd will always receive the content as bytes
-    # delimited with CRLF.
-    expected = CRLF.join(
-        [
-            "From: Anne Person <anne@example.com>",
-            "To: Bart Person <bart@example.com>",
-            "Subject: A test",
-            "X-Peer: ::1",
-            "",
-            "Testing\r\n",
-        ]
-    ).encode("ascii")
 
     # There are two controllers and two SMTPd's running here.  The
     # "upstream" one listens on port 9025 and is connected to a "data
     # handler" which captures the messages it receives.  The second -and
     # the one under test here- listens on port 9024 and proxies to the one
-    # on port 9025.  Because we need to set the decode_data flag
-    # differently for each different test, the controller of the proxy is
-    # created in the individual tests, not in the setup.
+    # on port 9025.
 
     def test_deliver_bytes(self, upstream_controller, proxy_controller, client):
-        client.sendmail("anne@example.com", ["bart@example.com"], self.source)
+        client.sendmail(self.sender_addr, [self.receiver_addr], self.source)
         upstream = upstream_controller.handler
-        assert upstream.content == self.expected
-        assert upstream.original_content == self.expected
+        proxysess: ServerSession = proxy_controller.smtpd.session
+        expected = self.expected_template % proxysess.peer[0].encode("ascii")
+        assert upstream.content == expected
+        assert upstream.original_content == expected
 
     def test_deliver_str(self, upstream_controller, proxy_decoding_controller, client):
-        client.sendmail("anne@example.com", ["bart@example.com"], self.source)
+        client.sendmail(self.sender_addr, [self.receiver_addr], self.source)
         upstream = upstream_controller.handler
-        assert upstream.content == self.expected
-        assert upstream.original_content == self.expected
+        proxysess: ServerSession = proxy_decoding_controller.smtpd.session
+        expected = self.expected_template % proxysess.peer[0].encode("ascii")
+        assert upstream.content == expected
+        assert upstream.original_content == expected
 
 
 class TestProxyMocked:
