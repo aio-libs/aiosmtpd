@@ -141,6 +141,10 @@ if __name__ == "__main__":
     print(sys.version)
     print(sys.executable)
     print(NORM)
+    if os.environ.get("TRAVIS") == "true":
+        # All the housekeeping steps are pointless on Travis CI; they build and tear
+        # down their VMs everytime anyways.
+        sys.exit(0)
     opts = get_opts(sys.argv[1:])
     dispatcher = globals().get(f"dispatch_{opts.cmd}")
     dispatcher()
