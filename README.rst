@@ -29,7 +29,7 @@
    :alt: Discourse status
 
 The Python standard library includes a basic
-`SMTP <http://www.faqs.org/rfcs/rfc5321.html>`__ server in the
+`SMTP <https://tools.ietf.org/html/rfc5321>`__ server in the
 `smtpd <https://docs.python.org/3/library/smtpd.html>`__ module, based on the
 old asynchronous libraries
 `asyncore <https://docs.python.org/3/library/asyncore.html>`__ and
@@ -86,8 +86,8 @@ You can install this package in a virtual environment like so::
     $ source /path/to/venv/bin/activate
     $ python setup.py install
 
-This will give you a command line script called ``smtpd`` which implements the
-SMTP server.  Use ``smtpd --help`` for details.
+This will give you a command line script called ``aiosmtpd`` which implements the
+SMTP server.  Use ``aiosmtpd --help`` for details.
 
 You will also have access to the ``aiosmtpd`` library, which you can use as a
 testing environment for your SMTP clients.  See the documentation links above
@@ -104,17 +104,24 @@ test suite for Python 3.  Once you've got that, run::
 
 Individual tests can be run like this::
 
-    $ tox -e py36-nocov -- -P <pattern>
+    $ tox -- <testname>
 
-where *<pattern>* is a Python regular expression matching a test name.
+where ``<testname>`` is the "node id" of the test case to run, as explained
+in `the pytest documentation`_. The command above will run that one test case
+against all testenvs defined in ``tox.ini`` (see below).
 
-You can also add the ``-E`` option to boost debugging output, e.g.::
+If you want test to stop as soon as it hit a failure, use the ``-x``/``--exitfirst``
+option:
 
-    $ tox -e py36-nocov -- -E
+    $ tox -- -x
+
+You can also add the ``-s``/``--capture=no`` option to show output, e.g.::
+
+    $ tox -e py36-nocov -- -s
 
 and these options can be combined::
 
-    $ tox -e py36-nocov -- -P test_connection_reset_during_DATA -E
+    $ tox -e py36-nocov -- -x -s <testname>
 
 
 Supported 'testenvs'
@@ -209,3 +216,6 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+
+.. _`the pytest documentation`: https://docs.pytest.org/en/stable/usage.html#specifying-tests-selecting-tests
