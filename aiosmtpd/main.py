@@ -178,7 +178,7 @@ def main(args=None):
     try:
         server = loop.create_server(factory, host=args.host, port=args.port)
         server_loop = loop.run_until_complete(server)
-    except RuntimeError as e:  # pragma: nocover
+    except RuntimeError:  # pragma: nocover
         raise
     log.debug(f"server_loop = {server_loop}")
     log.info("Server is listening on %s:%s", args.host, args.port)
