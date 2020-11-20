@@ -53,11 +53,10 @@ def _parser() -> ArgumentParser:
         metavar="CLASSPATH",
         default=DEFAULT_CLASS,
         help=(
-            "Use the given class, as a Python dotted import path, as the "
-            "handler class for SMTP events.  This class can process "
-            "received messages and do other actions during the SMTP "
-            "dialog.  Uses ``{DEFAULT_CLASS}`` by default."
-            "".format(DEFAULT_CLASS=DEFAULT_CLASS)
+            f"Use the given class, as a Python dotted import path, as the "
+            f"handler class for SMTP events.  This class can process "
+            f"received messages and do other actions during the SMTP "
+            f"dialog.  Uses ``{DEFAULT_CLASS}`` by default."
         ),
     )
     parser.add_argument(
@@ -68,7 +67,7 @@ def _parser() -> ArgumentParser:
         help=(
             f"Restrict the total size of the incoming message to "
             f"``SIZE`` number of bytes via the RFC 1870 SIZE extension. "
-            f"Defaults to {DATA_SIZE_DEFAULT} bytes."
+            f"Defaults to {DATA_SIZE_DEFAULT:,} bytes."
         ),
     )
     parser.add_argument(
@@ -110,8 +109,6 @@ def _parser() -> ArgumentParser:
 
 def parseargs(args=None):
     parser = _parser()
-    # Defer setting description here to fix sphinx-argparse output
-    parser.description = "An RFC 5321 SMTP server with extensions."
     args = parser.parse_args(args)
     # Find the handler class.
     path, dot, name = args.classpath.rpartition(".")
@@ -121,7 +118,7 @@ def parseargs(args=None):
         args.handler = handler_class.from_cli(parser, *args.classargs)
     else:
         if len(args.classargs) > 0:
-            parser.error("Handler class {} takes no arguments".format(path))
+            parser.error(f"Handler class {path} takes no arguments")
         args.handler = handler_class()
     # Parse the host:port argument.
     if args.listen is None:
@@ -182,7 +179,6 @@ def main(args=None):
         server = loop.create_server(factory, host=args.host, port=args.port)
         server_loop = loop.run_until_complete(server)
     except RuntimeError as e:  # pragma: nocover
-        log.critical("\u001b[33;1m" + "#" * 600 + "\u001b[0m", exc_info=e)
         raise
     log.debug(f"server_loop = {server_loop}")
     log.info("Server is listening on %s:%s", args.host, args.port)
