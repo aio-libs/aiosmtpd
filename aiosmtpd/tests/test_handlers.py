@@ -128,10 +128,10 @@ class AsyncDeprecatedHandler:
 
 
 @pytest.fixture
-def debugging_controller() -> ExposingController:
+def debugging_controller(get_controller) -> ExposingController:
     stream = StringIO()
     handler = Debugging(stream)
-    controller = ExposingController(handler)
+    controller = get_controller(handler)
     controller.start()
     Global.set_addr_from(controller)
     #
