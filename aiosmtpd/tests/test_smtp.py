@@ -695,8 +695,9 @@ class TestSMTP(_CommonMethods):
             "RCPT <anne@example.com>",
             "RCPT TO:",
             "RCPT TO: <bart@example.com> SIZE=1000",
+            "RCPT TO: bart <bart@example.com>",
         ],
-        ids=["noarg", "noto", "noaddr", "params"],
+        ids=["noarg", "noto", "noaddr", "params", "malformed"],
     )
     def test_rcpt_smtp_errsyntax(self, client, command):
         self._helo(client)
@@ -712,8 +713,9 @@ class TestSMTP(_CommonMethods):
             "RCPT <anne@example.com>",
             "RCPT TO:",
             "RCPT TO: <bart@example.com> #$%=!@#",
+            "RCPT TO: bart <bart@example.com>",
         ],
-        ids=["noarg", "noto", "noaddr", "badparams"],
+        ids=["noarg", "noto", "noaddr", "badparams", "malformed"],
     )
     def test_rcpt_esmtp_errsyntax(self, client, command):
         self._ehlo(client)
@@ -1067,6 +1069,11 @@ class TestSMTPRequiredAuthentication(_CommonMethods):
         self._login(client)
         resp = client.docmd("RCPT TO: <anne@example.com>")
         assert resp == S.S503_MAIL_NEEDED
+
+    def test_data_norcpt_authenticated(self, client):
+        self._login(client)
+        resp = client.docmd("DATA")
+        assert resp == S.S503_RCPT_NEEDED
 
 
 class TestResetCommands:
