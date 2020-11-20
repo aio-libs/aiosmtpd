@@ -23,7 +23,7 @@ DEFAULT_CLASS = "aiosmtpd.handlers.Debugging"
 
 # Make the program name a little nicer, especially when `python3 -m aiosmtpd`
 # is used.
-PROGRAM = "smtpd" if "__main__.py" in sys.argv[0] else sys.argv[0]
+PROGRAM = "aiosmtpd" if "__main__.py" in sys.argv[0] else sys.argv[0]
 
 
 # Need to emit ArgumentParser by itself so autoprogramm extension can do its magic
