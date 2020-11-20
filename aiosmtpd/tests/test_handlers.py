@@ -381,7 +381,7 @@ class TestDebugging:
 
 class TestMessage:
     @pytest.mark.handler_data(class_=DataHandler)
-    def test_message_Data(self, plain_controller, client):
+    def test_message(self, plain_controller, client):
         handler = plain_controller.handler
         assert isinstance(handler, DataHandler)
         # In this test, the message content comes in as a bytes.
@@ -405,7 +405,7 @@ class TestMessage:
         assert isinstance(handler.original_content, bytes)
 
     @pytest.mark.handler_data(class_=DataHandler)
-    def test_message_decoded_Data(self, decoding_controller, client):
+    def test_message_decoded(self, decoding_controller, client):
         handler = decoding_controller.handler
         assert isinstance(handler, DataHandler)
         # In this test, the message content comes in as a string.
@@ -428,7 +428,7 @@ class TestMessage:
         assert isinstance(handler.original_content, bytes)
 
     @pytest.mark.handler_data(class_=AsyncMessageHandler)
-    def test_message_AsyncMessage(self, plain_controller, client):
+    def test_message_async(self, plain_controller, client):
         handler = plain_controller.handler
         assert isinstance(handler, AsyncMessageHandler)
         # In this test, the message data comes in as bytes.
@@ -454,7 +454,7 @@ class TestMessage:
         assert handled_message["X-RcptTo"] == "bart@example.com"
 
     @pytest.mark.handler_data(class_=AsyncMessageHandler)
-    def test_message_decoded_AsyncMessage(self, decoding_controller, client):
+    def test_message_decoded_async(self, decoding_controller, client):
         handler = decoding_controller.handler
         assert isinstance(handler, AsyncMessageHandler)
         # With a server that decodes the data, the messages come in as
@@ -557,27 +557,27 @@ class TestMailbox:
 
 
 class TestCLI:
-    def test_no_args(self, fake_parser):
+    def test_debugging_no_args(self, fake_parser):
         handler = Debugging.from_cli(fake_parser)
         assert fake_parser.message is None
         assert handler.stream == sys.stdout
 
-    def test_two_args(self, fake_parser):
+    def test_debugging_two_args(self, fake_parser):
         with pytest.raises(SystemExit):
             Debugging.from_cli(fake_parser, "foo", "bar")
         assert fake_parser.message == "Debugging usage: [stdout|stderr]"
 
-    def test_stdout(self, fake_parser):
+    def test_debugging_stdout(self, fake_parser):
         handler = Debugging.from_cli(fake_parser, "stdout")
         assert fake_parser.message is None
         assert handler.stream == sys.stdout
 
-    def test_stderr(self, fake_parser):
+    def test_debugging_stderr(self, fake_parser):
         handler = Debugging.from_cli(fake_parser, "stderr")
         assert fake_parser.message is None
         assert handler.stream == sys.stderr
 
-    def test_bad_argument(self, fake_parser):
+    def test_debugging_bad_argument(self, fake_parser):
         with pytest.raises(SystemExit):
             Debugging.from_cli(fake_parser, "stdfoo")
         assert fake_parser.message == "Debugging usage: [stdout|stderr]"
@@ -838,7 +838,7 @@ class TestDeprecation:
         )
 
     @pytest.mark.handler_data(class_=DeprecatedHandler)
-    def test_process_message_Deprecated(self, plain_controller, client):
+    def test_process_message(self, plain_controller, client):
         """handler.process_message is Deprecated"""
         handler = plain_controller.handler
         assert isinstance(handler, DeprecatedHandler)
@@ -846,14 +846,14 @@ class TestDeprecation:
         self._process_message_testing(controller, client)
 
     @pytest.mark.handler_data(class_=AsyncDeprecatedHandler)
-    def test_process_message_AsyncDeprecated(self, plain_controller, client):
+    def test_process_message_async(self, plain_controller, client):
         """handler.process_message is Deprecated"""
         handler = plain_controller.handler
         assert isinstance(handler, AsyncDeprecatedHandler)
         controller = plain_controller
         self._process_message_testing(controller, client)
 
-    def test_ehlo_hook_warn(self, deprecated_hook_controller, client):
+    def test_ehlo_hook(self, deprecated_hook_controller, client):
         """SMTP.ehlo_hook is Deprecated"""
         with pytest.warns(DeprecationWarning) as record:
             client.ehlo("example.com")

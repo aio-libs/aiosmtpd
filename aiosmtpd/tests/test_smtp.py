@@ -353,7 +353,7 @@ class TestProtocol:
     ):
         handler = ReceivingHandler()
         protocol = get_protocol(handler)
-        data = b"test\r\nmail\rdelimeters\nsaved\r\n"
+        data = b"test\r\nmail\rdelimiters\nsaved\r\n"
         protocol.data_received(
             BCRLF.join(
                 [
@@ -483,7 +483,7 @@ class TestSMTP(_CommonMethods):
         resp = client.helo("")
         assert resp == S.S501_SYNTAX_HELO
 
-    def test_helo_duplicate_ok(self, client):
+    def test_helo_duplicate(self, client):
         self._helo(client, "example.org")
         self._helo(client, "example.com")
 
@@ -498,7 +498,7 @@ class TestSMTP(_CommonMethods):
             b"HELP",
         ]
 
-    def test_ehlo_duplicate_ok(self, client):
+    def test_ehlo_duplicate(self, client):
         self._ehlo(client, "example.com")
         self._ehlo(client, "example.org")
 
@@ -551,7 +551,7 @@ class TestSMTP(_CommonMethods):
             "AUTH",
         ],
     )
-    def test_help_command(self, client, command):
+    def test_help_(self, client, command):
         resp = client.docmd(f"HELP {command}")
         syntax = getattr(S, f"S250_SYNTAX_{command}")
         assert resp == syntax
@@ -563,7 +563,7 @@ class TestSMTP(_CommonMethods):
             "RCPT",
         ],
     )
-    def test_help_command_esmtp(self, client, command):
+    def test_help_esmtp(self, client, command):
         self._ehlo(client)
         resp = client.docmd(f"HELP {command}")
         syntax = getattr(S, f"S250_SYNTAX_{command}_E")
@@ -591,7 +591,7 @@ class TestSMTP(_CommonMethods):
         valid_mailfrom_addresses,
         ids=itertools.count(),
     )
-    def test_mail_valid_addresses(self, client, address):
+    def test_mail_valid_address(self, client, address):
         self._ehlo(client)
         resp = client.docmd(f"MAIL FROM:{address}")
         assert resp == S.S250_OK
@@ -732,7 +732,7 @@ class TestSMTP(_CommonMethods):
         assert resp == S.S555_RCPT_PARAMS_UNRECOG
 
     @pytest.mark.parametrize("address", valid_rcptto_addresses, ids=itertools.count())
-    def test_rcpt_valid(self, client, address):
+    def test_rcpt_valid_address(self, client, address):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == S.S250_OK
@@ -740,7 +740,7 @@ class TestSMTP(_CommonMethods):
         assert resp == S.S250_OK
 
     @pytest.mark.parametrize("address", invalid_email_addresses, ids=itertools.count())
-    def test_rcpt_malformed(self, client, address):
+    def test_rcpt_address_malformed(self, client, address):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == S.S250_OK
@@ -866,22 +866,10 @@ class TestSMTPAuth(_CommonMethods):
         assert resp == S.S501_TOO_FEW
 
     @pytest.mark.parametrize("mechanism", ["GSSAPI", "DIGEST-MD5", "MD5", "CRAM-MD5"])
-    def test_auth_not_supported_mechanisms(self, client, mechanism):
+    def test_auth_not_supported_mechanism(self, client, mechanism):
         self._ehlo(client)
         resp = client.docmd("AUTH " + mechanism)
         assert resp == S.S504_AUTH_UNRECOG
-
-    def test_auth_success(self, client):
-        self._ehlo(client)
-        resp = client.login("goodlogin", "goodpasswd", initial_response_ok=False)
-        assert resp == S.S235_AUTH_SUCCESS
-
-    def test_auth_good_credentials(self, client):
-        self._ehlo(client)
-        resp = client.docmd(
-            "AUTH PLAIN " + b64encode(b"\0goodlogin\0goodpasswd").decode()
-        )
-        assert resp == S.S235_AUTH_SUCCESS
 
     def test_auth_already_authenticated(self, client):
         self._ehlo(client)
@@ -936,6 +924,18 @@ class TestSMTPAuth(_CommonMethods):
         resp = client.docmd("ab@%")
         assert resp == S.S501_AUTH_NOTB64
 
+    def test_auth_good_credentials(self, client):
+        self._ehlo(client)
+        resp = client.docmd(
+            "AUTH PLAIN " + b64encode(b"\0goodlogin\0goodpasswd").decode()
+        )
+        assert resp == S.S235_AUTH_SUCCESS
+
+    def test_auth_success(self, client):
+        self._ehlo(client)
+        resp = client.login("goodlogin", "goodpasswd", initial_response_ok=False)
+        assert resp == S.S235_AUTH_SUCCESS
+
     def test_auth_no_credentials(self, client):
         self._ehlo(client)
         resp = client.docmd("AUTH PLAIN =")
@@ -955,7 +955,7 @@ class TestSMTPAuth(_CommonMethods):
 
 
 @pytest.mark.usefixtures("auth_peeker_controller")
-class TestSMTPAuthMechanisms(_CommonMethods):
+class TestAuthMechanisms(_CommonMethods):
     def test_ehlo(self, client):
         code, mesg = client.ehlo("example.com")
         assert code == 250
@@ -1021,7 +1021,7 @@ class TestSMTPAuthMechanisms(_CommonMethods):
 
 
 @pytest.mark.usefixtures("require_auth_controller", "suppress_userwarning")
-class TestSMTPRequiredAuthentication(_CommonMethods):
+class TestRequiredAuthentication(_CommonMethods):
     def _login(self, client: SMTP):
         self._ehlo(client)
         resp = client.login("goodlogin", "goodpasswd")

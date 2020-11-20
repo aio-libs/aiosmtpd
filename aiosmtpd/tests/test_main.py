@@ -85,7 +85,7 @@ class TestMain:
         main(args=())
         mock.assert_called_with(nobody_uid)
 
-    def test_suid_permission_error(self, nobody_uid, mocker, capsys):
+    def test_setuid_permission_error(self, nobody_uid, mocker, capsys):
         mock = mocker.patch("os.setuid", side_effect=PermissionError)
         with pytest.raises(SystemExit) as excinfo:
             main(args=())
