@@ -5,7 +5,7 @@
 ================
 
 At the heart of this module is the ``SMTP`` class.  This class implements the
-`RFC 5321 <http://www.faqs.org/rfcs/rfc5321.html>`_ Simple Mail Transport
+`RFC 5321 <https://tools.ietf.org/html/rfc5321>`_ Simple Mail Transport
 Protocol.  Often you won't run an ``SMTP`` instance directly, but instead will
 use a :ref:`controller <controller>` instance to run the server in a subthread.
 
@@ -286,7 +286,7 @@ advertised, and the ``STARTTLS`` command will not be accepted.
 ``False``.
 
 .. _StreamReaderProtocol: https://docs.python.org/3/library/asyncio-stream.html#streamreaderprotocol
-.. _`RFC 3207`: http://www.faqs.org/rfcs/rfc3207.html
-.. _`RFC 2821`: https://www.ietf.org/rfc/rfc2821.txt
+.. _`RFC 3207`: https://tools.ietf.org/html/rfc3207
+.. _`RFC 2821`: https://tools.ietf.org/html/rfc2821
 .. _`asyncio transport`: https://docs.python.org/3/library/asyncio-protocol.html#asyncio-transport
 .. _ssl: https://docs.python.org/3/library/ssl.html

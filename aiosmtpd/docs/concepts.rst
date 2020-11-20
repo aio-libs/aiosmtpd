@@ -127,7 +127,7 @@ completed, or in certain error conditions as mandated by |RFC 5321|_.
 
 
 .. _peername: https://docs.python.org/3/library/asyncio-protocol.html?highlight=peername#asyncio.BaseTransport.get_extra_info
-.. _ESMTP: http://www.faqs.org/rfcs/rfc1869.html
+.. _ESMTP: https://tools.ietf.org/html/rfc1869
 .. _asyncio.BaseTransport.get_extra_info: https://docs.python.org/3/library/asyncio-protocol.html?highlight=get_extra_info#asyncio.BaseTransport.get_extra_info
 .. |asyncio.BaseTransport.get_extra_info| replace:: ``asyncio.BaseTransport.get_extra_info``
 .. _RFC 5321: https://tools.ietf.org/html/rfc5321

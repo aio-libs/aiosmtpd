@@ -44,5 +44,5 @@ Options
 Optional arguments are described in the :ref:`man page <manpage>` document.
 
 .. _smtplib: https://docs.python.org/3/library/smtplib.html
-.. _`RFC 1870`: http://www.faqs.org/rfcs/rfc1870.html
-.. _`RFC 6531`: http://www.faqs.org/rfcs/rfc6531.html
+.. _`RFC 1870`: https://tools.ietf.org/html/rfc1870
+.. _`RFC 6531`: https://tools.ietf.org/html/rfc6531

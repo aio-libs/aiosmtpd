@@ -4,11 +4,11 @@
 
 This library provides an `asyncio <https://pypi.python.org/pypi/asyncio>`__
 based implementation of a server for
-`RFC 5321 <http://www.faqs.org/rfcs/rfc5321.html>`__ -
+`RFC 5321 <https://tools.ietf.org/html/rfc5321>`__ -
 Simple Mail Transfer Protocol (SMTP) and
-`RFC 2033 <http://www.faqs.org/rfcs/rfc2033.html>`__ -
+`RFC 2033 <https://tools.ietf.org/html/rfc2033>`__ -
 Local Mail Transfer Protocol (LMTP).  It is derived from
-`Python 3's smtpd.py <https://hg.python.org/cpython/file/3.5/Lib/smtpd.py>`__
+`Python 3.5's smtpd.py <https://hg.python.org/cpython/file/3.5/Lib/smtpd.py>`__
 standard library module, and provides both a command line interface and an API
 for use in testing applications that send email.
 
@@ -24,15 +24,15 @@ Inspiration for this library comes from several other packages:
 Relevant RFCs
 =============
 
-* `RFC 5321 <http://www.faqs.org/rfcs/rfc5321.html>`__ - Simple Mail Transfer
+* `RFC 5321 <https://tools.ietf.org/html/rfc5321>`__ - Simple Mail Transfer
   Protocol (SMTP)
-* `RFC 2033 <http://www.faqs.org/rfcs/rfc2033.html>`__ - Local Mail Transfer
+* `RFC 2033 <https://tools.ietf.org/html/rfc2033>`__ - Local Mail Transfer
   Protocol (LMTP)
-* `RFC 2034 <http://www.faqs.org/rfcs/rfc2034.html>`__ - SMTP Service
+* `RFC 2034 <https://tools.ietf.org/html/rfc2034>`__ - SMTP Service
   Extension for Returning Enhanced Error Codes
-* `RFC 6531 <http://www.faqs.org/rfcs/rfc6531.html>`__ - SMTP Extension for
+* `RFC 6531 <https://tools.ietf.org/html/rfc6531>`__ - SMTP Extension for
   Internationalized Email
-* `RFC 4954 <http://www.faqs.org/rfcs/rfc4954.html>`__ - SMTP Service Extension
+* `RFC 4954 <https://tools.ietf.org/html/rfc4954>`__ - SMTP Service Extension
   for Authentication
 * `RFC 5322 <https://tools.ietf.org/html/rfc5322>`__ - Internet Message Format
 * `RFC 3696 <https://tools.ietf.org/html/rfc3696>`__ - Application Techniques
