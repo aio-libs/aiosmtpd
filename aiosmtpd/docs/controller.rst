@@ -1,6 +1,3 @@
-.. role:: boldital
-  :class: boldital
-
 .. _controller:
 
 ====================

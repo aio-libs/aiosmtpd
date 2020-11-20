@@ -14,6 +14,9 @@
 
 import sys
 import os
+import datetime
+
+from pathlib import Path
 
 YELLOW = "\x1b[1;93m"
 NORM = "\x1b[0m"
@@ -23,18 +26,20 @@ NORM = "\x1b[0m"
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath('.'))
+sys.path.append(str(Path("aiosmtpd/docs/_exts").expanduser().absolute()))
 
 # -- General configuration ------------------------------------------------
 
-# If your documentation needs a minimal Sphinx version, state it here.
-#needs_sphinx = '1.0'
+# autoprogramm needs Sphinx>=1.2.2
+needs_sphinx = '1.2.2'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
     'sphinx.ext.intersphinx',
-    ]
+    'autoprogramm',
+]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -49,8 +54,10 @@ source_suffix = '.rst'
 master_doc = 'README'
 
 # General information about the project.
+author = "The aiosmtpd Developers"
 project = u'aiosmtpd'
-copyright = u'2015-2020, aiosmtpd hackers'
+# noinspection PyShadowingBuiltins
+copyright = f'2015-{datetime.datetime.now().year}, {author}'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -97,6 +104,13 @@ pygments_style = 'sphinx'
 
 # If true, keep warnings as "system message" paragraphs in the built documents.
 #keep_warnings = False
+
+rst_prolog = f"""
+.. role:: boldital
+  :class: boldital
+.. |author| replace:: {author}
+.. |copyright| replace:: {copyright}
+"""
 
 
 # -- Options for HTML output ----------------------------------------------
@@ -187,14 +201,14 @@ htmlhelp_basename = 'aiosmtpddoc'
 # -- Options for LaTeX output ---------------------------------------------
 
 latex_elements = {
-# The paper size ('letterpaper' or 'a4paper').
-#'papersize': 'letterpaper',
+    # The paper size ('letterpaper' or 'a4paper').
+    #'papersize': 'letterpaper',
 
-# The font size ('10pt', '11pt' or '12pt').
-#'pointsize': '10pt',
+    # The font size ('10pt', '11pt' or '12pt').
+    #'pointsize': '10pt',
 
-# Additional stuff for the LaTeX preamble.
-#'preamble': '',
+    # Additional stuff for the LaTeX preamble.
+    #'preamble': '',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
@@ -300,6 +314,7 @@ def index_html():
                 raise
     finally:
         os.chdir(cwd)
+
 
 import atexit
 atexit.register(index_html)
