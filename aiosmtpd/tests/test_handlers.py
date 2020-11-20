@@ -278,7 +278,7 @@ class TestDebugging:
             """
         )
 
-    def test_debugging_bytes(self, debugging_decoding_controller, client):
+    def test_debugging_bytes(self, debugging_controller, client):
         peer = client.sock.getsockname()
         client.sendmail(
             "anne@example.com",
@@ -293,7 +293,7 @@ class TestDebugging:
                 """
             ),
         )
-        handler = debugging_decoding_controller.handler
+        handler = debugging_controller.handler
         assert isinstance(handler, Debugging)
         text = handler.stream.getvalue()
         assert text == dedent(
