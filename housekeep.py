@@ -83,8 +83,8 @@ def pycache_clean(verbose=False):
 def superclean():
     """Remove work dirs & files. They are .gitignore'd anyways."""
     print(f"{BOLD}Removing work dirs ... {NORM}", end="")
-    for dd in (".pytest-cache", ".tox", "_dynamic", "aiosmtpd.egg-info", "build",
-               "htmlcov", "prof"):
+    for dd in (".pytest-cache", ".pytest_cache", ".tox", "_dynamic",
+               "aiosmtpd.egg-info", "build", "htmlcov", "prof"):
         print(dd, end=" ", flush=True)
         deldir(Path(dd))
     print(f"\n{BOLD}Removing work files ...{NORM}", end="")
