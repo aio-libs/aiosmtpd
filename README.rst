@@ -29,7 +29,7 @@
    :alt: Discourse status
 
 The Python standard library includes a basic
-:rfc:`SMTP <5321>`__ server in the
+:rfc:`SMTP <5321>` server in the
 :mod:`smtpd` module, based on the
 old asynchronous libraries :mod:`asyncore` and :mod:`asynchat`.  These modules
 are quite old and are definitely showing their age.  ``asyncore`` and ``asynchat`` are
