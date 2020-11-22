@@ -31,7 +31,8 @@ sys.path.append(str(Path("aiosmtpd/docs/_exts").expanduser().absolute()))
 # -- General configuration ------------------------------------------------
 
 # autoprogramm needs Sphinx>=1.2.2
-needs_sphinx = '1.2.2'
+# :classmethod: needs Sphinx>=2.1
+needs_sphinx = '2.1'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom

@@ -23,3 +23,13 @@ SYNOPSIS
    :nodesc:
    :options_title: Options
    :options_adornment: ~
+
+
+ENVIRONMENT
+===========
+
+.. envvar:: AIOSMTPD_CONTROLLER_TIMEOUT
+
+    How long the main thread will wait (in seconds) until the SMTP thread is ready.
+
+    Default: ``1.0``

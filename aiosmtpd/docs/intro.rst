@@ -2,11 +2,10 @@
  Introduction
 ==============
 
-This library provides an `asyncio <https://pypi.python.org/pypi/asyncio>`__
-based implementation of a server for
-`RFC 5321 <https://tools.ietf.org/html/rfc5321>`__ -
+This library provides an :mod:`asyncio`-based implementation of a server for
+:rfc:`5321` -
 Simple Mail Transfer Protocol (SMTP) and
-`RFC 2033 <https://tools.ietf.org/html/rfc2033>`__ -
+:rfc:`2033` -
 Local Mail Transfer Protocol (LMTP).  It is derived from
 `Python 3.5's smtpd.py <https://hg.python.org/cpython/file/3.5/Lib/smtpd.py>`__
 standard library module, and provides both a command line interface and an API
@@ -24,23 +23,15 @@ Inspiration for this library comes from several other packages:
 Relevant RFCs
 =============
 
-* `RFC 5321 <https://tools.ietf.org/html/rfc5321>`__ - Simple Mail Transfer
-  Protocol (SMTP)
-* `RFC 2033 <https://tools.ietf.org/html/rfc2033>`__ - Local Mail Transfer
-  Protocol (LMTP)
-* `RFC 2034 <https://tools.ietf.org/html/rfc2034>`__ - SMTP Service
-  Extension for Returning Enhanced Error Codes
-* `RFC 6531 <https://tools.ietf.org/html/rfc6531>`__ - SMTP Extension for
-  Internationalized Email
-* `RFC 4954 <https://tools.ietf.org/html/rfc4954>`__ - SMTP Service Extension
-  for Authentication
-* `RFC 5322 <https://tools.ietf.org/html/rfc5322>`__ - Internet Message Format
-* `RFC 3696 <https://tools.ietf.org/html/rfc3696>`__ - Application Techniques
-  for Checking and Transformation of Names
-* `RFC 2034 <https://tools.ietf.org/html/rfc2034>`__ - SMTP Service Extension for
-  Returning Enhanced Error Codes
-* `RFC 1870 <https://tools.ietf.org/html/rfc1870>`__ - SMTP Service Extension
-  for Message Size Declaration
+* :rfc:`5321` - Simple Mail Transfer Protocol (SMTP)
+* :rfc:`2033` - Local Mail Transfer Protocol (LMTP)
+* :rfc:`2034` - SMTP Service Extension for Returning Enhanced Error Codes
+* :rfc:`6531` - SMTP Extension for Internationalized Email
+* :rfc:`4954` - SMTP Service Extension for Authentication
+* :rfc:`5322` - Internet Message Format
+* :rfc:`3696` - Application Techniques for Checking and Transformation of Names
+* :rfc:`2034` - SMTP Service Extension for Returning Enhanced Error Codes
+* :rfc:`1870` - SMTP Service Extension for Message Size Declaration
 
 Other references
 ================

@@ -29,16 +29,13 @@
    :alt: Discourse status
 
 The Python standard library includes a basic
-`SMTP <https://tools.ietf.org/html/rfc5321>`__ server in the
-`smtpd <https://docs.python.org/3/library/smtpd.html>`__ module, based on the
-old asynchronous libraries
-`asyncore <https://docs.python.org/3/library/asyncore.html>`__ and
-`asynchat <https://docs.python.org/3/library/asynchat.html>`__.  These modules
-are quite old and are definitely showing their age.  asyncore and asynchat are
+:rfc:`SMTP <5321>`__ server in the
+:mod:`smtpd` module, based on the
+old asynchronous libraries :mod:`asyncore` and :mod:`asynchat`.  These modules
+are quite old and are definitely showing their age.  ``asyncore`` and ``asynchat`` are
 difficult APIs to work with, understand, extend, and fix.
 
-With the introduction of the
-`asyncio <https://docs.python.org/3/library/asyncio.html>`__ module in Python
+With the introduction of the :mod:`asyncio` module in Python
 3.4, a much better way of doing asynchronous I/O is now available.  It seems
 obvious that an asyncio-based version of the SMTP and related protocols are
 needed for Python 3.  This project brings together several highly experienced

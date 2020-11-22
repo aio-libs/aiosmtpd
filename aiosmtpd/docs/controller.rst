@@ -7,7 +7,7 @@
 If you already have an `asyncio event loop`_, you can `create a server`_ using
 the ``SMTP`` class as the *protocol factory*, and then run the loop forever.
 If you need to pass arguments to the ``SMTP`` constructor, use
-`functools.partial()`_ or write your own wrapper function.  You might also
+:func:`functools.partial` or write your own wrapper function.  You might also
 want to add a signal handler so that the loop can be stopped, say when you hit
 control-C.
 
@@ -56,7 +56,7 @@ then start it::
 The SMTP thread might run into errors during its setup phase; to catch this
 the main thread will timeout when waiting for the SMTP server to become ready.
 By default the timeout is set to 1 second but can be changed either by using
-the ``AIOSMTPD_CONTROLLER_TIMEOUT`` environment variable or by passing a
+the :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` environment variable or by passing a
 different ``ready_timeout`` duration to the Controller's constructor.
 
 Connect to the server and send a message, which then gets printed by
@@ -174,13 +174,12 @@ Controller API
    :boldital:`handler` is an instance of a :ref:`handler <handlers>` class.
 
    :boldital:`loop` is the asyncio event loop to use.  If not given,
-   :meth:`asyncio.new_event_loop()` is called to create the event loop.
+   :func:`asyncio.new_event_loop` is called to create the event loop.
 
    :boldital:`hostname` is passed to your loop's
-   :meth:`AbstractEventLoop.create_server` method as the
-   ``host`` parameter,
-   except None (default) is translated to '::1'. To bind
-   dual-stack locally, use 'localhost'. To bind `dual-stack
+   :meth:`asyncio.loop.create_server` method as the ``host`` parameter,
+   except ``None`` (default) is translated to '::1'. To bind dual-stack
+   locally, use 'localhost'. To bind `dual-stack
    <https://en.wikipedia.org/wiki/IPv6#Dual-stack_IP_implementation>`_
    on all interfaces, use ''. Please note that this parameter does NOT get passed
    through to the SMTP instance; if you want to give the SMTP instance a custom
@@ -188,7 +187,7 @@ Controller API
    `server_kwargs` parameter.
 
    :boldital:`port` is passed directly to your loop's
-   :meth:`AbstractEventLoop.create_server` method.
+   :meth:`asyncio.loop.create_server` method.
 
    :boldital:`ready_timeout` is float number of seconds that the controller will wait in
    :meth:`Controller.start` for the subthread to start its server.  You can
@@ -229,7 +228,7 @@ Controller API
       True
 
    :boldital:`ssl_context` is an ``SSLContext`` that will be used by the loop's
-   server. It is passed directly to the :meth:`AbstractEventLoop.create_server`
+   server. It is passed directly to the :meth:`asyncio.loop.create_server`
    method. Note that this implies unconditional encryption of the connection,
    and prevents use of the ``STARTTLS`` mechanism.
 
@@ -264,7 +263,7 @@ Controller API
    .. attribute:: server
 
       This is the server instance returned by
-      :meth:`AbstractEventLoop.create_server` after the server has started.
+      :meth:`asyncio.loop.create_server` after the server has started.
 
    .. py:attribute:: smtpd
 
@@ -293,4 +292,4 @@ Controller API
 
 .. _`asyncio event loop`: https://docs.python.org/3/library/asyncio-eventloop.html
 .. _`create a server`: https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.AbstractEventLoop.create_server
-.. _`functools.partial()`: https://docs.python.org/3/library/functools.html#functools.partial
+

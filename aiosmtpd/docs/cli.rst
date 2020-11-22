@@ -27,7 +27,7 @@ greeting::
     221 Bye
     Connection closed by foreign host.
 
-Of course, you could use Python's smtplib_ module, or any other SMTP client to
+Of course, you could use Python's :mod:`smtplib` module, or any other SMTP client to
 talk to the server.
 
 Hit control-C at the server to stop it.
@@ -42,7 +42,3 @@ Options
 =======
 
 Optional arguments are described in the :ref:`man page <manpage>` document.
-
-.. _smtplib: https://docs.python.org/3/library/smtplib.html
-.. _`RFC 1870`: https://tools.ietf.org/html/rfc1870
-.. _`RFC 6531`: https://tools.ietf.org/html/rfc6531
