@@ -248,6 +248,14 @@ class SMTP(asyncio.StreamReaderProtocol):
             # If STARTTLS was issued, return False, because True has no effect
             # on an SSL transport and raises a warning. Our superclass has no
             # way of knowing we switched to SSL so it might return True.
+            #
+            # There seems to be a race condition somewhere that rendered
+            # self.session.ssl to be None when entering eof_received(), resulting
+            # in intermittent coverage failure on Linux, and constant coverage
+            # failure in Windows. A special-purpose 'intimate' test case has been
+            # written that sidesteps the race condition by calling this method
+            # directly. This resulted in the removal of a pragma that used
+            # to live here. Good riddance!
             return False
         return super().eof_received()
 
