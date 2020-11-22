@@ -111,7 +111,7 @@ in `the pytest documentation`_. The command above will run that one test case
 against all testenvs defined in ``tox.ini`` (see below).
 
 If you want test to stop as soon as it hit a failure, use the ``-x``/``--exitfirst``
-option:
+option::
 
     $ tox -- -x
 
@@ -143,9 +143,23 @@ have been configured and tested:
   - ``profile`` = no coverage testing, but code profiling instead.
     This must be **invoked manually** using the ``-e`` parameter
 
-  **Note:** Due to possible 'complications' when setting up PyPy on
+  **Note 1:** Due to possible 'complications' when setting up PyPy on
   systems without pyenv, ``pypy3`` tests also will not be automatically
-  run; you must invoke them manually.
+  run; you must invoke them manually. For example::
+
+    $ tox -e pypy3-nocov
+
+  **Note 2:** It is also possible to use whatever Python version is used when
+  invoking ``tox`` by using the ``py`` target, but you must explicitly include
+  the type of testing you want. For example::
+
+    $ tox -e "py-{nocov,cov,diffcov}"
+
+  (Don't forget the quotes if you want to use braces!)
+
+  You might want to do this for CI platforms where the exact Python version
+  is pre-prepared, such as Travis CI or |GitHub Actions|_; this will definitely
+  save some time during tox's testenv prepping.
 
 * ``qa``
 
@@ -153,18 +167,32 @@ have been configured and tested:
 
 * ``docs``
 
-  Builds HTML documentation using Sphinx
+  Builds HTML documentation using Sphinx. A `pytest doctest`_ will run prior to
+  actual building of the documentation.
 
 
 Environment Variables
 -------------------------
 
-``PLATFORM``
+.. envvar:: ASYNCIO_CATCHUP_DELAY
+
+    Due to how asyncio event loop works, some actions do not instantly get
+    responded to. This is especially so on slower / overworked systems.
+    In consideration of such situations, some test cases invoke a slight
+    delay to let the event loop catch up.
+
+    Defaults to `0.1` and can be set to any float value you want.
+
+.. envvar:: PLATFORM
+
     Used on non-native-Linux operating systems to specify tests to skip.
     Valid values:
 
-    * ``mswin`` -- when running tox on Microsoft Windows
-    * ``wsl`` -- when running tox on Windows Subsystem for Linux (WSL)
+    +-----------+-------------------------------------------------------+
+    | ``mswin`` | when running tox on Microsoft Windows (non-Cygwin)    |
+    +-----------+-------------------------------------------------------+
+    | ``wsl``   | when running tox on Windows Subsystem for Linux (WSL) |
+    +-----------+-------------------------------------------------------+
 
 
 Different Python Versions
@@ -189,6 +217,25 @@ versions on your system by using ``pyenv``. General steps:
 
 5. Invoke tox with the option ``--tox-pyenv-no-fallback`` (see tox-pyenv's
    documentation about this option)
+
+
+Housekeeping
+----------------
+
+Between runs of ``tox``, sometimes you want to cleanup artifacts from previous
+runs. For example, you want to force Sphinx to rebuild all documentation. Or,
+you're sharing a repo between environments and the cached Python bytecode
+messes up file access (e.g., sharing the exact same directory between Windows
+PowerShell and Cygwin will cause problems as Python becomes confused about the
+locations of the source code).
+
+The ``housekeep.py`` script is provided to help ensure clean testing
+environment between run. Simply invoke as such::
+
+    $ python ./housekeep.py superclean
+
+(The same script is actually called before and after runs on ``py*-*``
+testenvs, as you can see in ``tox.ini``, but with less destructive commands.)
 
 
 Contents
@@ -218,4 +265,7 @@ Indices and tables
 * :ref:`search`
 
 
+.. _`GitHub Actions`: https://docs.github.com/en/free-pro-team@latest/actions/guides/building-and-testing-python#running-tests-with-tox
+.. |GitHub Actions| replace:: **GitHub Actions**
+.. _`pytest doctest`: https://docs.pytest.org/en/stable/doctest.html
 .. _`the pytest documentation`: https://docs.pytest.org/en/stable/usage.html#specifying-tests-selecting-tests
