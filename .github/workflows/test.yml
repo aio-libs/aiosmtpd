@@ -14,9 +14,9 @@ on:
 
 jobs:
   test:
-    # If a matrix fail, do NOT stop other matrix, let them run to completion
-    fail-fast: false
     strategy:
+      # If a matrix fail, do NOT stop other matrix, let them run to completion
+      fail-fast: false
       matrix:
         os: [ ubuntu-latest ]
         python-version: [ 3.6, 3.7, 3.8, 3.9, pypy3 ]
