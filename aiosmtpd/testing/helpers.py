@@ -1,14 +1,21 @@
 """Testing helpers."""
 
-import ssl
+import os
 import sys
+import time
 import socket
 import struct
 
 from aiosmtpd.smtp import Envelope
-from pkg_resources import resource_filename
 from smtplib import SMTP as SMTP_Client
 from typing import List
+
+
+ASYNCIO_CATCHUP_DELAY = float(os.environ.get("ASYNCIO_CATCHUP_DELAY", 0.1))
+"""
+Delay (in seconds) to give asyncio event loop time to catch up and do things. May need
+to be increased for slow and/or overburdened test systems.
+"""
 
 
 def reset_connection(client: SMTP_Client):
@@ -36,25 +43,6 @@ def reset_connection(client: SMTP_Client):
     client.close()
 
 
-def get_server_context() -> ssl.SSLContext:
-    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    context.check_hostname = False
-    context.load_cert_chain(
-        resource_filename("aiosmtpd.tests.certs", "server.crt"),
-        resource_filename("aiosmtpd.tests.certs", "server.key"),
-    )
-    return context
-
-
-def get_client_context() -> ssl.SSLContext:
-    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-    context.check_hostname = False
-    context.load_verify_locations(
-        resource_filename("aiosmtpd.tests.certs", "server.crt")
-    )
-    return context
-
-
 class ReceivingHandler:
     box: List[Envelope] = None
 
@@ -64,3 +52,10 @@ class ReceivingHandler:
     async def handle_DATA(self, server, session, envelope):
         self.box.append(envelope)
         return "250 OK"
+
+
+def catchup_delay(delay=ASYNCIO_CATCHUP_DELAY):
+    """
+    Sleep for awhile to give asyncio's event loop time to catch up.
+    """
+    time.sleep(delay)

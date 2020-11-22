@@ -5,8 +5,6 @@ import pytest
 from .conftest import ExposingController, Global
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
-    get_client_context,
-    get_server_context,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from email.mime.text import MIMEText
@@ -14,10 +12,9 @@ from smtplib import SMTP_SSL
 
 
 @pytest.fixture
-def ssl_controller(get_controller) -> ExposingController:
-    context = get_server_context()
+def ssl_controller(get_controller, ssl_context_server) -> ExposingController:
     handler = ReceivingHandler()
-    controller = get_controller(handler, ssl_context=context)
+    controller = get_controller(handler, ssl_context=ssl_context_server)
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -27,8 +24,8 @@ def ssl_controller(get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def smtps_client() -> SMTP_SSL:
-    context = get_client_context()
+def smtps_client(ssl_context_client) -> SMTP_SSL:
+    context = ssl_context_client
     with SMTP_SSL(*Global.SrvAddr, context=context) as client:
         yield client
 

@@ -1,4 +1,3 @@
-import os
 import ssl
 import pytest
 import socket
@@ -9,6 +8,7 @@ from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
 from contextlib import suppress
+from pkg_resources import resource_filename
 from smtplib import SMTP as SMTPClient
 from typing import NamedTuple, Optional, Type
 
@@ -25,12 +25,6 @@ class HostPort(NamedTuple):
 
 
 # region #### Constants & Global Vars #################################################
-
-ASYNCIO_CATCHUP_DELAY = float(os.environ.get("ASYNCIO_CATCHUP_DELAY", 0.1))
-"""
-Delay (in seconds) to give asyncio event loop time to catch up and do things. May need
-to be increased for slow and/or overburdened test systems.
-"""
 
 
 class Global:
@@ -217,6 +211,29 @@ def client(request) -> SMTPClient:
     addrport = markerdata.get("connect_to", Global.SrvAddr)
     with SMTPClient(*addrport) as client:
         yield client
+
+
+@pytest.fixture
+def ssl_context_server() -> ssl.SSLContext:
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    context.check_hostname = False
+    context.load_cert_chain(
+        resource_filename("aiosmtpd.tests.certs", "server.crt"),
+        resource_filename("aiosmtpd.tests.certs", "server.key"),
+    )
+    #
+    yield context
+
+
+@pytest.fixture
+def ssl_context_client() -> ssl.SSLContext:
+    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    context.check_hostname = False
+    context.load_verify_locations(
+        resource_filename("aiosmtpd.tests.certs", "server.crt")
+    )
+    #
+    yield context
 
 
 # endregion

@@ -3,7 +3,6 @@ import pytest
 from .conftest import ExposingController, Global
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
-    get_server_context,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from contextlib import suppress
@@ -25,14 +24,16 @@ class HandshakeFailingHandler:
 
 
 @pytest.fixture
-def tls_controller(get_handler, get_controller) -> ExposingController:
+def tls_controller(
+    get_handler, get_controller, ssl_context_server
+) -> ExposingController:
     handler = get_handler()
     # controller = TLSController(handler)
     controller = get_controller(
         handler,
         decode_data=True,
         require_starttls=False,
-        tls_context=get_server_context(),
+        tls_context=ssl_context_server,
     )
     controller.start()
     Global.set_addr_from(controller)
@@ -47,14 +48,16 @@ def tls_controller(get_handler, get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def tls_req_controller(get_handler, get_controller) -> ExposingController:
+def tls_req_controller(
+    get_handler, get_controller, ssl_context_server
+) -> ExposingController:
     handler = get_handler()
     # controller = TLSRequiredController(handler)
     controller = get_controller(
         handler,
         decode_data=True,
         require_starttls=True,
-        tls_context=get_server_context(),
+        tls_context=ssl_context_server,
     )
     controller.start()
     Global.set_addr_from(controller)
@@ -65,14 +68,16 @@ def tls_req_controller(get_handler, get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def auth_req_tls_controller(get_handler, get_controller) -> ExposingController:
+def auth_req_tls_controller(
+    get_handler, get_controller, ssl_context_server
+) -> ExposingController:
     handler = get_handler()
     # controller = RequireTLSAuthDecodingController(handler)
     controller = get_controller(
         handler,
         decode_data=True,
         auth_require_tls=True,
-        tls_context=get_server_context(),
+        tls_context=ssl_context_server,
     )
     controller.start()
     Global.set_addr_from(controller)

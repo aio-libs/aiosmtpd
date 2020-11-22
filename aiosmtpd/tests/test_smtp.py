@@ -15,11 +15,12 @@ from aiosmtpd.smtp import (
     __ident__ as GREETING,
 )
 from aiosmtpd.testing.helpers import (
+    catchup_delay,
     ReceivingHandler,
     reset_connection,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-from .conftest import ASYNCIO_CATCHUP_DELAY, ExposingController, Global
+from .conftest import ExposingController, Global
 from base64 import b64encode
 from contextlib import suppress
 from smtplib import SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected
@@ -1370,7 +1371,7 @@ class TestClientCrash(_CommonMethods):
             # completes, i.e. before the .\r\n
             client.send(b"From: <anne@example.com>")
             reset_connection(client)
-            time.sleep(ASYNCIO_CATCHUP_DELAY)
+            catchup_delay()
             # Apparently within that delay, ._writer.close() invoked several times
             # That is okay; we just want to ensure that it's invoked at least once.
             assert spy.call_count > 0
@@ -1380,14 +1381,14 @@ class TestClientCrash(_CommonMethods):
     def test_connreset_during_command(self, mocker, plain_controller, client):
         # Trigger factory() to produce the smtpd server
         self._helo(client)
-        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        catchup_delay()
         smtpd: Server = plain_controller.smtpd
         spy: MagicMock = mocker.spy(smtpd._writer, "close")
         # Start sending a command but reset the connection before that
         # completes, i.e. before the \r\n
         client.send("MAIL FROM: <anne")
         reset_connection(client)
-        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        catchup_delay()
         # Should be called at least once. (In practice, almost certainly just once.)
         assert spy.call_count > 0
 
@@ -1403,7 +1404,7 @@ class TestClientCrash(_CommonMethods):
         # Don't include the CRLF.
         client.send("FOO")
         client.close()
-        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        catchup_delay()
         # At this point, smtpd's StreamWriter hasn't been initialized. Prolly since
         # the call is self._reader.readline() and we abort before CRLF is sent.
         # That is why we don't need to 'spy' on writer.close()
@@ -1414,14 +1415,14 @@ class TestClientCrash(_CommonMethods):
 
     def test_connclose_in_command_2(self, mocker, plain_controller, client):
         self._helo(client)
-        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        catchup_delay()
         smtpd: Server = plain_controller.smtpd
         writer = smtpd._writer
         spy: MagicMock = mocker.spy(writer, "close")
         # Don't include the CRLF.
         client.send("FOO")
         client.close()
-        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        catchup_delay()
         # Check that smtpd._writer.close() invoked at least once
         assert spy.call_count > 0
         # transport.is_closing() == True if transport is in the process of closing,
@@ -1451,7 +1452,7 @@ class TestClientCrash(_CommonMethods):
 
     def test_connclose_in_data(self, mocker, plain_controller, client):
         self._helo(client)
-        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        catchup_delay()
         smtpd: Server = plain_controller.smtpd
         writer = smtpd._writer
         spy: MagicMock = mocker.spy(writer, "close")
@@ -1468,7 +1469,7 @@ class TestClientCrash(_CommonMethods):
             # Don't include the CRLF.
             client.send("FOO")
             client.close()
-            time.sleep(ASYNCIO_CATCHUP_DELAY)
+            catchup_delay()
             # Check that smtpd._writer.close() invoked at least once
             assert spy.call_count > 0
             # transport.is_closing() == True if transport is in the process of closing,
@@ -1479,13 +1480,13 @@ class TestClientCrash(_CommonMethods):
 
     def test_sockclose_after_helo(self, mocker, plain_controller, client):
         client.send("HELO example.com\r\n")
-        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        catchup_delay()
         smtpd: Server = plain_controller.smtpd
         writer = smtpd._writer
         spy: MagicMock = mocker.spy(writer, "close")
 
         client.sock.shutdown(socket.SHUT_WR)
-        time.sleep(ASYNCIO_CATCHUP_DELAY)
+        catchup_delay()
         # Check that smtpd._writer.close() invoked at least once
         assert spy.call_count > 0
         # transport.is_closing() == True if transport is in the process of closing,
