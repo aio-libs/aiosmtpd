@@ -1,7 +1,7 @@
 import pytest
 
 from .conftest import ExposingController, Global
-from aiosmtpd.smtp import Session as Sess_
+from aiosmtpd.smtp import Session as Sess_, SMTP as Server
 from aiosmtpd.testing.helpers import (
     catchup_delay,
     ReceivingHandler,
@@ -166,22 +166,42 @@ class TestStartTLS:
             tls_controller.stop()
 
 
+class EOFingHandler:
+    ssl_existed = None
+    result = None
+
+    async def handle_NOOP(self, server: Server, session: Sess_, envelope, arg):
+        self.ssl_existed = session.ssl is not None
+        self.result = server.eof_received()
+        return "250 OK"
+
+
 class TestTLSEnding:
+
+    @pytest.mark.handler_data(class_=EOFingHandler)
     def test_eof_received(self, tls_controller, client):
         # I don't like this. It's too intimately involved with the innards of the SMTP
         # class. But for the life of me, I can't figure out why coverage there fail
         # intermittently.
-        code, mesg = client.ehlo("example.com")
-        assert code == 250
-        resp = client.starttls()
-        assert resp == S.S220_READY_TLS
-        code, mesg = client.ehlo("example.com")
-        assert code == 250
-        catchup_delay()
-        sess: Sess_ = tls_controller.smtpd.session
-        assert sess.ssl is not None
-        assert tls_controller.smtpd.eof_received() is False
-        catchup_delay()
+        #
+        # I suspect it's a race condition, but with what, and how to prevent that from
+        # happening, that's ... a mystery.
+        try:
+            code, mesg = client.ehlo("example.com")
+            assert code == 250
+            resp = client.starttls()
+            assert resp == S.S220_READY_TLS
+            code, mesg = client.ehlo("example.com")
+            assert code == 250
+            sess: Sess_ = tls_controller.smtpd.session
+            assert sess.ssl is not None
+            client.noop()
+            catchup_delay()
+            handler: EOFingHandler = tls_controller.handler
+            assert handler.ssl_existed is True
+            assert handler.result is False
+        finally:
+            tls_controller.stop()
 
 
 @pytest.mark.usefixtures("tls_controller")
