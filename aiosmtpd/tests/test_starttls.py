@@ -1,7 +1,9 @@
 import pytest
 
 from .conftest import ExposingController, Global
+from aiosmtpd.smtp import Session as Sess_
 from aiosmtpd.testing.helpers import (
+    catchup_delay,
     ReceivingHandler,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
@@ -162,6 +164,24 @@ class TestStartTLS:
             assert resp == S.S220_READY_TLS
         finally:
             tls_controller.stop()
+
+
+class TestTLSEnding:
+    def test_eof_received(self, tls_controller, client):
+        # I don't like this. It's too intimately involved with the innards of the SMTP
+        # class. But for the life of me, I can't figure out why coverage there fail
+        # intermittently.
+        code, mesg = client.ehlo("example.com")
+        assert code == 250
+        resp = client.starttls()
+        assert resp == S.S220_READY_TLS
+        code, mesg = client.ehlo("example.com")
+        assert code == 250
+        catchup_delay()
+        sess: Sess_ = tls_controller.smtpd.session
+        assert sess.ssl is not None
+        assert tls_controller.smtpd.eof_received() is False
+        catchup_delay()
 
 
 @pytest.mark.usefixtures("tls_controller")
