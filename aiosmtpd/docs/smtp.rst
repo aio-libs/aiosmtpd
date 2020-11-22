@@ -11,7 +11,7 @@ use a :ref:`controller <controller>` instance to run the server in a subthread.
 
     >>> from aiosmtpd.controller import Controller
 
-The ``SMTP`` class is itself a subclass of StreamReaderProtocol_.
+The ``SMTP`` class is itself a subclass of |StreamReaderProtocol|_
 
 
 .. _subclass:
@@ -285,8 +285,9 @@ advertised, and the ``STARTTLS`` command will not be accepted.
 *require_starttls* is meaningless in this case, and should be set to
 ``False``.
 
-.. _StreamReaderProtocol: https://docs.python.org/3/library/asyncio-stream.html#streamreaderprotocol
 .. _`RFC 3207`: https://tools.ietf.org/html/rfc3207
 .. _`RFC 2821`: https://tools.ietf.org/html/rfc2821
 .. _`asyncio transport`: https://docs.python.org/3/library/asyncio-protocol.html#asyncio-transport
 .. _ssl: https://docs.python.org/3/library/ssl.html
+.. _StreamReaderProtocol: https://docs.python.org/3.6/library/asyncio-stream.html#streamreaderprotocol
+.. |StreamReaderProtocol| replace:: ``StreamReaderProtocol``
