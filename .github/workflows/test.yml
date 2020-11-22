@@ -19,6 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest ]
+        platform: [ "linux" ]
         python-version: [ 3.6, 3.7, 3.8, 3.9, pypy3 ]
         include:
           - os: windows-latest
@@ -26,6 +27,7 @@ jobs:
             # https://devguide.python.org/#branchstatus
             # ('stable' means Status == "security")
             python-version: 3.7
+            platform: "mswin"
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v2
@@ -38,6 +40,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install tox
     - name: Execute tox
+      env:
+        PLATFORM: ${{ matrix.platform }}
       # The "&&" syntax is supported on PowerShell and cmd
       run: |
         tox -e qa && tox -e docs && tox -e py-cov
