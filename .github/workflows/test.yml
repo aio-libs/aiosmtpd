@@ -44,7 +44,7 @@ jobs:
         PLATFORM: ${{ matrix.platform }}
       # The "&&" syntax is supported on PowerShell and cmd
       run: |
-        tox -e qa && tox -e docs && tox -e py-cov
+        tox -e "qa,docs,py-cov"
     - name: Report to codecov
       # Ubuntu 18.04 came out of the box with 3.6, and LOTS of system are still running
       # 18.04 happily, so we choose this as the 'canonical' code coverage testing.
