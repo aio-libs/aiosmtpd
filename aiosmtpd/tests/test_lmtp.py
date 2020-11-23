@@ -34,7 +34,7 @@ def test_lhlo(lmtp_controller, client):
 def test_helo(lmtp_controller, client):
     # HELO and EHLO are not valid LMTP commands.
     resp = client.helo("example.com")
-    assert resp == S.S500_CMD_UNRECOG(b"HELO")
+    assert resp != S.S500_CMD_UNRECOG(b"HELO")
 
 
 def test_ehlo(lmtp_controller, client):
