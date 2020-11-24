@@ -24,7 +24,7 @@ class TestLMTP(unittest.TestCase):
     def test_lhlo(self):
         with SMTP(*self.address) as client:
             code, response = client.docmd('LHLO', 'example.com')
-            self.assertEqual(code, 1250)
+            self.assertEqual(code, 250)
             self.assertEqual(response, bytes(socket.getfqdn(), 'utf-8'))
 
     def test_helo(self):
