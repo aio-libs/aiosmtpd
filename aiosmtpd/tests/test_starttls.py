@@ -14,6 +14,20 @@ from email.mime.text import MIMEText
 # region #### Harness Classes & Functions #############################################
 
 
+class EOFingHandler:
+    """
+    Handler to specifically test SMTP.eof_received() method. To trigger, invoke the
+    SMTP NOOP command *twice*
+    """
+    ssl_existed = None
+    result = None
+
+    async def handle_NOOP(self, server: Server, session: Sess_, envelope, arg):
+        self.ssl_existed = session.ssl is not None
+        self.result = server.eof_received()
+        return "250 OK"
+
+
 class HandshakeFailingHandler:
     def handle_STARTTLS(self, server, session, envelope):
         return False
@@ -166,16 +180,6 @@ class TestStartTLS:
             tls_controller.stop()
 
 
-class EOFingHandler:
-    ssl_existed = None
-    result = None
-
-    async def handle_NOOP(self, server: Server, session: Sess_, envelope, arg):
-        self.ssl_existed = session.ssl is not None
-        self.result = server.eof_received()
-        return "250 OK"
-
-
 class TestTLSEnding:
 
     @pytest.mark.handler_data(class_=EOFingHandler)
@@ -191,6 +195,7 @@ class TestTLSEnding:
             assert code == 250
             resp = client.starttls()
             assert resp == S.S220_READY_TLS
+            # Need this to make SMTP update its internal session variable
             code, mesg = client.ehlo("example.com")
             assert code == 250
             sess: Sess_ = tls_controller.smtpd.session
