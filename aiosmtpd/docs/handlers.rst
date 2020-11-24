@@ -13,8 +13,14 @@ returns a handler instance:
 .. py:classmethod:: from_cli(cls, parser, *args)
 
     Convert the positional arguments, as strings passed in on the command
-    line, into a handler instance.  ``parser`` is the
+    line, into a handler instance.
+
+    :boldital:`parser` is the
     :class:`~argparse.ArgumentParser` instance in use.
+
+    If this method does not recognize the positional arguments passed in ``parser``,
+    it can *optionally* call :meth:`parser.error <argparse.ArgumentParser.error>`
+    with the error message.
 
 If ``from_cli()`` is not defined, the handler can still be used on the command
 line, but its constructor cannot accept arguments.
