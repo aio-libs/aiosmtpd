@@ -160,11 +160,11 @@ those methods of the handler instance will override the built-in methods.
 
 .. py:method:: auth_MECHANISM(server: SMTP, args: List[str])
 
-  *server* is the instance of the ``SMTP`` class invoking the AUTH hook.
+  :boldital:`server` is the instance of the ``SMTP`` class invoking the AUTH hook.
   This allows the AUTH hook implementation to invoke facilities such as the
   ``push()`` and ``_auth_interact()`` methods.
 
-  *args* is a list of string split from the string after the ``AUTH`` command.
+  :boldital:`args` is a list of string split from the string after the ``AUTH`` command.
   ``args[0]`` is always equal to ``MECHANISM``.
 
   The AUTH hook **must** perform the actual validation of AUTH credentials.
@@ -175,11 +175,11 @@ those methods of the handler instance will override the built-in methods.
   The AUTH hook **must** return one of the following values:
 
     * ``None`` -- an error happened during AUTH exchange/procedure, and has
-      been handled inside the hook. ``smtp_AUTH`` will not do anything more.
+      been handled inside the hook. :meth:`~SMTP.smtp_AUTH` will not do anything more.
 
     * ``MISSING`` -- no error during exchange, but the credentials received
       are invalid/rejected. (``MISSING`` is a pre-instantiated object you
-      can import from ``aiosmtpd.smtp``)
+      can import from :mod:`aiosmtpd.smtp`)
 
     * *Anything else* -- an 'identity' of the STMP user. Usually is the username
       given during AUTH exchange/procedure, but not necessarily so; can also
