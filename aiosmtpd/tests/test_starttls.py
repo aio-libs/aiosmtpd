@@ -4,7 +4,7 @@ import pkg_resources
 
 from aiosmtpd.controller import Controller as BaseController
 from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import SMTP as SMTPProtocol
+from aiosmtpd.smtp import Session as Sess_, SMTP as SMTPProtocol
 from aiosmtpd.testing.helpers import (
     SUPPORTED_COMMANDS_TLS,
     assert_auth_invalid,
@@ -65,6 +65,53 @@ class RequireTLSAuthDecodingController(Controller):
 class HandshakeFailingHandler:
     def handle_STARTTLS(self, server, session, envelope):
         return False
+
+
+class EOFingHandler:
+    sess: Sess_ = None
+    ssl_existed: bool = None
+    result = None
+
+    async def handle_NOOP(self, server: SMTPProtocol, session: Sess_,
+                          envelope, arg):
+        # First NOOP records the session, second NOOP triggers eof_received()
+        if self.sess is None:
+            self.sess = session
+        else:
+            self.ssl_existed = session.ssl is not None
+            self.result = server.eof_received()
+        return "250 OK"
+
+
+class TestTLSEnding(unittest.TestCase):
+    def test_eof_received(self):
+        # Adapted from 54ff1fa9 + fc65a84e of PR #202
+        #
+        # I don't like this. It's too intimately involved with the innards of
+        # the SMTP class. But for the life of me, I can't figure out why
+        # coverage there fail intermittently.
+        #
+        # I suspect it's a race condition, but with what, and how to prevent
+        # that from happening, that's ... a mystery.
+        #
+        handler = EOFingHandler()
+        controller = TLSController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            code, response = client.ehlo("example.com")
+            self.assertEqual(code, 250)
+            self.assertIn("starttls", client.esmtp_features)
+            code, response = client.starttls()
+            self.assertEqual(code, 220)
+            # Ensure that Server object 'realizes' it's in TLS mode
+            code, response = client.ehlo("example.com")
+            self.assertEqual(code, 250)
+            client.noop()
+            self.assertIsNotNone(handler.sess.ssl)
+            client.noop()
+            self.assertTrue(handler.ssl_existed)
+            self.assertFalse(handler.result)
 
 
 class TestStartTLS(unittest.TestCase):
