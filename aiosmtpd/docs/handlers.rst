@@ -5,7 +5,9 @@
 ==========
 
 Handlers are classes which can implement :ref:`hook methods <hooks>` that get
-called at various points in the SMTP dialog.  Handlers can also be named on
+called at various points in the SMTP dialog.
+
+Handlers can also be named on
 the :ref:`command line <cli>`, but if the class's constructor takes arguments,
 you must define a ``@classmethod`` that converts the positional arguments and
 returns a handler instance:
@@ -200,20 +202,32 @@ The following built-in handlers can be imported from :mod:`aiosmtpd.handlers`:
 
 * :class:`Debugging` - this class prints the contents of the received messages to a
   given output stream.  Programmatically, you can pass the stream to print to
-  into the constructor.  When specified on the command line, the positional
+  into the constructor.
+
+  When specified on the command line, the (optional) positional
   argument must either be the string ``stdout`` or ``stderr`` indicating which
   stream to use.
+  Examples::
+
+      aiosmtpd -c aiosmtpd.handlers.Debugging
+      aiosmtpd -c aiosmtpd.handlers.Debugging stderr
+      aiosmtpd -c aiosmtpd.handlers.Debugging stdout
 
 * :class:`Proxy` - this class is a relatively simple SMTP proxy; it forwards
   messages to a remote host and port.  The constructor takes the host name and
-  port as positional arguments.  This class cannot be used on the command
-  line.
+  port as positional arguments.
+
+  This class **cannot** be used on the command line.
 
 * :class:`Sink` - this class just consumes and discards messages.  It's essentially
-  the "no op" handler.  It can be used on the command line, but accepts no
-  positional arguments.
+  the "no op" handler.
 
-* :class:`Message` - this class is a base class (it must be subclassed) which
+  It can be used on the command line, but accepts no positional arguments.
+  Example::
+
+      aiosmtpd -c aiosmtpd.handlers.Sink
+
+* :class:`Message` - this class is an :term:`abstract base class` (it must be subclassed) which
   converts the message content into a message instance.  The class used to
   create these instances can be passed to the constructor, and defaults to
   :class:`email.message.Message`
@@ -224,14 +238,26 @@ The following built-in handlers can be imported from :mod:`aiosmtpd.handlers`:
   envelope.  The message instance is then passed to the handler's
   ``handle_message()`` method.  It is this method that must be implemented in
   the subclass.  ``prepare_message()`` and ``handle_message()`` are both
-  called *synchronously*.  This handler cannot be used on the command line.
+  called *synchronously*.
 
-* :class:`AsyncMessage` - a subclass of the ``Message`` handler, with the only
-  difference being that ``handle_message()`` is called *asynchronously*.  This
-  handler cannot be used on the command line.
+  This class **cannot** be used on the command line.
+
+* :class:`AsyncMessage` - a subclass of the ``Message`` handler,
+  it is also an :term:`abstract base class` (it must be subclassed).
+  The only difference with :class:`Message` is that
+  ``handle_message()`` is called *asynchronously*.
+
+  This class **cannot** be used on the command line.
 
 * :class:`Mailbox` - a subclass of the ``Message`` handler which adds the messages
   to a :class:`~mailbox.Maildir`.  See below for details.
+
+  When specified on the command line,
+  it accepts *exactly* one positional argument which is
+  the ``maildir`` (i.e, directory where email messages will be stored.)
+  Example::
+
+      aiosmtpd -c aiosmtpd.handlers.Mailbox /home/myhome/Maildir
 
 
 The Mailbox handler
