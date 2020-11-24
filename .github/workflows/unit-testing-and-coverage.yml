@@ -50,5 +50,6 @@ jobs:
       # 18.04 happily, so we choose this as the 'canonical' code coverage testing.
       # One day we'll have to revisit this and bump the version ...
       if: always() && matrix.python-version == '3.6' && matrix.os == 'ubuntu-latest'
-      run: |
-        bash <(curl -s https://codecov.io/bash)
+      uses: codecov/codecov-action@v1
+      with:
+        verbose: true
