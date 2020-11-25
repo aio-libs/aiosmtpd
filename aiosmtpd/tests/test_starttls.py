@@ -191,6 +191,9 @@ class TestTLSEnding:
         #
         # I suspect it's a race condition, but with what, and how to prevent that from
         # happening, that's ... a mystery.
+
+        # Entering portion of code where hang is possible (upon assertion fail), so
+        # we must wrap with "try..finally".
         try:
             code, mesg = client.ehlo("example.com")
             assert code == 250
