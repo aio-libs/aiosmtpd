@@ -52,9 +52,8 @@ class FakeParser:
 
 
 class DataHandler:
-    def __init__(self):
-        self.content = None
-        self.original_content = None
+    content: AnyStr = None
+    original_content: bytes = None
 
     async def handle_DATA(self, server, session, envelope):
         self.content = envelope.content
@@ -158,6 +157,8 @@ class AsyncDeprecatedHandler:
 
 @pytest.fixture
 def debugging_controller(get_controller) -> ExposingController:
+    # Cannot use plain_controller fixture because we need to first create the
+    # Debugging handler before creating the controller.
     stream = StringIO()
     handler = Debugging(stream)
     controller = get_controller(handler)
@@ -685,8 +686,7 @@ class TestProxy:
 
     # For "expected" we insert X-Peer with yet another template
     expected_template = (
-        b"\r\n".join(ln.encode("ascii") for ln in source_lines)
-        % b"X-Peer: %s\r\n"
+        b"\r\n".join(ln.encode("ascii") for ln in source_lines) % b"X-Peer: %s\r\n"
     )
 
     # There are two controllers and two SMTPd's running here.  The
