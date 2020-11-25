@@ -106,11 +106,12 @@ def auth_req_tls_controller(
 # endregion
 
 
-def test_disabled_tls(plain_controller, client):
-    code, _ = client.ehlo("example.com")
-    assert code == 250
-    resp = client.docmd("STARTTLS")
-    assert resp == S.S454_TLS_NA
+class TestNoTLS:
+    def test_disabled_tls(self, plain_controller, client):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        resp = client.docmd("STARTTLS")
+        assert resp == S.S454_TLS_NA
 
 
 @pytest.mark.usefixtures("tls_controller")
