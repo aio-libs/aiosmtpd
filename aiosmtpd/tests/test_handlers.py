@@ -48,13 +48,18 @@ class AsyncMessageHandler(AsyncMessage):
 
 
 class HELOHandler:
+    ReturnCode = StatusCode(250, b"pepoluan.was.here")
+
     async def handle_HELO(self, server, session, envelope, hostname):
-        return "250 geddy.example.com"
+        return self.ReturnCode.to_str()
 
 
 class EHLOHandler:
+    Domain = "alex.example.code"
+    ReturnCode = StatusCode(250, Domain.encode("ascii"))
+
     async def handle_EHLO(self, server, session, envelope, hostname):
-        return "250 alex.example.com"
+        return self.ReturnCode.to_str()
 
 
 class MAILHandler:
@@ -78,8 +83,10 @@ class RCPTHandler:
 
 
 class ErroringDataHandler:
+    ReturnCode = StatusCode(599, b"Not today")
+
     async def handle_DATA(self, server, session, envelope):
-        return "599 Not today"
+        return self.ReturnCode.to_str()
 
 
 class AUTHHandler:
@@ -727,7 +734,7 @@ class TestHooks:
     def test_hook_HELO(self, plain_controller, client):
         assert isinstance(plain_controller.handler, HELOHandler)
         resp = client.helo("me")
-        assert resp == (250, b"geddy.example.com")
+        assert resp == HELOHandler.ReturnCode
 
     @pytest.mark.handler_data(class_=EHLOHandler)
     def test_hook_EHLO(self, plain_controller, client):
@@ -735,7 +742,7 @@ class TestHooks:
         code, mesg = client.ehlo("me")
         lines = mesg.decode("utf-8").splitlines()
         assert code == 250
-        assert lines[-1] == "alex.example.com"
+        assert lines[-1] == EHLOHandler.Domain
 
     @pytest.mark.handler_data(class_=MAILHandler)
     def test_hook_MAIL(self, plain_controller, client):
@@ -786,8 +793,9 @@ class TestHooks:
                     """
                 ),
             )
-        assert excinfo.value.smtp_code == 599
-        assert excinfo.value.smtp_error == b"Not today"
+        expected: StatusCode = ErroringDataHandler.ReturnCode
+        assert excinfo.value.smtp_code == expected.code
+        assert excinfo.value.smtp_error == expected.mesg
 
     def test_hook_AUTH(self, auth_decoding_controller, client):
         assert isinstance(auth_decoding_controller.handler, AUTHHandler)
