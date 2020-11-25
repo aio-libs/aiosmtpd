@@ -26,6 +26,10 @@ class HasFakeParser(Protocol):
     exception: Type[Exception]
 
 
+class KnowsUpstream(Protocol):
+    upstream: ExposingController
+
+
 T = TypeVar("T")
 
 
@@ -238,9 +242,12 @@ def upstream_controller(get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def proxy_controller(upstream_controller, get_controller) -> ExposingController:
+def proxy_nodecode_controller(
+    upstream_controller, get_controller
+) -> Union[ExposingController, KnowsUpstream]:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
     proxy_controller = get_controller(proxy_handler)
+    proxy_controller.upstream = upstream_controller
     proxy_controller.start()
     Global.set_addr_from(proxy_controller)
     #
@@ -252,9 +259,10 @@ def proxy_controller(upstream_controller, get_controller) -> ExposingController:
 @pytest.fixture
 def proxy_decoding_controller(
     upstream_controller, get_controller
-) -> ExposingController:
+) -> Union[ExposingController, KnowsUpstream]:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
     proxy_controller = get_controller(proxy_handler, decode_data=True)
+    proxy_controller.upstream = upstream_controller
     proxy_controller.start()
     Global.set_addr_from(proxy_controller)
     #
@@ -687,21 +695,25 @@ class TestProxy:
     # the one under test here- listens on port 9024 and proxies to the one
     # on port 9025.
 
-    def test_deliver_bytes(self, upstream_controller, proxy_controller, client):
+    def test_deliver_bytes(self, proxy_nodecode_controller, client):
         client.sendmail(self.sender_addr, [self.receiver_addr], self.source)
-        upstream = upstream_controller.handler
-        proxysess: ServerSession = proxy_controller.smtpd.session
+        upstream = proxy_nodecode_controller.upstream
+        upstream_handler = upstream.handler
+        assert isinstance(upstream_handler, DataHandler)
+        proxysess: ServerSession = proxy_nodecode_controller.smtpd.session
         expected = self.expected_template % proxysess.peer[0].encode("ascii")
-        assert upstream.content == expected
-        assert upstream.original_content == expected
+        assert upstream.handler.content == expected
+        assert upstream.handler.original_content == expected
 
-    def test_deliver_str(self, upstream_controller, proxy_decoding_controller, client):
+    def test_deliver_str(self, proxy_decoding_controller, client):
         client.sendmail(self.sender_addr, [self.receiver_addr], self.source)
-        upstream = upstream_controller.handler
+        upstream = proxy_decoding_controller.upstream
+        upstream_handler = upstream.handler
+        assert isinstance(upstream_handler, DataHandler)
         proxysess: ServerSession = proxy_decoding_controller.smtpd.session
         expected = self.expected_template % proxysess.peer[0].encode("ascii")
-        assert upstream.content == expected
-        assert upstream.original_content == expected
+        assert upstream.handler.content == expected
+        assert upstream.handler.original_content == expected
 
 
 class TestProxyMocked:
