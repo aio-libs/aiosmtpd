@@ -46,6 +46,7 @@ class ExposingController(Controller):
     """
     A subclass of Controller that 'exposes' the inner SMTP object for inspection.
     """
+
     smtpd: Server
 
     def __init__(self, *args, **kwargs):
@@ -62,6 +63,7 @@ class ExposingController(Controller):
 # region #### Optimizing Fixtures #####################################################
 
 
+# autouse=True and scope="session" automatically apply this fixture to ALL test cases
 @pytest.fixture(autouse=True, scope="session")
 def cache_fqdn(session_mocker):
     """
@@ -83,7 +85,7 @@ def cache_fqdn(session_mocker):
 @pytest.fixture
 def get_controller(request):
     """
-    Provides a getter that will return an instance of a controller. Default class of
+    Provides a function that will return an instance of a controller. Default class of
     the controller is ExposingController, but can be changed via the "class_" parameter
     of @pytest.mark.controller_data
     """
@@ -104,12 +106,12 @@ def get_controller(request):
         """
         :param handler: The handler object
         :param default_class: If set to None, then the actual class used to instantiate
-        the controller *must* be provided via pytest.mark.controller_data
+            the controller *must* be provided via pytest.mark.controller_data
         :param hostname: The hostname (actually, address) for the controller. Defaults
-        to HostPort().host
+            to HostPort().host
         :param port: The port for the controller. Defaults to HostPort().port
         :param ssl_context: The SSLContext for SMTPS. If provided, will disable
-        STARTTLS
+            STARTTLS
         """
         assert not inspect.isclass(handler)
         class_: Type[Controller] = markerdata.get("class_", default_class)
@@ -166,10 +168,9 @@ def temp_event_loop() -> asyncio.AbstractEventLoop:
 @pytest.fixture
 def plain_controller(get_handler, get_controller) -> ExposingController:
     """
-    Returns a Controller that was invoked with as few args as allowed. Hence the
-    moniker "plain". By default, uses Sink as the handler class and ExposingController
-    as the controller class, but changeable using pytest.mark.handler_data and
-    .controller_data, respectively.
+    Returns a Controller that was invoked with no optional args. Hence the
+    moniker "plain". Uses whatever class get_controller() uses as default, with
+    Sink as the handler class (changeable using pytest.mark.handler_data).
     """
     handler = get_handler()
     controller = get_controller(handler)
@@ -219,6 +220,10 @@ def decoding_controller(get_handler, get_controller) -> ExposingController:
 
 @pytest.fixture
 def client(request) -> SMTPClient:
+    """
+    Generic SMTP Client, will connect to the host:port defined in Global.SrvAddr
+    unless overriden using @pytest.mark.client_data(connect_to: HostPort = ...)
+    """
     marker = request.node.get_closest_marker("client_data")
     if marker:
         markerdata = marker.kwargs or {}
