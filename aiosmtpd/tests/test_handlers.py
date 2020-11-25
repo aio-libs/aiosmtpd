@@ -12,6 +12,21 @@ from operator import itemgetter
 from pathlib import Path
 from smtplib import SMTPDataError, SMTPRecipientsRefused
 from textwrap import dedent
+from types import SimpleNamespace
+from typing import AnyStr, Type, TypeVar, Union
+
+try:
+    from typing_extensions import Protocol
+except ModuleNotFoundError:
+    from typing import Protocol
+
+
+class HasFakeParser(Protocol):
+    fparser: "FakeParser"
+    exception: Type[Exception]
+
+
+T = TypeVar("T")
 
 
 CRLF = "\r\n"
@@ -21,8 +36,11 @@ CRLF = "\r\n"
 
 
 class FakeParser:
-    def __init__(self):
-        self.message = None
+    """
+    Emulates ArgumentParser.error() to catch the message
+    """
+
+    message: AnyStr = None
 
     def error(self, message):
         self.message = message
@@ -183,8 +201,28 @@ def mailbox_controller(temp_maildir, get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def fake_parser() -> FakeParser:
-    yield FakeParser()
+def with_fake_parser():
+    """
+    Gets a function that will instantiate a handler_class using the class's
+    from_cli() @classmethod, using FakeParser as the parser.
+
+    This function will also catch any exceptions and store the exception's type --
+    alongside any message passed to FakeParser.error() -- in the handler object itself
+    (using the HasFakeParser protocol/mixin).
+    """
+    parser = FakeParser()
+
+    def handler_initer(handler_class: Type[T], *args) -> Union[T, HasFakeParser]:
+        handler: Union[T, HasFakeParser]
+        try:
+            handler = handler_class.from_cli(parser, *args)
+            handler.fparser = parser
+            handler.exception = None
+        except (Exception, SystemExit) as e:
+            handler = SimpleNamespace(fparser=parser, exception=type(e))
+        return handler
+
+    yield handler_initer
 
 
 @pytest.fixture
@@ -564,53 +602,59 @@ class TestMailbox:
 
 
 class TestCLI:
-    def test_debugging_no_args(self, fake_parser):
-        handler = Debugging.from_cli(fake_parser)
-        assert fake_parser.message is None
+    def test_debugging_no_args(self, with_fake_parser):
+        handler = with_fake_parser(Debugging)
+        assert handler.exception is None
+        assert handler.fparser.message is None
         assert handler.stream == sys.stdout
 
-    def test_debugging_two_args(self, fake_parser):
-        with pytest.raises(SystemExit):
-            Debugging.from_cli(fake_parser, "foo", "bar")
-        assert fake_parser.message == "Debugging usage: [stdout|stderr]"
+    def test_debugging_two_args(self, with_fake_parser):
+        handler = with_fake_parser(Debugging, "foo", "bar")
+        assert handler.exception is SystemExit
+        assert handler.fparser.message == "Debugging usage: [stdout|stderr]"
 
-    def test_debugging_stdout(self, fake_parser):
-        handler = Debugging.from_cli(fake_parser, "stdout")
-        assert fake_parser.message is None
+    def test_debugging_stdout(self, with_fake_parser):
+        handler = with_fake_parser(Debugging, "stdout")
+        assert handler.exception is None
+        assert handler.fparser.message is None
         assert handler.stream == sys.stdout
 
-    def test_debugging_stderr(self, fake_parser):
-        handler = Debugging.from_cli(fake_parser, "stderr")
-        assert fake_parser.message is None
+    def test_debugging_stderr(self, with_fake_parser):
+        handler = with_fake_parser(Debugging, "stderr")
+        assert handler.exception is None
+        assert handler.fparser.message is None
         assert handler.stream == sys.stderr
 
-    def test_debugging_bad_argument(self, fake_parser):
-        with pytest.raises(SystemExit):
-            Debugging.from_cli(fake_parser, "stdfoo")
-        assert fake_parser.message == "Debugging usage: [stdout|stderr]"
+    def test_debugging_bad_argument(self, with_fake_parser):
+        handler = with_fake_parser(Debugging, "stdfoo")
+        assert handler.exception is SystemExit
+        assert handler.fparser.message == "Debugging usage: [stdout|stderr]"
 
-    def test_sink_no_args(self, fake_parser):
-        handler = Sink.from_cli(fake_parser)
+    def test_sink_no_args(self, with_fake_parser):
+        handler = with_fake_parser(Sink)
+        assert handler.exception is None
+        assert handler.fparser.message is None
         assert isinstance(handler, Sink)
-        assert fake_parser.message is None
 
-    def test_sink_any_args(self, fake_parser):
-        with pytest.raises(SystemExit):
-            Sink.from_cli(fake_parser, "foo")
-        assert fake_parser.message, "Sink handler does not accept arguments"
+    def test_sink_any_args(self, with_fake_parser):
+        handler = with_fake_parser(Sink, "foo")
+        assert handler.exception is SystemExit
+        assert handler.fparser.message == "Sink handler does not accept arguments"
 
-    def test_mailbox_no_args(self, fake_parser):
-        with pytest.raises(SystemExit):
-            Mailbox.from_cli(fake_parser)
-        assert fake_parser.message == "The directory for the maildir is required"
+    def test_mailbox_no_args(self, with_fake_parser):
+        handler = with_fake_parser(Mailbox)
+        assert handler.exception is SystemExit
+        assert handler.fparser.message == "The directory for the maildir is required"
 
-    def test_mailbox_too_many_args(self, fake_parser):
-        with pytest.raises(SystemExit):
-            Mailbox.from_cli(fake_parser, "foo", "bar", "baz")
-        assert fake_parser.message == "Too many arguments for Mailbox handler"
+    def test_mailbox_too_many_args(self, with_fake_parser):
+        handler = with_fake_parser(Mailbox, "foo", "bar", "baz")
+        assert handler.exception is SystemExit
+        assert handler.fparser.message == "Too many arguments for Mailbox handler"
 
-    def test_mailbox(self, fake_parser, temp_maildir):
-        handler = Mailbox.from_cli(fake_parser, temp_maildir)
+    def test_mailbox(self, with_fake_parser, temp_maildir):
+        handler = with_fake_parser(Mailbox, temp_maildir)
+        assert handler.exception is None
+        assert handler.fparser.message is None
         assert isinstance(handler.mailbox, Maildir)
         assert handler.mail_dir == temp_maildir
 
