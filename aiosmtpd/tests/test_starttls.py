@@ -293,14 +293,11 @@ class TestRequireTLSAUTH:
         code, _ = client.ehlo("example.com")
         assert code == 250
         resp = client.docmd("AUTH ")
-        assert resp == (
-            538,
-            b"5.7.11 Encryption required for requested authentication mechanism",
-        )
+        assert resp == S.S538_AUTH_ENCRYPTREQ
 
     def test_auth_tls(self, client):
         resp = client.starttls()
-        assert resp == (220, b"Ready to start TLS")
+        assert resp == S.S220_READY_TLS
         code, _ = client.ehlo("example.com")
         assert code == 250
         resp = client.docmd("AUTH PLAIN AHRlc3QAdGVzdA==")

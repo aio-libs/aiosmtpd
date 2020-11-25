@@ -145,6 +145,10 @@ class SMTP_STATUS_CODES:
     S530_STARTTLS_FIRST = StatusCode(530, b"Must issue a STARTTLS command first")
     S530_AUTH_REQUIRED = StatusCode(530, b"5.7.0 Authentication required")
     S535_AUTH_INVALID = StatusCode(535, b"5.7.8 Authentication credentials invalid")
+    S538_AUTH_ENCRYPTREQ = StatusCode(
+        538,
+        b"5.7.11 Encryption required for requested authentication mechanism",
+    )
 
     S550_DEST_UNKNOWN = StatusCode(
         550, b"5.1.1 Recipient address rejected: User unknown"
