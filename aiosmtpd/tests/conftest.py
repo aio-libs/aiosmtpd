@@ -186,6 +186,22 @@ def plain_controller(get_handler, get_controller) -> ExposingController:
 
 
 @pytest.fixture
+def nodecode_controller(get_handler, get_controller) -> ExposingController:
+    handler = get_handler()
+    controller = get_controller(handler, decode_data=False)
+    controller.start()
+    Global.set_addr_from(controller)
+    #
+    yield controller
+    #
+    # Some test cases need to .stop() the controller inside themselves
+    # in such cases, we must suppress Controller's raise of AssertionError
+    # because Controller doesn't like .stop() to be invoked more than once
+    with suppress(AssertionError):
+        controller.stop()
+
+
+@pytest.fixture
 def decoding_controller(get_handler, get_controller) -> ExposingController:
     handler = get_handler()
     controller = get_controller(handler, decode_data=True)
