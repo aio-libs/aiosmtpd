@@ -59,6 +59,9 @@ class Controller:
         """Wraps factory() to catch exceptions during instantiation"""
         try:
             self.smtpd = self.factory()
+            if self.smtpd is None:
+                raise RuntimeError("factory() returned None")
+            return self.smtpd
         except Exception as err:
             self._thread_exception = err
             return _FakeServer(self.loop)

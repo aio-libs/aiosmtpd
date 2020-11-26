@@ -7,7 +7,9 @@ import unittest
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
+from contextlib import ExitStack
 from smtplib import SMTP
+from unittest.mock import patch
 
 
 def in_wsl():
@@ -84,3 +86,21 @@ class TestFactory(unittest.TestCase):
             self.assertIn("enable_SMTPUTF8", excm)
         finally:
             cont.stop()
+
+    def test_factory_none(self):
+        # Hypothetical situation where factory() did not raise an Exception
+        # but returned None instead
+        with ExitStack() as stk:
+            cont = Controller(Sink())
+            stk.callback(cont.stop)
+
+            stk.enter_context(
+                patch("aiosmtpd.controller.SMTP",
+                      return_value=None)
+            )
+
+            with self.assertRaises(RuntimeError) as cm:
+                cont.start()
+            self.assertIsNone(cont.smtpd)
+            excm = str(cm.exception)
+            self.assertEqual("factory() returned None", excm)
