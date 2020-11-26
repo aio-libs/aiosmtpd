@@ -4,7 +4,7 @@ import os
 import socket
 import unittest
 
-from aiosmtpd.controller import Controller
+from aiosmtpd.controller import Controller, _FakeServer
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
 from contextlib import ExitStack
@@ -61,6 +61,15 @@ class TestServer(unittest.TestCase):
 
 
 class TestFactory(unittest.TestCase):
+    def test_normal_situation(self):
+        cont = Controller(Sink())
+        try:
+            cont.start()
+            self.assertIsNotNone(cont.smtpd)
+            self.assertIsNone(cont._thread_exception)
+        finally:
+            cont.stop()
+
     def test_unknown_args(self):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), server_kwargs={unknown: True})
@@ -104,3 +113,34 @@ class TestFactory(unittest.TestCase):
             self.assertIsNone(cont.smtpd)
             excm = str(cm.exception)
             self.assertEqual("factory() returned None", excm)
+
+    def test_noexc_smtpd_missing(self):
+        # Hypothetical situation where factory() failed but no
+        # Exception was generated.
+        with ExitStack() as stk:
+            cont = Controller(Sink())
+            stk.callback(cont.stop)
+
+            def hijacker(*args, **kwargs):
+                cont._thread_exception = None
+                # Must still return an (unmocked) _FakeServer instance
+                # to prevent spurious "ignored Exception" messages
+                # which are harmless but messy and annoying.
+                return _FakeServer(cont.loop)
+
+            stk.enter_context(
+                patch("aiosmtpd.controller._FakeServer",
+                      side_effect=hijacker)
+            )
+            stk.enter_context(
+                patch("aiosmtpd.controller.SMTP",
+                      side_effect=RuntimeError("Simulated Failure"))
+            )
+
+            with self.assertRaises(RuntimeError) as cm:
+                cont.start()
+            self.assertIsNone(cont.smtpd)
+            self.assertIsNone(cont._thread_exception)
+            excm = str(cm.exception)
+            self.assertEqual("Unknown Error, failed to init SMTP server",
+                             excm)

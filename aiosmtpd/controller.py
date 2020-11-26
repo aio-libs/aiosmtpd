@@ -126,6 +126,9 @@ class Controller:
             pass
         if self._thread_exception is not None:
             raise self._thread_exception
+        # Defensive
+        if self.smtpd is None:
+            raise RuntimeError("Unknown Error, failed to init SMTP server")
 
     def _stop(self):
         self.loop.stop()
