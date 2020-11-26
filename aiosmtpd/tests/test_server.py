@@ -56,3 +56,29 @@ class TestServer(unittest.TestCase):
         finally:
             controller.stop()
             self.assertIsNone(controller.server)
+
+
+class TestFactory(unittest.TestCase):
+    def test_unknown_args(self):
+        unknown = "this_is_an_unknown_kwarg"
+        cont = Controller(Sink(), server_kwargs={unknown: True})
+        try:
+            with self.assertRaises(TypeError) as cm:
+                cont.start()
+            excm = str(cm.exception)
+            self.assertIn("unexpected keyword", excm)
+            self.assertIn(unknown, excm)
+        finally:
+            cont.stop()
+
+    def test_conflict_smtputf8(self):
+        kwargs = dict(enable_SMTPUTF8=True)
+        cont = Controller(Sink(), server_kwargs=kwargs)
+        try:
+            with self.assertRaises(TypeError) as cm:
+                cont.start()
+            excm = str(cm.exception)
+            self.assertIn("multiple values", excm)
+            self.assertIn("enable_SMTPUTF8", excm)
+        finally:
+            cont.stop()
