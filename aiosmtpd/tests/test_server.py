@@ -65,6 +65,7 @@ class TestFactory(unittest.TestCase):
         try:
             with self.assertRaises(TypeError) as cm:
                 cont.start()
+            self.assertIsNone(cont.smtpd)
             excm = str(cm.exception)
             self.assertIn("unexpected keyword", excm)
             self.assertIn(unknown, excm)
@@ -77,6 +78,7 @@ class TestFactory(unittest.TestCase):
         try:
             with self.assertRaises(TypeError) as cm:
                 cont.start()
+            self.assertIsNone(cont.smtpd)
             excm = str(cm.exception)
             self.assertIn("multiple values", excm)
             self.assertIn("enable_SMTPUTF8", excm)

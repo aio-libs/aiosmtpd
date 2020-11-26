@@ -61,8 +61,7 @@ class Controller:
             self.smtpd = self.factory()
         except Exception as err:
             self._thread_exception = err
-            self.smtpd = _FakeServer(self.loop)
-        return self.smtpd
+            return _FakeServer(self.loop)
 
     def _run(self, ready_event):
         asyncio.set_event_loop(self.loop)
