@@ -15,11 +15,13 @@ class _FakeServer(asyncio.StreamReaderProtocol):
     Returned by _factory_invoker() in lieu of an SMTP instance in case
     factory() fails with an exception.
     """
+
     def __init__(self, loop):
         super().__init__(
             asyncio.StreamReader(loop=loop),
             client_connected_cb=self._client_connected_cb,
-            loop=loop)
+            loop=loop,
+        )
 
     def _client_connected_cb(self, reader, writer):
         pass
@@ -29,16 +31,25 @@ class _FakeServer(asyncio.StreamReaderProtocol):
 class Controller:
     smtpd = None
 
-    def __init__(self, handler, loop=None, hostname=None, port=8025, *,
-                 ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None,
-                 server_kwargs: Dict[str, Any] = None):
+    def __init__(
+        self,
+        handler,
+        loop=None,
+        hostname=None,
+        port=8025,
+        *,
+        ready_timeout=1.0,
+        enable_SMTPUTF8=True,
+        ssl_context=None,
+        server_kwargs: Dict[str, Any] = None
+    ):
         """
         `Documentation can be found here
         <http://aiosmtpd.readthedocs.io/en/latest/aiosmtpd\
 /docs/controller.html#controller-api>`_.
         """
         self.handler = handler
-        self.hostname = '::1' if hostname is None else hostname
+        self.hostname = "::1" if hostname is None else hostname
         self.port = port
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self.ssl_context = ssl_context
@@ -46,14 +57,14 @@ class Controller:
         self.server = None
         self._thread = None
         self._thread_exception = None
-        self.ready_timeout = os.getenv(
-            'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
+        self.ready_timeout = os.getenv("AIOSMTPD_CONTROLLER_TIMEOUT", ready_timeout)
         self.server_kwargs: Dict[str, Any] = server_kwargs or {}
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
-        return SMTP(self.handler, enable_SMTPUTF8=self.enable_SMTPUTF8,
-                    **self.server_kwargs)
+        return SMTP(
+            self.handler, enable_SMTPUTF8=self.enable_SMTPUTF8, **self.server_kwargs
+        )
 
     def _factory_invoker(self):
         """Wraps factory() to catch exceptions during instantiation"""
@@ -71,8 +82,12 @@ class Controller:
         try:
             self.server = self.loop.run_until_complete(
                 self.loop.create_server(
-                    self._factory_invoker, host=self.hostname, port=self.port,
-                    ssl=self.ssl_context))
+                    self._factory_invoker,
+                    host=self.hostname,
+                    port=self.port,
+                    ssl=self.ssl_context,
+                )
+            )
         except Exception as error:  # pragma: nowsl
             # Will enter this part _only_ if create_server cannot bind to
             # specified host:port
@@ -91,20 +106,16 @@ class Controller:
 
     def _testconn(self):
         with ExitStack() as stk:
-            s = stk.enter_context(
-                create_connection((self.hostname, self.port), 1.0)
-            )
+            s = stk.enter_context(create_connection((self.hostname, self.port), 1.0))
             if self.ssl_context:
                 context = ssl.SSLContext()
-                s = stk.enter_context(
-                    context.wrap_socket(s)
-                )
+                s = stk.enter_context(context.wrap_socket(s))
             # Need to perform socket read, else create_server won't call
             # _factory_invoker
             _ = s.recv(1024)
 
     def start(self):
-        assert self._thread is None, 'SMTP daemon already running'
+        assert self._thread is None, "SMTP daemon already running"
         ready_event = threading.Event()
         self._thread = threading.Thread(target=self._run, args=(ready_event,))
         self._thread.daemon = True
@@ -134,13 +145,13 @@ class Controller:
         self.loop.stop()
         try:
             _all_tasks = asyncio.all_tasks
-        except AttributeError:   # pragma: skipif_gt_py36
+        except AttributeError:  # pragma: skipif_gt_py36
             _all_tasks = asyncio.Task.all_tasks
         for task in _all_tasks(self.loop):
             task.cancel()
 
     def stop(self):
-        assert self._thread is not None, 'SMTP daemon not running'
+        assert self._thread is not None, "SMTP daemon not running"
         self.loop.call_soon_threadsafe(self._stop)
         self._thread.join()
         self._thread = None
