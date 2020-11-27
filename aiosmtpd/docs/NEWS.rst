@@ -13,6 +13,7 @@ Added
 * Feature to inject keyword args during server class instantiation in ``Controller.factory``
   (potentially Closes #194, #179)
 * Support for Python 3.8 and 3.9.0 (also Closes #188)
+* Also catches exceptions raised by ``Controller.factory()`` (Closes #212)
 
 Fixed/Improved
 --------------

@@ -242,8 +242,7 @@ Controller API
       class being controlled.  By default, this creates an ``SMTP`` instance,
       passing in your handler and setting the ``enable_SMTPUTF8`` flag.
       Examples of why you would want to override this method include creating
-      an ``LMTP`` server instance instead, or passing in a different set of
-      arguments to the ``SMTP`` constructor.
+      an ``LMTP`` server instance instead, or using your own ``SMTP`` class.
 
 
 .. _`asyncio event loop`: https://docs.python.org/3/library/asyncio-eventloop.html
