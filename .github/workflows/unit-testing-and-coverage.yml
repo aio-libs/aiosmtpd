@@ -1,0 +1,60 @@
+name: "aiosmtpd CI"
+
+on:
+  # This is for direct commit to master
+  push:
+    branches: [ "master" ]
+  # This is for PRs
+  pull_request:
+    branches: [ "master" ]
+  # Manual/on-demand
+  workflow_dispatch:
+  # When doing "releases"
+  release:
+    types: [ "created", "edited", "published", "prereleased", "released" ]
+
+jobs:
+  test:
+    strategy:
+      # If a matrix fail, do NOT stop other matrix, let them run to completion
+      fail-fast: false
+      matrix:
+        os: [ "ubuntu-latest" ]
+        platform: [ "linux" ]
+        python-version: [ "3.6", "3.7", "3.8", "3.9", "pypy3" ]
+        include:
+          - os: "windows-latest"
+            platform: "mswin"
+            # Only the latest stable branch as indicated on
+            # https://devguide.python.org/#branchstatus
+            # ('stable' means Status == "security")
+            # Reason being that Windows users can change their Python anytime,
+            # so there is no benefit in testing all released Python versions.
+            # Plus pypy3 implementation in Windows is ... complicated. We
+            # should stay away from all those complications; users choosing to
+            # run aiosmtpd on pypy3 on Windows should be considered advanced
+            # and know what they're doing.
+            python-version: "3.7"
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: "Checkout latest commit"
+      uses: actions/checkout@v2
+    - name: "Set up Python ${{ matrix.python-version }}"
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: "Install dependencies"
+      run: |
+        python -m pip install --upgrade pip
+        pip install tox
+    - name: "Execute tox"
+      env:
+        PLATFORM: ${{ matrix.platform }}
+      run: |
+        tox -e "qa,docs,py-cov"
+    - name: "Report to codecov"
+      # Ubuntu 18.04 came out of the box with 3.6, and LOTS of system are still running
+      # 18.04 happily, so we choose this as the 'canonical' code coverage testing.
+      # One day we'll have to revisit this and bump the version ...
+      if: always() && matrix.python-version == '3.6' && matrix.os == 'ubuntu-latest'
+      uses: codecov/codecov-action@v1

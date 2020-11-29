@@ -243,15 +243,10 @@ class SMTP(asyncio.StreamReaderProtocol):
     def eof_received(self):
         log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
-        if self.session.ssl is not None:            # pragma: nomswin
+        if self.session.ssl is not None:
             # If STARTTLS was issued, return False, because True has no effect
             # on an SSL transport and raises a warning. Our superclass has no
             # way of knowing we switched to SSL so it might return True.
-            #
-            # This entire method seems not to be called during any of the
-            # starttls tests on Windows.  I don't really know why, but it
-            # causes these lines to fail coverage, hence the `nomswin` pragma
-            # above.
             return False
         return super().eof_received()
 
