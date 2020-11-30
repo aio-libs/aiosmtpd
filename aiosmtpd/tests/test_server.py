@@ -1,13 +1,15 @@
 """Test other aspects of the server implementation."""
 
+import gc
 import os
 import socket
 import unittest
 
-from aiosmtpd.controller import Controller, _FakeServer
+from aiosmtpd.controller import asyncio, Controller, _FakeServer
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
 from contextlib import ExitStack
+from functools import wraps
 from smtplib import SMTP
 from unittest.mock import patch
 
@@ -60,7 +62,42 @@ class TestServer(unittest.TestCase):
             self.assertIsNone(controller.server)
 
 
+# Silence the "Exception ignored ... RuntimeError: Event loop is closed" message.
+# This goes hand-in-hand with TestFactory.setUpClass() below.
+# Source: https://github.com/aio-libs/aiohttp/issues/4324#issuecomment-733884349
+def silence_event_loop_closed(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except RuntimeError as e:
+            if str(e) != "Event loop is closed":
+                raise
+    return wrapper
+
+
 class TestFactory(unittest.TestCase):
+    Proactor = None
+    olddel = None
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        # See silence_event_loop_closed() above
+        # noinspection PyUnresolvedReferences
+        cls.Proactor = asyncio.proactor_events._ProactorBasePipeTransport
+        cls.olddel = cls.Proactor.__del__
+        cls.Proactor.__del__ = silence_event_loop_closed(
+            silence_event_loop_closed(cls.olddel)
+            )
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        # gc.collect() hinted in https://stackoverflow.com/a/25067818/149900
+        # Probably to remove leftover "Exception ignored"?
+        gc.collect()
+        if cls.olddel is not None:
+            cls.Proactor.__del__ = cls.olddel
+
     def test_normal_situation(self):
         cont = Controller(Sink())
         try:
@@ -123,15 +160,15 @@ class TestFactory(unittest.TestCase):
 
             def hijacker(*args, **kwargs):
                 cont._thread_exception = None
-                # Must still return an (unmocked) _FakeServer instance
-                # to prevent spurious "ignored Exception" messages
-                # which are harmless but messy and annoying.
+                # Must still return an (unmocked) _FakeServer to prevent a whole bunch
+                # of messy exceptions, although they doesn't affect the test at all.
                 return _FakeServer(cont.loop)
 
             stk.enter_context(
                 patch("aiosmtpd.controller._FakeServer",
                       side_effect=hijacker)
             )
+
             stk.enter_context(
                 patch("aiosmtpd.controller.SMTP",
                       side_effect=RuntimeError("Simulated Failure"))
