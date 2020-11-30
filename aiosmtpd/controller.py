@@ -10,13 +10,17 @@ from socket import create_connection
 from typing import Any, Coroutine, Dict, Optional
 
 
+AsyncServer = asyncio.base_events.Server
+
+
 class _FakeServer(asyncio.StreamReaderProtocol):
     """
     Returned by _factory_invoker() in lieu of an SMTP instance in case
-    factory() fails with an exception.
+    factory() failed to instantiate an SMTP instance.
     """
 
     def __init__(self, loop):
+        # Imitate what SMTP does
         super().__init__(
             asyncio.StreamReader(loop=loop),
             client_connected_cb=self._client_connected_cb,
@@ -29,7 +33,11 @@ class _FakeServer(asyncio.StreamReaderProtocol):
 
 @public
 class Controller:
+    server: Optional[AsyncServer] = None
+    server_coro: Coroutine = None
     smtpd = None
+    _thread: Optional[threading.Thread] = None
+    _thread_exception: Optional[Exception] = None
 
     def __init__(
         self,
@@ -54,10 +62,6 @@ class Controller:
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self.ssl_context = ssl_context
         self.loop = asyncio.new_event_loop() if loop is None else loop
-        self.server: Optional[asyncio.base_events.Server] = None
-        self.server_coro: Optional[Coroutine] = None
-        self._thread = None
-        self._thread_exception = None
         self.ready_timeout = os.getenv("AIOSMTPD_CONTROLLER_TIMEOUT", ready_timeout)
         self.server_kwargs: Dict[str, Any] = server_kwargs or {}
 
@@ -82,8 +86,9 @@ class Controller:
         asyncio.set_event_loop(self.loop)
         try:
             # Need to do two-step assignments here to ensure IDEs can properly
-            # detect the types ofthe vars. Cannot use `assert isinstance`, be-
-            # cause it has a serious bug in Python 3.6 in asyncio debug mode.
+            # detect the types of the vars. Cannot use `assert isinstance`, because
+            # Python 3.6 in asyncio debug mode has a bug wherein CoroWrapper is not
+            # an instance of Coroutine
             srv_coro: Coroutine = self.loop.create_server(
                 self._factory_invoker,
                 host=self.hostname,
@@ -91,13 +96,14 @@ class Controller:
                 ssl=self.ssl_context,
             )
             self.server_coro = srv_coro
-            srv: asyncio.base_events.Server = self.loop.run_until_complete(
+            srv: AsyncServer = self.loop.run_until_complete(
                 srv_coro
             )
             self.server = srv
         except Exception as error:  # pragma: nowsl
-            # Will enter this part _only_ if create_server cannot bind to
-            # specified host:port
+            # Usually will enter this part only if create_server() cannot bind to the
+            # specified host:port.
+            #
             # Somehow WSL1.0 (Windows Subsystem for Linux) allows multiple
             # listeners on one port?!
             # That is why we add "pragma: nowsl" there, so when testing on
@@ -112,12 +118,15 @@ class Controller:
         self.server = None
 
     def _testconn(self):
+        """
+        Opens a socket connection to the newly launched server, wrapping in an SSL
+        Context if necessary, and read some data from it to ensure that factory()
+        gets invoked.
+        """
         with ExitStack() as stk:
             s = stk.enter_context(create_connection((self.hostname, self.port), 1.0))
             if self.ssl_context:
                 s = stk.enter_context(self.ssl_context.wrap_socket(s))
-            # Need to perform socket read, else create_server won't call
-            # _factory_invoker
             _ = s.recv(1024)
 
     def start(self):
@@ -131,10 +140,9 @@ class Controller:
         if self._thread_exception is not None:  # pragma: nowsl
             # See comment about WSL1.0 in the _run() method
             raise self._thread_exception
-        # Apparently create_server invokes the passed-in factory method
-        # "lazily", resulting in exceptions in factory() to go undetected.
-        # So we open a connection to trigger create_server to actually in-
-        # voke factory (via _factory_invoker)
+        # Apparently create_server invokes factory() "lazily", so exceptions in
+        # factory() go undetected. To trigger factory() invocation we need to open
+        # a connection to the server and 'exchange' some traffic.
         try:
             self._testconn()
         except Exception:
@@ -161,3 +169,4 @@ class Controller:
         self.loop.call_soon_threadsafe(self._stop)
         self._thread.join()
         self._thread = None
+        self._thread_exception = None
