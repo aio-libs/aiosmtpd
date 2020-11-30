@@ -65,7 +65,7 @@ class TestServer(unittest.TestCase):
 # Silence the "Exception ignored ... RuntimeError: Event loop is closed" message.
 # This goes hand-in-hand with TestFactory.setUpClass() below.
 # Source: https://github.com/aio-libs/aiohttp/issues/4324#issuecomment-733884349
-def silence_event_loop_closed(func):
+def silencer(func):
     @wraps(func)
     def wrapper(self, *args, **kwargs):
         try:
@@ -73,26 +73,41 @@ def silence_event_loop_closed(func):
         except RuntimeError as e:
             if str(e) != "Event loop is closed":
                 raise
+        except AttributeError as e:
+            # Added this to suppress the perplexing ignored exception below.
+            # Perplexing because I really don't know where that comes from. SMTP object
+            # could NOT have existed during that particular test case!
+            if str(e) != "'SMTP' object has no attribute '_closed'":
+                raise
+
     return wrapper
 
 
 class TestFactory(unittest.TestCase):
     Proactor = None
-    olddel = None
+    old_pa_del = None
+    SRProto = None
+    old_srp_del = None
 
     @classmethod
     def setUpClass(cls) -> None:
-        # See silence_event_loop_closed() above
+        # See silencer() above
         try:
             # noinspection PyUnresolvedReferences
             cls.Proactor = asyncio.proactor_events._ProactorBasePipeTransport
-            cls.olddel = cls.Proactor.__del__
-            cls.Proactor.__del__ = silence_event_loop_closed(
-                silence_event_loop_closed(cls.olddel)
-                )
+            cls.old_pa_del = cls.Proactor.__del__
+            cls.Proactor.__del__ = silencer(cls.old_pa_del)
         except AttributeError:
             # proactor_events only available on Windows. So we'll just skip if it's
             # not found (indicating non-Windows platform)
+            pass
+        try:
+            cls.SRProto = asyncio.streams.StreamReaderProtocol
+            # noinspection PyUnresolvedReferences
+            cls.old_srp_del = cls.SRProto.__del__
+            cls.SRProto.__del__ = silencer(cls.old_srp_del)
+        except AttributeError:
+            # Sometimes the __del__ method is ... missing?? What???
             pass
 
     @classmethod
@@ -100,8 +115,10 @@ class TestFactory(unittest.TestCase):
         # gc.collect() hinted in https://stackoverflow.com/a/25067818/149900
         # Probably to remove leftover "Exception ignored"?
         gc.collect()
-        if cls.olddel is not None:
-            cls.Proactor.__del__ = cls.olddel
+        if cls.old_pa_del is not None:
+            cls.Proactor.__del__ = cls.old_pa_del
+        if cls.old_srp_del is not None:
+            cls.SRProto.__del__ = cls.old_srp_del
 
     def test_normal_situation(self):
         cont = Controller(Sink())
