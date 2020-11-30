@@ -83,12 +83,17 @@ class TestFactory(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         # See silence_event_loop_closed() above
-        # noinspection PyUnresolvedReferences
-        cls.Proactor = asyncio.proactor_events._ProactorBasePipeTransport
-        cls.olddel = cls.Proactor.__del__
-        cls.Proactor.__del__ = silence_event_loop_closed(
-            silence_event_loop_closed(cls.olddel)
-            )
+        try:
+            # noinspection PyUnresolvedReferences
+            cls.Proactor = asyncio.proactor_events._ProactorBasePipeTransport
+            cls.olddel = cls.Proactor.__del__
+            cls.Proactor.__del__ = silence_event_loop_closed(
+                silence_event_loop_closed(cls.olddel)
+                )
+        except AttributeError:
+            # proactor_events only available on Windows. So we'll just skip if it's
+            # not found (indicating non-Windows platform)
+            pass
 
     @classmethod
     def tearDownClass(cls) -> None:
