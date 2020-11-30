@@ -136,12 +136,16 @@ def get_opts(argv):
     return parser.parse_args(argv)
 
 
+def python_interp_details():
+    print(f"{FG_CYAN}Python interpreter details:{NORM}")
+    details = sys.version.splitlines() + sys.executable.splitlines()
+    for ln in details:
+        print(f"    {FG_CYAN}{ln}{NORM}")
+
+
 if __name__ == "__main__":
-    print(f"{FG_CYAN}Python interpreter details:")
-    print(sys.version)
-    print(sys.executable)
-    print(NORM)
-    if os.environ.get("TRAVIS") == "true" or os.environ.get("CI") == "true":
+    python_interp_details()
+    if os.environ.get("CI") == "true":
         # All the housekeeping steps are pointless on Travis CI / GitHub Actions;
         # they build and tear down their VMs everytime anyways.
         sys.exit(0)
