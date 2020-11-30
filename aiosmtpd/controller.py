@@ -7,7 +7,7 @@ from aiosmtpd.smtp import SMTP
 from contextlib import ExitStack
 from public import public
 from socket import create_connection
-from typing import Any, Dict
+from typing import Any, Coroutine, Dict, Optional
 
 
 class _FakeServer(asyncio.StreamReaderProtocol):
@@ -54,7 +54,8 @@ class Controller:
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self.ssl_context = ssl_context
         self.loop = asyncio.new_event_loop() if loop is None else loop
-        self.server = None
+        self.server: Optional[asyncio.base_events.Server] = None
+        self.server_coro: Optional[Coroutine] = None
         self._thread = None
         self._thread_exception = None
         self.ready_timeout = os.getenv("AIOSMTPD_CONTROLLER_TIMEOUT", ready_timeout)
@@ -80,14 +81,20 @@ class Controller:
     def _run(self, ready_event):
         asyncio.set_event_loop(self.loop)
         try:
-            self.server = self.loop.run_until_complete(
-                self.loop.create_server(
-                    self._factory_invoker,
-                    host=self.hostname,
-                    port=self.port,
-                    ssl=self.ssl_context,
-                )
+            # Need to do two-step assignments here to ensure IDEs can properly
+            # detect the types ofthe vars. Cannot use `assert isinstance`, be-
+            # cause it has a serious bug in Python 3.6 in asyncio debug mode.
+            srv_coro: Coroutine = self.loop.create_server(
+                self._factory_invoker,
+                host=self.hostname,
+                port=self.port,
+                ssl=self.ssl_context,
             )
+            self.server_coro = srv_coro
+            srv: asyncio.base_events.Server = self.loop.run_until_complete(
+                srv_coro
+            )
+            self.server = srv
         except Exception as error:  # pragma: nowsl
             # Will enter this part _only_ if create_server cannot bind to
             # specified host:port
