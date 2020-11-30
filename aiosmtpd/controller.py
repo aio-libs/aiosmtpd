@@ -40,7 +40,7 @@ class Controller:
         *,
         ready_timeout=1.0,
         enable_SMTPUTF8=True,
-        ssl_context=None,
+        ssl_context: ssl.SSLContext = None,
         server_kwargs: Dict[str, Any] = None
     ):
         """
@@ -108,8 +108,7 @@ class Controller:
         with ExitStack() as stk:
             s = stk.enter_context(create_connection((self.hostname, self.port), 1.0))
             if self.ssl_context:
-                context = ssl.SSLContext()
-                s = stk.enter_context(context.wrap_socket(s))
+                s = stk.enter_context(self.ssl_context.wrap_socket(s))
             # Need to perform socket read, else create_server won't call
             # _factory_invoker
             _ = s.recv(1024)
