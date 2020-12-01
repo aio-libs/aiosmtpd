@@ -24,7 +24,7 @@ from typing import (
 from warnings import warn
 
 
-__version__ = '1.2.2'
+__version__ = '1.2.3a6'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 

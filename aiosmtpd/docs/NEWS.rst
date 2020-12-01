@@ -2,6 +2,14 @@
  NEWS for aiosmtpd
 ===================
 
+1.2.3a6 (aiosmtpd-next)
+=======================
+
+Fixed/Improved
+--------------
+* Now catches ``factory()`` failure during ``start()`` (Closes #212)
+
+
 1.2.2 (2020-11-08)
 ==================
 
