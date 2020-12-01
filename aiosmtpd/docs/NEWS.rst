@@ -2,6 +2,14 @@
  NEWS for aiosmtpd
 ===================
 
+1.2.3a7 (aiosmtpd-next)
+=======================
+
+Fixed/Improved
+--------------
+* Implement & enforce line-length-limit, thus becoming Compliant with RFC 5321 § 4.5.3.1.6
+
+
 1.2.2 (2020-11-08)
 ==================
 
