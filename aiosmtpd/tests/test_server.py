@@ -27,9 +27,9 @@ class TestServer(unittest.TestCase):
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
-            code, response = client.ehlo('example.com')
+            code, response = client.ehlo("example.com")
         self.assertEqual(code, 250)
-        self.assertIn(b'SMTPUTF8', response.splitlines())
+        self.assertIn(b"SMTPUTF8", response.splitlines())
 
     def test_default_max_command_size_limit(self):
         server = Server(Sink())
@@ -37,7 +37,7 @@ class TestServer(unittest.TestCase):
 
     def test_special_max_command_size_limit(self):
         server = Server(Sink())
-        server.command_size_limits['DATA'] = 1024
+        server.command_size_limits["DATA"] = 1024
         self.assertEqual(server.max_command_size_limit, 1024)
 
     @unittest.skipIf(in_wsl(), "WSL prevents socket collisions")
@@ -162,10 +162,7 @@ class TestFactory(unittest.TestCase):
             cont = Controller(Sink())
             stk.callback(cont.stop)
 
-            stk.enter_context(
-                patch("aiosmtpd.controller.SMTP",
-                      return_value=None)
-            )
+            stk.enter_context(patch("aiosmtpd.controller.SMTP", return_value=None))
 
             with self.assertRaises(RuntimeError) as cm:
                 cont.start()
@@ -187,13 +184,14 @@ class TestFactory(unittest.TestCase):
                 return _FakeServer(cont.loop)
 
             stk.enter_context(
-                patch("aiosmtpd.controller._FakeServer",
-                      side_effect=hijacker)
+                patch("aiosmtpd.controller._FakeServer", side_effect=hijacker)
             )
 
             stk.enter_context(
-                patch("aiosmtpd.controller.SMTP",
-                      side_effect=RuntimeError("Simulated Failure"))
+                patch(
+                    "aiosmtpd.controller.SMTP",
+                    side_effect=RuntimeError("Simulated Failure"),
+                )
             )
 
             with self.assertRaises(RuntimeError) as cm:
@@ -201,5 +199,4 @@ class TestFactory(unittest.TestCase):
             self.assertIsNone(cont.smtpd)
             self.assertIsNone(cont._thread_exception)
             excm = str(cm.exception)
-            self.assertEqual("Unknown Error, failed to init SMTP server",
-                             excm)
+            self.assertEqual("Unknown Error, failed to init SMTP server", excm)
