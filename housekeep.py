@@ -14,6 +14,17 @@ NORM = "\x1b[0m"
 
 TOX_ENV_NAME = os.environ.get("TOX_ENV_NAME", None)
 
+WORKDIRS = (
+    ".pytest-cache",
+    ".pytest_cache",
+    ".tox",
+    "_dynamic",
+    "aiosmtpd.egg-info",
+    "build",
+    "htmlcov",
+    "prof",
+)
+
 
 # region #### Helper funcs ############################################################
 
@@ -21,7 +32,7 @@ TOX_ENV_NAME = os.environ.get("TOX_ENV_NAME", None)
 def deldir(targ: Path):
     if not targ.exists():
         return
-    for pp in reversed(sorted(targ.rglob("*"))):
+    for i, pp in enumerate(reversed(sorted(targ.rglob("*"))), start=1):
         if pp.is_symlink():
             pp.unlink()
         elif pp.is_file():
@@ -32,7 +43,10 @@ def deldir(targ: Path):
             pp.rmdir()
         else:
             raise RuntimeError(f"Don't know how to handle '{pp}'")
+        if (i & 1023) == 0:
+            print(".", end="", flush=True)
     targ.rmdir()
+    print(" ", end="", flush=True)
 
 
 # endregion
@@ -47,7 +61,7 @@ def dump_env():
         pprint.pprint(dict(os.environ), stream=fout)
 
 
-def moveprof():
+def move_prof():
     """Move profiling files to per-testenv dirs"""
     profpath = Path("prof")
     prof_files = [
@@ -68,8 +82,8 @@ def moveprof():
 def pycache_clean(verbose=False):
     """Cleanup __pycache__ dirs & bytecode files (if any)"""
     aiosmtpdpath = Path(".")
-    for f in aiosmtpdpath.rglob("*.py[co]"):
-        if verbose:
+    for i, f in enumerate(aiosmtpdpath.rglob("*.py[co]"), start=1):
+        if verbose and (i % 63) == 0:
             print(".", end="", flush=True)
         f.unlink()
     for d in aiosmtpdpath.rglob("__pycache__"):
@@ -80,12 +94,13 @@ def pycache_clean(verbose=False):
         print()
 
 
-def superclean():
+def rm_work():
     """Remove work dirs & files. They are .gitignore'd anyways."""
     print(f"{BOLD}Removing work dirs ... {NORM}", end="")
-    for dd in (".pytest-cache", ".pytest_cache", ".tox", "_dynamic",
-               "aiosmtpd.egg-info", "build", "htmlcov", "prof"):
-        print(dd, end=" ", flush=True)
+    # The reason we list WORKDIRS explicitly is because we don't want to accidentally
+    # bork IDE workdirs such as .idea/ or .vscode/
+    for dd in WORKDIRS:
+        print(dd, end="", flush=True)
         deldir(Path(dd))
     print(f"\n{BOLD}Removing work files ...{NORM}", end="")
     for fn in (".coverage", "coverage.xml", "diffcov.html"):
@@ -113,7 +128,7 @@ def dispatch_setup():
 
 
 def dispatch_cleanup():
-    moveprof()
+    move_prof()
     pycache_clean()
 
 
@@ -122,7 +137,7 @@ def dispatch_superclean():
         raise RuntimeError("Do NOT run this inside tox!")
     print(f"{BOLD}Running pycache cleanup ...{NORM}", end="")
     pycache_clean(verbose=True)
-    superclean()
+    rm_work()
 
 
 # endregion
