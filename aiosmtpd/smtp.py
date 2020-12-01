@@ -953,7 +953,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if state != _DataState.NOMINAL:
             if state == _DataState.TOO_LONG:
                 await self.push("500 Line too long (see RFC5321 4.5.3.1.6)")
-            elif state == _DataState.TOO_MUCH:
+            elif state == _DataState.TOO_MUCH:  # pragma: nobranch
                 await self.push('552 Error: Too much mail data')
             self._set_post_data_state()
             return
