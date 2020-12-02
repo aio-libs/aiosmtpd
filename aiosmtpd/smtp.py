@@ -926,7 +926,9 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # The line exceeds StreamReader's "stream limit".
                 # Delay SMTP Status Code sending until data receive is complete
                 # This seems to be implied in RFC 5321 § 4.2.5
-                state = _DataState.TOO_LONG
+                if state == _DataState.NOMINAL:
+                    # Transition to TOO_LONG only if we haven't gone TOO_MUCH yet
+                    state = _DataState.TOO_LONG
                 # Discard data immediately to prevent memory pressure
                 data *= 0
                 line = await self._reader.read(e.consumed)

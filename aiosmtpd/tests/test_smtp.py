@@ -1319,7 +1319,9 @@ Testing
             self.assertEqual(cm.exception.smtp_error,
                              b'Error: Too much mail data')
 
-    def test_too_long_message_body_long_lines(self):
+    def test_too_long_lines_then_too_long_body(self):
+        # If "too long line" state was reached before "too much data" happens,
+        # SMTP should respond with '500' instead of '552'
         size = 2000
         controller = SizedController(Sink(), size=size)
         controller.start()
@@ -1332,6 +1334,21 @@ Testing
         self.assertEqual(cm.exception.smtp_code, 500)
         self.assertEqual(cm.exception.smtp_error,
                          b'Line too long (see RFC5321 4.5.3.1.6)')
+
+    def test_too_long_body_then_too_long_lines(self):
+        # If "too much mail" state was reached before "too long line" gets received,
+        # SMTP should respond with '552' instead of '500'
+        controller = SizedController(Sink(), size=700)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = '\r\n'.join(['z' * 76] * 10 + ["a" * 1100] * 2)
+            with self.assertRaises(SMTPResponseException) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], mail)
+            self.assertEqual(cm.exception.smtp_code, 552)
+            self.assertEqual(cm.exception.smtp_error,
+                             b'Error: Too much mail data')
 
     def test_data_line_too_long(self):
         handler = ReceivingHandler()
