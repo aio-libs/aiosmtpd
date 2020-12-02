@@ -923,7 +923,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 self._writer.close()
                 raise
             except asyncio.LimitOverrunError as e:
-                # The line exceeds StreamReader's buffer.
+                # The line exceeds StreamReader's "stream limit".
                 # Delay SMTP Status Code sending until data receive is complete
                 # This seems to be implied in RFC 5321 § 4.2.5
                 state = _DataState.TOO_LONG
