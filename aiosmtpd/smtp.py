@@ -57,6 +57,7 @@ log = logging.getLogger('mail.log')
 
 
 DATA_SIZE_DEFAULT = 33_554_432  # Where does this number come from, I wonder...
+EMPTY_BARR = bytearray()
 EMPTYBYTES = b''
 MISSING = _Missing()
 NEWLINE = '\n'
@@ -904,11 +905,11 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
 
         await self.push('354 End data with <CR><LF>.<CR><LF>')
-        data: List[bytes] = []
+        data: List[bytearray] = []
 
         num_bytes: int = 0
         limit: Optional[int] = self.data_size_limit
-        partial_line: List[bytes] = []
+        line_fragments: List[bytes] = []
         state: _DataState = _DataState.NOMINAL
         while self.transport is not None:           # pragma: nobranch
             # Since eof_received cancels this coroutine,
@@ -934,7 +935,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 line = await self._reader.read(e.consumed)
                 assert not line.endswith(b'\n')
             # A lone dot in a line signals the end of DATA.
-            if not partial_line and line == b'.\r\n':
+            if not line_fragments and line == b'.\r\n':
                 break
             num_bytes += len(line)
             if state == _DataState.NOMINAL and limit and num_bytes > limit:
@@ -943,13 +944,12 @@ class SMTP(asyncio.StreamReaderProtocol):
                 state = _DataState.TOO_MUCH
                 # Discard data immediately to prevent memory pressure
                 data *= 0
+            line_fragments.append(line)
             if line.endswith(b'\n'):
-                # Stop recording data if state is not "NOMINAL"
+                # Record data only if state is "NOMINAL"
                 if state == _DataState.NOMINAL:
-                    data.append(EMPTYBYTES.join(partial_line) + line)
-                partial_line *= 0
-            else:
-                partial_line.append(line)
+                    data.append(EMPTY_BARR.join(line_fragments))
+                line_fragments *= 0
 
         # Day of reckoning! Let's take care of those out-of-nominal situations
         if state != _DataState.NOMINAL:
@@ -961,14 +961,16 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
 
         # If unfinished_line is non-empty, then the connection was closed.
-        assert not partial_line
+        assert not line_fragments
 
         # Remove extraneous carriage returns and de-transparency
         # according to RFC 5321, Section 4.5.2.
-        for i, text in enumerate(data):
+        for text in data:
             if text.startswith(b'.'):
-                data[i] = text[1:]
-        content = original_content = EMPTYBYTES.join(data)
+                del text[0]
+        original_content: bytes = EMPTYBYTES.join(data)
+        # Discard data immediately to prevent memory pressure
+        data *= 0
 
         if self._decode_data:
             if self.enable_SMTPUTF8:
@@ -982,8 +984,11 @@ class SMTP(asyncio.StreamReaderProtocol):
                     # but the client ignores that and sends non-ascii anyway.
                     await self.push('500 Error: strict ASCII mode')
                     return
+        else:
+            content = original_content
         self.envelope.content = content
         self.envelope.original_content = original_content
+
         # Call the new API first if it's implemented.
         if "DATA" in self._handle_hooks:
             status = await self._call_handler_hook('DATA')
