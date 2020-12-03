@@ -1591,7 +1591,7 @@ class TestAuthArgs(unittest.TestCase):
     @patch("aiosmtpd.smtp.warn")
     def test_warn_authreqnotls(self, mock_warn: Mock, mock_warning: Mock):
         """If auth_required=True while auth_require_tls=False, emit warning"""
-        server = Server(Sink(), auth_required=True, auth_require_tls=False)
+        _ = Server(Sink(), auth_required=True, auth_require_tls=False)
         mock_warn.assert_any_call(
             "Requiring AUTH while not requiring TLS "
             "can lead to security vulnerabilities!"
@@ -1606,7 +1606,7 @@ class TestAuthArgs(unittest.TestCase):
         server = Server(Sink())
         auth_mechs = sorted(
             m.replace("auth_", "") + "(builtin)"
-            for m in dir(Server)
+            for m in dir(server)
             if m.startswith("auth_")
         )
         mock_info.assert_any_call(

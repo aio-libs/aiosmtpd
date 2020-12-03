@@ -10,9 +10,8 @@ import warnings
 
 from contextlib import ExitStack
 from pkg_resources import resource_filename
-from typing import Optional
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 
 def reset_connection(client):

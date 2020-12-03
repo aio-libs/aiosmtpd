@@ -273,14 +273,14 @@ class TestTLSContext(unittest.TestCase):
         context = get_server_context()
         for mode in (ssl.CERT_NONE, ssl.CERT_OPTIONAL):
             context.verify_mode = mode
-            server = SMTPProtocol(Sink(), tls_context=context)
+            _ = SMTPProtocol(Sink(), tls_context=context)
             self.assertEqual(mode, context.verify_mode)
 
     @patch("logging.Logger.warning")
     def test_certreq_warn(self, mock_warn: Mock):
         context = get_server_context()
         context.verify_mode = ssl.CERT_REQUIRED
-        server = SMTPProtocol(Sink(), tls_context=context)
+        _ = SMTPProtocol(Sink(), tls_context=context)
         self.assertEqual(ssl.CERT_REQUIRED, context.verify_mode)
         mock_warn.assert_called_once()
         warn_msg = mock_warn.call_args[0][0]
@@ -293,7 +293,7 @@ class TestTLSContext(unittest.TestCase):
         # .check_hostname=True needs .verify_mode!=CERT_NONE
         context.verify_mode = ssl.CERT_OPTIONAL
         context.check_hostname = True
-        server = SMTPProtocol(Sink(), tls_context=context)
+        _ = SMTPProtocol(Sink(), tls_context=context)
         self.assertEqual(ssl.CERT_OPTIONAL, context.verify_mode)
         mock_warn.assert_called_once()
         warn_msg = mock_warn.call_args[0][0]
