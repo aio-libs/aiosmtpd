@@ -96,20 +96,6 @@ def get_server_context():
     return tls_context
 
 
-class ExitStackWithMock(ExitStack):
-
-    def __init__(self, test_case: Optional[TestCase] = None):
-        super().__init__()
-        if isinstance(test_case, TestCase):
-            test_case.addCleanup(self.close)
-
-    def enter_patch(self, target: str) -> Mock:
-        return self.enter_context(patch(target))
-
-    def enter_patch_object(self, obj, target: str) -> Mock:
-        return self.enter_context(patch.object(obj, target))
-
-
 class ReceivingHandler:
     box = None
 

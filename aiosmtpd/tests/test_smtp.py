@@ -1,6 +1,5 @@
 """Test the SMTP protocol."""
 
-import ssl
 import time
 import socket
 import asyncio
@@ -11,13 +10,11 @@ from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import MISSING, SMTP as Server, __ident__ as GREETING
 from aiosmtpd.testing.helpers import (
-    ExitStackWithMock,
     ReceivingHandler,
     SUPPORTED_COMMANDS_NOTLS,
     assert_auth_invalid,
     assert_auth_required,
     assert_auth_success,
-    get_server_context,
     reset_connection,
 )
 from base64 import b64encode
@@ -1600,70 +1597,29 @@ class TestTimeout(unittest.TestCase):
             self.assertRaises(SMTPServerDisconnected, client.getreply)
 
 
-class TestInit(unittest.TestCase):
-    """Tests aiosmtpd.smtp.SMTP.__init__ behavior"""
-
-    def setUp(self) -> None:
-        self.handler = ReceivingHandler()
-        self.tls_context = get_server_context()
-
-        self.controller = Controller(
-            self.handler,
-            server_kwargs={"tls_context": self.tls_context}
-        )
-        self.addCleanup(self.controller.stop)
-
-        self.stk = ExitStackWithMock(self)  # Has built-in call to addCleanup
-
-    def trigger_init(self):
-        """Ensure SMTP.__init__ triggered"""
-        self.controller.start()
-        self.stk.enter_context(
-            SMTP(self.controller.hostname, self.controller.port)
-        )
-
-    def test_logwarn_on_checkhostname(self):
-        """If tls_context.check_hostname is True, log warning"""
-        # .check_hostname=True needs .verify_mode!=CERT_NONE
-        self.tls_context.verify_mode = ssl.CERT_OPTIONAL
-        self.tls_context.check_hostname = True
-        mocklogwarn = self.stk.enter_patch_object(MAIL_LOG, "warning")
-        self.trigger_init()
-        mocklogwarn.assert_called_once()
-
-    def test_logwarn_on_certrequired(self):
-        """If tls_context.verify_mode too strict, log warning"""
-        self.tls_context.verify_mode = ssl.CERT_REQUIRED
-        mocklogwarn = self.stk.enter_patch_object(MAIL_LOG, "warning")
-        self.trigger_init()
-        mocklogwarn.assert_called_once()
-
-    def test_warn_authreqnotls(self):
+class TestAuthArgs(unittest.TestCase):
+    @patch("logging.Logger.warning")
+    @patch("aiosmtpd.smtp.warn")
+    def test_warn_authreqnotls(self, mock_warn: Mock, mock_warning: Mock):
         """If auth_required=True while auth_require_tls=False, emit warning"""
-        self.controller.server_kwargs = {
-            "auth_require_tls": False,
-            "auth_required": True,
-        }
-        mockwarn = self.stk.enter_patch("aiosmtpd.smtp.warn")
-        mocklogwarn = self.stk.enter_patch_object(MAIL_LOG, "warning")
-        self.trigger_init()
-        mockwarn.assert_any_call(
+        server = Server(Sink(), auth_required=True, auth_require_tls=False)
+        mock_warn.assert_any_call(
             "Requiring AUTH while not requiring TLS "
             "can lead to security vulnerabilities!"
         )
-        mocklogwarn.assert_any_call(
+        mock_warning.assert_any_call(
             "auth_required == True but auth_require_tls == False"
         )
 
-    def test_log_authmechanisms(self):
+    @patch("logging.Logger.info")
+    def test_log_authmechanisms(self, mock_info: Mock):
         """At __init__ list of AUTH mechanisms must be logged"""
-        mockloginfo = self.stk.enter_patch_object(MAIL_LOG, "info")
-        self.trigger_init()
+        server = Server(Sink())
         auth_mechs = sorted(
             m.replace("auth_", "") + "(builtin)"
             for m in dir(Server)
             if m.startswith("auth_")
         )
-        mockloginfo.assert_any_call(
+        mock_info.assert_any_call(
             f"Available AUTH mechanisms: {' '.join(auth_mechs)}"
         )
