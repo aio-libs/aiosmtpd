@@ -290,6 +290,7 @@ class TestTLSContext(unittest.TestCase):
     @patch("logging.Logger.warning")
     def test_nocertreq_chkhost_warn(self, mock_warn: Mock):
         context = get_server_context()
+        # .check_hostname=True needs .verify_mode!=CERT_NONE
         context.verify_mode = ssl.CERT_OPTIONAL
         context.check_hostname = True
         server = SMTPProtocol(Sink(), tls_context=context)
