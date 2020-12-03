@@ -103,7 +103,13 @@ override to provide additional responses.
 SMTP API
 ========
 
-.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, decode_data=False, hostname=None, ident=None, tls_context=None, require_starttls=False, timeout=300, auth_required=False, auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, loop=None)
+.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, \
+   decode_data=False, hostname=None, ident=None, tls_context=None, \
+   require_starttls=False, timeout=300, auth_required=False, auth_require_tls=True, \
+   auth_exclude_mechanism=None, auth_callback=None, command_call_limit=None, \
+   loop=None)
+
+   **Parameters**
 
    *handler* is an instance of a :ref:`handler <handlers>` class.
 
@@ -155,8 +161,50 @@ SMTP API
    must return a ``bool`` that indicates whether the client's authentication
    attempt is accepted/successful or not.
 
+   *command_call_limit* if not ``None`` sets the maximum time a certain SMTP
+   command can be invoked.
+   This is to prevent DoS due to malicious client connecting and never disconnecting,
+   due to continual sending of SMTP commands to prevent timeout.
+
+   The handling differs based on the type:
+
+   .. highlights::
+
+      If :attr:`command_call_limit` is of type ``int``,
+      then the value is the call limit for ALL SMTP commands.
+
+      If :attr:`command_call_limit` is of type ``dict``,
+      it must be a ``Dict[str, int]``
+      (the type of the values will be enforced).
+      The keys will be the SMTP Command to set the limit for,
+      the values will be the call limit per SMTP Command.
+
+      .. highlights::
+
+         A special key of ``"*"`` is used to set the 'default' call limit for commands not
+         explicitly declared in :attr:`command_call_limit`.
+         If ``"*"`` is not given,
+         then the 'default' call limit will be set to ``aiosmtpd.smtp.CALL_LIMIT_DEFAULT``
+
+      Other types -- or a ``Dict`` whose any value is not an ``int`` -- will raise a
+      ``TypeError`` exception.
+
+      Examples::
+
+          # All commands have a limit of 10 calls
+          SMTP(..., command_call_limit=10)
+
+          # Commands RCPT and NOOP have their own limits; others have an implicit limit
+          # of 20 (CALL_LIMIT_DEFAULT)
+          SMTP(..., command_call_limit={"RCPT": 30, "NOOP": 5})
+
+          # Commands RCPT and NOOP have their own limits; others set to 3
+          SMTP(..., command_call_limit={"RCPT": 20, "NOOP": 10, "*": 3})
+
    *loop* is the asyncio event loop to use.  If not given,
    :meth:`asyncio.new_event_loop()` is called to create the event loop.
+
+   **Attributes**
 
    .. attribute:: event_handler
 
