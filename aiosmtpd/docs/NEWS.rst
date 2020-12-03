@@ -2,6 +2,14 @@
  NEWS for aiosmtpd
 ===================
 
+1.2.3 (aiosmtpd-next)
+=====================
+
+Fixed/Improved
+--------------
+* Make sure that handle_exception() do not get called when the client disconnected. (Closes #127, #162)
+
+
 1.2.2 (2020-11-08)
 ==================
 
