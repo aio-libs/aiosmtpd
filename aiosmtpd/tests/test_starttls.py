@@ -1,3 +1,4 @@
+import ssl
 import unittest
 
 from aiosmtpd.controller import Controller as BaseController
@@ -11,6 +12,7 @@ from aiosmtpd.testing.helpers import (
 )
 from email.mime.text import MIMEText
 from smtplib import SMTP
+from unittest.mock import Mock, patch
 
 
 class Controller(BaseController):
@@ -264,3 +266,35 @@ class TestRequireTLSAUTH(unittest.TestCase):
             client.ehlo('example.com')
             code, response = client.docmd('AUTH PLAIN AHRlc3QAdGVzdA==')
             assert_auth_invalid(self, code, response)
+
+
+class TestTLSContext(unittest.TestCase):
+    def test_verify_mode_nochange(self):
+        context = get_server_context()
+        for mode in (ssl.CERT_NONE, ssl.CERT_OPTIONAL):
+            context.verify_mode = mode
+            server = SMTPProtocol(Sink(), tls_context=context)
+            self.assertEqual(mode, context.verify_mode)
+
+    @patch("logging.Logger.warning")
+    def test_certreq_warn(self, mock_warn: Mock):
+        context = get_server_context()
+        context.verify_mode = ssl.CERT_REQUIRED
+        server = SMTPProtocol(Sink(), tls_context=context)
+        self.assertEqual(ssl.CERT_REQUIRED, context.verify_mode)
+        mock_warn.assert_called_once()
+        warn_msg = mock_warn.call_args[0][0]
+        self.assertIn("tls_context.verify_mode", warn_msg)
+        self.assertIn("might cause client connection problems", warn_msg)
+
+    @patch("logging.Logger.warning")
+    def test_nocertreq_chkhost_warn(self, mock_warn: Mock):
+        context = get_server_context()
+        context.verify_mode = ssl.CERT_OPTIONAL
+        context.check_hostname = True
+        server = SMTPProtocol(Sink(), tls_context=context)
+        self.assertEqual(ssl.CERT_OPTIONAL, context.verify_mode)
+        mock_warn.assert_called_once()
+        warn_msg = mock_warn.call_args[0][0]
+        self.assertIn("tls_context.check_hostname", warn_msg)
+        self.assertIn("might cause client connection problems", warn_msg)
