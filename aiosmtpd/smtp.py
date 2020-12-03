@@ -137,7 +137,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                             "CERT_OPTIONAL}; this might cause client "
                             "connection problems")
             elif tls_context.check_hostname:
-                log.warning("tls_context.check_hostname != True; "
+                log.warning("tls_context.check_hostname == True; "
                             "this might cause client connection problems")
         self.require_starttls = tls_context and require_starttls
         self._timeout_duration = timeout
