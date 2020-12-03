@@ -1,0 +1,18 @@
+# From #214
+queries:
+  - exclude: javascript/*
+# From github/codeql-cli-binaries#5
+extraction:
+  javascript:
+    index:
+      exclude:
+        - ".git"
+        - ".github"
+        - "aiosmtpd"
+        - "build"
+        - "examples"
+        - "htmlcov"
+      filters:
+        - exclude: "**/*.js"
+        - exclude: "**/*.css"
+        - exclude: "**/*.html"

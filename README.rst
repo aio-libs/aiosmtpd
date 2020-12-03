@@ -2,6 +2,32 @@
  aiosmtpd - An asyncio based SMTP server
 =========================================
 
+| |github license| |travis ci| |codecov| |LGTM.com| |readthedocs| |PyPI|
+|
+| |Discourse|
+
+.. |github license| image:: https://img.shields.io/github/license/aio-libs/aiosmtpd
+   :target: https://github.com/aio-libs/aiosmtpd/blob/master/LICENSE
+   :alt: Project License on GitHub
+.. |travis ci| image:: https://travis-ci.com/aio-libs/aiosmtpd.svg?branch=master
+   :target: https://travis-ci.com/github/aio-libs/aiosmtpd
+   :alt: Travis CI Build Status
+.. |codecov| image:: https://codecov.io/github/aio-libs/aiosmtpd/coverage.svg?branch=master
+   :target: https://codecov.io/github/aio-libs/aiosmtpd?branch=master
+   :alt: Code Coverage
+.. |LGTM.com| image:: https://img.shields.io/lgtm/grade/python/github/aio-libs/aiosmtpd.svg?logo=lgtm&logoWidth=18
+   :target: https://lgtm.com/projects/g/aio-libs/aiosmtpd/context:python
+   :alt: Semmle/LGTM.com quality
+.. |readthedocs| image:: https://readthedocs.org/projects/aiosmtpd/badge/?version=latest
+   :target: https://aiosmtpd.readthedocs.io/en/latest/?badge=latest
+   :alt: Documentation Status
+.. |PyPI| image:: https://badge.fury.io/py/aiosmtpd.svg
+   :target: https://badge.fury.io/py/aiosmtpd
+   :alt: PyPI Package
+.. |Discourse| image:: https://img.shields.io/discourse/status?server=https%3A%2F%2Faio-libs.discourse.group%2F&style=social
+   :target: https://aio-libs.discourse.group/
+   :alt: Discourse status
+
 The Python standard library includes a basic
 `SMTP <http://www.faqs.org/rfcs/rfc5321.html>`__ server in the
 `smtpd <https://docs.python.org/3/library/smtpd.html>`__ module, based on the
@@ -25,7 +51,7 @@ protocols.
 Requirements
 ============
 
-You need at least Python 3.5 to use this library.  Both Windows and \*nix are
+You need **at least Python 3.6** to use this library.  Both Windows and \*nix are
 supported.
 
 
@@ -78,17 +104,17 @@ test suite for Python 3.  Once you've got that, run::
 
 Individual tests can be run like this::
 
-    $ tox -e py35-nocov -- -P <pattern>
+    $ tox -e py36-nocov -- -P <pattern>
 
 where *<pattern>* is a Python regular expression matching a test name.
 
 You can also add the ``-E`` option to boost debugging output, e.g.::
 
-    $ tox -e py35-nocov -- -E
+    $ tox -e py36-nocov -- -E
 
 and these options can be combined::
 
-    $ tox -e py35-nocov -- -P test_connection_reset_during_DATA -E
+    $ tox -e py36-nocov -- -P test_connection_reset_during_DATA -E
 
 
 Supported 'testenvs'
