@@ -29,7 +29,12 @@ class TestVersion:
     def test_ge_master(self, aiosmtpd_version):
         """Ensure version is monotonically increasing"""
         reference = "master:aiosmtpd/smtp.py"
-        master_smtp = subprocess.check_output(f"git show {reference}").decode()
+        cmd = f"git show {reference}".split()
+        try:
+            master_smtp = subprocess.check_output(cmd).decode()
+        except subprocess.CalledProcessError:
+            pytest.skip("Skipping due to git error")
+            return
         for ln in master_smtp.splitlines():
             m = RE_DUNDERVER.match(ln)
             if m:
