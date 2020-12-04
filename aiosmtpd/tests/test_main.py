@@ -72,24 +72,21 @@ class TestMain(unittest.TestCase):
             mock.assert_called_with(pwd.getpwnam('nobody').pw_uid)
 
     @unittest.skipIf(pwd is None, 'No pwd module available')
-    def test_setuid_permission_error(self):
-        mock = self.resources.enter_context(
-            patch('os.setuid', side_effect=PermissionError))
-        stderr = StringIO()
-        self.resources.enter_context(patch('sys.stderr', stderr))
+    @patch('os.setuid', side_effect=PermissionError)
+    @patch('sys.stderr', new_callable=StringIO)
+    def test_setuid_permission_error(self, mock_err, mock_setuid):
         with self.assertRaises(SystemExit) as cm:
             main(args=())
         self.assertEqual(cm.exception.code, 1)
-        mock.assert_called_with(pwd.getpwnam('nobody').pw_uid)
+        mock_setuid.assert_called_with(pwd.getpwnam('nobody').pw_uid)
         self.assertEqual(
-            stderr.getvalue(),
+            mock_err.getvalue(),
             'Cannot setuid "nobody"; try running with -n option.\n')
 
     @unittest.skipIf(pwd is None, 'No pwd module available')
-    def test_setuid_no_pwd_module(self):
-        self.resources.enter_context(patch('aiosmtpd.main.pwd', None))
-        stderr = StringIO()
-        self.resources.enter_context(patch('sys.stderr', stderr))
+    @patch('aiosmtpd.main.pwd', None)
+    @patch('sys.stderr', new_callable=StringIO)
+    def test_setuid_no_pwd_module(self, mock_err, mock_pwd):
         with self.assertRaises(SystemExit) as cm:
             main(args=())
         self.assertEqual(cm.exception.code, 1)
@@ -100,29 +97,25 @@ class TestMain(unittest.TestCase):
         # the string DOES appear in stderr, just buried.
         self.assertIn(
             'Cannot import module "pwd"; try running with -n option.\n',
-            stderr.getvalue(),
+            mock_err.getvalue(),
         )
 
     @unittest.skipUnless(has_setuid, 'setuid is unvailable')
-    def test_n(self):
-        self.resources.enter_context(patch('aiosmtpd.main.pwd', None))
-        self.resources.enter_context(
-            patch('os.setuid', side_effect=PermissionError))
-        # Just to short-circuit the main() function.
-        self.resources.enter_context(
-            patch('aiosmtpd.main.partial', side_effect=RuntimeError))
+    # Just to short-circuit the main() function.
+    @patch('aiosmtpd.main.partial', side_effect=RuntimeError)
+    @patch('os.setuid', side_effect=PermissionError)
+    @patch('aiosmtpd.main.pwd', None)
+    def test_n(self, mock_partial, mock_setuid, mock_pwd):
         # Getting the RuntimeError means that a SystemExit was never
         # triggered in the setuid section.
         self.assertRaises(RuntimeError, main, ('-n',))
 
     @unittest.skipUnless(has_setuid, 'setuid is unvailable')
-    def test_nosetuid(self):
-        self.resources.enter_context(patch('aiosmtpd.main.pwd', None))
-        self.resources.enter_context(
-            patch('os.setuid', side_effect=PermissionError))
-        # Just to short-circuit the main() function.
-        self.resources.enter_context(
-            patch('aiosmtpd.main.partial', side_effect=RuntimeError))
+    # Just to short-circuit the main() function.
+    @patch('aiosmtpd.main.partial', side_effect=RuntimeError)
+    @patch('os.setuid', side_effect=PermissionError)
+    @patch('aiosmtpd.main.pwd', None)
+    def test_nosetuid(self, mock_partial, mock_setuid, mock_pwd):
         # Getting the RuntimeError means that a SystemExit was never
         # triggered in the setuid section.
         self.assertRaises(RuntimeError, main, ('--nosetuid',))
@@ -227,25 +220,21 @@ class TestParseArgs(unittest.TestCase):
         usage_lines = stderr.getvalue().splitlines()
         self.assertEqual(usage_lines[-1][-24:], 'Invalid port number: foo')
 
-    def test_version(self):
-        stdout = StringIO()
-        with ExitStack() as resources:
-            resources.enter_context(patch('sys.stdout', stdout))
-            resources.enter_context(patch('aiosmtpd.main.PROGRAM', 'smtpd'))
-            cm = resources.enter_context(self.assertRaises(SystemExit))
+    @patch('aiosmtpd.main.PROGRAM', 'smtpd')  # does NOT return a mock object! so...
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_version(self, mock_out):  # ...so, only one arg here
+        with self.assertRaises(SystemExit) as cm:
             parseargs(('--version',))
-            self.assertEqual(cm.exception.code, 0)
-        self.assertEqual(stdout.getvalue(), 'smtpd {}\n'.format(__version__))
+        self.assertEqual(cm.exception.code, 0)
+        self.assertEqual(mock_out.getvalue(), 'smtpd {}\n'.format(__version__))
 
-    def test_v(self):
-        stdout = StringIO()
-        with ExitStack() as resources:
-            resources.enter_context(patch('sys.stdout', stdout))
-            resources.enter_context(patch('aiosmtpd.main.PROGRAM', 'smtpd'))
-            cm = resources.enter_context(self.assertRaises(SystemExit))
+    @patch('aiosmtpd.main.PROGRAM', 'smtpd')  # does NOT return a mock object! so...
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_v(self, mock_out):  # ...so, only one arg here
+        with self.assertRaises(SystemExit) as cm:
             parseargs(('-v',))
-            self.assertEqual(cm.exception.code, 0)
-        self.assertEqual(stdout.getvalue(), 'smtpd {}\n'.format(__version__))
+        self.assertEqual(cm.exception.code, 0)
+        self.assertEqual(mock_out.getvalue(), 'smtpd {}\n'.format(__version__))
 
 
 class TestSigint(unittest.TestCase):
