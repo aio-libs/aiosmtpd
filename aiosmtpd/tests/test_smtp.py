@@ -19,7 +19,6 @@ from aiosmtpd.testing.helpers import (
     send_recv,
 )
 from base64 import b64encode
-from contextlib import ExitStack
 from smtplib import (
     SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected)
 from unittest.mock import Mock, PropertyMock, patch
@@ -1447,88 +1446,77 @@ Testing
             self.assertEqual(len(handler.box), 1)
             self.assertEqual(handler.box[0].content, 'Test\r\n.\r\nmail\r\n')
 
-    def test_unexpected_errors(self):
+    # Suppress logging to the console during the tests.  Depending on
+    # timing, the exception may or may not be logged.
+    @patch("logging.Logger.exception")
+    def test_unexpected_errors(self, mock_logex):
         handler = ErroringHandler()
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
-            # Suppress logging to the console during the tests.  Depending on
-            # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
-            client = resources.enter_context(
-                SMTP(controller.hostname, controller.port))
-            code, response = client.helo('example.com')
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.helo('example.com')
         self.assertEqual(code, 500)
-        self.assertEqual(response, b'ErroringHandler handling error')
+        self.assertEqual(mesg, b'ErroringHandler handling error')
         self.assertIsInstance(handler.error, ValueError)
 
-    def test_unexpected_errors_unhandled(self):
+    # Suppress logging to the console during the tests.  Depending on
+    # timing, the exception may or may not be logged.
+    @patch("logging.Logger.exception")
+    def test_unexpected_errors_unhandled(self, mock_logex):
         handler = Sink()
         handler.error = None
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
-            # Suppress logging to the console during the tests.  Depending on
-            # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
-            client = resources.enter_context(
-                SMTP(controller.hostname, controller.port))
-            code, response = client.helo('example.com')
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.helo('example.com')
         self.assertEqual(code, 500)
-        self.assertEqual(response, b'Error: (ValueError) test')
+        self.assertEqual(mesg, b'Error: (ValueError) test')
         # handler.error did not change because the handler does not have a
         # handle_exception() method.
         self.assertIsNone(handler.error)
 
-    def test_unexpected_errors_custom_response(self):
+    # Suppress logging to the console during the tests.  Depending on
+    # timing, the exception may or may not be logged.
+    @patch("logging.Logger.exception")
+    def test_unexpected_errors_custom_response(self, mock_logex):
         handler = ErroringHandlerCustomResponse()
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
-            # Suppress logging to the console during the tests.  Depending on
-            # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
-            client = resources.enter_context(
-                SMTP(controller.hostname, controller.port))
-            code, response = client.helo('example.com')
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.helo('example.com')
         self.assertEqual(code, 451)
-        self.assertEqual(response, b'Temporary error: (ValueError) test')
+        self.assertEqual(mesg, b'Temporary error: (ValueError) test')
         self.assertIsInstance(handler.error, ValueError)
 
-    def test_exception_handler_exception(self):
+    # Suppress logging to the console during the tests.  Depending on
+    # timing, the exception may or may not be logged.
+    @patch("logging.Logger.exception")
+    def test_exception_handler_exception(self, mock_logex):
         handler = ErroringErrorHandler()
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
-            # Suppress logging to the console during the tests.  Depending on
-            # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
-            client = resources.enter_context(
-                SMTP(controller.hostname, controller.port))
-            code, response = client.helo('example.com')
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.helo('example.com')
         self.assertEqual(code, 500)
-        self.assertEqual(response,
-                         b'Error: (ValueError) ErroringErrorHandler test')
+        self.assertEqual(mesg, b'Error: (ValueError) ErroringErrorHandler test')
         self.assertIsInstance(handler.error, ValueError)
 
-    def test_exception_handler_undescribable(self):
+    # Suppress logging to the console during the tests.  Depending on
+    # timing, the exception may or may not be logged.
+    @patch("logging.Logger.exception")
+    def test_exception_handler_undescribable(self, mock_logex):
         handler = UndescribableErrorHandler()
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
-            # Suppress logging to the console during the tests.  Depending on
-            # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
-            client = resources.enter_context(
-                SMTP(controller.hostname, controller.port))
-            code, response = client.helo('example.com')
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.helo('example.com')
         self.assertEqual(code, 500)
-        self.assertEqual(response, b'Error: Cannot describe error')
+        self.assertEqual(mesg, b'Error: Cannot describe error')
         self.assertIsInstance(handler.error, ValueError)
 
     def test_bad_encodings(self):
