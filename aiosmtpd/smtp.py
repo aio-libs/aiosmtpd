@@ -932,6 +932,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                     state = _DataState.TOO_LONG
                 # Discard data immediately to prevent memory pressure
                 data *= 0
+                # Drain the stream anyways
                 line = await self._reader.read(e.consumed)
                 assert not line.endswith(b'\n')
             # A lone dot in a line signals the end of DATA.
@@ -948,7 +949,15 @@ class SMTP(asyncio.StreamReaderProtocol):
             if line.endswith(b'\n'):
                 # Record data only if state is "NOMINAL"
                 if state == _DataState.NOMINAL:
-                    data.append(EMPTY_BARR.join(line_fragments))
+                    line = EMPTY_BARR.join(line_fragments)
+                    if len(line) > self.line_length_limit:
+                        # Theoretically we shouldn't reach this place. But it's always
+                        # good to practice DEFENSIVE coding.
+                        state = _DataState.TOO_LONG
+                        # Discard data immediately to prevent memory pressure
+                        data *= 0
+                    else:
+                        data.append(EMPTY_BARR.join(line_fragments))
                 line_fragments *= 0
 
         # Day of reckoning! Let's take care of those out-of-nominal situations

@@ -1434,6 +1434,26 @@ Testing
         self.assertEqual(cm.exception.smtp_error,
                          b'Line too long (see RFC5321 4.5.3.1.6)')
 
+    @patch("aiosmtpd.smtp.EMPTY_BARR")
+    def test_long_line_leak(self, mock_ebarr):
+        # Simulates situation where readuntil() does not raise LimitOverrunError,
+        # but somehow the line_fragments when join()ed resulted in a too-long line
+
+        # Hijack EMPTY_BARR.join() to return a bytes object that's definitely too long
+        mock_ebarr.join.return_value = (b"a" * 1010)
+
+        controller = Controller(Sink())
+        self.addCleanup(controller.stop)
+        controller.start()
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = 'z' * 72  # Make sure this is small and definitely within limits
+            with self.assertRaises(SMTPDataError) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], mail)
+        self.assertEqual(cm.exception.smtp_code, 500)
+        self.assertEqual(cm.exception.smtp_error,
+                         b'Line too long (see RFC5321 4.5.3.1.6)')
+
     def test_dots_escaped(self):
         handler = ReceivingHandler()
         controller = DecodingController(handler)
