@@ -7,7 +7,9 @@ import unittest
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import MISSING, SMTP as Server, __ident__ as GREETING
+from aiosmtpd.smtp import (
+    MISSING, Session as SMTPSess, SMTP as Server, __ident__ as GREETING
+)
 from aiosmtpd.testing.helpers import (
     SUPPORTED_COMMANDS_NOTLS,
     assert_auth_invalid,
@@ -40,8 +42,7 @@ class DecodingController(Controller):
 
 
 class PeekerHandler:
-    def __init__(self):
-        self.session = None
+    session: SMTPSess = None
 
     async def handle_MAIL(
             self, server, session, envelope, address, mail_options
@@ -971,7 +972,8 @@ class TestSMTPAuth(unittest.TestCase):
             self.assertEqual(auth_peeker.login, None)
             self.assertEqual(auth_peeker.password, None)
             code, response = client.mail("alice@example.com")
-            self.assertEqual(self.handler.session.login_data, b"")
+            sess: SMTPSess = self.handler.session
+            self.assertEqual(sess.login_data, b"")
 
     def test_auth_login_null_credential(self):
         with SMTP(*self.address) as client:
@@ -987,7 +989,8 @@ class TestSMTPAuth(unittest.TestCase):
             self.assertEqual(auth_peeker.login, None)
             self.assertEqual(auth_peeker.password, None)
             code, response = client.mail("alice@example.com")
-            self.assertEqual(self.handler.session.login_data, b"")
+            sess: SMTPSess = self.handler.session
+            self.assertEqual(sess.login_data, b"")
 
     def test_auth_login_abort_login(self):
         with SMTP(*self.address) as client:
