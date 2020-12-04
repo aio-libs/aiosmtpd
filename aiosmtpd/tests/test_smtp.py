@@ -14,6 +14,7 @@ from aiosmtpd.testing.helpers import (
     assert_auth_required,
     assert_auth_success,
     reset_connection,
+    send_recv,
 )
 from base64 import b64encode
 from contextlib import ExitStack
@@ -1319,6 +1320,69 @@ Testing
             self.assertEqual(cm.exception.smtp_error,
                              b'Error: Too much mail data')
 
+    def test_too_long_body_delay_error(self):
+        size, sock = 20, None
+
+        cont = Controller(Sink(), hostname="localhost",
+                          server_kwargs={"data_size_limit": size})
+        self.addCleanup(cont.stop)
+        cont.start()
+
+        with socket.socket() as sock:
+            sock.connect((cont.hostname, cont.port))
+            rslt = send_recv(sock, b"EHLO example.com")
+            self.assertTrue(rslt.startswith(b"220"))
+            rslt = send_recv(sock, b"MAIL FROM: <anne@example.com>")
+            self.assertTrue(rslt.startswith(b"250"))
+            rslt = send_recv(sock, b"RCPT TO: <bruce@example.com>")
+            self.assertTrue(rslt.startswith(b"250"))
+            rslt = send_recv(sock, b"DATA")
+            self.assertTrue(rslt.startswith(b"354"))
+            rslt = send_recv(sock, b"a" * (size + 3))
+            # Must NOT receive status code here even if data is too much
+            self.assertEqual(b"", rslt)
+            rslt = send_recv(sock, b"\r\n.")
+            # *NOW* we must receive status code
+            self.assertEqual(b"552 Error: Too much mail data\r\n", rslt)
+
+    def test_data_line_too_long(self):
+        handler = ReceivingHandler()
+        controller = NoDecodeController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = b'\r\n'.join([b'a' * 5555] * 3)
+            with self.assertRaises(SMTPDataError) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], mail)
+        self.assertEqual(cm.exception.smtp_code, 500)
+        self.assertEqual(cm.exception.smtp_error,
+                         b'Line too long (see RFC5321 4.5.3.1.6)')
+
+    def test_too_long_line_delay_error(self):
+        sock = None
+
+        cont = Controller(Sink(), hostname="localhost")
+        self.addCleanup(cont.stop)
+        cont.start()
+
+        with socket.socket() as sock:
+            sock.connect((cont.hostname, cont.port))
+            rslt = send_recv(sock, b"EHLO example.com")
+            self.assertTrue(rslt.startswith(b"220"))
+            rslt = send_recv(sock, b"MAIL FROM: <anne@example.com>")
+            self.assertTrue(rslt.startswith(b"250"))
+            rslt = send_recv(sock, b"RCPT TO: <bruce@example.com>")
+            self.assertTrue(rslt.startswith(b"250"))
+            rslt = send_recv(sock, b"DATA")
+            self.assertTrue(rslt.startswith(b"354"))
+            rslt = send_recv(sock, b"a" * (Server.line_length_limit + 3))
+            # Must NOT receive status code here even if data is too much
+            self.assertEqual(b"", rslt)
+            rslt = send_recv(sock, b"\r\n.")
+            # *NOW* we must receive status code
+            self.assertEqual(b"500 Line too long (see RFC5321 4.5.3.1.6)\r\n", rslt)
+
     def test_too_long_lines_then_too_long_body(self):
         # If "too long line" state was reached before "too much data" happens,
         # SMTP should respond with '500' instead of '552'
@@ -1349,20 +1413,6 @@ Testing
             self.assertEqual(cm.exception.smtp_code, 552)
             self.assertEqual(cm.exception.smtp_error,
                              b'Error: Too much mail data')
-
-    def test_data_line_too_long(self):
-        handler = ReceivingHandler()
-        controller = NoDecodeController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.helo('example.com')
-            mail = b'\r\n'.join([b'a' * 5555] * 3)
-            with self.assertRaises(SMTPDataError) as cm:
-                client.sendmail('anne@example.com', ['bart@example.com'], mail)
-        self.assertEqual(cm.exception.smtp_code, 500)
-        self.assertEqual(cm.exception.smtp_error,
-                         b'Line too long (see RFC5321 4.5.3.1.6)')
 
     def test_long_line_double_count(self):
         controller = SizedController(Sink(), size=10000)
