@@ -84,9 +84,9 @@ class TestMain(unittest.TestCase):
             'Cannot setuid "nobody"; try running with -n option.\n')
 
     @unittest.skipIf(pwd is None, 'No pwd module available')
-    @patch('aiosmtpd.main.pwd', None)
+    @patch('aiosmtpd.main.pwd', None)  # Returns no object, so needs no arg
     @patch('sys.stderr', new_callable=StringIO)
-    def test_setuid_no_pwd_module(self, mock_err, mock_pwd):
+    def test_setuid_no_pwd_module(self, mock_err):
         with self.assertRaises(SystemExit) as cm:
             main(args=())
         self.assertEqual(cm.exception.code, 1)
@@ -104,8 +104,8 @@ class TestMain(unittest.TestCase):
     # Just to short-circuit the main() function.
     @patch('aiosmtpd.main.partial', side_effect=RuntimeError)
     @patch('os.setuid', side_effect=PermissionError)
-    @patch('aiosmtpd.main.pwd', None)
-    def test_n(self, mock_partial, mock_setuid, mock_pwd):
+    @patch('aiosmtpd.main.pwd', None)  # Returns no object, so needs no arg
+    def test_n(self, mock_setuid, mock_partial):
         # Getting the RuntimeError means that a SystemExit was never
         # triggered in the setuid section.
         self.assertRaises(RuntimeError, main, ('-n',))
@@ -114,8 +114,8 @@ class TestMain(unittest.TestCase):
     # Just to short-circuit the main() function.
     @patch('aiosmtpd.main.partial', side_effect=RuntimeError)
     @patch('os.setuid', side_effect=PermissionError)
-    @patch('aiosmtpd.main.pwd', None)
-    def test_nosetuid(self, mock_partial, mock_setuid, mock_pwd):
+    @patch('aiosmtpd.main.pwd', None)  # Returns no object, so needs no arg
+    def test_nosetuid(self, mock_setuid, mock_partial):
         # Getting the RuntimeError means that a SystemExit was never
         # triggered in the setuid section.
         self.assertRaises(RuntimeError, main, ('--nosetuid',))
