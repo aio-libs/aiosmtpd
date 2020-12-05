@@ -175,6 +175,16 @@ class ErroringErrorHandler:
         raise ValueError('ErroringErrorHandler test')
 
 
+class ErroringHandlerConnectionLost:
+    error = None
+
+    async def handle_DATA(self, server, session, envelope):
+        raise ConnectionResetError('ErroringHandlerConnectionLost test')
+
+    async def handle_exception(self, error):
+        self.error = error
+
+
 class UndescribableError(Exception):
     def __str__(self):
         raise Exception()
@@ -1385,6 +1395,35 @@ Testing
         self.assertEqual(response,
                          b'Error: (ValueError) ErroringErrorHandler test')
         self.assertIsInstance(handler.error, ValueError)
+
+    def test_exception_handler_multiple_connections_lost(self):
+        handler = ErroringHandlerConnectionLost()
+        controller = Controller(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client1:
+            code, response = client1.ehlo('example.com')
+            self.assertEqual(code, 250)
+            with SMTP(controller.hostname, controller.port) as client2:
+                code, response = client2.ehlo('example.com')
+                self.assertEqual(code, 250)
+                with self.assertRaises(SMTPServerDisconnected) as cm:
+                    mail = CRLF.join(['Test', '.', 'mail'])
+                    client2.sendmail(
+                        'anne@example.com',
+                        ['bart@example.com'],
+                        mail)
+                self.assertIsInstance(cm.exception, SMTPServerDisconnected)
+                self.assertEqual(handler.error, None)
+                # At this point connection should be down
+                with self.assertRaises(SMTPServerDisconnected) as cm:
+                    client2.mail("alice@example.com")
+                self.assertEqual(
+                    "please run connect() first",
+                    str(cm.exception))
+            # client1 shouldn't be affected.
+            code, response = client1.mail("alice@example.com")
+            self.assertEqual(code, 250)
 
     def test_exception_handler_undescribable(self):
         handler = UndescribableErrorHandler()

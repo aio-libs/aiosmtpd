@@ -121,6 +121,7 @@ synchronously (i.e. they are **not** coroutines).
     a status string, such as ``'542 Internal server error'``.  If the method
     returns ``None`` or raises an exception, an exception will be logged, and a
     ``500`` code will be returned to the client.
+    **Note:** If client connection losted function will not be called.
 
 
 .. _auth_hooks:
