@@ -2,12 +2,13 @@
  NEWS for aiosmtpd
 ===================
 
-1.2.3a7 (aiosmtpd-next)
+1.2.3a1 (aiosmtpd-next)
 =======================
 
 Fixed/Improved
 --------------
-* Implement & enforce line-length-limit, thus becoming Compliant with RFC 5321 § 4.5.3.1.6
+* ``handle_exception()`` no longer gets called when the client disconnected. (Closes #127, #162)
+* Implement & enforce line-length-limit, thus becoming Compliant with RFC 5321 § 4.5.3.1.6 (Closes #9)
 
 
 1.2.2 (2020-11-08)
