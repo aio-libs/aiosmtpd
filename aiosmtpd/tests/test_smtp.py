@@ -4,6 +4,7 @@ import time
 import socket
 import asyncio
 import unittest
+import warnings
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
@@ -19,8 +20,10 @@ from aiosmtpd.testing.helpers import (
     send_recv,
 )
 from base64 import b64encode
+from contextlib import ExitStack
 from smtplib import (
     SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected)
+from typing import ContextManager, cast
 from unittest.mock import Mock, PropertyMock, patch
 
 CRLF = '\r\n'
@@ -895,7 +898,9 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('AUTH PLAIN')
             self.assertEqual(code, 334)
             self.assertEqual(response, b'')
-            code, response = client.docmd('*')
+            # Suppress log.warning()
+            with patch("logging.Logger.warning"):
+                code, response = client.docmd('*')
             self.assertEqual(code, 501)
             self.assertEqual(response, b'Auth aborted')
 
@@ -1007,7 +1012,9 @@ class TestSMTPAuth(unittest.TestCase):
             code, response = client.docmd("AUTH LOGIN")
             self.assertEqual(code, 334)
             self.assertEqual(response, b"VXNlciBOYW1lAA==")
-            code, response = client.docmd('*')
+            # Suppress log.warning()
+            with patch("logging.Logger.warning"):
+                code, response = client.docmd('*')
             self.assertEqual(code, 501)
             self.assertEqual(response, b"Auth aborted")
 
@@ -1021,7 +1028,9 @@ class TestSMTPAuth(unittest.TestCase):
             code, response = client.docmd('=')
             self.assertEqual(code, 334)
             self.assertEqual(response, b"UGFzc3dvcmQA")
-            code, response = client.docmd('*')
+            # Suppress log.warning()
+            with patch("logging.Logger.warning"):
+                code, response = client.docmd('*')
             self.assertEqual(code, 501)
             self.assertEqual(response, b"Auth aborted")
 
@@ -1044,9 +1053,15 @@ class TestSMTPAuth(unittest.TestCase):
 class TestRequiredAuthentication(unittest.TestCase):
     def setUp(self):
         controller = RequiredAuthDecodingController(Sink)
-        controller.start()
         self.addCleanup(controller.stop)
+        controller.start()
         self.address = (controller.hostname, controller.port)
+
+        self.resource = ExitStack()
+        self.addCleanup(self.resource.close)
+        # Suppress auth_req_but_no_tls warning
+        self.resource.enter_context(cast(ContextManager, warnings.catch_warnings()))
+        warnings.simplefilter("ignore", category=UserWarning)
 
     def test_help_unauthenticated(self):
         with SMTP(*self.address) as client:
@@ -1538,13 +1553,13 @@ Testing
     def test_exception_handler_multiple_connections_lost(self):
         handler = ErroringHandlerConnectionLost()
         controller = Controller(handler)
-        controller.start()
         self.addCleanup(controller.stop)
+        controller.start()
         with SMTP(controller.hostname, controller.port) as client1:
-            code, response = client1.ehlo('example.com')
+            code, mesg = client1.ehlo('example.com')
             self.assertEqual(code, 250)
             with SMTP(controller.hostname, controller.port) as client2:
-                code, response = client2.ehlo('example.com')
+                code, mesg = client2.ehlo('example.com')
                 self.assertEqual(code, 250)
                 with self.assertRaises(SMTPServerDisconnected) as cm:
                     mail = CRLF.join(['Test', '.', 'mail'])
@@ -1557,11 +1572,9 @@ Testing
                 # At this point connection should be down
                 with self.assertRaises(SMTPServerDisconnected) as cm:
                     client2.mail("alice@example.com")
-                self.assertEqual(
-                    "please run connect() first",
-                    str(cm.exception))
+                self.assertEqual("please run connect() first", str(cm.exception))
             # client1 shouldn't be affected.
-            code, response = client1.mail("alice@example.com")
+            code, mesg = client1.mail("alice@example.com")
             self.assertEqual(code, 250)
 
     # Suppress logging to the console during the tests.  Depending on
