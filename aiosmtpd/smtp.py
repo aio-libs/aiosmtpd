@@ -56,7 +56,7 @@ __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
 
-DATA_SIZE_DEFAULT = 33_554_432  # Where does this number come from, I wonder...
+DATA_SIZE_DEFAULT = 2**25  # Where does this number come from, I wonder...
 EMPTY_BARR = bytearray()
 EMPTYBYTES = b''
 MISSING = _Missing()
