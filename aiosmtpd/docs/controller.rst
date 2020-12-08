@@ -236,9 +236,9 @@ Controller API
 
       .. important::
 
-         If :meth:`start` raises an Exception, :class:`Controller` does not
-         automatically perform cleanup, to support deep inspection post-exception,
-         (if you wish to do so.)
+         If :meth:`start` raises an Exception,
+         :class:`Controller` does not automatically perform cleanup,
+         to support deep inspection post-exception (if you wish to do so.)
          Cleanup must still be performed manually by calling :meth:`stop`
 
          For example::
