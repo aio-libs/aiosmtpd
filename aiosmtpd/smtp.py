@@ -24,7 +24,7 @@ from typing import (
 from warnings import warn
 
 
-__version__ = '1.2.3a6'
+__version__ = '1.2.3a2'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
@@ -373,6 +373,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # The connection got reset during the DATA command.
                 # XXX If handler method raises ConnectionResetError, we should
                 # verify that it was actually self._reader that was reset.
+                log.info('Connection lost during _handle_client()')
+                self._writer.close()
+                raise
+            except ConnectionResetError:
                 log.info('Connection lost during _handle_client()')
                 self._writer.close()
                 raise
