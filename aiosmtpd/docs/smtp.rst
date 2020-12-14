@@ -4,10 +4,10 @@
  The SMTP class
 ================
 
-At the heart of this module is the ``SMTP`` class.  This class implements the
-`RFC 5321 <http://www.faqs.org/rfcs/rfc5321.html>`_ Simple Mail Transport
-Protocol.  Often you won't run an ``SMTP`` instance directly, but instead will
-use a :ref:`controller <controller>` instance to run the server in a subthread.
+At the heart of this module is the ``SMTP`` class.
+This class implements the :rfc:`5321` Simple Mail Transport Protocol.
+Often you won't run an ``SMTP`` instance directly,
+but instead will use a :ref:`Controller <controller>` instance to run the server in a subthread.
 
     >>> from aiosmtpd.controller import Controller
 
@@ -103,7 +103,13 @@ override to provide additional responses.
 SMTP API
 ========
 
-.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, decode_data=False, hostname=None, ident=None, tls_context=None, require_starttls=False, timeout=300, auth_required=False, auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, loop=None)
+.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, decode_data=False, \
+   hostname=None, ident=None, tls_context=None, require_starttls=False, timeout=300, \
+   auth_required=False, auth_require_tls=True, auth_exclude_mechanism=None, \
+   auth_callback=None, authenticator=None, \
+   loop=None)
+
+   **Parameters**
 
    *handler* is an instance of a :ref:`handler <handlers>` class.
 
@@ -128,14 +134,14 @@ SMTP API
    to the client. If not given, a default Python SMTP ident is used.
 
    *tls_context* and *require_starttls*.  The ``STARTTLS`` option of ESMTP
-   (and LMTP), defined in `RFC 3207`_, provides for secure connections to the
+   (and LMTP), defined in :rfc:`3207`, provides for secure connections to the
    server. For this option to be available, *tls_context* must be supplied,
    and *require_starttls* should be ``True``.  See :ref:`tls` for a more in
    depth discussion on enabling ``STARTTLS``.
 
    *timeout* is the number of seconds to wait between valid SMTP commands.
    After this time the connection will be closed by the server.  The default
-   is 300 seconds, as per `RFC 2821`_.
+   is 300 seconds, as per :rfc:`2821`.
 
    *auth_required* specifies whether SMTP Authentication is mandatory or
    not for the session. This impacts some SMTP commands such as HELP, MAIL
@@ -154,9 +160,36 @@ SMTP API
    ``login: bytes``, and ``password: bytes``. Based on these args, the function
    must return a ``bool`` that indicates whether the client's authentication
    attempt is accepted/successful or not.
+   The** ``authenticator`` parameter below, if set, **overrides** this parameter.
+
+   *authenticator* is a function whose signature is identical to ``aiosmtpd.smtp.AuthenticatorType``.
+   This parameter, if set, **overrides** the ``auth_callback`` parameter above.
+   The function must accept five arguments:
+
+      * ``server`` -- reference to the calling SMTP instance
+      * ``session`` -- the Session object of the current SMTP session
+      * ``envelope`` -- the Envelope object of the current SMTP session so far
+      * ``mechanism`` -- the SMTP Auth Mechanism chosen by the SMTP Client
+      * ``auth_data`` -- a data structure containing information necessary for authentication.
+        For built-in mechanisms this invariably contains a tuple of ``(username, password)``
+
+   The function must return an instance of ``AuthResult``,
+   a namedtuple with the following fields/attributes:
+
+      * ``success`` -- True if authentication successful
+      * ``handled`` -- (ignored if ``success`` is True)
+        Indicates all necessary processing (e.g., sending of SMTP Status Codes) has been handled and
+        the calling SMTP instance does not need to perform further processing
+      * ``message`` -- (Optional) Message explaining the ``success`` value.
+        If ``handled`` is false, then contains the SMTP Status Code to be sent by the calling SMTP instance
+      * ``auth_data`` -- (only if ``success`` is True)
+        A free-form data structure containing the authentication information.
+        For the built-in AUTH mechanisms, invariably contains a tuple of ``(username, password)``
 
    *loop* is the asyncio event loop to use.  If not given,
    :meth:`asyncio.new_event_loop()` is called to create the event loop.
+
+   **Attributes & Methods**
 
    .. attribute:: event_handler
 
@@ -238,9 +271,10 @@ SMTP API
 Enabling STARTTLS
 =================
 
-To enable `RFC 3207`_ ``STARTTLS``, you must supply the *tls_context* argument
-to the :class:`SMTP` class.  *tls_context* is created with the
-:meth:`ssl.create_default_context()` call from the ssl_ module, as follows::
+To enable :rfc:`3207` ``STARTTLS``,
+you must supply the *tls_context* argument to the :class:`SMTP` class.
+*tls_context* is created with the :func:`ssl.create_default_context` call
+from the :mod:`ssl` module, as follows::
 
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
 
@@ -265,7 +299,7 @@ constructor.
 
 Note that a number of exceptions can be generated by these methods, and by SSL
 connections, which you must be prepared to handle.  Additional documentation
-is available in Python's ssl_ module, and should be reviewed before use; in
+is available in Python's :mod:`ssl` module, and should be reviewed before use; in
 particular if client authentication and/or advanced error handling is desired.
 
 If *require_starttls* is ``True``, a TLS session must be initiated for the
@@ -282,7 +316,4 @@ advertised, and the ``STARTTLS`` command will not be accepted.
 ``False``.
 
 .. _StreamReaderProtocol: https://docs.python.org/3/library/asyncio-stream.html#streamreaderprotocol
-.. _`RFC 3207`: http://www.faqs.org/rfcs/rfc3207.html
-.. _`RFC 2821`: https://www.ietf.org/rfc/rfc2821.txt
 .. _`asyncio transport`: https://docs.python.org/3/library/asyncio-protocol.html#asyncio-transport
-.. _ssl: https://docs.python.org/3/library/ssl.html
