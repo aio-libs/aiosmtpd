@@ -2,8 +2,13 @@
  NEWS for aiosmtpd
 ===================
 
-1.2.3a1 (aiosmtpd-next)
+1.2.3 (aiosmtpd-next)
 =======================
+
+Added
+-----
+* authenticator system improves on auth_callback by enabling the called function to see the
+  SMTP Session and other info. (We can deprecate auth_callback in a future version)
 
 Fixed/Improved
 --------------
