@@ -1,4 +1,5 @@
 import ssl
+import enum
 import socket
 import asyncio
 import logging
@@ -24,30 +25,44 @@ from typing import (
 from warnings import warn
 
 
-__version__ = '1.2.3a2'
-__ident__ = 'Python SMTP {}'.format(__version__)
-log = logging.getLogger('mail.log')
-
-
-DATA_SIZE_DEFAULT = 33554432
-EMPTYBYTES = b''
-NEWLINE = '\n'
-
+# region #### Custom Data Types #######################################################
 
 class _Missing:
     pass
 
 
-MISSING = _Missing()
+class _AuthMechAttr(NamedTuple):
+    method: "AuthMechanismType"
+    is_builtin: bool
+
+
+class _DataState(enum.Enum):
+    NOMINAL = enum.auto()
+    TOO_LONG = enum.auto()
+    TOO_MUCH = enum.auto()
 
 
 AuthMechanismType = Callable[["SMTP", List[str]], Awaitable[Any]]
 _TriStateType = Union[None, _Missing, bytes]
 
 
-class _AuthMechAttr(NamedTuple):
-    method: AuthMechanismType
-    is_builtin: bool
+# endregion
+
+
+# region #### Constant & Constant-likes ###############################################
+
+__version__ = '1.2.3a2'
+__ident__ = 'Python SMTP {}'.format(__version__)
+log = logging.getLogger('mail.log')
+
+
+DATA_SIZE_DEFAULT = 2**25  # Where does this number come from, I wonder...
+EMPTY_BARR = bytearray()
+EMPTYBYTES = b''
+MISSING = _Missing()
+NEWLINE = '\n'
+
+# endregion
 
 
 @public
@@ -98,29 +113,37 @@ class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
     command_size_limits = collections.defaultdict(
         lambda x=command_size_limit: x)
+    line_length_limit = 1001
+    """Maximum line length according to RFC 5321 s 4.5.3.1.6"""
+    # The number comes from this calculation:
+    # (RFC 5322 s 2.1.1 + RFC 6532 s 3.4) 998 octets + CRLF = 1000 octets
+    # (RFC 5321 s 4.5.3.1.6) 1000 octets + "transparent dot" = 1001 octets
 
-    def __init__(self, handler,
-                 *,
-                 data_size_limit=DATA_SIZE_DEFAULT,
-                 enable_SMTPUTF8=False,
-                 decode_data=False,
-                 hostname=None,
-                 ident=None,
-                 tls_context=None,
-                 require_starttls=False,
-                 timeout=300,
-                 auth_required=False,
-                 auth_require_tls=True,
-                 auth_exclude_mechanism: Optional[Iterable[str]] = None,
-                 auth_callback: Callable[[str, bytes, bytes], bool] = None,
-                 loop=None):
+    def __init__(
+            self, handler,
+            *,
+            data_size_limit=DATA_SIZE_DEFAULT,
+            enable_SMTPUTF8=False,
+            decode_data=False,
+            hostname=None,
+            ident=None,
+            tls_context=None,
+            require_starttls=False,
+            timeout=300,
+            auth_required=False,
+            auth_require_tls=True,
+            auth_exclude_mechanism: Optional[Iterable[str]] = None,
+            auth_callback: Callable[[str, bytes, bytes], bool] = None,
+            loop=None,
+    ):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
         super().__init__(
-            asyncio.StreamReader(loop=self.loop),
+            asyncio.StreamReader(loop=self.loop, limit=self.line_length_limit),
             client_connected_cb=self._client_connected_cb,
             loop=self.loop)
         self.event_handler = handler
+        assert data_size_limit is None or isinstance(data_size_limit, int)
         self.data_size_limit = data_size_limit
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self._decode_data = decode_data
@@ -300,9 +323,24 @@ class SMTP(asyncio.StreamReaderProtocol):
         log.info('%r handling connection', self.session.peer)
         await self.push('220 {} {}'.format(self.hostname, self.__ident__))
         while self.transport is not None:   # pragma: nobranch
-            # XXX Put the line limit stuff into the StreamReader?
             try:
-                line: bytes = await self._reader.readline()
+                try:
+                    line = await self._reader.readuntil()
+                except asyncio.LimitOverrunError as error:
+                    # Line too long. Read until end of line before sending 500.
+                    await self._reader.read(error.consumed)
+                    while True:
+                        try:
+                            await self._reader.readuntil()
+                            break
+                        except asyncio.LimitOverrunError as e:
+                            # Line is even longer...
+                            await self._reader.read(e.consumed)
+                            continue
+                    # Now that we have read a full line from the client,
+                    # send error response and read the next command line.
+                    await self.push('500 Command line too long')
+                    continue
                 log.debug('_handle_client readline: %s', line)
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.rstrip(b'\r\n')
@@ -348,7 +386,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                           if self.session.extended_smtp
                           else self.command_size_limit)
                 if len(line) > max_sz:
-                    await self.push('500 Error: line too long')
+                    await self.push('500 Command line too long')
                     continue
                 if not self._tls_handshake_okay and command != 'QUIT':
                     await self.push(
@@ -869,42 +907,87 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg:
             await self.push('501 Syntax: DATA')
             return
+
         await self.push('354 End data with <CR><LF>.<CR><LF>')
-        data = []
-        num_bytes = 0
-        size_exceeded = False
+        data: List[bytearray] = []
+
+        num_bytes: int = 0
+        limit: Optional[int] = self.data_size_limit
+        line_fragments: List[bytes] = []
+        state: _DataState = _DataState.NOMINAL
         while self.transport is not None:           # pragma: nobranch
+            # Since eof_received cancels this coroutine,
+            # readuntil() can never raise asyncio.IncompleteReadError.
             try:
-                line = await self._reader.readline()
+                line: bytes = await self._reader.readuntil()
                 log.debug('DATA readline: %s', line)
+                assert line.endswith(b'\n')
             except asyncio.CancelledError:
                 # The connection got reset during the DATA command.
                 log.info('Connection lost during DATA')
                 self._writer.close()
                 raise
-            if line == b'.\r\n':
+            except asyncio.LimitOverrunError as e:
+                # The line exceeds StreamReader's "stream limit".
+                # Delay SMTP Status Code sending until data receive is complete
+                # This seems to be implied in RFC 5321 § 4.2.5
+                if state == _DataState.NOMINAL:
+                    # Transition to TOO_LONG only if we haven't gone TOO_MUCH yet
+                    state = _DataState.TOO_LONG
+                # Discard data immediately to prevent memory pressure
+                data *= 0
+                # Drain the stream anyways
+                line = await self._reader.read(e.consumed)
+                assert not line.endswith(b'\n')
+            # A lone dot in a line signals the end of DATA.
+            if not line_fragments and line == b'.\r\n':
                 break
             num_bytes += len(line)
-            if (not size_exceeded
-                    and self.data_size_limit
-                    and num_bytes > self.data_size_limit):
-                size_exceeded = True
+            if state == _DataState.NOMINAL and limit and num_bytes > limit:
+                # Delay SMTP Status Code sending until data receive is complete
+                # This seems to be implied in RFC 5321 § 4.2.5
+                state = _DataState.TOO_MUCH
+                # Discard data immediately to prevent memory pressure
+                data *= 0
+            line_fragments.append(line)
+            if line.endswith(b'\n'):
+                # Record data only if state is "NOMINAL"
+                if state == _DataState.NOMINAL:
+                    line = EMPTY_BARR.join(line_fragments)
+                    if len(line) > self.line_length_limit:
+                        # Theoretically we shouldn't reach this place. But it's always
+                        # good to practice DEFENSIVE coding.
+                        state = _DataState.TOO_LONG
+                        # Discard data immediately to prevent memory pressure
+                        data *= 0
+                    else:
+                        data.append(EMPTY_BARR.join(line_fragments))
+                line_fragments *= 0
+
+        # Day of reckoning! Let's take care of those out-of-nominal situations
+        if state != _DataState.NOMINAL:
+            if state == _DataState.TOO_LONG:
+                await self.push("500 Line too long (see RFC5321 4.5.3.1.6)")
+            elif state == _DataState.TOO_MUCH:  # pragma: nobranch
                 await self.push('552 Error: Too much mail data')
-            if not size_exceeded:
-                data.append(line)
-        if size_exceeded:
             self._set_post_data_state()
             return
+
+        # If unfinished_line is non-empty, then the connection was closed.
+        assert not line_fragments
+
         # Remove extraneous carriage returns and de-transparency
         # according to RFC 5321, Section 4.5.2.
-        for i, text in enumerate(data):
+        for text in data:
             if text.startswith(b'.'):
-                data[i] = text[1:]
-        content = original_content = EMPTYBYTES.join(data)
+                del text[0]
+        original_content: bytes = EMPTYBYTES.join(data)
+        # Discard data immediately to prevent memory pressure
+        data *= 0
+
         if self._decode_data:
             if self.enable_SMTPUTF8:
-                content = original_content.decode(
-                    'utf-8', errors='surrogateescape')
+                content = original_content.decode('utf-8', errors='surrogateescape')
             else:
                 try:
                     content = original_content.decode('ascii', errors='strict')
@@ -914,8 +997,11 @@ class SMTP(asyncio.StreamReaderProtocol):
                     # but the client ignores that and sends non-ascii anyway.
                     await self.push('500 Error: strict ASCII mode')
                     return
+        else:
+            content = original_content
         self.envelope.content = content
         self.envelope.original_content = original_content
+
         # Call the new API first if it's implemented.
         if "DATA" in self._handle_hooks:
             status = await self._call_handler_hook('DATA')
