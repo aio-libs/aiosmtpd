@@ -41,6 +41,7 @@ class _Missing:
 MISSING = _Missing()
 
 
+AuthenticatorType = Callable[["SMTP", "Session", "Envelope", str, Any], "AuthResult"]
 AuthMechanismType = Callable[["SMTP", List[str]], Awaitable[Any]]
 _TriStateType = Union[None, _Missing, bytes]
 
@@ -48,6 +49,30 @@ _TriStateType = Union[None, _Missing, bytes]
 class _AuthMechAttr(NamedTuple):
     method: AuthMechanismType
     is_builtin: bool
+
+
+class AuthResult(NamedTuple):
+    success: bool
+    """Indicates authentication is successful or not"""
+    handled: bool = True
+    """
+    True means everything (including sending of status code) has been handled by the
+    AUTH handler and smtp_AUTH should not do anything else.
+    Applicable only if success == False.
+    """
+    message: Optional[str] = None
+    """Optional message for additional handling by smtp_AUTH"""
+    auth_data: Optional[Any] = None
+    """
+    Optional free-form authentication data. For the built-in mechanisms, it is usually
+    an instance of _LoginPassword. Other implementations are free to use any data
+    structure here.
+    """
+
+
+class _LoginPassword(NamedTuple):
+    login: bytes
+    password: bytes
 
 
 @public
@@ -59,6 +84,7 @@ class Session:
         self.extended_smtp = False
         self.loop = loop
         self.login_data = None
+        self.auth_data = None
 
 
 @public
@@ -89,7 +115,9 @@ def syntax(text, extended=None, when=None):
     return decorator
 
 
-def login_always_fail(mechanism, login, password):
+def login_always_fail(
+        mechanism: str, session: Session, login_data: _LoginPassword
+) -> bool:
     return False
 
 
@@ -113,6 +141,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  auth_require_tls=True,
                  auth_exclude_mechanism: Optional[Iterable[str]] = None,
                  auth_callback: Callable[[str, bytes, bytes], bool] = None,
+                 authenticator: AuthenticatorType = None,
                  loop=None):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
@@ -149,7 +178,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             warn("Requiring AUTH while not requiring TLS "
                  "can lead to security vulnerabilities!")
         self._auth_require_tls = auth_require_tls
-        self._auth_callback = auth_callback or login_always_fail
+        if authenticator is not None:
+            self._authenticator: AuthenticatorType = authenticator
+            self._auth_callback = None
+        else:
+            self._auth_callback = auth_callback or login_always_fail
+            self._authenticator = None
         self._auth_required = auth_required
         self.authenticated = False
         # Get hooks & methods to significantly speedup getattr's
@@ -512,50 +546,71 @@ class SMTP(asyncio.StreamReaderProtocol):
         if await self.check_helo_needed("EHLO"):
             return
         elif not self.session.extended_smtp:
-            await self.push("500 Error: command 'AUTH' not recognized")
+            return await self.push("500 Error: command 'AUTH' not recognized")
         elif self._auth_require_tls and not self._tls_protocol:
-            await self.push("538 5.7.11 Encryption required for requested "
-                            "authentication mechanism")
+            return await self.push("538 5.7.11 Encryption required for requested "
+                                   "authentication mechanism")
         elif self.authenticated:
-            await self.push('503 Already authenticated')
+            return await self.push('503 Already authenticated')
         elif not arg:
-            await self.push('501 Not enough value')
-        else:
-            args = arg.split()
-            if len(args) > 2:
-                await self.push('501 Too many values')
-                return
+            return await self.push('501 Not enough value')
 
-            mechanism = args[0]
-            if mechanism not in self._auth_methods:
-                await self.push('504 5.5.4 Unrecognized authentication type')
-                return
+        args = arg.split()
+        if len(args) > 2:
+            return await self.push('501 Too many values')
 
-            status = await self._call_handler_hook('AUTH', args)
-            if status is MISSING:
-                method = self._auth_methods[mechanism]
-                if method.is_builtin:
-                    log.debug(f"Using builtin auth_ hook for {mechanism}")
+        mechanism = args[0]
+        if mechanism not in self._auth_methods:
+            return await self.push('504 5.5.4 Unrecognized authentication type')
+
+        CODE_SUCCESS = "235 2.7.0 Authentication successful"
+        CODE_INVALID = "535 5.7.8 Authentication credentials invalid"
+        status = await self._call_handler_hook('AUTH', args)
+        if status is MISSING:
+            auth_method = self._auth_methods[mechanism]
+            if auth_method.is_builtin:
+                log.debug(f"Using builtin auth_ hook for {mechanism}")
+            else:
+                log.debug(f"Using handler auth_ hook for {mechanism}")
+            # Pass 'self' to method so external methods can leverage this
+            # class's helper methods such as push()
+            auth_result = await auth_method.method(self, args)
+            log.debug(f"auth_{mechanism} returned {auth_result}")
+
+            # New system using `authenticator` and AuthResult
+            if isinstance(auth_result, AuthResult):
+                self.authenticated = auth_result.success
+                if auth_result.success:
+                    _auth_data = auth_result.auth_data
+                    self.session.auth_data = _auth_data
+                    # Custom mechanisms might not implement the "login" attribute, and
+                    # that's okay.
+                    self.session.login_data = getattr(_auth_data, "login", None)
+                    status = auth_result.message or CODE_SUCCESS
                 else:
-                    log.debug(f"Using handler auth_ hook for {mechanism}")
-                # Pass 'self' to method so external methods can leverage this
-                # class's helper methods such as push()
-                login_data = await method.method(self, args)
-                log.debug(f"auth_{mechanism} returned {login_data}")
-                if login_data is None:
-                    # None means there's an error already handled by method and
-                    # we don't need to do anything more
-                    return
-                elif login_data is MISSING:
-                    # MISSING means no error in AUTH process, but credentials
-                    # is rejected / not valid
-                    status = '535 5.7.8 Authentication credentials invalid'
-                else:
-                    self.authenticated = True
-                    self.session.login_data = login_data
-                    status = '235 2.7.0 Authentication successful'
-            if status is not None:  # pragma: no branch
-                await self.push(status)
+                    if auth_result.handled:
+                        status = None
+                    elif auth_result.message:
+                        status = auth_result.message
+                    else:
+                        status = CODE_INVALID
+
+            # Old system using `auth_callback` and _TriState
+            elif auth_result is None:
+                # None means there's an error already handled by method and
+                # we don't need to do anything more
+                status = None
+            elif auth_result is MISSING or auth_result is False:
+                # MISSING means no error in AUTH process, but credentials
+                # is rejected / not valid
+                status = CODE_INVALID
+            else:
+                self.authenticated = True
+                self.session.login_data = auth_result
+                status = CODE_SUCCESS
+
+        if status is not None:  # pragma: no branch
+            await self.push(status)
 
     async def _auth_interact(self, server_message) -> _TriStateType:
         blob: bytes
@@ -577,15 +632,30 @@ class SMTP(asyncio.StreamReaderProtocol):
             return MISSING
         return decoded_blob
 
+    def _authenticate(self, mechanism, auth_data) -> AuthResult:
+        if self._authenticator is not None:
+            # self.envelope is likely still empty, but we'll pass it anyways to
+            # make the invocation similar to the one in _call_handler_hook
+            return self._authenticator(
+                self, self.session, self.envelope, mechanism, auth_data
+            )
+        else:
+            assert self._auth_callback is not None
+            assert isinstance(auth_data, _LoginPassword)
+            if self._auth_callback(mechanism, *auth_data):
+                return AuthResult(True, True, None, auth_data.login)
+            else:
+                return AuthResult(False, False)
+
     # IMPORTANT NOTES FOR THE auth_* METHODS
+    # ======================================
+    # Please note that there are two systems for return values in #2.
     #
-    # 1. For internal methods, due to how they are called, we must ignore
-    #    the first arg
-    # 2. All auth_* methods can return one of three values:
+    # 1. For internal methods, due to how they are called, we must ignore the first arg
+    # 2. (OLD SYSTEM) All auth_* methods can return one of three values:
     #    - None: An error happened and handled;
     #            smtp_AUTH should do nothing more
-    #    - MISSING: No error during SMTP AUTH process, but authentication
-    #               failed
+    #    - MISSING or False: Authentication failed, but not because of error
     #    - [Any]: Authentication succeeded and this is the 'identity' of
     #             the SMTP user
     #      - 'identity' is not always username, depending on the auth mecha-
@@ -593,62 +663,62 @@ class SMTP(asyncio.StreamReaderProtocol):
     #        object, actually.
     #      - If the client provides "=" for username during interaction, the
     #        method MUST return b"" (empty bytes)
+    # 2. (NEW SYSTEM) All auth_* methods must return an AuthResult object.
+    #    For explanation on the object's attributes,
+    #    see the AuthResult class definition.
     # 3. Auth credentials checking is performed in the auth_* methods because
     #    more advanced auth mechanism might not return login+password pair
     #    (see #2 above)
 
-    async def auth_PLAIN(self, _, args: List[str]):
-        loginpassword: _TriStateType
+    async def auth_PLAIN(self, _, args: List[str]) -> AuthResult:
+        login_and_password: _TriStateType
         if len(args) == 1:
             # Trailing space is MANDATORY
             # See https://tools.ietf.org/html/rfc4954#page-4
-            loginpassword = await self._auth_interact("334 ")
-            if loginpassword is MISSING:
-                return
+            login_and_password = await self._auth_interact("334 ")
+            if login_and_password is MISSING:
+                return AuthResult(False)
         else:
             blob = args[1].encode()
             if blob == b"=":
-                loginpassword = None
+                login_and_password = None
             else:
                 try:
-                    loginpassword = b64decode(blob, validate=True)
+                    login_and_password = b64decode(blob, validate=True)
                 except Exception:
                     await self.push("501 5.5.2 Can't decode base64")
-                    return
-        if loginpassword is None:
+                    return AuthResult(False)
+        if login_and_password is None:
             login = password = None
         else:
             try:
-                _, login, password = loginpassword.split(b"\x00")
+                _, login, password = login_and_password.split(b"\x00")
             except ValueError:  # not enough args
                 await self.push("501 5.5.2 Can't split auth value")
-                return
-        if self._auth_callback("PLAIN", login, password):
-            if login is None:
-                login = EMPTYBYTES
-            return login
+                return AuthResult(False)
+        return self._authenticate("PLAIN", _LoginPassword(login, password))
+
+    async def auth_LOGIN(self, _, args: List[str]) -> AuthResult:
+        if len(args) > 1:
+            try:
+                login = b64decode(args[1].encode(), validate=True)
+            except binascii.Error:
+                await self.push("501 5.5.2 Can't decode base64")
+                login = MISSING
         else:
-            return MISSING
-
-    async def auth_LOGIN(self, _, args: List[str]):
-        login: _TriStateType
-        # 'User Name\x00'
-        login = await self._auth_interact("334 VXNlciBOYW1lAA==")
+            login: _TriStateType
+            # 'User Name\x00'
+            login = await self._auth_interact("334 VXNlciBOYW1lAA==")
         if login is MISSING:
-            return
-
+            return AuthResult(False)
+        #
         password: _TriStateType
         # 'Password\x00'
         password = await self._auth_interact("334 UGFzc3dvcmQA")
         if password is MISSING:
-            return
-
-        if self._auth_callback("LOGIN", login, password):
-            if login is None:  # pragma: no branch
-                login = EMPTYBYTES
-            return login
-        else:
-            return MISSING
+            return AuthResult(False)
+        #
+        return self._authenticate("LOGIN", _LoginPassword(login, password))
 
     def _strip_command_keyword(self, keyword, arg):
         keylen = len(keyword)
