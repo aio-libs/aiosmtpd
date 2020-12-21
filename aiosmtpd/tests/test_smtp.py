@@ -167,7 +167,7 @@ class ErroringHandlerCustomResponse:
 
     async def handle_exception(self, error):
         self.error = error
-        return '451 Temporary error: ({}) {}'.format(
+        return '554 Persistent error: ({}) {}'.format(
             error.__class__.__name__, str(error))
 
 
@@ -1516,7 +1516,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 500)
+        self.assertEqual(code, 451)
         self.assertEqual(mesg, b'Error: (ValueError) test')
         # handler.error did not change because the handler does not have a
         # handle_exception() method.
@@ -1532,8 +1532,8 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 451)
-        self.assertEqual(mesg, b'Temporary error: (ValueError) test')
+        self.assertEqual(code, 554)
+        self.assertEqual(mesg, b'Persistent error: (ValueError) test')
         self.assertIsInstance(handler.error, ValueError)
 
     # Suppress logging to the console during the tests.  Depending on
@@ -1546,7 +1546,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 500)
+        self.assertEqual(code, 451)
         self.assertEqual(mesg, b'Error: (ValueError) ErroringErrorHandler test')
         self.assertIsInstance(handler.error, ValueError)
 
@@ -1587,7 +1587,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 500)
+        self.assertEqual(code, 451)
         self.assertEqual(mesg, b'Error: Cannot describe error')
         self.assertIsInstance(handler.error, ValueError)
 
