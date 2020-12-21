@@ -4,6 +4,7 @@ import time
 import socket
 import asyncio
 import unittest
+import warnings
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
@@ -21,6 +22,7 @@ from aiosmtpd.testing.helpers import (
     assert_auth_required,
     assert_auth_success,
     reset_connection,
+    send_recv,
 )
 from base64 import b64encode
 from contextlib import ExitStack
@@ -33,7 +35,7 @@ from smtplib import (
 )
 from unittest.mock import Mock, PropertyMock, patch
 
-from typing import List, Tuple
+from typing import ContextManager, List, Tuple, cast
 
 CRLF = '\r\n'
 BCRLF = b'\r\n'
@@ -827,7 +829,20 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             code, response = client.docmd('a' * 513)
             self.assertEqual(code, 500)
-            self.assertEqual(response, b'Error: line too long')
+            self.assertEqual(response, b'Command line too long')
+
+    def test_way_too_long_command(self):
+        with SMTP(*self.address) as client:
+            # Send a very large string to ensure it is broken
+            # into several packets, which hits the inner
+            # LimitOverrunError code path in _handle_client.
+            client.send('a' * 1000000)
+            code, response = client.docmd('a' * 1001)
+            self.assertEqual(code, 500)
+            self.assertEqual(response, b'Command line too long')
+            code, response = client.docmd('NOOP')
+            self.assertEqual(code, 250)
+            self.assertEqual(response, b'OK')
 
     def test_unknown_command(self):
         with SMTP(*self.address) as client:
@@ -944,7 +959,9 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('AUTH PLAIN')
             self.assertEqual(code, 334)
             self.assertEqual(response, b'')
-            code, response = client.docmd('*')
+            # Suppress log.warning()
+            with patch("logging.Logger.warning"):
+                code, response = client.docmd('*')
             self.assertEqual(code, 501)
             self.assertEqual(response, b'Auth aborted')
 
@@ -1109,7 +1126,9 @@ class TestSMTPAuth(unittest.TestCase):
             code, response = client.docmd("AUTH LOGIN")
             self.assertEqual(code, 334)
             self.assertEqual(response, b"VXNlciBOYW1lAA==")
-            code, response = client.docmd('*')
+            # Suppress log.warning()
+            with patch("logging.Logger.warning"):
+                code, response = client.docmd('*')
             self.assertEqual(code, 501)
             self.assertEqual(response, b"Auth aborted")
 
@@ -1123,7 +1142,9 @@ class TestSMTPAuth(unittest.TestCase):
             code, response = client.docmd('=')
             self.assertEqual(code, 334)
             self.assertEqual(response, b"UGFzc3dvcmQA")
-            code, response = client.docmd('*')
+            # Suppress log.warning()
+            with patch("logging.Logger.warning"):
+                code, response = client.docmd('*')
             self.assertEqual(code, 501)
             self.assertEqual(response, b"Auth aborted")
 
@@ -1204,9 +1225,15 @@ class TestSMTPAuthNew(unittest.TestCase):
 class TestRequiredAuthentication(unittest.TestCase):
     def setUp(self):
         controller = RequiredAuthDecodingController(Sink)
-        controller.start()
         self.addCleanup(controller.stop)
+        controller.start()
         self.address = (controller.hostname, controller.port)
+
+        self.resource = ExitStack()
+        self.addCleanup(self.resource.close)
+        # Suppress auth_req_but_no_tls warning
+        self.resource.enter_context(cast(ContextManager, warnings.catch_warnings()))
+        warnings.simplefilter("ignore", category=UserWarning)
 
     def test_help_unauthenticated(self):
         with SMTP(*self.address) as client:
@@ -1495,6 +1522,138 @@ Testing
             self.assertEqual(cm.exception.smtp_error,
                              b'Error: Too much mail data')
 
+    def test_too_long_body_delay_error(self):
+        size, sock = 20, None
+
+        cont = Controller(Sink(), hostname="localhost",
+                          server_kwargs={"data_size_limit": size})
+        self.addCleanup(cont.stop)
+        cont.start()
+
+        with socket.socket() as sock:
+            sock.connect((cont.hostname, cont.port))
+            rslt = send_recv(sock, b"EHLO example.com")
+            self.assertTrue(rslt.startswith(b"220"))
+            rslt = send_recv(sock, b"MAIL FROM: <anne@example.com>")
+            self.assertTrue(rslt.startswith(b"250"))
+            rslt = send_recv(sock, b"RCPT TO: <bruce@example.com>")
+            self.assertTrue(rslt.startswith(b"250"))
+            rslt = send_recv(sock, b"DATA")
+            self.assertTrue(rslt.startswith(b"354"))
+            rslt = send_recv(sock, b"a" * (size + 3))
+            # Must NOT receive status code here even if data is too much
+            self.assertEqual(b"", rslt)
+            rslt = send_recv(sock, b"\r\n.")
+            # *NOW* we must receive status code
+            self.assertEqual(b"552 Error: Too much mail data\r\n", rslt)
+
+    def test_data_line_too_long(self):
+        handler = ReceivingHandler()
+        controller = NoDecodeController(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = b'\r\n'.join([b'a' * 5555] * 3)
+            with self.assertRaises(SMTPDataError) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], mail)
+        self.assertEqual(cm.exception.smtp_code, 500)
+        self.assertEqual(cm.exception.smtp_error,
+                         b'Line too long (see RFC5321 4.5.3.1.6)')
+
+    def test_too_long_line_delay_error(self):
+        sock = None
+
+        cont = Controller(Sink(), hostname="localhost")
+        self.addCleanup(cont.stop)
+        cont.start()
+
+        with socket.socket() as sock:
+            sock.connect((cont.hostname, cont.port))
+            rslt = send_recv(sock, b"EHLO example.com")
+            self.assertTrue(rslt.startswith(b"220"))
+            rslt = send_recv(sock, b"MAIL FROM: <anne@example.com>")
+            self.assertTrue(rslt.startswith(b"250"))
+            rslt = send_recv(sock, b"RCPT TO: <bruce@example.com>")
+            self.assertTrue(rslt.startswith(b"250"))
+            rslt = send_recv(sock, b"DATA")
+            self.assertTrue(rslt.startswith(b"354"))
+            rslt = send_recv(sock, b"a" * (Server.line_length_limit + 3))
+            # Must NOT receive status code here even if data is too much
+            self.assertEqual(b"", rslt)
+            rslt = send_recv(sock, b"\r\n.")
+            # *NOW* we must receive status code
+            self.assertEqual(b"500 Line too long (see RFC5321 4.5.3.1.6)\r\n", rslt)
+
+    def test_too_long_lines_then_too_long_body(self):
+        # If "too long line" state was reached before "too much data" happens,
+        # SMTP should respond with '500' instead of '552'
+        size = 2000
+        controller = SizedController(Sink(), size=size)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = '\r\n'.join(['z' * (size - 1)] * 2)
+            with self.assertRaises(SMTPResponseException) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], mail)
+        self.assertEqual(cm.exception.smtp_code, 500)
+        self.assertEqual(cm.exception.smtp_error,
+                         b'Line too long (see RFC5321 4.5.3.1.6)')
+
+    def test_too_long_body_then_too_long_lines(self):
+        # If "too much mail" state was reached before "too long line" gets received,
+        # SMTP should respond with '552' instead of '500'
+        controller = SizedController(Sink(), size=700)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = '\r\n'.join(['z' * 76] * 10 + ["a" * 1100] * 2)
+            with self.assertRaises(SMTPResponseException) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], mail)
+            self.assertEqual(cm.exception.smtp_code, 552)
+            self.assertEqual(cm.exception.smtp_error,
+                             b'Error: Too much mail data')
+
+    def test_long_line_double_count(self):
+        controller = SizedController(Sink(), size=10000)
+        # With a read limit of 1001 bytes in aiosmtp.SMTP, asyncio.StreamReader
+        # returns too-long lines of length up to 2002 bytes.
+        # This test ensures that bytes in partial lines are only counted once.
+        # If the implementation has a double-counting bug, then a message of
+        # 9998 bytes + CRLF will raise SMTPResponseException.
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = 'z' * 9998
+            with self.assertRaises(SMTPDataError) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], mail)
+        self.assertEqual(cm.exception.smtp_code, 500)
+        self.assertEqual(cm.exception.smtp_error,
+                         b'Line too long (see RFC5321 4.5.3.1.6)')
+
+    @patch("aiosmtpd.smtp.EMPTY_BARR")
+    def test_long_line_leak(self, mock_ebarr):
+        # Simulates situation where readuntil() does not raise LimitOverrunError,
+        # but somehow the line_fragments when join()ed resulted in a too-long line
+
+        # Hijack EMPTY_BARR.join() to return a bytes object that's definitely too long
+        mock_ebarr.join.return_value = (b"a" * 1010)
+
+        controller = Controller(Sink())
+        self.addCleanup(controller.stop)
+        controller.start()
+        with SMTP(controller.hostname, controller.port) as client:
+            client.helo('example.com')
+            mail = 'z' * 72  # Make sure this is small and definitely within limits
+            with self.assertRaises(SMTPDataError) as cm:
+                client.sendmail('anne@example.com', ['bart@example.com'], mail)
+        self.assertEqual(cm.exception.smtp_code, 500)
+        self.assertEqual(cm.exception.smtp_error,
+                         b'Line too long (see RFC5321 4.5.3.1.6)')
+
     def test_dots_escaped(self):
         handler = ReceivingHandler()
         controller = DecodingController(handler)
@@ -1507,84 +1666,75 @@ Testing
             self.assertEqual(len(handler.box), 1)
             self.assertEqual(handler.box[0].content, 'Test\r\n.\r\nmail\r\n')
 
-    def test_unexpected_errors(self):
+    # Suppress logging to the console during the tests.  Depending on
+    # timing, the exception may or may not be logged.
+    @patch("logging.Logger.exception")
+    def test_unexpected_errors(self, mock_logex):
         handler = ErroringHandler()
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
-            # Suppress logging to the console during the tests.  Depending on
-            # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
-            client = resources.enter_context(
-                SMTP(controller.hostname, controller.port))
-            code, response = client.helo('example.com')
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.helo('example.com')
         self.assertEqual(code, 500)
-        self.assertEqual(response, b'ErroringHandler handling error')
+        self.assertEqual(mesg, b'ErroringHandler handling error')
         self.assertIsInstance(handler.error, ValueError)
 
-    def test_unexpected_errors_unhandled(self):
+    # Suppress logging to the console during the tests.  Depending on
+    # timing, the exception may or may not be logged.
+    @patch("logging.Logger.exception")
+    def test_unexpected_errors_unhandled(self, mock_logex):
         handler = Sink()
         handler.error = None
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
-            # Suppress logging to the console during the tests.  Depending on
-            # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
-            client = resources.enter_context(
-                SMTP(controller.hostname, controller.port))
-            code, response = client.helo('example.com')
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.helo('example.com')
         self.assertEqual(code, 500)
-        self.assertEqual(response, b'Error: (ValueError) test')
+        self.assertEqual(mesg, b'Error: (ValueError) test')
         # handler.error did not change because the handler does not have a
         # handle_exception() method.
         self.assertIsNone(handler.error)
 
-    def test_unexpected_errors_custom_response(self):
+    # Suppress logging to the console during the tests.  Depending on
+    # timing, the exception may or may not be logged.
+    @patch("logging.Logger.exception")
+    def test_unexpected_errors_custom_response(self, mock_logex):
         handler = ErroringHandlerCustomResponse()
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
-            # Suppress logging to the console during the tests.  Depending on
-            # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
-            client = resources.enter_context(
-                SMTP(controller.hostname, controller.port))
-            code, response = client.helo('example.com')
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.helo('example.com')
         self.assertEqual(code, 451)
-        self.assertEqual(response, b'Temporary error: (ValueError) test')
+        self.assertEqual(mesg, b'Temporary error: (ValueError) test')
         self.assertIsInstance(handler.error, ValueError)
 
-    def test_exception_handler_exception(self):
+    # Suppress logging to the console during the tests.  Depending on
+    # timing, the exception may or may not be logged.
+    @patch("logging.Logger.exception")
+    def test_exception_handler_exception(self, mock_logex):
         handler = ErroringErrorHandler()
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
-            # Suppress logging to the console during the tests.  Depending on
-            # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
-            client = resources.enter_context(
-                SMTP(controller.hostname, controller.port))
-            code, response = client.helo('example.com')
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.helo('example.com')
         self.assertEqual(code, 500)
-        self.assertEqual(response,
-                         b'Error: (ValueError) ErroringErrorHandler test')
+        self.assertEqual(mesg, b'Error: (ValueError) ErroringErrorHandler test')
         self.assertIsInstance(handler.error, ValueError)
 
     def test_exception_handler_multiple_connections_lost(self):
         handler = ErroringHandlerConnectionLost()
         controller = Controller(handler)
-        controller.start()
         self.addCleanup(controller.stop)
+        controller.start()
         with SMTP(controller.hostname, controller.port) as client1:
-            code, response = client1.ehlo('example.com')
+            code, mesg = client1.ehlo('example.com')
             self.assertEqual(code, 250)
             with SMTP(controller.hostname, controller.port) as client2:
-                code, response = client2.ehlo('example.com')
+                code, mesg = client2.ehlo('example.com')
                 self.assertEqual(code, 250)
                 with self.assertRaises(SMTPServerDisconnected) as cm:
                     mail = CRLF.join(['Test', '.', 'mail'])
@@ -1597,27 +1747,23 @@ Testing
                 # At this point connection should be down
                 with self.assertRaises(SMTPServerDisconnected) as cm:
                     client2.mail("alice@example.com")
-                self.assertEqual(
-                    "please run connect() first",
-                    str(cm.exception))
+                self.assertEqual("please run connect() first", str(cm.exception))
             # client1 shouldn't be affected.
-            code, response = client1.mail("alice@example.com")
+            code, mesg = client1.mail("alice@example.com")
             self.assertEqual(code, 250)
 
-    def test_exception_handler_undescribable(self):
+    # Suppress logging to the console during the tests.  Depending on
+    # timing, the exception may or may not be logged.
+    @patch("logging.Logger.exception")
+    def test_exception_handler_undescribable(self, mock_logex):
         handler = UndescribableErrorHandler()
         controller = ErrorController(handler)
         controller.start()
         self.addCleanup(controller.stop)
-        with ExitStack() as resources:
-            # Suppress logging to the console during the tests.  Depending on
-            # timing, the exception may or may not be logged.
-            resources.enter_context(patch('aiosmtpd.smtp.log.exception'))
-            client = resources.enter_context(
-                SMTP(controller.hostname, controller.port))
-            code, response = client.helo('example.com')
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.helo('example.com')
         self.assertEqual(code, 500)
-        self.assertEqual(response, b'Error: Cannot describe error')
+        self.assertEqual(mesg, b'Error: Cannot describe error')
         self.assertIsInstance(handler.error, ValueError)
 
     def test_bad_encodings(self):
@@ -1703,10 +1849,14 @@ class TestClientCrash(unittest.TestCase):
 
     def test_connection_reset_during_DATA(self):
         with SMTP(*self.address) as client:
-            client.helo('example.com')
-            client.docmd('MAIL FROM: <anne@example.com>')
-            client.docmd('RCPT TO: <bart@example.com>')
-            client.docmd('DATA')
+            code, response = client.helo('example.com')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('MAIL FROM: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('RCPT TO: <anne@example.com>')
+            self.assertEqual(code, 250)
+            code, response = client.docmd('DATA')
+            self.assertEqual(code, 354)
             # Start sending the DATA but reset the connection before that
             # completes, i.e. before the .\r\n
             client.send(b'From: <anne@example.com>')
@@ -1728,10 +1878,20 @@ class TestClientCrash(unittest.TestCase):
             # server just hung.
             self.assertRaises(SMTPServerDisconnected, client.noop)
 
+    def test_connection_reset_in_long_command(self):
+        with SMTP(*self.address) as client:
+            client.send('F' + 5555 * 'O')  # without CRLF
+            reset_connection(client)
+
     def test_close_in_command(self):
         with SMTP(*self.address) as client:
             # Don't include the CRLF.
             client.send('FOO')
+            client.close()
+
+    def test_close_in_long_command(self):
+        with SMTP(*self.address) as client:
+            client.send('F' + 5555 * 'O')  # without CRLF
             client.close()
 
     def test_close_in_data(self):

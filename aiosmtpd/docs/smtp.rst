@@ -191,6 +191,22 @@ SMTP API
 
    **Attributes & Methods**
 
+   .. py:attribute:: line_length_limit
+
+      The maximum line length, in octets (not characters; one UTF-8 character
+      may result in more than one octet).
+      Defaults to ``1001`` in compliance with
+      :rfc:`RFC 5321 § 4.5.3.1.6 <5321#section-4.5.3.1.6>`
+
+      .. attention::
+
+         This sets the *stream limit* of :meth:`asyncio.StreamReader.readuntil`,
+         thus impacting how the method works.
+         In previous versions of aiosmtpd, the limit is not set.
+         To return to the behavior of the previous versions, set
+         :attr:`line_length_limit` to ``2**16`` *before* instantiating the
+         :class:`SMTP` class.
+
    .. attribute:: event_handler
 
       The *handler* instance passed into the constructor.
