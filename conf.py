@@ -50,6 +50,7 @@ master_doc = 'README'
 
 # General information about the project.
 project = u'aiosmtpd'
+# noinspection PyShadowingBuiltins
 copyright = u'2015-2016, aiosmtpd hackers'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -189,14 +190,14 @@ htmlhelp_basename = 'aiosmtpddoc'
 # -- Options for LaTeX output ---------------------------------------------
 
 latex_elements = {
-# The paper size ('letterpaper' or 'a4paper').
-#'papersize': 'letterpaper',
+    # The paper size ('letterpaper' or 'a4paper').
+    #'papersize': 'letterpaper',
 
-# The font size ('10pt', '11pt' or '12pt').
-#'pointsize': '10pt',
+    # The font size ('10pt', '11pt' or '12pt').
+    #'pointsize': '10pt',
 
-# Additional stuff for the LaTeX preamble.
-#'preamble': '',
+    # Additional stuff for the LaTeX preamble.
+    #'preamble': '',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
@@ -298,6 +299,7 @@ def index_html():
                 raise
     finally:
         os.chdir(cwd)
+
 
 import atexit
 atexit.register(index_html)
