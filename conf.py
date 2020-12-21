@@ -15,6 +15,10 @@
 import sys
 import os
 
+YELLOW = "\x1b[1;93m"
+NORM = "\x1b[0m"
+
+
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
@@ -280,7 +284,17 @@ def index_html():
             os.symlink('README.html', 'index.html')
             print('index.html -> README.html')
         except OSError as error:
-            if error.errno != errno.EEXIST:
+            # On Windows>= 7, only users with 'SeCreateSymbolicLinkPrivilege' token
+            # can create symlinks.
+            if (getattr(error, "winerror", None) == 1314
+                    or str(error) == "symbolic link privilege not held"):
+                # I don't like matching against string, but sometimes this particular
+                # OSError does not have any errno nor winerror.
+                print(f"{YELLOW}WARNING: No privilege to create symlinks. "
+                      f"You have to make one manually{NORM}")
+            elif error.errno == errno.EEXIST:
+                pass
+            else:
                 raise
     finally:
         os.chdir(cwd)
