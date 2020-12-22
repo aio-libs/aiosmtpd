@@ -2,6 +2,7 @@
 
 import ssl
 import sys
+import select
 import socket
 import struct
 import asyncio
@@ -9,6 +10,7 @@ import logging
 import warnings
 
 from contextlib import ExitStack
+from typing import List
 from pkg_resources import resource_filename
 from unittest import TestCase
 from unittest.mock import patch
@@ -84,6 +86,22 @@ SUPPORTED_COMMANDS_TLS: bytes = (
 )
 
 SUPPORTED_COMMANDS_NOTLS = SUPPORTED_COMMANDS_TLS.replace(b" STARTTLS", b"")
+
+
+def send_recv(
+        sock: socket.socket, data: bytes, end: bytes = b"\r\n", timeout=0.1
+) -> bytes:
+    sock.send(data + end)
+    slist = [sock]
+    result: List[bytes] = []
+    while True:
+        read_s, _, _ = select.select(slist, [], [], timeout)
+        if read_s:
+            # We can use sock instead of read_s because slist only contains sock
+            result.append(sock.recv(1024))
+        else:
+            break
+    return b"".join(result)
 
 
 def get_server_context():

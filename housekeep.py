@@ -46,7 +46,6 @@ def deldir(targ: Path):
         if (i & 1023) == 0:
             print(".", end="", flush=True)
     targ.rmdir()
-    print(" ", end="", flush=True)
 
 
 # endregion
@@ -102,6 +101,7 @@ def rm_work():
     for dd in WORKDIRS:
         print(dd, end="", flush=True)
         deldir(Path(dd))
+        print(" ", end="", flush=True)
     print(f"\n{BOLD}Removing work files ...{NORM}", end="")
     for fn in (".coverage", "coverage.xml", "diffcov.html"):
         print(".", end="", flush=True)

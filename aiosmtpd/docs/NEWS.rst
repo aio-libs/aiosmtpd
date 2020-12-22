@@ -11,6 +11,9 @@ Added
 
 Fixed/Improved
 --------------
+* ``handle_exception()`` no longer gets called when the client disconnected (Closes #127, #162)
+* Implement & enforce line-length-limit, thus becoming Compliant with RFC 5321 § 4.5.3.1.6
+* Delay all SMTP Status Code replies during ``DATA`` phase until the phase termination (Closes #9)
 * :class:`SMTP` no longer edits user-supplied SSL Context (closes #191)
 
 
