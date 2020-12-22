@@ -25,15 +25,22 @@ jobs:
         include:
           - os: "windows-latest"
             platform: "mswin"
-            # Only the latest stable branch as indicated on
-            # https://devguide.python.org/#branchstatus
-            # ('stable' means Status == "security")
-            # Reason being that Windows users can change their Python anytime,
-            # so there is no benefit in testing all released Python versions.
-            # Plus pypy3 implementation in Windows is ... complicated. We
-            # should stay away from all those complications; users choosing to
-            # run aiosmtpd on pypy3 on Windows should be considered advanced
-            # and know what they're doing.
+            # For Windows, we'll use only the latest "frozen" branch.
+            #     "Frozen" here means Status == "security" as indicated on the
+            #     https://devguide.python.org/#status-of-python-branches page.
+            #     I call it "frozen" because "no more binaries are released", so
+            #     for the great majority of users not compiling their own CPython,
+            #     the behavior won't change. Originally I call it "stable" but
+            #     someone apparently defined the term "stable" as "still receiving
+            #     bugfixes" so I had to change to prevent confusion.
+            #
+            # Also, Windows users can change their Python anytime since it's not part of the OS.
+            # Hence there is no benefit in testing all released Python versions.
+            #
+            # In addition, pypy3 implementation in Windows is ... complicated. We should stay
+            # away from all those complications; users choosing to use pypy3 on Windows to run
+            # aiosmtpd should be considered advanced, know what they're doing, and ready for
+            # all the consequences
             python-version: "3.7"
     runs-on: ${{ matrix.os }}
     steps:
