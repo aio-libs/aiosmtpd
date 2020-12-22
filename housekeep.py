@@ -142,7 +142,6 @@ def dispatch_setup():
 
 def dispatch_cleanup():
     move_prof()
-    pycache_clean()
 
 
 def dispatch_superclean():
