@@ -7,10 +7,23 @@ import argparse
 
 from pathlib import Path
 
+try:
+    # noinspection PyPackageRequirements
+    from colorama import (
+        Fore,
+        Style,
+        init as colorama_init,
+    )
+except ImportError:
+    colorama_init = None
 
-FG_CYAN = "\x1b[1;96m"
-BOLD = "\x1b[1m"
-NORM = "\x1b[0m"
+    class Fore:
+        CYAN = "\x1b[1;96m"
+
+    class Style:
+        BRIGHT = "\x1b[1m"
+        RESET_ALL = "\x1b[0m"
+
 
 TOX_ENV_NAME = os.environ.get("TOX_ENV_NAME", None)
 
@@ -95,14 +108,14 @@ def pycache_clean(verbose=False):
 
 def rm_work():
     """Remove work dirs & files. They are .gitignore'd anyways."""
-    print(f"{BOLD}Removing work dirs ... {NORM}", end="")
+    print(f"{Style.BRIGHT}Removing work dirs ... ", end="")
     # The reason we list WORKDIRS explicitly is because we don't want to accidentally
     # bork IDE workdirs such as .idea/ or .vscode/
     for dd in WORKDIRS:
         print(dd, end="", flush=True)
         deldir(Path(dd))
         print(" ", end="", flush=True)
-    print(f"\n{BOLD}Removing work files ...{NORM}", end="")
+    print(f"\n{Style.BRIGHT}Removing work files ...", end="")
     for fn in (".coverage", "coverage.xml", "diffcov.html"):
         print(".", end="", flush=True)
         fp = Path(fn)
@@ -135,7 +148,7 @@ def dispatch_cleanup():
 def dispatch_superclean():
     if TOX_ENV_NAME is not None:
         raise RuntimeError("Do NOT run this inside tox!")
-    print(f"{BOLD}Running pycache cleanup ...{NORM}", end="")
+    print(f"{Style.BRIGHT}Running pycache cleanup ...", end="")
     pycache_clean(verbose=True)
     rm_work()
 
@@ -152,13 +165,15 @@ def get_opts(argv):
 
 
 def python_interp_details():
-    print(f"{FG_CYAN}Python interpreter details:{NORM}")
+    print(f"{Fore.CYAN}Python interpreter details:")
     details = sys.version.splitlines() + sys.executable.splitlines()
     for ln in details:
-        print(f"    {FG_CYAN}{ln}{NORM}")
+        print(f"    {Fore.CYAN}{ln}")
+    print(Style.RESET_ALL, end="", flush=True)
 
 
 if __name__ == "__main__":
+    colorama_init is None or colorama_init(autoreset=True)
     python_interp_details()
     if os.environ.get("CI") == "true":
         # All the housekeeping steps are pointless on Travis CI / GitHub Actions;
@@ -167,3 +182,4 @@ if __name__ == "__main__":
     opts = get_opts(sys.argv[1:])
     dispatcher = globals().get(f"dispatch_{opts.cmd}")
     dispatcher()
+    print(Style.RESET_ALL, end="", flush=True)
