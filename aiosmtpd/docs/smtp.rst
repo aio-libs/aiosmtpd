@@ -207,6 +207,16 @@ SMTP API
          :attr:`line_length_limit` to ``2**16`` *before* instantiating the
          :class:`SMTP` class.
 
+   .. py:attribute:: AuthLoginUsernameChallenge
+
+      A ``str`` containing the base64-encoded challenge to be sent as the first challenge
+      in the ``AUTH LOGIN`` mechanism.
+
+   .. py:attribute:: AuthLoginPasswordChallenge
+
+      A ``str`` containing the base64-encoded challenge to be sent as the second challenge
+      in the ``AUTH LOGIN`` mechanism.
+
    .. attribute:: event_handler
 
       The *handler* instance passed into the constructor.

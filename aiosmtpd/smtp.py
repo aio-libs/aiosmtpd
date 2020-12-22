@@ -147,6 +147,11 @@ class SMTP(asyncio.StreamReaderProtocol):
     # (RFC 5322 s 2.1.1 + RFC 6532 s 3.4) 998 octets + CRLF = 1000 octets
     # (RFC 5321 s 4.5.3.1.6) 1000 octets + "transparent dot" = 1001 octets
 
+    # base64-encoded 'User Name\x00'
+    AuthLoginUsernameChallenge = "VXNlciBOYW1lAA=="
+    # base64-encoded 'Password\x00'
+    AuthLoginPasswordChallenge = "UGFzc3dvcmQA"
+
     def __init__(self, handler,
                  *,
                  data_size_limit=DATA_SIZE_DEFAULT,
@@ -743,14 +748,12 @@ class SMTP(asyncio.StreamReaderProtocol):
                 login = MISSING
         else:
             login: _TriStateType
-            # 'User Name\x00'
-            login = await self._auth_interact("334 VXNlciBOYW1lAA==")
+            login = await self._auth_interact("334 " + self.AuthLoginUsernameChallenge)
         if login is MISSING:
             return AuthResult(False)
         #
         password: _TriStateType
-        # 'Password\x00'
-        password = await self._auth_interact("334 UGFzc3dvcmQA")
+        password = await self._auth_interact("334 " + self.AuthLoginPasswordChallenge)
         if password is MISSING:
             return AuthResult(False)
         #
