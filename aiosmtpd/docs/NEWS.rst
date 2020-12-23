@@ -2,12 +2,15 @@
  NEWS for aiosmtpd
 ===================
 
-1.2.3a6 (aiosmtpd-next)
-=======================
+1.2.3 (aiosmtpd-next)
+=====================
 
 Fixed/Improved
 --------------
-* Now catches ``factory()`` failure during ``start()`` (Closes #212)
+* ``handle_exception()`` no longer gets called when the client disconnected (Closes #127, #162)
+* Implement & enforce line-length-limit, thus becoming Compliant with RFC 5321 § 4.5.3.1.6
+* Delay all SMTP Status Code replies during ``DATA`` phase until the phase termination (Closes #9)
+* Now catches ``Controller.factory()`` failure during ``Controller.start()`` (Closes #212)
 
 
 1.2.2 (2020-11-08)
@@ -21,7 +24,6 @@ Added
 * Feature to inject keyword args during server class instantiation in ``Controller.factory``
   (potentially Closes #194, #179)
 * Support for Python 3.8 and 3.9.0 (also Closes #188)
-* Also catches exceptions raised by ``Controller.factory()`` (Closes #212)
 
 Fixed/Improved
 --------------

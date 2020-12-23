@@ -161,7 +161,9 @@ The EHLO response does not include the ``SMTPUTF8`` ESMTP option.
 Controller API
 ==============
 
-.. class:: Controller(handler, loop=None, hostname=None, port=8025, *, ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None, server_kwargs=None)
+.. class:: Controller(handler, loop=None, hostname=None, port=8025, *, \
+   ready_timeout=1.0, enable_SMTPUTF8=True, ssl_context=None, \
+   server_kwargs=None)
 
    *handler* is an instance of a :ref:`handler <handlers>` class.
 
@@ -234,9 +236,9 @@ Controller API
 
       .. important::
 
-         If :meth:`start` raises an Exception, :class:`Controller` does not
-         automatically perform cleanup, to support deep inspection post-exception,
-         (if you wish to do so.)
+         If :meth:`start` raises an Exception,
+         :class:`Controller` does not automatically perform cleanup,
+         to support deep inspection post-exception (if you wish to do so.)
          Cleanup must still be performed manually by calling :meth:`stop`
 
          For example::
