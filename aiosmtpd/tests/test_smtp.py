@@ -1827,22 +1827,6 @@ class TestTimeout(unittest.TestCase):
 
 
 class TestLimits(unittest.TestCase):
-    # def test_default_limit(self):
-    #     controller = Controller(Sink())
-    #     self.addCleanup(controller.stop)
-    #     controller.start()
-    #     with SMTP(controller.hostname, controller.port) as client:
-    #         code, mesg = client.ehlo('example.com')
-    #         self.assertEqual(250, code)
-    #         for _ in range(0, 10):
-    #             code, mesg = client.noop()
-    #             self.assertEqual(250, code)
-    #         code, mesg = client.noop()
-    #         self.assertEqual(503, code)
-    #         self.assertEqual(b"NOOP sent too many times", mesg)
-    #         with self.assertRaises(SMTPServerDisconnected):
-    #             client.noop()
-    #
     def test_all_limit_15(self):
         kwargs = dict(
             command_call_limit=15,
