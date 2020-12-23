@@ -31,6 +31,19 @@ CRLF = '\r\n'
 BCRLF = b'\r\n'
 
 
+ModuleResources = ExitStack()
+
+
+def setUpModule():
+    # Needed especially on FreeBSD because socket.getfqdn() is slow on that OS,
+    # and oftentimes (not always, though) leads to Error
+    ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
+
+
+def tearDownModule():
+    ModuleResources.close()
+
+
 def authenticator(mechanism, login, password):
     if login and login.decode() == 'goodlogin':
         return True

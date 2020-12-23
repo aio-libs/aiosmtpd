@@ -7,12 +7,27 @@ import pkg_resources
 
 from aiosmtpd.controller import Controller as BaseController
 from aiosmtpd.smtp import SMTP as SMTPProtocol
+from contextlib import ExitStack
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
     get_server_context
 )
 from email.mime.text import MIMEText
 from smtplib import SMTP_SSL
+from unittest.mock import patch
+
+
+ModuleResources = ExitStack()
+
+
+def setUpModule():
+    # Needed especially on FreeBSD because socket.getfqdn() is slow on that OS,
+    # and oftentimes (not always, though) leads to Error
+    ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
+
+
+def tearDownModule():
+    ModuleResources.close()
 
 
 class Controller(BaseController):
