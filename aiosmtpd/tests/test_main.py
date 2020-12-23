@@ -18,6 +18,19 @@ has_setuid = hasattr(os, 'setuid')
 log = logging.getLogger('mail.log')
 
 
+ModuleResources = ExitStack()
+
+
+def setUpModule():
+    # Needed especially on FreeBSD because socket.getfqdn() is slow on that OS,
+    # and oftentimes (not always, though) leads to Error
+    ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
+
+
+def tearDownModule():
+    ModuleResources.close()
+
+
 class TestHandler1:
     def __init__(self, called):
         self.called = called
