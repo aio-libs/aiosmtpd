@@ -1065,16 +1065,17 @@ class TestSMTPAuth(unittest.TestCase):
 
 class TestRequiredAuthentication(unittest.TestCase):
     def setUp(self):
+        self.resource = ExitStack()
+        self.addCleanup(self.resource.close)
+
+        # Suppress auth_req_but_no_tls warning
+        self.resource.enter_context(cast(ContextManager, warnings.catch_warnings()))
+        warnings.simplefilter("ignore", category=UserWarning)
+
         controller = RequiredAuthDecodingController(Sink)
         self.addCleanup(controller.stop)
         controller.start()
         self.address = (controller.hostname, controller.port)
-
-        self.resource = ExitStack()
-        self.addCleanup(self.resource.close)
-        # Suppress auth_req_but_no_tls warning
-        self.resource.enter_context(cast(ContextManager, warnings.catch_warnings()))
-        warnings.simplefilter("ignore", category=UserWarning)
 
     def test_help_unauthenticated(self):
         with SMTP(*self.address) as client:
