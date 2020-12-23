@@ -231,7 +231,7 @@ if __name__ == "__main__":
             sys.exit(0)
         else:
             print(f"{Fore.YELLOW}We're in CI but --force is specified")
-    print(f"{Fore.GREEN}{Path(__file__).name} {opts.cmd}")
+    print(f"{Fore.GREEN}{Path(__file__).name} {opts.cmd}{Style.RESET_ALL}")
     dispatcher = globals().get(f"dispatch_{opts.cmd}")
     dispatcher()
     # Defensive reset
