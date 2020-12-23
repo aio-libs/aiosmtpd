@@ -99,7 +99,9 @@ class EOFingHandler:
 
 
 class TestTLSEnding(unittest.TestCase):
-    def test_eof_received(self):
+    # Suppress some harmless, expected warning
+    @patch("logging.Logger.warning")
+    def test_eof_received(self, mock_warning):
         # Adapted from 54ff1fa9 + fc65a84e of PR #202
         #
         # I don't like this. It's too intimately involved with the innards of
