@@ -84,7 +84,9 @@ class EOFingHandler:
 
 
 class TestTLSEnding(unittest.TestCase):
-    def test_eof_received(self):
+    # Suppress scary-looking, but totally harmless, log warning
+    @patch("logging.Logger.warning")
+    def test_eof_received(self, mock_warning):
         # Adapted from 54ff1fa9 + fc65a84e of PR #202
         #
         # I don't like this. It's too intimately involved with the innards of
@@ -173,7 +175,9 @@ class TestStartTLS(unittest.TestCase):
             self.assertEqual(code, 250)
             self.assertEqual(response, SUPPORTED_COMMANDS_TLS)
 
-    def test_tls_handshake_stopcontroller(self):
+    # Suppress hairy-looking, but harmless & expected, log error
+    @patch("logging.Logger.error")
+    def test_tls_handshake_stopcontroller(self, mock_error):
         controller = TLSController(Sink())
         controller.start()
         self.addCleanup(controller.stop)
