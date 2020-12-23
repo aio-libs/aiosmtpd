@@ -1524,7 +1524,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 451)
+        self.assertEqual(code, 500)
         self.assertEqual(mesg, b'Error: (ValueError) test')
         # handler.error did not change because the handler does not have a
         # handle_exception() method.
@@ -1554,7 +1554,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 451)
+        self.assertEqual(code, 500)
         self.assertEqual(mesg, b'Error: (ValueError) ErroringErrorHandler test')
         self.assertIsInstance(handler.error, ValueError)
 
@@ -1595,7 +1595,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 451)
+        self.assertEqual(code, 500)
         self.assertEqual(mesg, b'Error: Cannot describe error')
         self.assertIsInstance(handler.error, ValueError)
 
