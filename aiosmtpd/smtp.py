@@ -430,6 +430,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 self._writer.close()
                 raise
             except Exception as error:
+                status = None
                 try:
                     status = await self.handle_exception(error)
                 except Exception as inner_error:
