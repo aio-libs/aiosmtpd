@@ -3,7 +3,7 @@ import unittest
 
 from aiosmtpd.controller import Controller as BaseController
 from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import Session as Sess_, SMTP as SMTPProtocol
+from aiosmtpd.smtp import Session as Sess_, SMTP as SMTPProtocol, TLSSetupException
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
     SUPPORTED_COMMANDS_TLS,
@@ -11,9 +11,8 @@ from aiosmtpd.testing.helpers import (
     get_server_context,
 )
 from contextlib import ExitStack
-from aiosmtpd.smtp import SMTP as SMTPProtocol, TLSSetupException
 from email.mime.text import MIMEText
-from smtplib import SMTP
+from smtplib import SMTP, SMTPServerDisconnected
 from unittest.mock import Mock, patch
 
 
