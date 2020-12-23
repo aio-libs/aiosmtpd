@@ -183,7 +183,9 @@ class TestStartTLS(unittest.TestCase):
             self.doCleanups()
             self.assertRaises(SMTPServerDisconnected, client.quit)
 
-    def test_tls_handshake_failing(self):
+    # Suppress hairy-looking, but ultimately harmless, warning + traceback
+    @patch("logging.Logger.warning")
+    def test_tls_handshake_failing(self, mock_warning):
         class ExceptionCaptureHandler:
             error = None
 
