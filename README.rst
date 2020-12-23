@@ -184,6 +184,24 @@ versions on your system by using ``pyenv``. General steps:
    documentation about this option)
 
 
+``housekeep.py``
+-------------------
+
+If you ever need to 'reset' your repo, you can use the ``housekeep.py`` utility
+like so::
+
+    $ python housekeep.py superclean
+
+It is `strongly` recommended to NOT do superclean too often, though.
+Every time you invoke ``superclean``,
+tox will have to recreate all its testenvs,
+and this will make testing `much` longer to finish.
+
+``superclean`` is typically only needed when you switch branches,
+or if you want to really ensure that artifacts from previous testing sessions
+won't interfere with your next testing sessions.
+
+
 Contents
 ========
 
