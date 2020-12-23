@@ -5,6 +5,10 @@
 1.2.3 (aiosmtpd-next)
 =====================
 
+Added
+-----
+* Implement mechanism to limit the number of commands sent (Closes #145)
+
 Fixed/Improved
 --------------
 * ``handle_exception()`` no longer gets called when the client disconnected (Closes #127, #162)
