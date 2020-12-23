@@ -1055,11 +1055,6 @@ class TestSMTPAuth(unittest.TestCase):
 
 class TestRequiredAuthentication(unittest.TestCase):
     def setUp(self):
-        controller = RequiredAuthDecodingController(Sink)
-        self.addCleanup(controller.stop)
-        controller.start()
-        self.address = (controller.hostname, controller.port)
-
         self.resource = ExitStack()
         self.addCleanup(self.resource.close)
 
@@ -1070,6 +1065,11 @@ class TestRequiredAuthentication(unittest.TestCase):
         self.resource.enter_context(
             cast(ContextManager, patch("logging.Logger.warning"))
         )
+
+        controller = RequiredAuthDecodingController(Sink)
+        self.addCleanup(controller.stop)
+        controller.start()
+        self.address = (controller.hostname, controller.port)
 
     def test_help_unauthenticated(self):
         with SMTP(*self.address) as client:
