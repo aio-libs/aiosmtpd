@@ -351,65 +351,65 @@ class FakeParser:
 
 class TestCLI(unittest.TestCase):
     def setUp(self):
-        self.parser = FakeParser()
+        self.fakeparser = FakeParser()
 
     def test_debugging_cli_no_args(self):
-        handler = Debugging.from_cli(self.parser)
-        self.assertIsNone(self.parser.message)
+        handler = Debugging.from_cli(self.fakeparser)
+        self.assertIsNone(self.fakeparser.message)
         self.assertEqual(handler.stream, sys.stdout)
 
     def test_debugging_cli_two_args(self):
         self.assertRaises(
             SystemExit,
-            Debugging.from_cli, self.parser, 'foo', 'bar')
+            Debugging.from_cli, self.fakeparser, 'foo', 'bar')
         self.assertEqual(
-            self.parser.message, 'Debugging usage: [stdout|stderr]')
+            self.fakeparser.message, 'Debugging usage: [stdout|stderr]')
 
     def test_debugging_cli_stdout(self):
-        handler = Debugging.from_cli(self.parser, 'stdout')
-        self.assertIsNone(self.parser.message)
+        handler = Debugging.from_cli(self.fakeparser, 'stdout')
+        self.assertIsNone(self.fakeparser.message)
         self.assertEqual(handler.stream, sys.stdout)
 
     def test_debugging_cli_stderr(self):
-        handler = Debugging.from_cli(self.parser, 'stderr')
-        self.assertIsNone(self.parser.message)
+        handler = Debugging.from_cli(self.fakeparser, 'stderr')
+        self.assertIsNone(self.fakeparser.message)
         self.assertEqual(handler.stream, sys.stderr)
 
     def test_debugging_cli_bad_argument(self):
         self.assertRaises(
             SystemExit,
-            Debugging.from_cli, self.parser, 'stdfoo')
+            Debugging.from_cli, self.fakeparser, 'stdfoo')
         self.assertEqual(
-            self.parser.message, 'Debugging usage: [stdout|stderr]')
+            self.fakeparser.message, 'Debugging usage: [stdout|stderr]')
 
     def test_sink_cli_no_args(self):
-        handler = Sink.from_cli(self.parser)
-        self.assertIsNone(self.parser.message)
+        handler = Sink.from_cli(self.fakeparser)
+        self.assertIsNone(self.fakeparser.message)
         self.assertIsInstance(handler, Sink)
 
     def test_sink_cli_any_args(self):
         self.assertRaises(
             SystemExit,
-            Sink.from_cli, self.parser, 'foo')
+            Sink.from_cli, self.fakeparser, 'foo')
         self.assertEqual(
-            self.parser.message, 'Sink handler does not accept arguments')
+            self.fakeparser.message, 'Sink handler does not accept arguments')
 
     def test_mailbox_cli_no_args(self):
-        self.assertRaises(SystemExit, Mailbox.from_cli, self.parser)
+        self.assertRaises(SystemExit, Mailbox.from_cli, self.fakeparser)
         self.assertEqual(
-            self.parser.message,
+            self.fakeparser.message,
             'The directory for the maildir is required')
 
     def test_mailbox_cli_too_many_args(self):
-        self.assertRaises(SystemExit, Mailbox.from_cli, self.parser,
+        self.assertRaises(SystemExit, Mailbox.from_cli, self.fakeparser,
                           'foo', 'bar', 'baz')
         self.assertEqual(
-            self.parser.message,
+            self.fakeparser.message,
             'Too many arguments for Mailbox handler')
 
     def test_mailbox_cli(self):
         with TemporaryDirectory() as tmpdir:
-            handler = Mailbox.from_cli(self.parser, tmpdir)
+            handler = Mailbox.from_cli(self.fakeparser, tmpdir)
             self.assertIsInstance(handler.mailbox, Maildir)
             self.assertEqual(handler.mail_dir, tmpdir)
 
