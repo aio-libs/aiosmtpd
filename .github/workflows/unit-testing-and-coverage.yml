@@ -50,6 +50,8 @@ jobs:
     - name: "Execute tox"
       env:
         PLATFORM: ${{ matrix.platform }}
+      # "py" testenv means we'll use whatever Python provided by GA,
+      # as specified in 'matrix' above. No need to specify exact version.
       run: |
         tox -e "qa,docs,py-cov"
     - name: "Report to codecov"

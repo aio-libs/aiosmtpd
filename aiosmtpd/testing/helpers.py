@@ -1,5 +1,6 @@
 """Testing helpers."""
 
+import ssl
 import sys
 import select
 import socket
@@ -10,6 +11,7 @@ import warnings
 
 from contextlib import ExitStack
 from typing import List
+from pkg_resources import resource_filename
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -100,3 +102,23 @@ def send_recv(
         else:
             break
     return b"".join(result)
+
+
+def get_server_context():
+    tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    tls_context.load_cert_chain(
+        resource_filename('aiosmtpd.tests.certs', 'server.crt'),
+        resource_filename('aiosmtpd.tests.certs', 'server.key'),
+    )
+    return tls_context
+
+
+class ReceivingHandler:
+    box = None
+
+    def __init__(self):
+        self.box = []
+
+    async def handle_DATA(self, server, session, envelope):
+        self.box.append(envelope)
+        return '250 OK'

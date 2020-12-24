@@ -16,6 +16,7 @@ from aiosmtpd.smtp import (
     __ident__ as GREETING
 )
 from aiosmtpd.testing.helpers import (
+    ReceivingHandler,
     SUPPORTED_COMMANDS_NOTLS,
     assert_auth_invalid,
     assert_auth_required,
@@ -121,17 +122,6 @@ class RequiredAuthDecodingController(Controller):
         return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
                       auth_require_tls=False, auth_callback=authenticator,
                       auth_required=True)
-
-
-class ReceivingHandler:
-    box = None
-
-    def __init__(self):
-        self.box = []
-
-    async def handle_DATA(self, server, session, envelope):
-        self.box.append(envelope)
-        return '250 OK'
 
 
 class StoreEnvelopeOnVRFYHandler:
@@ -1076,6 +1066,10 @@ class TestRequiredAuthentication(unittest.TestCase):
         self.resource.enter_context(cast(ContextManager, warnings.catch_warnings()))
         warnings.simplefilter("ignore", category=UserWarning)
 
+        self.resource.enter_context(
+            cast(ContextManager, patch("logging.Logger.warning"))
+        )
+
         controller = RequiredAuthDecodingController(Sink)
         self.addCleanup(controller.stop)
         controller.start()
@@ -1824,6 +1818,34 @@ class TestTimeout(unittest.TestCase):
             code, response = client.ehlo('example.com')
             time.sleep(0.1 + TimeoutController.Delay)
             self.assertRaises(SMTPServerDisconnected, client.getreply)
+
+
+class TestAuthArgs(unittest.TestCase):
+    @patch("logging.Logger.warning")
+    @patch("aiosmtpd.smtp.warn")
+    def test_warn_authreqnotls(self, mock_warn: Mock, mock_warning: Mock):
+        """If auth_required=True while auth_require_tls=False, emit warning"""
+        _ = Server(Sink(), auth_required=True, auth_require_tls=False)
+        mock_warn.assert_any_call(
+            "Requiring AUTH while not requiring TLS "
+            "can lead to security vulnerabilities!"
+        )
+        mock_warning.assert_any_call(
+            "auth_required == True but auth_require_tls == False"
+        )
+
+    @patch("logging.Logger.info")
+    def test_log_authmechanisms(self, mock_info: Mock):
+        """At __init__ list of AUTH mechanisms must be logged"""
+        server = Server(Sink())
+        auth_mechs = sorted(
+            m.replace("auth_", "") + "(builtin)"
+            for m in dir(server)
+            if m.startswith("auth_")
+        )
+        mock_info.assert_any_call(
+            f"Available AUTH mechanisms: {' '.join(auth_mechs)}"
+        )
 
 
 class TestLimits(unittest.TestCase):
