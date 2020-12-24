@@ -3,16 +3,43 @@
 import os
 import sys
 import pprint
+import inspect
 import argparse
 
 from pathlib import Path
 
+try:
+    # noinspection PyPackageRequirements
+    from colorama import (
+        Fore,
+        Style,
+        init as colorama_init,
+    )
+except ImportError:
+    colorama_init = None
 
-FG_CYAN = "\x1b[1;96m"
-BOLD = "\x1b[1m"
-NORM = "\x1b[0m"
+    class Fore:
+        CYAN = "\x1b[1;96m"
+        GREEN = "\x1b[1;92m"
+        YELLOW = "\x1b[1;93m"
+
+    class Style:
+        BRIGHT = "\x1b[1m"
+        RESET_ALL = "\x1b[0m"
+
 
 TOX_ENV_NAME = os.environ.get("TOX_ENV_NAME", None)
+
+WORKDIRS = (
+    ".pytest-cache",
+    ".pytest_cache",
+    ".tox",
+    "_dynamic",
+    "aiosmtpd.egg-info",
+    "build",
+    "htmlcov",
+    "prof",
+)
 
 
 # region #### Helper funcs ############################################################
@@ -21,7 +48,7 @@ TOX_ENV_NAME = os.environ.get("TOX_ENV_NAME", None)
 def deldir(targ: Path):
     if not targ.exists():
         return
-    for pp in reversed(sorted(targ.rglob("*"))):
+    for i, pp in enumerate(reversed(sorted(targ.rglob("*"))), start=1):
         if pp.is_symlink():
             pp.unlink()
         elif pp.is_file():
@@ -32,6 +59,8 @@ def deldir(targ: Path):
             pp.rmdir()
         else:
             raise RuntimeError(f"Don't know how to handle '{pp}'")
+        if (i & 1023) == 0:
+            print(".", end="", flush=True)
     targ.rmdir()
 
 
@@ -47,7 +76,7 @@ def dump_env():
         pprint.pprint(dict(os.environ), stream=fout)
 
 
-def moveprof():
+def move_prof():
     """Move profiling files to per-testenv dirs"""
     profpath = Path("prof")
     prof_files = [
@@ -68,8 +97,8 @@ def moveprof():
 def pycache_clean(verbose=False):
     """Cleanup __pycache__ dirs & bytecode files (if any)"""
     aiosmtpdpath = Path(".")
-    for f in aiosmtpdpath.rglob("*.py[co]"):
-        if verbose:
+    for i, f in enumerate(aiosmtpdpath.rglob("*.py[co]"), start=1):
+        if verbose and (i % 63) == 0:
             print(".", end="", flush=True)
         f.unlink()
     for d in aiosmtpdpath.rglob("__pycache__"):
@@ -80,14 +109,16 @@ def pycache_clean(verbose=False):
         print()
 
 
-def superclean():
+def rm_work():
     """Remove work dirs & files. They are .gitignore'd anyways."""
-    print(f"{BOLD}Removing work dirs ... {NORM}", end="")
-    for dd in (".pytest-cache", ".pytest_cache", ".tox", "_dynamic",
-               "aiosmtpd.egg-info", "build", "htmlcov", "prof"):
-        print(dd, end=" ", flush=True)
+    print(f"{Style.BRIGHT}Removing work dirs ... ", end="")
+    # The reason we list WORKDIRS explicitly is because we don't want to accidentally
+    # bork IDE workdirs such as .idea/ or .vscode/
+    for dd in WORKDIRS:
+        print(dd, end="", flush=True)
         deldir(Path(dd))
-    print(f"\n{BOLD}Removing work files ...{NORM}", end="")
+        print(" ", end="", flush=True)
+    print(f"\n{Style.BRIGHT}Removing work files ...", end="")
     for fn in (".coverage", "coverage.xml", "diffcov.html"):
         print(".", end="", flush=True)
         fp = Path(fn)
@@ -109,42 +140,99 @@ def superclean():
 
 
 def dispatch_setup():
+    """
+    Set up work directories and dump env vars
+    """
     dump_env()
 
 
-def dispatch_cleanup():
-    moveprof()
+def dispatch_gather():
+    """
+    Gather inspection results into per-testenv dirs
+    """
+    move_prof()
+
+
+def dispatch_remcache():
+    """
+    Remove all .py[co] files and all __pycache__ dirs
+    """
     pycache_clean()
 
 
 def dispatch_superclean():
+    """
+    Total cleaning of all test artifacts
+    """
     if TOX_ENV_NAME is not None:
         raise RuntimeError("Do NOT run this inside tox!")
-    print(f"{BOLD}Running pycache cleanup ...{NORM}", end="")
+    print(f"{Style.BRIGHT}Running pycache cleanup ...", end="")
     pycache_clean(verbose=True)
-    superclean()
+    rm_work()
 
 
 # endregion
 
 
 def get_opts(argv):
+    # From: https://stackoverflow.com/a/49999185/149900
+    class NoAction(argparse.Action):
+        def __init__(self, **kwargs):
+            kwargs.setdefault("default", argparse.SUPPRESS)
+            kwargs.setdefault("nargs", 0)
+            super().__init__(**kwargs)
+
+        def __call__(self, *args, **kwargs):
+            pass
+
+    dispers = {
+        name.replace("dispatch_", ""): inspect.getdoc(obj)
+        for name, obj in inspect.getmembers(sys.modules[__name__])
+        if name.startswith("dispatch_") and inspect.isfunction(obj)
+    }
+
     parser = argparse.ArgumentParser()
+    parser.register("action", "no_action", NoAction)
+
     parser.add_argument(
-        "cmd", metavar="CMD", choices=["setup", "cleanup", "superclean"]
+        "--force", "-F", action="store_true", help="Force action even if in CI"
     )
+    parser.add_argument(
+        "cmd", metavar="COMMAND", choices=sorted(dispers.keys()), help="(See below)"
+    )
+
+    cgrp = parser.add_argument_group(title="COMMAND is one of")
+    for name, doc in sorted(dispers.items()):
+        cgrp.add_argument(name, help=doc, action="no_action")
+
     return parser.parse_args(argv)
 
 
+def python_interp_details():
+    print(f"{Fore.CYAN}Python interpreter details:")
+    details = sys.version.splitlines() + sys.executable.splitlines()
+    for ln in details:
+        print(f"    {Fore.CYAN}{ln}")
+    print(Style.RESET_ALL, end="", flush=True)
+
+
 if __name__ == "__main__":
-    print(f"{FG_CYAN}Python interpreter details:")
-    print(sys.version)
-    print(sys.executable)
-    print(NORM)
-    if os.environ.get("TRAVIS") == "true" or os.environ.get("CI") == "true":
-        # All the housekeeping steps are pointless on Travis CI / GitHub Actions;
-        # they build and tear down their VMs everytime anyways.
-        sys.exit(0)
+    colorama_init is None or colorama_init(autoreset=True)
+    python_interp_details()
     opts = get_opts(sys.argv[1:])
+    if os.environ.get("CI") == "true":
+        if not opts.force:
+            # All the housekeeping steps are pointless on Travis CI / GitHub Actions;
+            # they build and tear down their VMs everytime anyways.
+            print(
+                f"{Fore.YELLOW}Skipping housekeeping because we're in CI and "
+                f"--force not specified"
+            )
+            sys.exit(0)
+        else:
+            print(f"{Fore.YELLOW}We're in CI but --force is specified")
+    print(f"{Fore.GREEN}{Path(__file__).name} {opts.cmd}{Style.RESET_ALL}")
     dispatcher = globals().get(f"dispatch_{opts.cmd}")
     dispatcher()
+    # Defensive reset
+    print(Style.RESET_ALL, end="", flush=True)
