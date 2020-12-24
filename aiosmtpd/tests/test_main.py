@@ -18,6 +18,19 @@ has_setuid = hasattr(os, 'setuid')
 log = logging.getLogger('mail.log')
 
 
+ModuleResources = ExitStack()
+
+
+def setUpModule():
+    # Needed especially on FreeBSD because socket.getfqdn() is slow on that OS,
+    # and oftentimes (not always, though) leads to Error
+    ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
+
+
+def tearDownModule():
+    ModuleResources.close()
+
+
 class TestHandler1:
     def __init__(self, called):
         self.called = called
@@ -138,18 +151,20 @@ class TestMain(unittest.TestCase):
             main(('-n', '-d'))
             self.assertEqual(log.getEffectiveLevel(), logging.INFO)
 
-    def test_debug_2(self):
-        # Mock the logger to eliminate console noise.
-        with patch.object(logging.getLogger('mail.log'), 'info'):
-            main(('-n', '-dd'))
-            self.assertEqual(log.getEffectiveLevel(), logging.DEBUG)
+    # Mock the logger to eliminate console noise.
+    @patch("logging.Logger.info")
+    @patch("logging.Logger.debug")
+    def test_debug_2(self, mock_debug, mock_info):
+        main(('-n', '-dd'))
+        self.assertEqual(log.getEffectiveLevel(), logging.DEBUG)
 
-    def test_debug_3(self):
-        # Mock the logger to eliminate console noise.
-        with patch.object(logging.getLogger('mail.log'), 'info'):
-            main(('-n', '-ddd'))
-            self.assertEqual(log.getEffectiveLevel(), logging.DEBUG)
-            self.assertTrue(asyncio.get_event_loop().get_debug())
+    # Mock the logger to eliminate console noise.
+    @patch("logging.Logger.info")
+    @patch("logging.Logger.debug")
+    def test_debug_3(self, mock_debug, mock_info):
+        main(('-n', '-ddd'))
+        self.assertEqual(log.getEffectiveLevel(), logging.DEBUG)
+        self.assertTrue(asyncio.get_event_loop().get_debug())
 
 
 class TestParseArgs(unittest.TestCase):

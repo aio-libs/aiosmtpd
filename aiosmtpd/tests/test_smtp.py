@@ -17,6 +17,7 @@ from aiosmtpd.smtp import (
     Session as SMTPSession,
 )
 from aiosmtpd.testing.helpers import (
+    ReceivingHandler,
     SUPPORTED_COMMANDS_NOTLS,
     assert_auth_invalid,
     assert_auth_required,
@@ -39,6 +40,19 @@ from typing import ContextManager, List, Tuple, cast
 
 CRLF = '\r\n'
 BCRLF = b'\r\n'
+
+
+ModuleResources = ExitStack()
+
+
+def setUpModule():
+    # Needed especially on FreeBSD because socket.getfqdn() is slow on that OS,
+    # and oftentimes (not always, though) leads to Error
+    ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
+
+
+def tearDownModule():
+    ModuleResources.close()
 
 
 def authenticator(mechanism, login, password):
@@ -158,19 +172,6 @@ class RequiredAuthDecodingController(Controller):
                       auth_required=True)
 
 
-class ReceivingHandler:
-    box = None
-
-    def __init__(self):
-        self.box: List[SMTPEnvelope] = []
-        self.boxed_sess: List[SMTPSession] = []
-
-    async def handle_DATA(self, server, session: SMTPSession, envelope: SMTPEnvelope):
-        self.box.append(envelope)
-        self.boxed_sess.append(session)
-        return '250 OK'
-
-
 class StoreEnvelopeOnVRFYHandler:
     """Saves envelope for later inspection when handling VRFY."""
     envelope = None
@@ -221,7 +222,7 @@ class ErroringHandlerCustomResponse:
 
     async def handle_exception(self, error):
         self.error = error
-        return '451 Temporary error: ({}) {}'.format(
+        return '554 Persistent error: ({}) {}'.format(
             error.__class__.__name__, str(error))
 
 
@@ -1224,16 +1225,21 @@ class TestSMTPAuthNew(unittest.TestCase):
 
 class TestRequiredAuthentication(unittest.TestCase):
     def setUp(self):
+        self.resource = ExitStack()
+        self.addCleanup(self.resource.close)
+
+        # Suppress auth_req_but_no_tls warning
+        self.resource.enter_context(cast(ContextManager, warnings.catch_warnings()))
+        warnings.simplefilter("ignore", category=UserWarning)
+
+        self.resource.enter_context(
+            cast(ContextManager, patch("logging.Logger.warning"))
+        )
+
         controller = RequiredAuthDecodingController(Sink)
         self.addCleanup(controller.stop)
         controller.start()
         self.address = (controller.hostname, controller.port)
-
-        self.resource = ExitStack()
-        self.addCleanup(self.resource.close)
-        # Suppress auth_req_but_no_tls warning
-        self.resource.enter_context(cast(ContextManager, warnings.catch_warnings()))
-        warnings.simplefilter("ignore", category=UserWarning)
 
     def test_help_unauthenticated(self):
         with SMTP(*self.address) as client:
@@ -1691,7 +1697,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 500)
+        self.assertEqual(code, 451)
         self.assertEqual(mesg, b'Error: (ValueError) test')
         # handler.error did not change because the handler does not have a
         # handle_exception() method.
@@ -1707,8 +1713,8 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 451)
-        self.assertEqual(mesg, b'Temporary error: (ValueError) test')
+        self.assertEqual(code, 554)
+        self.assertEqual(mesg, b'Persistent error: (ValueError) test')
         self.assertIsInstance(handler.error, ValueError)
 
     # Suppress logging to the console during the tests.  Depending on
@@ -1721,7 +1727,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 500)
+        self.assertEqual(code, 451)
         self.assertEqual(mesg, b'Error: (ValueError) ErroringErrorHandler test')
         self.assertIsInstance(handler.error, ValueError)
 
@@ -1762,7 +1768,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 500)
+        self.assertEqual(code, 451)
         self.assertEqual(mesg, b'Error: Cannot describe error')
         self.assertIsInstance(handler.error, ValueError)
 
@@ -1981,3 +1987,31 @@ class TestTimeout(unittest.TestCase):
             code, response = client.ehlo('example.com')
             time.sleep(0.1 + TimeoutController.Delay)
             self.assertRaises(SMTPServerDisconnected, client.getreply)
+
+
+class TestAuthArgs(unittest.TestCase):
+    @patch("logging.Logger.warning")
+    @patch("aiosmtpd.smtp.warn")
+    def test_warn_authreqnotls(self, mock_warn: Mock, mock_warning: Mock):
+        """If auth_required=True while auth_require_tls=False, emit warning"""
+        _ = Server(Sink(), auth_required=True, auth_require_tls=False)
+        mock_warn.assert_any_call(
+            "Requiring AUTH while not requiring TLS "
+            "can lead to security vulnerabilities!"
+        )
+        mock_warning.assert_any_call(
+            "auth_required == True but auth_require_tls == False"
+        )
+
+    @patch("logging.Logger.info")
+    def test_log_authmechanisms(self, mock_info: Mock):
+        """At __init__ list of AUTH mechanisms must be logged"""
+        server = Server(Sink())
+        auth_mechs = sorted(
+            m.replace("auth_", "") + "(builtin)"
+            for m in dir(server)
+            if m.startswith("auth_")
+        )
+        mock_info.assert_any_call(
+            f"Available AUTH mechanisms: {' '.join(auth_mechs)}"
+        )

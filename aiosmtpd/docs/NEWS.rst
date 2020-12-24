@@ -7,6 +7,7 @@
 
 Added
 -----
+* Test for ``SMTP.__init__`` behavior after taking out code that edits TLS Context
 * authenticator system improves on auth_callback by enabling the called function to see the
   SMTP Session and other info. (We can deprecate auth_callback in a future version)
 
@@ -15,6 +16,8 @@ Fixed/Improved
 * ``handle_exception()`` no longer gets called when the client disconnected (Closes #127, #162)
 * Implement & enforce line-length-limit, thus becoming Compliant with RFC 5321 § 4.5.3.1.6
 * Delay all SMTP Status Code replies during ``DATA`` phase until the phase termination (Closes #9)
+* Now catches ``Controller.factory()`` failure during ``Controller.start()`` (Closes #212)
+* :class:`SMTP` no longer edits user-supplied SSL Context (closes #191)
 
 
 1.2.2 (2020-11-08)

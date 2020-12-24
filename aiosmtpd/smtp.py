@@ -52,7 +52,7 @@ _TriStateType = Union[None, _Missing, bytes]
 
 # region #### Constant & Constant-likes ###############################################
 
-__version__ = '1.2.3a2'
+__version__ = '1.2.3a3'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
@@ -159,7 +159,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  decode_data=False,
                  hostname=None,
                  ident=None,
-                 tls_context=None,
+                 tls_context: Optional[ssl.SSLContext] = None,
                  require_starttls=False,
                  timeout=300,
                  auth_required=False,
@@ -186,10 +186,14 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.hostname = socket.getfqdn()
         self.tls_context = tls_context
         if tls_context:
-            # Through rfc3207 part 4.1 certificate checking is part of SMTP
-            # protocol, not SSL layer.
-            self.tls_context.check_hostname = False
-            self.tls_context.verify_mode = ssl.CERT_NONE
+            if (tls_context.verify_mode
+                    not in {ssl.CERT_NONE, ssl.CERT_OPTIONAL}):
+                log.warning("tls_context.verify_mode not in {CERT_NONE, "
+                            "CERT_OPTIONAL}; this might cause client "
+                            "connection problems")
+            elif tls_context.check_hostname:
+                log.warning("tls_context.check_hostname == True; "
+                            "this might cause client connection problems")
         self.require_starttls = tls_context and require_starttls
         self._timeout_duration = timeout
         self._timeout_handle = None
@@ -203,6 +207,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not auth_require_tls and auth_required:
             warn("Requiring AUTH while not requiring TLS "
                  "can lead to security vulnerabilities!")
+            log.warning("auth_required == True but auth_require_tls == False")
         self._auth_require_tls = auth_require_tls
         if authenticator is not None:
             self._authenticator: AuthenticatorType = authenticator
@@ -352,7 +357,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return status
         else:
             log.exception('SMTP session exception')
-            status = '500 Error: ({}) {}'.format(
+            status = '451 Error: ({}) {}'.format(
                 error.__class__.__name__, str(error))
             return status
 
@@ -462,10 +467,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                 except Exception as error:
                     try:
                         log.exception('Exception in handle_exception()')
-                        status = '500 Error: ({}) {}'.format(
+                        status = '451 Error: ({}) {}'.format(
                             error.__class__.__name__, str(error))
                     except Exception:
-                        status = '500 Error: Cannot describe error'
+                        status = '451 Error: Cannot describe error'
                     await self.push(status)
 
     async def check_helo_needed(self, helo: str = "HELO") -> bool:
