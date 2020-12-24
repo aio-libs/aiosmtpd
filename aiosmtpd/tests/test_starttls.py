@@ -27,7 +27,6 @@ def setUpModule():
 
 def tearDownModule():
     ModuleResources.close()
-from smtplib import SMTP, SMTPServerDisconnected
 
 
 class Controller(BaseController):
