@@ -5,13 +5,13 @@
 ================
 
 At the heart of this module is the ``SMTP`` class.  This class implements the
-`RFC 5321 <http://www.faqs.org/rfcs/rfc5321.html>`_ Simple Mail Transport
+:rfc:`5321` Simple Mail Transport
 Protocol.  Often you won't run an ``SMTP`` instance directly, but instead will
 use a :ref:`controller <controller>` instance to run the server in a subthread.
 
     >>> from aiosmtpd.controller import Controller
 
-The ``SMTP`` class is itself a subclass of StreamReaderProtocol_.
+The ``SMTP`` class is itself a subclass of |StreamReaderProtocol|_
 
 
 .. _subclass:
@@ -44,10 +44,6 @@ Now let's run this server in a controller::
     >>> controller = MyController(Sink())
     >>> controller.start()
 
-..
-    >>> # Arrange for the controller to be stopped at the end of this doctest.
-    >>> ignore = resources.callback(controller.stop)
-
 We can now connect to this server with an ``SMTP`` client.
 
     >>> from smtplib import SMTP as Client
@@ -72,6 +68,10 @@ And we can get more detailed help on the new command.
 
     >>> print(client.help('PING').decode('utf-8'))
     Syntax: PING [ignored]
+
+Don't forget to ``stop()`` the controller when you're done.
+
+    >>> controller.stop()
 
 
 Server hooks
@@ -109,57 +109,56 @@ SMTP API
    auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, \
    loop=None)
 
-   *handler* is an instance of a :ref:`handler <handlers>` class.
+   :boldital:`handler` is an instance of a :ref:`handler <handlers>` class.
 
-   *data_size_limit* is the limit in number of bytes that is accepted for
+   :boldital:`data_size_limit` is the limit in number of bytes that is accepted for
    client SMTP commands.  It is returned to ESMTP clients in the ``250-SIZE``
    response.  The default is 33554432.
 
-   *enable_SMTPUTF8* is a flag that when True causes the ESMTP ``SMTPUTF8``
+   :boldital:`enable_SMTPUTF8` is a flag that when True causes the ESMTP ``SMTPUTF8``
    option to be returned to the client, and allows for UTF-8 content to be
-   accepted.  The default is False.
+   accepted, as defined in :rfc:`6531`.  The default is False.
 
-   *decode_data* is a flag that when True, attempts to decode byte content in
+   :boldital:`decode_data` is a flag that when True, attempts to decode byte content in
    the ``DATA`` command, assigning the string value to the :ref:`envelope's
    <sessions_and_envelopes>` ``content`` attribute.  The default is False.
 
-   *hostname* is the first part of the string returned in the ``220`` greeting
+   :boldital:`hostname` is the first part of the string returned in the ``220`` greeting
    response given to clients when they first connect to the server.  If not given,
    the system's fully-qualified domain name is used.
 
-   *ident* is the second part of the string returned in the ``220`` greeting
+   :boldital:`ident` is the second part of the string returned in the ``220`` greeting
    response that identifies the software name and version of the SMTP server
    to the client. If not given, a default Python SMTP ident is used.
 
-   *tls_context* and *require_starttls*.  The ``STARTTLS`` option of ESMTP
-   (and LMTP), defined in `RFC 3207`_, provides for secure connections to the
+   :boldital:`tls_context` and :boldital:`require_starttls`.  The ``STARTTLS`` option of ESMTP
+   (and LMTP), defined in :rfc:`3207`, provides for secure connections to the
    server. For this option to be available, *tls_context* must be supplied,
    and *require_starttls* should be ``True``.  See :ref:`tls` for a more in
    depth discussion on enabling ``STARTTLS``.
 
-   *timeout* is the number of seconds to wait between valid SMTP commands.
+   :boldital:`timeout` is the number of seconds to wait between valid SMTP commands.
    After this time the connection will be closed by the server.  The default
-   is 300 seconds, as per `RFC 2821`_.
+   is 300 seconds, as per :rfc:`2821`.
 
-   *auth_required* specifies whether SMTP Authentication is mandatory or
+   :boldital:`auth_required` specifies whether SMTP Authentication is mandatory or
    not for the session. This impacts some SMTP commands such as HELP, MAIL
    FROM, RCPT TO, and others.
 
-   *auth_require_tls* specifies whether ``STARTTLS`` must be used before
+   :boldital:`auth_require_tls` specifies whether ``STARTTLS`` must be used before
    AUTH exchange or not. If you set this to ``False`` then AUTH exchange can
    be done outside a TLS context, but the class will warn you of security
-   considerations. Please note that *require_starttls* takes precedence
-   over this setting.
+   considerations. This has no effect if *require_starttls* is ``True``.
 
-   *auth_exclude_mechanism* is an ``Iterable[str]`` that specifies SMTP AUTH
+   :boldital:`auth_exclude_mechanism` is an ``Iterable[str]`` that specifies SMTP AUTH
    mechanisms to NOT use.
 
-   *auth_callback* is a function that accepts three arguments: ``mechanism: str``,
+   :boldital:`auth_callback` is a function that accepts three arguments: ``mechanism: str``,
    ``login: bytes``, and ``password: bytes``. Based on these args, the function
    must return a ``bool`` that indicates whether the client's authentication
    attempt is accepted/successful or not.
 
-   *loop* is the asyncio event loop to use.  If not given,
+   :boldital:`loop` is the asyncio event loop to use.  If not given,
    :meth:`asyncio.new_event_loop()` is called to create the event loop.
 
    .. py:attribute:: line_length_limit
@@ -258,20 +257,20 @@ SMTP API
 Enabling STARTTLS
 =================
 
-To enable `RFC 3207`_ ``STARTTLS``, you must supply the *tls_context* argument
+To enable :rfc:`3207` ``STARTTLS``, you must supply the *tls_context* argument
 to the :class:`SMTP` class.  *tls_context* is created with the
-:meth:`ssl.create_default_context()` call from the ssl_ module, as follows::
+:func:`ssl.create_default_context` call from the :mod:`ssl` module, as follows::
 
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
 
 The context must be initialized with a server certificate, private key, and/or
 intermediate CA certificate chain with the
-:meth:`ssl.SSLContext.load_cert_chain()` method.  This can be done with
+:meth:`ssl.SSLContext.load_cert_chain` method.  This can be done with
 separate files, or an all in one file.  Files must be in PEM format.
 
 For example, if you wanted to use a self-signed certification for localhost,
 which is easy to create but doesn't provide much security, you could use the
-``openssl(1)`` command like so::
+:manpage:`openssl(1)` command like so::
 
     $ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=localhost'
 
@@ -285,7 +284,7 @@ constructor.
 
 Note that a number of exceptions can be generated by these methods, and by SSL
 connections, which you must be prepared to handle.  Additional documentation
-is available in Python's ssl_ module, and should be reviewed before use; in
+is available in Python's :mod:`ssl` module, and should be reviewed before use; in
 particular if client authentication and/or advanced error handling is desired.
 
 If *require_starttls* is ``True``, a TLS session must be initiated for the
@@ -301,8 +300,6 @@ advertised, and the ``STARTTLS`` command will not be accepted.
 *require_starttls* is meaningless in this case, and should be set to
 ``False``.
 
-.. _StreamReaderProtocol: https://docs.python.org/3/library/asyncio-stream.html#streamreaderprotocol
-.. _`RFC 3207`: http://www.faqs.org/rfcs/rfc3207.html
-.. _`RFC 2821`: https://www.ietf.org/rfc/rfc2821.txt
 .. _`asyncio transport`: https://docs.python.org/3/library/asyncio-protocol.html#asyncio-transport
-.. _ssl: https://docs.python.org/3/library/ssl.html
+.. _StreamReaderProtocol: https://docs.python.org/3.6/library/asyncio-stream.html#streamreaderprotocol
+.. |StreamReaderProtocol| replace:: ``StreamReaderProtocol``
