@@ -36,7 +36,7 @@ from smtplib import (
 )
 from unittest.mock import Mock, PropertyMock, patch
 
-from typing import ContextManager, List, Tuple, cast
+from typing import ContextManager, Tuple, cast
 
 CRLF = '\r\n'
 BCRLF = b'\r\n'
