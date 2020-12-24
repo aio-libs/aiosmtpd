@@ -103,11 +103,11 @@ override to provide additional responses.
 SMTP API
 ========
 
-.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, decode_data=False, \
-   hostname=None, ident=None, tls_context=None, require_starttls=False, timeout=300, \
-   auth_required=False, auth_require_tls=True, auth_exclude_mechanism=None, \
-   auth_callback=None, authenticator=None, \
-   loop=None)
+.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, \
+   decode_data=False, hostname=None, ident=None, tls_context=None, \
+   require_starttls=False, timeout=300, auth_required=False, \
+   auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, \
+   authenticator=None, loop=None)
 
    **Parameters**
 
