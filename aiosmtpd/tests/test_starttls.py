@@ -1,18 +1,19 @@
 import ssl
 import unittest
-import pkg_resources
 
 from aiosmtpd.controller import Controller as BaseController
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import Session as Sess_, SMTP as SMTPProtocol
 from aiosmtpd.testing.helpers import (
+    ReceivingHandler,
     SUPPORTED_COMMANDS_TLS,
     assert_auth_invalid,
+    get_server_context,
 )
 from contextlib import ExitStack
 from email.mime.text import MIMEText
 from smtplib import SMTP
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 ModuleResources = ExitStack()
@@ -33,30 +34,13 @@ class Controller(BaseController):
         return SMTPProtocol(self.handler)
 
 
-class ReceivingHandler:
-    def __init__(self):
-        self.box = []
-
-    async def handle_DATA(self, server, session, envelope):
-        self.box.append(envelope)
-        return '250 OK'
-
-
-def get_tls_context():
-    tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    tls_context.load_cert_chain(
-        pkg_resources.resource_filename('aiosmtpd.tests.certs', 'server.crt'),
-        pkg_resources.resource_filename('aiosmtpd.tests.certs', 'server.key'))
-    return tls_context
-
-
 class TLSRequiredController(Controller):
     def factory(self):
         return SMTPProtocol(
             self.handler,
             decode_data=True,
             require_starttls=True,
-            tls_context=get_tls_context())
+            tls_context=get_server_context())
 
 
 class TLSController(Controller):
@@ -65,7 +49,7 @@ class TLSController(Controller):
             self.handler,
             decode_data=True,
             require_starttls=False,
-            tls_context=get_tls_context())
+            tls_context=get_server_context())
 
 
 class RequireTLSAuthDecodingController(Controller):
@@ -74,7 +58,7 @@ class RequireTLSAuthDecodingController(Controller):
             self.handler,
             decode_data=True,
             auth_require_tls=True,
-            tls_context=get_tls_context())
+            tls_context=get_server_context())
 
 
 class HandshakeFailingHandler:
@@ -296,3 +280,36 @@ class TestRequireTLSAUTH(unittest.TestCase):
             client.ehlo('example.com')
             code, response = client.docmd('AUTH PLAIN AHRlc3QAdGVzdA==')
             assert_auth_invalid(self, code, response)
+
+
+class TestTLSContext(unittest.TestCase):
+    def test_verify_mode_nochange(self):
+        context = get_server_context()
+        for mode in (ssl.CERT_NONE, ssl.CERT_OPTIONAL):
+            context.verify_mode = mode
+            _ = SMTPProtocol(Sink(), tls_context=context)
+            self.assertEqual(mode, context.verify_mode)
+
+    @patch("logging.Logger.warning")
+    def test_certreq_warn(self, mock_warn: Mock):
+        context = get_server_context()
+        context.verify_mode = ssl.CERT_REQUIRED
+        _ = SMTPProtocol(Sink(), tls_context=context)
+        self.assertEqual(ssl.CERT_REQUIRED, context.verify_mode)
+        mock_warn.assert_called_once()
+        warn_msg = mock_warn.call_args[0][0]
+        self.assertIn("tls_context.verify_mode", warn_msg)
+        self.assertIn("might cause client connection problems", warn_msg)
+
+    @patch("logging.Logger.warning")
+    def test_nocertreq_chkhost_warn(self, mock_warn: Mock):
+        context = get_server_context()
+        # .check_hostname=True needs .verify_mode!=CERT_NONE
+        context.verify_mode = ssl.CERT_OPTIONAL
+        context.check_hostname = True
+        _ = SMTPProtocol(Sink(), tls_context=context)
+        self.assertEqual(ssl.CERT_OPTIONAL, context.verify_mode)
+        mock_warn.assert_called_once()
+        warn_msg = mock_warn.call_args[0][0]
+        self.assertIn("tls_context.check_hostname", warn_msg)
+        self.assertIn("might cause client connection problems", warn_msg)

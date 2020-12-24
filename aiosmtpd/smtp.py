@@ -127,7 +127,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             decode_data=False,
             hostname=None,
             ident=None,
-            tls_context=None,
+            tls_context: Optional[ssl.SSLContext] = None,
             require_starttls=False,
             timeout=300,
             auth_required=False,
@@ -154,10 +154,14 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.hostname = socket.getfqdn()
         self.tls_context = tls_context
         if tls_context:
-            # Through rfc3207 part 4.1 certificate checking is part of SMTP
-            # protocol, not SSL layer.
-            self.tls_context.check_hostname = False
-            self.tls_context.verify_mode = ssl.CERT_NONE
+            if (tls_context.verify_mode
+                    not in {ssl.CERT_NONE, ssl.CERT_OPTIONAL}):
+                log.warning("tls_context.verify_mode not in {CERT_NONE, "
+                            "CERT_OPTIONAL}; this might cause client "
+                            "connection problems")
+            elif tls_context.check_hostname:
+                log.warning("tls_context.check_hostname == True; "
+                            "this might cause client connection problems")
         self.require_starttls = tls_context and require_starttls
         self._timeout_duration = timeout
         self._timeout_handle = None
@@ -171,6 +175,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not auth_require_tls and auth_required:
             warn("Requiring AUTH while not requiring TLS "
                  "can lead to security vulnerabilities!")
+            log.warning("auth_required == True but auth_require_tls == False")
         self._auth_require_tls = auth_require_tls
         self._auth_callback = auth_callback or login_always_fail
         self._auth_required = auth_required

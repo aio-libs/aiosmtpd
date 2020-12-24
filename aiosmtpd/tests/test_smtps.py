@@ -8,6 +8,10 @@ import pkg_resources
 from aiosmtpd.controller import Controller as BaseController
 from aiosmtpd.smtp import SMTP as SMTPProtocol
 from contextlib import ExitStack
+from aiosmtpd.testing.helpers import (
+    ReceivingHandler,
+    get_server_context
+)
 from email.mime.text import MIMEText
 from smtplib import SMTP_SSL
 from unittest.mock import patch
@@ -29,23 +33,6 @@ def tearDownModule():
 class Controller(BaseController):
     def factory(self):
         return SMTPProtocol(self.handler)
-
-
-class ReceivingHandler:
-    def __init__(self):
-        self.box = []
-
-    async def handle_DATA(self, server, session, envelope):
-        self.box.append(envelope)
-        return '250 OK'
-
-
-def get_server_context():
-    tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    tls_context.load_cert_chain(
-        pkg_resources.resource_filename('aiosmtpd.tests.certs', 'server.crt'),
-        pkg_resources.resource_filename('aiosmtpd.tests.certs', 'server.key'))
-    return tls_context
 
 
 def get_client_context():
