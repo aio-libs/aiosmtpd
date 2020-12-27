@@ -44,6 +44,7 @@ class _DataState(enum.Enum):
     TOO_MUCH = enum.auto()
 
 
+AuthCallbackType = Callable[[str, Optional[bytes], Optional[bytes]], bool]
 AuthMechanismType = Callable[["SMTP", List[str]], Awaitable[Any]]
 _TriStateType = Union[None, _Missing, bytes]
 
@@ -163,7 +164,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             auth_required=False,
             auth_require_tls=True,
             auth_exclude_mechanism: Optional[Iterable[str]] = None,
-            auth_callback: Callable[[str, bytes, bytes], bool] = None,
+            auth_callback: AuthCallbackType = None,
             loop=None,
     ):
         self.__ident__ = ident or __ident__
