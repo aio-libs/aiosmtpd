@@ -9,7 +9,7 @@ import warnings
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import (
-    MISSING, Session as SMTPSess, SMTP as Server, __ident__ as GREETING
+    MISSING, Session as SMTPSess, SMTP as Server, __ident__ as GREETING, auth_mechanism
 )
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
@@ -75,6 +75,16 @@ class PeekerHandler:
             self, server, args
     ):
         return MISSING
+
+    async def auth_WITH_UNDERSCORE(self, server, args):
+        return "250 OK"
+
+    @auth_mechanism("with-dash")
+    async def auth_WITH_DASH(self, server, args):
+        return "250 OK"
+
+    async def auth_WITH__MULTI__DASH(self, server, args):
+        return "250 OK"
 
 
 class PeekerAuth:
@@ -972,7 +982,7 @@ class TestSMTPAuth(unittest.TestCase):
                 bytes(socket.getfqdn(), 'utf-8'),
                 b'SIZE 33554432',
                 b'SMTPUTF8',
-                b'AUTH LOGIN NULL PLAIN',
+                b'AUTH LOGIN NULL PLAIN WITH-DASH WITH-MULTI-DASH WITH_UNDERSCORE',
                 b'HELP',
             )
             for actual, expected in zip(lines, expecteds):
@@ -1842,3 +1852,8 @@ class TestAuthArgs(unittest.TestCase):
         mock_info.assert_any_call(
             f"Available AUTH mechanisms: {' '.join(auth_mechs)}"
         )
+
+    def test_authmechname_decorator_badname(self):
+        self.assertRaises(ValueError, auth_mechanism, "has space")
+        self.assertRaises(ValueError, auth_mechanism, "has.dot")
+        self.assertRaises(ValueError, auth_mechanism, "has/slash")

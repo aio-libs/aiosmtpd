@@ -135,6 +135,24 @@ Every AUTH hook is named ``auth_MECHANISM`` where ``MECHANISM`` is the all-upper
 mechanism that the hook will implement. AUTH hooks will be called with the SMTP
 server instance and a list of str following the ``AUTH`` command.
 
+.. important::
+
+   If ``MECHANISM`` has a dash within its name,
+   use **double-underscore** to represent the dash.
+   For example, to implement a ``MECH-WITH-DASHES`` mechanism,
+   name the AUTH hook as ``auth_MECH__WITH__DASHES``.
+
+   Single underscores will not be modified.
+   So a hook named ``auth_MECH_WITH_UNDERSCORE``
+   will implement the ``MECH_WITH_UNDERSCORE`` mechanism.
+
+   (If in the future a SASL mechanism with double underscores in its name gets defined,
+   this name-mangling mechanism will be revisited.
+   That is very unlikely to happen, though.)
+
+   Alternatively, you can also use the ``@auth_mechanism(actual_name)`` decorator,
+   which you can import from the :mod:`aiosmtpd.smtp` module.
+
 The SMTP class provides built-in AUTH hooks for the ``LOGIN`` and ``PLAIN``
 mechanisms, named ``auth_LOGIN`` and ``auth_PLAIN``, respectively.
 If the handler class implements ``auth_LOGIN`` and/or ``auth_PLAIN``, then

@@ -1,7 +1,9 @@
+import re
 import ssl
 import enum
 import socket
 import asyncio
+import inspect
 import logging
 import binascii
 import collections
@@ -61,6 +63,7 @@ EMPTY_BARR = bytearray()
 EMPTYBYTES = b''
 MISSING = _Missing()
 NEWLINE = '\n'
+VALID_AUTHMECH = re.compile(r"[A-Z0-9_-]+\Z")
 
 # endregion
 
@@ -101,6 +104,24 @@ def syntax(text, extended=None, when=None):
         f.__smtp_syntax_extended__ = extended
         f.__smtp_syntax_when__ = when
         return f
+    return decorator
+
+
+@public
+def auth_mechanism(actual_name: str):
+    """
+    Explicitly specifies the name of the AUTH mechanism implemented by
+    the function/method this decorates
+
+    :param actual_name: Name of AUTH mechanism. Must consists of [A-Z0-9_-] only.
+        Will be converted to uppercase
+    """
+    def decorator(f):
+        f.__auth_mechanism_name__ = actual_name
+        return f
+    actual_name = actual_name.upper()
+    if not VALID_AUTHMECH.match(actual_name):
+        raise ValueError(f"Invalid AUTH mechanism name: {actual_name}")
     return decorator
 
 
@@ -182,18 +203,23 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.authenticated = False
         # Get hooks & methods to significantly speedup getattr's
         self._auth_methods: Dict[str, _AuthMechAttr] = {
-            m.replace("auth_", ""): _AuthMechAttr(getattr(h, m), h is self)
-            for h in (self, handler)
-            for m in dir(h)
-            if m.startswith("auth_")
+            getattr(
+                mfunc, "__auth_mechanism_name__",
+                mname.replace("auth_", "").replace("__", "-")
+            ): _AuthMechAttr(mfunc, obj is self)
+            for obj in (self, handler)
+            for mname, mfunc in inspect.getmembers(obj)
+            if mname.startswith("auth_")
         }
         for m in (auth_exclude_mechanism or []):
             self._auth_methods.pop(m, None)
-        msg = "Available AUTH mechanisms:"
-        for m, impl in sorted(
-                self._auth_methods.items()):  # type: str, _AuthMechAttr
-            msg += f" {m}{'(builtin)' if impl.is_builtin else ''}"
-        log.info(msg)
+        log.info(
+            "Available AUTH mechanisms: "
+            + " ".join(
+                m + "(builtin)" if impl.is_builtin else m
+                for m, impl in sorted(self._auth_methods.items())
+            )
+        )
         self._handle_hooks: Dict[str, Callable] = {
             m.replace("handle_", ""): getattr(handler, m)
             for m in dir(handler)
