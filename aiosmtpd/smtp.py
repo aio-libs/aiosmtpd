@@ -98,7 +98,16 @@ def make_loop():
     return asyncio.get_event_loop()
 
 
-def syntax(text, extended=None, when=None):
+@public
+def syntax(text, extended=None, when: Optional[str] = None):
+    """
+    Provides helptext for (E)SMTP HELP. Applies for smtp_* methods only!
+
+    :param text: Help text for SMTP HELP (and ESMTP if extended not given)
+    :param extended: Help text for ESMTP HELP
+    :param when: The name of the attribute of SMTP class to check; if the value
+        of the attribute is false-y then HELP will not be available for the command
+    """
     def decorator(f):
         f.__smtp_syntax__ = text
         f.__smtp_syntax_extended__ = extended
