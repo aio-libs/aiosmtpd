@@ -1062,6 +1062,37 @@ class TestSMTPAuth(unittest.TestCase):
             self.assertEqual(response,
                              b"5.5.4 Unrecognized authentication type")
 
+    def test_rset_maintain_authenticated(self):
+        """RSET resets only Envelope not Session"""
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, mesg = client.docmd("AUTH PLAIN")
+            self.assertEqual(code, 334)
+            self.assertEqual(mesg, b"")
+            code, mesg = client.docmd('=')
+            assert_auth_success(self, code, mesg)
+            self.assertEqual(auth_peeker.login, None)
+            self.assertEqual(auth_peeker.password, None)
+            code, mesg = client.mail("alice@example.com")
+            sess: SMTPSess = self.handler.session
+            self.assertEqual(sess.login_data, b"")
+            code, mesg = client.rset()
+            self.assertEqual(code, 250)
+            code, mesg = client.docmd("AUTH PLAIN")
+            self.assertEqual(503, code)
+            self.assertEqual(b'Already authenticated', mesg)
+
+    def test_auth_individually(self):
+        """AUTH state of different clients must be independent"""
+        with SMTP(*self.address) as client1,  SMTP(*self.address) as client2:
+            for client in client1, client2:
+                client.ehlo("example.com")
+                code, mesg = client.docmd("AUTH PLAIN")
+                self.assertEqual(code, 334)
+                self.assertEqual(mesg, b"")
+                code, mesg = client.docmd('=')
+                assert_auth_success(self, code, mesg)
+
 
 class TestRequiredAuthentication(unittest.TestCase):
     def setUp(self):
