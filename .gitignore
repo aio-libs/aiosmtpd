@@ -20,10 +20,13 @@ var/*
 .tox
 .DS_Store
 .coverage
+.coverage.*.*
 .noseids
 docs/_build/
 nosetests.xml
 __pycache__/
-htmlcov
+htmlcov/
+_dynamic/
 coverage.xml
 diffcov.html
+.python-version

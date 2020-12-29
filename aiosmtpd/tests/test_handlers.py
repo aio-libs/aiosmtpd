@@ -17,9 +17,27 @@ from unittest.mock import call, patch
 CRLF = '\r\n'
 
 
+ModuleResources = ExitStack()
+
+
+def setUpModule():
+    # Needed especially on FreeBSD because socket.getfqdn() is slow on that OS,
+    # and oftentimes (not always, though) leads to Error
+    ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
+
+
+def tearDownModule():
+    ModuleResources.close()
+
+
 class DecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True)
+
+
+class AUTHDecodingController(Controller):
+    def factory(self):
+        return Server(self.handler, decode_data=True, auth_require_tls=False)
 
 
 class DataHandler:
@@ -425,7 +443,7 @@ Testing
             'Subject: A test',
             'X-Peer: ::1',
             '',
-            'Testing']).encode('ascii')
+            'Testing\r\n']).encode('ascii')
 
     def test_deliver_bytes(self):
         with ExitStack() as resources:
@@ -538,6 +556,12 @@ class DATAHandler:
         return '599 Not today'
 
 
+class AUTHHandler:
+    async def handle_AUTH(self, server, session, envelope, args):
+        server.authenticates = True
+        return '235 Authentication successful'
+
+
 class NoHooksHandler:
     pass
 
@@ -604,6 +628,16 @@ Yikes
             self.assertEqual(cm.exception.smtp_code, 599)
             self.assertEqual(cm.exception.smtp_error, b'Not today')
 
+    def test_auth_hook(self):
+        controller = AUTHDecodingController(AUTHHandler())
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            client.ehlo('me')
+            code, response = client.login("test", "test")
+        self.assertEqual(code, 235)
+        self.assertEqual(response, b'Authentication successful')
+
     def test_no_hooks(self):
         controller = Controller(NoHooksHandler())
         controller.start()
@@ -633,6 +667,10 @@ class CapturingServer(Server):
 
 
 class CapturingController(Controller):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.smtpd = None
+
     def factory(self):
         self.smtpd = CapturingServer(self.handler)
         return self.smtpd
@@ -671,6 +709,10 @@ class DeprecatedHookServer(Server):
 
 
 class DeprecatedHookController(Controller):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.smtpd = None
+
     def factory(self):
         self.smtpd = DeprecatedHookServer(self.handler)
         return self.smtpd

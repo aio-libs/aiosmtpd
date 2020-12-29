@@ -1,25 +1,68 @@
 import ssl
+import enum
 import socket
 import asyncio
 import logging
+import binascii
 import collections
+import asyncio.sslproto as sslproto
 
-from asyncio import sslproto
+from base64 import b64decode
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
 from public import public
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Union,
+)
 from warnings import warn
 
 
-__version__ = '1.2+'
+# region #### Custom Data Types #######################################################
+
+class _Missing:
+    pass
+
+
+class _AuthMechAttr(NamedTuple):
+    method: "AuthMechanismType"
+    is_builtin: bool
+
+
+class _DataState(enum.Enum):
+    NOMINAL = enum.auto()
+    TOO_LONG = enum.auto()
+    TOO_MUCH = enum.auto()
+
+
+AuthMechanismType = Callable[["SMTP", List[str]], Awaitable[Any]]
+_TriStateType = Union[None, _Missing, bytes]
+
+
+# endregion
+
+
+# region #### Constant & Constant-likes ###############################################
+
+__version__ = '1.2.3a3'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
 
-DATA_SIZE_DEFAULT = 33554432
+DATA_SIZE_DEFAULT = 2**25  # Where does this number come from, I wonder...
+EMPTY_BARR = bytearray()
 EMPTYBYTES = b''
+MISSING = _Missing()
 NEWLINE = '\n'
-MISSING = object()
+
+# endregion
 
 
 @public
@@ -30,6 +73,7 @@ class Session:
         self.host_name = None
         self.extended_smtp = False
         self.loop = loop
+        self.login_data = None
 
 
 @public
@@ -38,7 +82,7 @@ class Envelope:
         self.mail_from = None
         self.mail_options = []
         self.smtp_utf8 = False
-        self.content = None
+        self.content: Union[None, bytes, str] = None
         self.original_content = None
         self.rcpt_tos = []
         self.rcpt_options = []
@@ -60,30 +104,50 @@ def syntax(text, extended=None, when=None):
     return decorator
 
 
+def login_always_fail(mechanism, login, password):
+    return False
+
+
+class TLSSetupException(Exception):
+    pass
+
+
 @public
 class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
     command_size_limits = collections.defaultdict(
         lambda x=command_size_limit: x)
+    line_length_limit = 1001
+    """Maximum line length according to RFC 5321 s 4.5.3.1.6"""
+    # The number comes from this calculation:
+    # (RFC 5322 s 2.1.1 + RFC 6532 s 3.4) 998 octets + CRLF = 1000 octets
+    # (RFC 5321 s 4.5.3.1.6) 1000 octets + "transparent dot" = 1001 octets
 
-    def __init__(self, handler,
-                 *,
-                 data_size_limit=DATA_SIZE_DEFAULT,
-                 enable_SMTPUTF8=False,
-                 decode_data=False,
-                 hostname=None,
-                 ident=None,
-                 tls_context=None,
-                 require_starttls=False,
-                 timeout=300,
-                 loop=None):
+    def __init__(
+            self, handler,
+            *,
+            data_size_limit=DATA_SIZE_DEFAULT,
+            enable_SMTPUTF8=False,
+            decode_data=False,
+            hostname=None,
+            ident=None,
+            tls_context: Optional[ssl.SSLContext] = None,
+            require_starttls=False,
+            timeout=300,
+            auth_required=False,
+            auth_require_tls=True,
+            auth_exclude_mechanism: Optional[Iterable[str]] = None,
+            auth_callback: Callable[[str, bytes, bytes], bool] = None,
+            loop=None,
+    ):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
         super().__init__(
-            asyncio.StreamReader(loop=self.loop),
+            asyncio.StreamReader(loop=self.loop, limit=self.line_length_limit),
             client_connected_cb=self._client_connected_cb,
             loop=self.loop)
         self.event_handler = handler
+        assert data_size_limit is None or isinstance(data_size_limit, int)
         self.data_size_limit = data_size_limit
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self._decode_data = decode_data
@@ -94,10 +158,14 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.hostname = socket.getfqdn()
         self.tls_context = tls_context
         if tls_context:
-            # Through rfc3207 part 4.1 certificate checking is part of SMTP
-            # protocol, not SSL layer.
-            self.tls_context.check_hostname = False
-            self.tls_context.verify_mode = ssl.CERT_NONE
+            if (tls_context.verify_mode
+                    not in {ssl.CERT_NONE, ssl.CERT_OPTIONAL}):
+                log.warning("tls_context.verify_mode not in {CERT_NONE, "
+                            "CERT_OPTIONAL}; this might cause client "
+                            "connection problems")
+            elif tls_context.check_hostname:
+                log.warning("tls_context.check_hostname == True; "
+                            "this might cause client connection problems")
         self.require_starttls = tls_context and require_starttls
         self._timeout_duration = timeout
         self._timeout_handle = None
@@ -108,6 +176,38 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.envelope = None
         self.transport = None
         self._handler_coroutine = None
+        if not auth_require_tls and auth_required:
+            warn("Requiring AUTH while not requiring TLS "
+                 "can lead to security vulnerabilities!")
+            log.warning("auth_required == True but auth_require_tls == False")
+        self._auth_require_tls = auth_require_tls
+        self._auth_callback = auth_callback or login_always_fail
+        self._auth_required = auth_required
+        self.authenticated = False
+        # Get hooks & methods to significantly speedup getattr's
+        self._auth_methods: Dict[str, _AuthMechAttr] = {
+            m.replace("auth_", ""): _AuthMechAttr(getattr(h, m), h is self)
+            for h in (self, handler)
+            for m in dir(h)
+            if m.startswith("auth_")
+        }
+        for m in (auth_exclude_mechanism or []):
+            self._auth_methods.pop(m, None)
+        msg = "Available AUTH mechanisms:"
+        for m, impl in sorted(
+                self._auth_methods.items()):  # type: str, _AuthMechAttr
+            msg += f" {m}{'(builtin)' if impl.is_builtin else ''}"
+        log.info(msg)
+        self._handle_hooks: Dict[str, Callable] = {
+            m.replace("handle_", ""): getattr(handler, m)
+            for m in dir(handler)
+            if m.startswith("handle_")
+        }
+        self._smtp_methods: Dict[str, Any] = {
+            m.replace("smtp_", ""): getattr(self, m)
+            for m in dir(self)
+            if m.startswith("smtp_")
+        }
 
     def _create_session(self):
         return Session(self.loop)
@@ -116,7 +216,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         return Envelope()
 
     async def _call_handler_hook(self, command, *args):
-        hook = getattr(self.event_handler, 'handle_' + command, None)
+        hook = self._handle_hooks.get(command)
         if hook is None:
             return MISSING
         status = await hook(self, self.session, self.envelope, *args)
@@ -144,11 +244,11 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Do SSL certificate checking as rfc3207 part 4.1 says.  Why is
             # _extra a protected attribute?
             self.session.ssl = self._tls_protocol._extra
-            handler = getattr(self.event_handler, 'handle_STARTTLS', None)
-            if handler is None:
+            hook = self._handle_hooks.get("STARTTLS")
+            if hook is None:
                 self._tls_handshake_okay = True
             else:
-                self._tls_handshake_okay = handler(
+                self._tls_handshake_okay = hook(
                     self, self.session, self.envelope)
         else:
             super().connection_made(transport)
@@ -175,15 +275,10 @@ class SMTP(asyncio.StreamReaderProtocol):
     def eof_received(self):
         log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
-        if self.session.ssl is not None:            # pragma: nomswin
+        if self.session.ssl is not None:
             # If STARTTLS was issued, return False, because True has no effect
             # on an SSL transport and raises a warning. Our superclass has no
             # way of knowing we switched to SSL so it might return True.
-            #
-            # This entire method seems not to be called during any of the
-            # starttls tests on Windows.  I don't really know why, but it
-            # causes these lines to fail coverage, hence the `nomswin` pragma
-            # above.
             return False
         return super().eof_received()
 
@@ -192,7 +287,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._timeout_handle.cancel()
 
         self._timeout_handle = self.loop.call_later(
-                self._timeout_duration, self._timeout_cb)
+            self._timeout_duration, self._timeout_cb)
 
     def _timeout_cb(self):
         log.info('%r connection timeout', self.session.peer)
@@ -228,7 +323,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             status = await self.event_handler.handle_exception(error)
             return status
         else:
-            log.exception('SMTP session exception')
+            log.exception('%r SMTP session exception', self.session.peer)
             status = '500 Error: ({}) {}'.format(
                 error.__class__.__name__, str(error))
             return status
@@ -237,9 +332,24 @@ class SMTP(asyncio.StreamReaderProtocol):
         log.info('%r handling connection', self.session.peer)
         await self.push('220 {} {}'.format(self.hostname, self.__ident__))
         while self.transport is not None:   # pragma: nobranch
-            # XXX Put the line limit stuff into the StreamReader?
             try:
-                line = await self._reader.readline()
+                try:
+                    line = await self._reader.readuntil()
+                except asyncio.LimitOverrunError as error:
+                    # Line too long. Read until end of line before sending 500.
+                    await self._reader.read(error.consumed)
+                    while True:
+                        try:
+                            await self._reader.readuntil()
+                            break
+                        except asyncio.LimitOverrunError as e:
+                            # Line is even longer...
+                            await self._reader.read(e.consumed)
+                            continue
+                    # Now that we have read a full line from the client,
+                    # send error response and read the next command line.
+                    await self.push('500 Command line too long')
+                    continue
                 log.debug('_handle_client readline: %s', line)
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.rstrip(b'\r\n')
@@ -247,28 +357,21 @@ class SMTP(asyncio.StreamReaderProtocol):
                 if not line:
                     await self.push('500 Error: bad syntax')
                     continue
-                i = line.find(b' ')
+                command, _, arg = line.partition(b" ")
                 # Decode to string only the command name part, which must be
                 # ASCII as per RFC.  If there is an argument, it is decoded to
                 # UTF-8/surrogateescape so that non-UTF-8 data can be
                 # re-encoded back to the original bytes when the SMTP command
                 # is handled.
-                if i < 0:
-                    try:
-                        command = line.upper().decode(encoding='ascii')
-                    except UnicodeDecodeError:
-                        await self.push('500 Error: bad syntax')
-                        continue
-
+                try:
+                    command = command.upper().decode(encoding='ascii')
+                except UnicodeDecodeError:
+                    await self.push('500 Error: bad syntax')
+                    continue
+                if not arg:
                     arg = None
                 else:
-                    try:
-                        command = line[:i].upper().decode(encoding='ascii')
-                    except UnicodeDecodeError:
-                        await self.push('500 Error: bad syntax')
-                        continue
-
-                    arg = line[i+1:].strip()
+                    arg = arg.strip()
                     # Remote SMTP servers can send us UTF-8 content despite
                     # whether they've declared to do so or not.  Some old
                     # servers can send 8-bit data.  Use surrogateescape so
@@ -292,7 +395,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                           if self.session.extended_smtp
                           else self.command_size_limit)
                 if len(line) > max_sz:
-                    await self.push('500 Error: line too long')
+                    await self.push('500 Command line too long')
                     continue
                 if not self._tls_handshake_okay and command != 'QUIT':
                     await self.push(
@@ -304,7 +407,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                     # RFC3207 part 4
                     await self.push('530 Must issue a STARTTLS command first')
                     continue
-                method = getattr(self, 'smtp_' + command, None)
+                method = self._smtp_methods.get(command)
                 if method is None:
                     await self.push(
                         '500 Error: command "%s" not recognized' % command)
@@ -317,21 +420,58 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # The connection got reset during the DATA command.
                 # XXX If handler method raises ConnectionResetError, we should
                 # verify that it was actually self._reader that was reset.
-                log.info('Connection lost during _handle_client()')
+                log.info('%r Connection lost during _handle_client()',
+                         self.session.peer)
+                self._writer.close()
+                raise
+            except ConnectionResetError:
+                log.info('%r Connection lost during _handle_client()',
+                         self.session.peer)
                 self._writer.close()
                 raise
             except Exception as error:
+                status = None
                 try:
                     status = await self.handle_exception(error)
-                    await self.push(status)
-                except Exception as error:
+                except Exception as inner_error:
                     try:
-                        log.exception('Exception in handle_exception()')
+                        log.exception('%r Exception in handle_exception()',
+                                      self.session.peer)
                         status = '500 Error: ({}) {}'.format(
-                            error.__class__.__name__, str(error))
+                            inner_error.__class__.__name__, str(inner_error))
                     except Exception:
                         status = '500 Error: Cannot describe error'
-                    await self.push(status)
+                finally:
+                    if isinstance(error, TLSSetupException):
+                        self.transport.close()
+                        self.connection_lost(error)
+                    else:
+                        await self.push(status)
+
+    async def check_helo_needed(self, helo: str = "HELO") -> bool:
+        """
+        Check if HELO/EHLO is needed.
+
+        :param helo: The actual string of HELO/EHLO
+        :return: True if HELO/EHLO is needed
+        """
+        if not self.session.host_name:
+            await self.push(f'503 Error: send {helo} first')
+            return True
+        return False
+
+    async def check_auth_needed(self, caller_method: str) -> bool:
+        """
+        Check if AUTH is needed.
+
+        :param caller_method: The SMTP method needing a check (for logging)
+        :return: True if AUTH is needed
+        """
+        if self._auth_required and not self.authenticated:
+            log.info(f'{caller_method}: Authentication required')
+            await self.push('530 5.7.0 Authentication required')
+            return True
+        return False
 
     # SMTP and ESMTP commands
     @syntax('HELO hostname')
@@ -371,6 +511,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             warn('Use handler.handle_EHLO() instead of .ehlo_hook()',
                  DeprecationWarning)
             await self.ehlo_hook()
+        if not self._auth_require_tls or self._tls_protocol:
+            await self.push(
+                "250-AUTH " + " ".join(sorted(self._auth_methods.keys()))
+            )
         status = await self._call_handler_hook('EHLO', hostname)
         if status is MISSING:
             self.session.host_name = hostname
@@ -405,12 +549,15 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push('454 TLS not available')
             return
         await self.push('220 Ready to start TLS')
+        # Create a waiter Future to wait for SSL handshake to complete
+        waiter = self.loop.create_future()
         # Create SSL layer.
+        # noinspection PyTypeChecker
         self._tls_protocol = sslproto.SSLProtocol(
             self.loop,
             self,
             self.tls_context,
-            None,
+            waiter,
             server_side=True)
         # Reconfigure transport layer.  Keep a reference to the original
         # transport so that we can close it explicitly when the connection is
@@ -421,6 +568,156 @@ class SMTP(asyncio.StreamReaderProtocol):
         # property, if it MUST be used externally?
         self.transport = self._tls_protocol._app_transport
         self._tls_protocol.connection_made(self._original_transport)
+        # wait until handshake complete
+        try:
+            await waiter
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            raise TLSSetupException() from error
+
+    @syntax("AUTH <mechanism>")
+    async def smtp_AUTH(self, arg: str) -> None:
+        if await self.check_helo_needed("EHLO"):
+            return
+        elif not self.session.extended_smtp:
+            await self.push("500 Error: command 'AUTH' not recognized")
+        elif self._auth_require_tls and not self._tls_protocol:
+            await self.push("538 5.7.11 Encryption required for requested "
+                            "authentication mechanism")
+        elif self.authenticated:
+            await self.push('503 Already authenticated')
+        elif not arg:
+            await self.push('501 Not enough value')
+        else:
+            args = arg.split()
+            if len(args) > 2:
+                await self.push('501 Too many values')
+                return
+
+            mechanism = args[0]
+            if mechanism not in self._auth_methods:
+                await self.push('504 5.5.4 Unrecognized authentication type')
+                return
+
+            status = await self._call_handler_hook('AUTH', args)
+            if status is MISSING:
+                method = self._auth_methods[mechanism]
+                if method.is_builtin:
+                    log.debug(f"Using builtin auth_ hook for {mechanism}")
+                else:
+                    log.debug(f"Using handler auth_ hook for {mechanism}")
+                # Pass 'self' to method so external methods can leverage this
+                # class's helper methods such as push()
+                login_data = await method.method(self, args)
+                log.debug(f"auth_{mechanism} returned {login_data}")
+                if login_data is None:
+                    # None means there's an error already handled by method and
+                    # we don't need to do anything more
+                    return
+                elif login_data is MISSING:
+                    # MISSING means no error in AUTH process, but credentials
+                    # is rejected / not valid
+                    status = '535 5.7.8 Authentication credentials invalid'
+                else:
+                    self.authenticated = True
+                    self.session.login_data = login_data
+                    status = '235 2.7.0 Authentication successful'
+            if status is not None:  # pragma: no branch
+                await self.push(status)
+
+    async def _auth_interact(self, server_message) -> _TriStateType:
+        blob: bytes
+        await self.push(server_message)
+        line = await self._reader.readline()
+        blob = line.strip()
+        # '=' and '*' handling are in accordance with RFC4954
+        if blob == b"=":
+            log.debug("User responded with '='")
+            return None
+        if blob == b"*":
+            log.warning("User requested abort with '*'")
+            await self.push("501 Auth aborted")
+            return MISSING
+        try:
+            decoded_blob = b64decode(blob, validate=True)
+        except binascii.Error:
+            await self.push("501 5.5.2 Can't decode base64")
+            return MISSING
+        return decoded_blob
+
+    # IMPORTANT NOTES FOR THE auth_* METHODS
+    #
+    # 1. For internal methods, due to how they are called, we must ignore
+    #    the first arg
+    # 2. All auth_* methods can return one of three values:
+    #    - None: An error happened and handled;
+    #            smtp_AUTH should do nothing more
+    #    - MISSING: No error during SMTP AUTH process, but authentication
+    #               failed
+    #    - [Any]: Authentication succeeded and this is the 'identity' of
+    #             the SMTP user
+    #      - 'identity' is not always username, depending on the auth mecha-
+    #        nism. Might be a session key, a one-time user ID, or any kind of
+    #        object, actually.
+    #      - If the client provides "=" for username during interaction, the
+    #        method MUST return b"" (empty bytes)
+    # 3. Auth credentials checking is performed in the auth_* methods because
+    #    more advanced auth mechanism might not return login+password pair
+    #    (see #2 above)
+
+    async def auth_PLAIN(self, _, args: List[str]):
+        loginpassword: _TriStateType
+        if len(args) == 1:
+            # Trailing space is MANDATORY
+            # See https://tools.ietf.org/html/rfc4954#page-4
+            loginpassword = await self._auth_interact("334 ")
+            if loginpassword is MISSING:
+                return
+        else:
+            blob = args[1].encode()
+            if blob == b"=":
+                loginpassword = None
+            else:
+                try:
+                    loginpassword = b64decode(blob, validate=True)
+                except Exception:
+                    await self.push("501 5.5.2 Can't decode base64")
+                    return
+        if loginpassword is None:
+            login = password = None
+        else:
+            try:
+                _, login, password = loginpassword.split(b"\x00")
+            except ValueError:  # not enough args
+                await self.push("501 5.5.2 Can't split auth value")
+                return
+        if self._auth_callback("PLAIN", login, password):
+            if login is None:
+                login = EMPTYBYTES
+            return login
+        else:
+            return MISSING
+
+    async def auth_LOGIN(self, _, args: List[str]):
+        login: _TriStateType
+        # 'User Name\x00'
+        login = await self._auth_interact("334 VXNlciBOYW1lAA==")
+        if login is MISSING:
+            return
+
+        password: _TriStateType
+        # 'Password\x00'
+        password = await self._auth_interact("334 UGFzc3dvcmQA")
+        if password is MISSING:
+            return
+
+        if self._auth_callback("LOGIN", login, password):
+            if login is None:  # pragma: no branch
+                login = EMPTYBYTES
+            return login
+        else:
+            return MISSING
 
     def _strip_command_keyword(self, keyword, arg):
         keylen = len(keyword)
@@ -454,17 +751,19 @@ class SMTP(asyncio.StreamReaderProtocol):
         return result
 
     def _syntax_available(self, method):
-        if getattr(method, '__smtp_syntax__', None) is None:
+        if not hasattr(method, '__smtp_syntax__'):
             return False
         if method.__smtp_syntax_when__:
             return bool(getattr(self, method.__smtp_syntax_when__))
         return True
 
     @syntax('HELP [command]')
-    async def smtp_HELP(self, arg):
+    async def smtp_HELP(self, arg: str) -> None:
+        if await self.check_auth_needed("HELP"):
+            return
         code = 250
         if arg:
-            method = getattr(self, 'smtp_' + arg.upper(), None)
+            method = self._smtp_methods.get(arg.upper())
             if method and self._syntax_available(method):
                 help_str = method.__smtp_syntax__
                 if (self.session.extended_smtp
@@ -474,18 +773,17 @@ class SMTP(asyncio.StreamReaderProtocol):
                 return
             code = 501
         commands = []
-        for name in dir(self):
-            if not name.startswith('smtp_'):
-                continue
-            method = getattr(self, name)
+        for name, method in self._smtp_methods.items():
             if self._syntax_available(method):
-                commands.append(name.lstrip('smtp_'))
+                commands.append(name)
         commands.sort()
         await self.push(
             '{} Supported commands: {}'.format(code, ' '.join(commands)))
 
     @syntax('VRFY <address>')
-    async def smtp_VRFY(self, arg):
+    async def smtp_VRFY(self, arg: str) -> None:
+        if await self.check_auth_needed("VRFY"):
+            return
         if arg:
             try:
                 address, params = self._getaddr(arg)
@@ -503,9 +801,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push('501 Syntax: VRFY <address>')
 
     @syntax('MAIL FROM: <address>', extended=' [SP <mail-parameters>]')
-    async def smtp_MAIL(self, arg):
-        if not self.session.host_name:
-            await self.push('503 Error: send HELO first')
+    async def smtp_MAIL(self, arg: str) -> None:
+        if await self.check_helo_needed():
+            return
+        if await self.check_auth_needed("MAIL"):
             return
         log.debug('===> MAIL %s', arg)
         syntaxerr = '501 Syntax: MAIL FROM: <address>'
@@ -570,9 +869,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push(status)
 
     @syntax('RCPT TO: <address>', extended=' [SP <mail-parameters>]')
-    async def smtp_RCPT(self, arg):
-        if not self.session.host_name:
-            await self.push('503 Error: send HELO first')
+    async def smtp_RCPT(self, arg: str) -> None:
+        if await self.check_helo_needed():
+            return
+        if await self.check_auth_needed("RCPT"):
             return
         log.debug('===> RCPT %s', arg)
         if not self.envelope.mail_from:
@@ -589,9 +889,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push(syntaxerr)
             return
         address, params = self._getaddr(arg)
-        if address is None:
-            await self.push(syntaxerr)
-            return
         if not address:
             await self.push(syntaxerr)
             return
@@ -630,9 +927,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push('250 OK' if status is MISSING else status)
 
     @syntax('DATA')
-    async def smtp_DATA(self, arg):
-        if not self.session.host_name:
-            await self.push('503 Error: send HELO first')
+    async def smtp_DATA(self, arg: str) -> None:
+        if await self.check_helo_needed():
+            return
+        if await self.check_auth_needed("DATA"):
             return
         if not self.envelope.rcpt_tos:
             await self.push('503 Error: need RCPT command')
@@ -640,45 +938,87 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg:
             await self.push('501 Syntax: DATA')
             return
+
         await self.push('354 End data with <CR><LF>.<CR><LF>')
-        data = []
-        num_bytes = 0
-        size_exceeded = False
+        data: List[bytearray] = []
+
+        num_bytes: int = 0
+        limit: Optional[int] = self.data_size_limit
+        line_fragments: List[bytes] = []
+        state: _DataState = _DataState.NOMINAL
         while self.transport is not None:           # pragma: nobranch
+            # Since eof_received cancels this coroutine,
+            # readuntil() can never raise asyncio.IncompleteReadError.
             try:
-                line = await self._reader.readline()
+                line: bytes = await self._reader.readuntil()
                 log.debug('DATA readline: %s', line)
+                assert line.endswith(b'\n')
             except asyncio.CancelledError:
                 # The connection got reset during the DATA command.
                 log.info('Connection lost during DATA')
                 self._writer.close()
                 raise
-            if line == b'.\r\n':
-                if data:
-                    data[-1] = data[-1].rstrip(b'\r\n')
+            except asyncio.LimitOverrunError as e:
+                # The line exceeds StreamReader's "stream limit".
+                # Delay SMTP Status Code sending until data receive is complete
+                # This seems to be implied in RFC 5321 § 4.2.5
+                if state == _DataState.NOMINAL:
+                    # Transition to TOO_LONG only if we haven't gone TOO_MUCH yet
+                    state = _DataState.TOO_LONG
+                # Discard data immediately to prevent memory pressure
+                data *= 0
+                # Drain the stream anyways
+                line = await self._reader.read(e.consumed)
+                assert not line.endswith(b'\n')
+            # A lone dot in a line signals the end of DATA.
+            if not line_fragments and line == b'.\r\n':
                 break
             num_bytes += len(line)
-            if (not size_exceeded and
-                    self.data_size_limit and
-                    num_bytes > self.data_size_limit):
-                size_exceeded = True
+            if state == _DataState.NOMINAL and limit and num_bytes > limit:
+                # Delay SMTP Status Code sending until data receive is complete
+                # This seems to be implied in RFC 5321 § 4.2.5
+                state = _DataState.TOO_MUCH
+                # Discard data immediately to prevent memory pressure
+                data *= 0
+            line_fragments.append(line)
+            if line.endswith(b'\n'):
+                # Record data only if state is "NOMINAL"
+                if state == _DataState.NOMINAL:
+                    line = EMPTY_BARR.join(line_fragments)
+                    if len(line) > self.line_length_limit:
+                        # Theoretically we shouldn't reach this place. But it's always
+                        # good to practice DEFENSIVE coding.
+                        state = _DataState.TOO_LONG
+                        # Discard data immediately to prevent memory pressure
+                        data *= 0
+                    else:
+                        data.append(EMPTY_BARR.join(line_fragments))
+                line_fragments *= 0
+
+        # Day of reckoning! Let's take care of those out-of-nominal situations
+        if state != _DataState.NOMINAL:
+            if state == _DataState.TOO_LONG:
+                await self.push("500 Line too long (see RFC5321 4.5.3.1.6)")
+            elif state == _DataState.TOO_MUCH:  # pragma: nobranch
                 await self.push('552 Error: Too much mail data')
-            if not size_exceeded:
-                data.append(line)
-        if size_exceeded:
             self._set_post_data_state()
             return
+
+        # If unfinished_line is non-empty, then the connection was closed.
+        assert not line_fragments
+
         # Remove extraneous carriage returns and de-transparency
         # according to RFC 5321, Section 4.5.2.
-        for i in range(len(data)):
-            text = data[i]
-            if text and text[:1] == b'.':
-                data[i] = text[1:]
-        content = original_content = EMPTYBYTES.join(data)
+        for text in data:
+            if text.startswith(b'.'):
+                del text[0]
+        original_content: bytes = EMPTYBYTES.join(data)
+        # Discard data immediately to prevent memory pressure
+        data *= 0
+
         if self._decode_data:
             if self.enable_SMTPUTF8:
-                content = original_content.decode(
-                    'utf-8', errors='surrogateescape')
+                content = original_content.decode('utf-8', errors='surrogateescape')
             else:
                 try:
                     content = original_content.decode('ascii', errors='strict')
@@ -688,10 +1028,13 @@ class SMTP(asyncio.StreamReaderProtocol):
                     # but the client ignores that and sends non-ascii anyway.
                     await self.push('500 Error: strict ASCII mode')
                     return
+        else:
+            content = original_content
         self.envelope.content = content
         self.envelope.original_content = original_content
+
         # Call the new API first if it's implemented.
-        if hasattr(self.event_handler, 'handle_DATA'):
+        if "DATA" in self._handle_hooks:
             status = await self._call_handler_hook('DATA')
         else:
             # Backward compatibility.
