@@ -34,16 +34,19 @@ Handler hooks
 =============
 
 Handlers can implement hooks that get called during the SMTP dialog, or in
-exceptional cases.  These *handler hooks* are all called asynchronously
+exceptional cases.  These *handler hooks* are all called **asynchronously**
 (i.e. they are coroutines) and they *must* return a status string, such as
 ``'250 OK'``.  All handler hooks are optional and default behaviors are
 carried out by the ``SMTP`` class when a hook is omitted, so you only need to
 implement the ones you care about.  When a handler hook is defined, it may
 have additional responsibilities as described below.
 
-All handler hooks take at least three arguments, the ``SMTP`` server instance,
-:ref:`a session instance, and an envelope instance <sessions_and_envelopes>`.
-Some methods take additional arguments.
+All handler hooks will be called with at least three arguments:
+(1) the ``SMTP`` server instance,
+(2) :ref:`a session instance <sessions_and_envelopes>`, and
+(3) :ref:`an envelope instance <sessions_and_envelopes>`.
+
+Some handler hooks will receive additional arguments.
 
 The following hooks are currently defined:
 
@@ -55,13 +58,30 @@ The following hooks are currently defined:
     ``'250 {}'.format(server.hostname)`` as the status.
 
 .. py:method:: handle_EHLO(server, session, envelope, hostname)
+               handle_EHLO(server, session, envelope, hostname, responses)
 
     Called during ``EHLO``.  The ``hostname`` argument is the host name given
-    by the client in the ``EHLO`` command.  If implemented, this hook must
-    also set the ``session.host_name`` attribute.  This hook may push
-    additional ``250-<command>`` responses to the client by yielding from
-    ``server.push(status)`` before returning ``250 HELP`` as the final
-    response.
+    by the client in the ``EHLO`` command.
+
+    There are two implementation forms.
+
+    The first form accepts only 4 (four) arguments.
+    This hook may push *additional* ``250-<command>`` responses to the client by doing
+    ``await server.push(status)`` before returning ``"250 HELP"`` as the final response.
+
+    **This form will be deprecated in a future version.**
+
+    The second form accept 5 (five) arguments.
+    ``responses`` is a list strings representing the 'planned' responses to the ``EHLO`` command,
+    *including* the last ``250 HELP`` response.
+    The hook must return a list containing the desired responses.
+    *This is the only exception to the requirement of returning a status string.*
+
+    .. important::
+
+        It is strongly recommended to not change element ``[0]`` of the list
+        (containing the hostname of the SMTP server),
+        and to end the list with ``"250 HELP"``
 
 .. py:method:: handle_NOOP(server, session, envelope, arg)
 

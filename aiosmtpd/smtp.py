@@ -2,6 +2,7 @@ import ssl
 import enum
 import socket
 import asyncio
+import inspect
 import logging
 import binascii
 import collections
@@ -203,6 +204,23 @@ class SMTP(asyncio.StreamReaderProtocol):
             for m in dir(handler)
             if m.startswith("handle_")
         }
+        # When we've depracted the 4-arg form of handle_EHLO,
+        # we can -- and should -- remove this whole code block
+        ehlo_hook = self._handle_hooks.get("EHLO", None)
+        if ehlo_hook is None:
+            self._ehlo_hook_ver = None
+        else:
+            ehlo_hook_params = inspect.signature(ehlo_hook).parameters
+            if len(ehlo_hook_params) == 4:
+                self._ehlo_hook_ver = "old"
+                warn('The 4-argument handle_EHLO hook will be deprecated '
+                     'in a future version.',
+                     DeprecationWarning)
+            elif len(ehlo_hook_params) == 5:
+                self._ehlo_hook_ver = "new"
+            else:
+                raise RuntimeError("Unsupported EHLO Hook")
+
         self._smtp_methods: Dict[str, Any] = {
             m.replace("smtp_", ""): getattr(self, m)
             for m in dir(self)
@@ -507,22 +525,38 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.command_size_limits['MAIL'] += 10
         if self.tls_context and not self._tls_protocol:
             response.append('250-STARTTLS')
-        if hasattr(self, 'ehlo_hook'):
-            warn('Use handler.handle_EHLO() instead of .ehlo_hook()',
-                 DeprecationWarning)
-            await self.ehlo_hook()
         if not self._auth_require_tls or self._tls_protocol:
             response.append(
                 "250-AUTH " + " ".join(sorted(self._auth_methods.keys()))
             )
-        status = await self._call_handler_hook('EHLO', hostname)
-        if status is MISSING:
-            self.session.host_name = hostname
+
+        if hasattr(self, 'ehlo_hook'):
+            warn('Use handler.handle_EHLO() instead of .ehlo_hook()',
+                 DeprecationWarning)
+            await self.ehlo_hook()
+
+        if self._ehlo_hook_ver is None:
             response.append('250 HELP')
+        elif self._ehlo_hook_ver == "old":
+            # Old behavior: Send all responses first...
             for r in response:
                 await self.push(r)
-        else:
-            await self.push(status)
+            # ... then send the response from the hook.
+            response = [await self._call_handler_hook("EHLO", hostname)]
+            # (The hook might internally send its own responses.)
+        elif self._ehlo_hook_ver == "new":  # pragma: nobranch
+            # New behavior: hand over list of responses so far to the hook, and
+            # REPLACE existing list of responses with what the hook returns.
+            # We will handle the push()ing
+            response.append('250 HELP')
+            response = await self._call_handler_hook("EHLO", hostname, response)
+
+        for r in response:
+            await self.push(r)
+
+        # Defensive. Why must Session.host_name be set by EHLO hook anyways?
+        if self.session.host_name is None:
+            self.session.host_name = hostname
 
     @syntax('NOOP [ignored]')
     async def smtp_NOOP(self, arg):
