@@ -1084,7 +1084,7 @@ class TestSMTPAuth(unittest.TestCase):
 
     def test_auth_individually(self):
         """AUTH state of different clients must be independent"""
-        with SMTP(*self.address) as client1,  SMTP(*self.address) as client2:
+        with SMTP(*self.address) as client1, SMTP(*self.address) as client2:
             for client in client1, client2:
                 client.ehlo("example.com")
                 code, mesg = client.docmd("AUTH PLAIN")
