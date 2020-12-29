@@ -5,9 +5,9 @@
 ==================================
 
 aiosmtpd is designed to make it easy to migrate an existing application based
-on `smtpd <https://docs.python.org/3/library/smtpd.html>`__ to aiosmtpd.
+on :mod:`smtpd` to aiosmtpd.
 
-Consider the following subclass of ``smtpd.SMTPServer``::
+Consider the following subclass of :class:`smtpd.SMTPServer`::
 
     import smtpd
     import asyncore
@@ -51,9 +51,9 @@ the ``handle_DATA()`` method::
 
 Important differences to note:
 
-* Unlike ``process_message()`` in smtpd, ``handle_DATA()`` **must** return
-  an SMTP response code for the sender such as ``"250 OK"``.
+* Unlike :meth:`~smtpd.SMTPServer.process_message` in smtpd, ``handle_DATA()``
+  **must** return an SMTP response code for the sender such as ``"250 OK"``.
 * ``handle_DATA()`` must be a coroutine function, which means it must be
   declared with ``async def``.
-* ``controller.start()`` runs the SMTP server in a separate thread and can be
-  stopped again by calling ``controller.stop()``.
+* :meth:`Controller.start` runs the SMTP server in a separate thread and can be
+  stopped again by calling :meth:`Controller.stop`
