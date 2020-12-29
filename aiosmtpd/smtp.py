@@ -689,31 +689,33 @@ class SMTP(asyncio.StreamReaderProtocol):
     #    (see #2 above)
 
     async def auth_PLAIN(self, _, args: List[str]):
-        loginpassword: _TriStateType
+        login_and_password: _TriStateType
         if len(args) == 1:
             # Trailing space is MANDATORY
-            # See https://tools.ietf.org/html/rfc4954#page-4
-            loginpassword = await self._auth_interact("334 ")
-            if loginpassword is MISSING:
+            # See https://tools.ietf.org/html/rfc4954#page-4 ¶ 5
+            login_and_password = await self._auth_interact("334 ")
+            if login_and_password is MISSING:
                 return
         else:
-            blob = args[1].encode()
-            if blob == b"=":
-                loginpassword = None
+            blob = args[1]
+            if blob == "=":
+                login_and_password = None
             else:
                 try:
-                    loginpassword = b64decode(blob, validate=True)
+                    login_and_password = b64decode(blob, validate=True)
                 except Exception:
                     await self.push("501 5.5.2 Can't decode base64")
                     return
-        if loginpassword is None:
+        # Decode login data
+        if login_and_password is None:
             login = password = None
         else:
             try:
-                _, login, password = loginpassword.split(b"\x00")
+                _, login, password = login_and_password.split(b"\x00")
             except ValueError:  # not enough args
                 await self.push("501 5.5.2 Can't split auth value")
                 return
+        # Verify login data
         if self._auth_callback("PLAIN", login, password):
             if login is None:
                 login = EMPTYBYTES
