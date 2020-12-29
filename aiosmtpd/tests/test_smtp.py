@@ -328,16 +328,17 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
-            lines = response.splitlines()
-            expecteds = (
+            actuals = response.splitlines()
+            expecteds = [
                 bytes(socket.getfqdn(), 'utf-8'),
                 b'SIZE 33554432',
                 b'SMTPUTF8',
                 b'AUTH LOGIN PLAIN',
                 b'HELP',
-            )
-            for actual, expected in zip(lines, expecteds):
-                self.assertEqual(actual, expected)
+            ]
+            # for actual, expected in zip(lines, expecteds):
+            #     self.assertEqual(actual, expected)
+            self.assertEqual(expecteds, actuals)
 
     def test_ehlo_duplicate(self):
         with SMTP(*self.address) as client:
