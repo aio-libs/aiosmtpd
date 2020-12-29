@@ -55,7 +55,7 @@ _TriStateType = Union[None, _Missing, bytes]
 # region #### Constant & Constant-likes ###############################################
 
 __all__ = ["MISSING"]  # Will be added to by @public
-__version__ = '1.2.3a3'
+__version__ = '1.2.3a4'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
