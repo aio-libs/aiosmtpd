@@ -80,6 +80,10 @@ class Session:
         self.loop = loop
         self.login_data = None
 
+    @property
+    def authenticated(self):
+        return self.login_data is not None
+
 
 @public
 class Envelope:
@@ -211,7 +215,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._auth_require_tls = auth_require_tls
         self._auth_callback = auth_callback or login_always_fail
         self._auth_required = auth_required
-        self.authenticated = False
         # Get hooks & methods to significantly speedup getattr's
         self._auth_methods: Dict[str, _AuthMechAttr] = {
             getattr(
@@ -492,7 +495,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         :param caller_method: The SMTP method needing a check (for logging)
         :return: True if AUTH is needed
         """
-        if self._auth_required and not self.authenticated:
+        if self._auth_required and not self.session.authenticated:
             log.info(f'{caller_method}: Authentication required')
             await self.push('530 5.7.0 Authentication required')
             return True
@@ -595,7 +598,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         elif self._auth_require_tls and not self._tls_protocol:
             await self.push("538 5.7.11 Encryption required for requested "
                             "authentication mechanism")
-        elif self.authenticated:
+        elif self.session.authenticated:
             await self.push('503 Already authenticated')
         elif not arg:
             await self.push('501 Not enough value')
@@ -630,7 +633,6 @@ class SMTP(asyncio.StreamReaderProtocol):
                     # is rejected / not valid
                     status = '535 5.7.8 Authentication credentials invalid'
                 else:
-                    self.authenticated = True
                     self.session.login_data = login_data
                     status = '235 2.7.0 Authentication successful'
             if status is not None:  # pragma: no branch
@@ -671,7 +673,8 @@ class SMTP(asyncio.StreamReaderProtocol):
     #        nism. Might be a session key, a one-time user ID, or any kind of
     #        object, actually.
     #      - If the client provides "=" for username during interaction, the
-    #        method MUST return b"" (empty bytes)
+    #        method MUST return b"" (empty bytes) NOT None, because None has been
+    #        used to indicate error/login failure.
     # 3. Auth credentials checking is performed in the auth_* methods because
     #    more advanced auth mechanism might not return login+password pair
     #    (see #2 above)
