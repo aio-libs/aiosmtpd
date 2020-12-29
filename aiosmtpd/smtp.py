@@ -561,7 +561,6 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @syntax('STARTTLS', when='tls_context')
     async def smtp_STARTTLS(self, arg):
-        log.info('%r STARTTLS', self.session.peer)
         if arg:
             await self.push('501 Syntax: STARTTLS')
             return
@@ -817,7 +816,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         if await self.check_auth_needed("MAIL"):
             return
-        log.debug('===> MAIL %s', arg)
         syntaxerr = '501 Syntax: MAIL FROM: <address>'
         if self.session.extended_smtp:
             syntaxerr += ' [SP <mail-parameters>]'
@@ -885,7 +883,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         if await self.check_auth_needed("RCPT"):
             return
-        log.debug('===> RCPT %s', arg)
         if not self.envelope.mail_from:
             await self.push('503 Error: need MAIL command')
             return
