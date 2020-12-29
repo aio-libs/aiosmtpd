@@ -512,7 +512,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  DeprecationWarning)
             await self.ehlo_hook()
         if not self._auth_require_tls or self._tls_protocol:
-            await self.push(
+            response.append(
                 "250-AUTH " + " ".join(sorted(self._auth_methods.keys()))
             )
         status = await self._call_handler_hook('EHLO', hostname)
