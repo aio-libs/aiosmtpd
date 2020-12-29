@@ -105,8 +105,8 @@ def syntax(text, extended=None, when: Optional[str] = None):
     """
     Provides helptext for (E)SMTP HELP. Applies for smtp_* methods only!
 
-    :param text: Help text for SMTP HELP (and ESMTP if extended not given)
-    :param extended: Help text for ESMTP HELP
+    :param text: Help text for (E)SMTP HELP
+    :param extended: Additional text for ESMTP HELP (appended to text)
     :param when: The name of the attribute of SMTP class to check; if the value
         of the attribute is false-y then HELP will not be available for the command
     """
