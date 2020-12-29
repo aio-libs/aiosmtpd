@@ -185,6 +185,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._auth_callback = auth_callback or login_always_fail
         self._auth_required = auth_required
         self.authenticated = False
+
         # Get hooks & methods to significantly speedup getattr's
         self._auth_methods: Dict[str, _AuthMechAttr] = {
             m.replace("auth_", ""): _AuthMechAttr(getattr(h, m), h is self)
@@ -199,6 +200,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 self._auth_methods.items()):  # type: str, _AuthMechAttr
             msg += f" {m}{'(builtin)' if impl.is_builtin else ''}"
         log.info(msg)
+
         self._handle_hooks: Dict[str, Callable] = {
             m.replace("handle_", ""): getattr(handler, m)
             for m in dir(handler)
