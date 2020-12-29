@@ -360,7 +360,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         response = bytes(
             status + '\r\n', 'utf-8' if self.enable_SMTPUTF8 else 'ascii')
         self._writer.write(response)
-        log.debug(response)
+        log.debug("%r << %r", self.session.peer, response)
         await self._writer.drain()
 
     async def handle_exception(self, error):
@@ -395,10 +395,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                     # send error response and read the next command line.
                     await self.push('500 Command line too long')
                     continue
-                log.debug('_handle_client readline: %s', line)
+                log.debug('_handle_client readline: %r', line)
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.rstrip(b'\r\n')
-                log.info('%r Data: %s', self.session.peer, line)
+                log.info('%r >> %r', self.session.peer, line)
                 if not line:
                     await self.push('500 Error: bad syntax')
                     continue
@@ -654,15 +654,16 @@ class SMTP(asyncio.StreamReaderProtocol):
         blob = line.strip()
         # '=' and '*' handling are in accordance with RFC4954
         if blob == b"=":
-            log.debug("User responded with '='")
+            log.debug("%r responded with '='", self.session.peer)
             return None
         if blob == b"*":
-            log.warning("User requested abort with '*'")
+            log.warning("%r aborted with '*'", self.session.peer)
             await self.push("501 Auth aborted")
             return MISSING
         try:
             decoded_blob = b64decode(blob, validate=True)
         except binascii.Error:
+            log.debug("%r can't decode base64: %s", self.session.peer, blob)
             await self.push("501 5.5.2 Can't decode base64")
             return MISSING
         return decoded_blob
