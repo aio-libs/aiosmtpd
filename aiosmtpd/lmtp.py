@@ -4,11 +4,12 @@ from public import public
 
 @public
 class LMTP(SMTP):
+    show_smtp_greeting = False
+
     @syntax('LHLO hostname')
     async def smtp_LHLO(self, arg):
         """The LMTP greeting, used instead of HELO/EHLO."""
         await super().smtp_EHLO(arg)
-        self.show_smtp_greeting = False
 
     async def smtp_HELO(self, arg):
         """HELO is not a valid LMTP command."""

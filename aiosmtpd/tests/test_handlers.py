@@ -17,6 +17,19 @@ from unittest.mock import call, patch
 CRLF = '\r\n'
 
 
+ModuleResources = ExitStack()
+
+
+def setUpModule():
+    # Needed especially on FreeBSD because socket.getfqdn() is slow on that OS,
+    # and oftentimes (not always, though) leads to Error
+    ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
+
+
+def tearDownModule():
+    ModuleResources.close()
+
+
 class DecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True)

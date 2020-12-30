@@ -6,7 +6,22 @@ import unittest
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.lmtp import LMTP
+from contextlib import ExitStack
 from smtplib import SMTP
+from unittest.mock import patch
+
+
+ModuleResources = ExitStack()
+
+
+def setUpModule():
+    # Needed especially on FreeBSD because socket.getfqdn() is slow on that OS,
+    # and oftentimes (not always, though) leads to Error
+    ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
+
+
+def tearDownModule():
+    ModuleResources.close()
 
 
 class LMTPController(Controller):

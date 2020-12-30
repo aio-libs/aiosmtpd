@@ -2,11 +2,23 @@
  NEWS for aiosmtpd
 ===================
 
-aiosmtpd-next
-=============
+1.2.3 (aiosmtpd-next)
+=====================
+
+Added
+-----
+* Test for ``SMTP.__init__`` behavior after taking out code that edits TLS Context
 
 Fixed/Improved
 --------------
+* ``handle_exception()`` no longer gets called when the client disconnected (Closes #127, #162)
+* Implement & enforce line-length-limit, thus becoming Compliant with RFC 5321 § 4.5.3.1.6
+* Delay all SMTP Status Code replies during ``DATA`` phase until the phase termination (Closes #9)
+* Now catches ``Controller.factory()`` failure during ``Controller.start()`` (Closes #212)
+* :class:`SMTP` no longer edits user-supplied SSL Context (closes #191)
+* Implement waiting for SSL setup/handshake within STARTTLS handler to be able to catch and handle
+  (log) errors and to avoid session hanging around until timeout in such cases
+* Add session peer information to some logging output where it was missing
 * LMTP servers now correctly advertise extensions in reply to ``LHLO``.
 
 1.2.2 (2020-11-08)
