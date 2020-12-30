@@ -538,6 +538,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.ehlo_hook()
 
         if self._ehlo_hook_ver is None:
+            self.session.host_name = hostname
             response.append('250 HELP')
         elif self._ehlo_hook_ver == "old":
             # Old behavior: Send all responses first...
