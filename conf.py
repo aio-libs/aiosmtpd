@@ -18,15 +18,33 @@ import datetime
 
 from pathlib import Path
 
-YELLOW = "\x1b[1;93m"
-NORM = "\x1b[0m"
+try:
+    # noinspection PyPackageRequirements
+    from colorama import (
+        Fore,
+        Style,
+        init as colorama_init,
+    )
+    colorama_init()
+except ImportError:
+    class Fore:
+        CYAN = "\x1b[1;96m"
+        GREEN = "\x1b[1;92m"
+        YELLOW = "\x1b[1;93m"
+
+    class Style:
+        BRIGHT = "\x1b[1m"
+        RESET_ALL = "\x1b[0m"
+
+    colorama_init = None
 
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('.'))
-sys.path.append(str(Path("aiosmtpd/docs/_exts").expanduser().absolute()))
+_curdir = Path(".").expanduser().absolute()
+sys.path.insert(0, str(_curdir))
+sys.path.append(str(_curdir / "aiosmtpd" / "docs" / "_exts"))
 
 # -- General configuration ------------------------------------------------
 
@@ -289,17 +307,16 @@ def setup(app):
 
 def index_html():
     import errno
-    cwd = os.getcwd()
+    cwd = Path(".").expanduser().absolute()
+    htmldir = cwd / "build" / "sphinx" / "html"
     try:
         try:
-            os.makedirs('build/sphinx/html')
-        except OSError as error:
-            if error.errno != errno.EEXIST:
-                raise
-        os.chdir('build/sphinx/html')
+            htmldir.mkdir()
+        except FileExistsError:
+            pass
         try:
-            os.symlink('README.html', 'index.html')
-            print('index.html -> README.html')
+            (htmldir / "index.html").symlink_to("README.html")
+            print(f'{Fore.CYAN}index.html -> README.html')
         except OSError as error:
             # On Windows>= 7, only users with 'SeCreateSymbolicLinkPrivilege' token
             # can create symlinks.
@@ -307,14 +324,14 @@ def index_html():
                     or str(error) == "symbolic link privilege not held"):
                 # I don't like matching against string, but sometimes this particular
                 # OSError does not have any errno nor winerror.
-                print(f"{YELLOW}WARNING: No privilege to create symlinks. "
-                      f"You have to make one manually{NORM}")
+                print(f"{Fore.YELLOW}WARNING: No privilege to create symlinks. "
+                      f"You have to make one manually")
             elif error.errno == errno.EEXIST:
                 pass
             else:
                 raise
     finally:
-        os.chdir(cwd)
+        print(Style.RESET_ALL)
 
 
 import atexit
