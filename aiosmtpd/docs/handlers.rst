@@ -57,6 +57,15 @@ The following hooks are currently defined:
     also set the ``session.host_name`` attribute before returning
     ``'250 {}'.format(server.hostname)`` as the status.
 
+    .. important::
+
+        If the handler sets the ``session.host_name`` attribute to a false-y value
+        (or leave it as the default ``None`` value)
+        it will signal later steps that ``HELO`` failed
+        and need to be performed again.
+
+        This also applies to the :meth:`handle_EHLO` hook below.
+
 .. py:method:: handle_EHLO(server, session, envelope, hostname)
                handle_EHLO(server, session, envelope, hostname, responses)
 
@@ -69,7 +78,7 @@ The following hooks are currently defined:
     This hook may push *additional* ``250-<command>`` responses to the client by doing
     ``await server.push(status)`` before returning ``"250 HELP"`` as the final response.
 
-    **This form will be deprecated in a future version.**
+    **The 4-argument form will be deprecated in a future version.**
 
     The second form accept 5 (five) arguments.
     ``responses`` is a list strings representing the 'planned' responses to the ``EHLO`` command,
@@ -109,7 +118,7 @@ The following hooks are currently defined:
 
     Called during ``RCPT TO``.  The ``address`` argument is the parsed email
     address given by the client in the ``RCPT TO`` command, and
-    ``rcpt_options`` are any additional ESMTP recipient options providing by
+    ``rcpt_options`` are any additional ESMTP recipient options provided by
     the client.  If implemented, this hook should append the address to
     ``envelope.rcpt_tos`` and may extend ``envelope.rcpt_options`` (both of
     which are always Python lists).
@@ -146,7 +155,7 @@ The following hooks are currently defined:
 
 In addition to the SMTP command hooks, the following hooks can also be
 implemented by handlers.  These have different APIs, and are called
-synchronously (i.e. they are **not** coroutines).
+**synchronously** (i.e. they are **not** coroutines).
 
 .. py:method:: handle_STARTTLS(server, session, envelope)
 
@@ -162,7 +171,10 @@ synchronously (i.e. they are **not** coroutines).
     a status string, such as ``'542 Internal server error'``.  If the method
     returns ``None`` or raises an exception, an exception will be logged, and a
     ``451`` code will be returned to the client.
-    **Note:** If client connection losted function will not be called.
+
+    .. important::
+
+        If client connection is lost, this handler will NOT be called.
 
 
 .. _auth_hooks:

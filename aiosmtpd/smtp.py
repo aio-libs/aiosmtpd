@@ -556,10 +556,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         for r in response:
             await self.push(r)
 
-        # Defensive. Why must Session.host_name be set by EHLO hook anyways?
-        if self.session.host_name is None:
-            self.session.host_name = hostname
-
     @syntax('NOOP [ignored]')
     async def smtp_NOOP(self, arg):
         status = await self._call_handler_hook('NOOP', arg)
