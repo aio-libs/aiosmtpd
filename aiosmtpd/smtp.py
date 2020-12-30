@@ -72,10 +72,6 @@ VALID_AUTHMECH = re.compile(r"[A-Z0-9_-]+\Z")
 
 @public
 class Session:
-    __slots__ = (
-        "peer", "ssl", "host_name", "extended_smtp", "loop", "login_data"
-    )
-
     def __init__(self, loop):
         self.peer = None
         self.ssl = None
@@ -91,11 +87,6 @@ class Session:
 
 @public
 class Envelope:
-    __slots__ = (
-        "mail_from", "mail_options", "smtp_utf8", "content", "original_content",
-        "rcpt_tos", "rcpt_options"
-    )
-
     def __init__(self):
         self.mail_from = None
         self.mail_options = []
