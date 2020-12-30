@@ -8,6 +8,8 @@
 Added
 -----
 * Test for ``SMTP.__init__`` behavior after taking out code that edits TLS Context
+* New :meth:`handle_EHLO` interaction where said method can now modify list of responses
+  to the EHLO command (Closes #155)
 
 Fixed/Improved
 --------------
@@ -15,7 +17,7 @@ Fixed/Improved
 * Implement & enforce line-length-limit, thus becoming Compliant with RFC 5321 § 4.5.3.1.6
 * Delay all SMTP Status Code replies during ``DATA`` phase until the phase termination (Closes #9)
 * Now catches ``Controller.factory()`` failure during ``Controller.start()`` (Closes #212)
-* :class:`SMTP` no longer edits user-supplied SSL Context (closes #191)
+* :class:`SMTP` no longer edits user-supplied SSL Context (Closes #191)
 * Implement waiting for SSL setup/handshake within STARTTLS handler to be able to catch and handle
   (log) errors and to avoid session hanging around until timeout in such cases
 * Add session peer information to some logging output where it was missing
