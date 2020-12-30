@@ -2,6 +2,7 @@
  NEWS for aiosmtpd
 ===================
 
+
 1.2.3 (aiosmtpd-next)
 =====================
 
@@ -16,10 +17,12 @@ Fixed/Improved
 * Delay all SMTP Status Code replies during ``DATA`` phase until the phase termination (Closes #9)
 * Now catches ``Controller.factory()`` failure during ``Controller.start()`` (Closes #212)
 * :class:`SMTP` no longer edits user-supplied SSL Context (closes #191)
-* Implement waiting for SSL setup/handshake within STARTTLS handler to be able to catch and handle
+* Implement waiting for SSL setup/handshake within ``STARTTLS`` handler to be able to catch and handle
   (log) errors and to avoid session hanging around until timeout in such cases
 * Add session peer information to some logging output where it was missing
-* LMTP servers now correctly advertise extensions in reply to ``LHLO``.
+* LMTP servers now correctly advertise extensions in reply to ``LHLO`` (Closes #123, #124)
+* ``NOOP`` now accepted before ``STARTTLS`` even if ``require_starttls=True`` (Closes #124)
+
 
 1.2.2 (2020-11-08)
 ==================
