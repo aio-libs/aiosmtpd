@@ -62,6 +62,9 @@ EMPTYBYTES = b''
 MISSING = _Missing()
 NEWLINE = '\n'
 
+# https://tools.ietf.org/html/rfc3207.html#page-3
+ALLOWED_BEFORE_STARTTLS = {"NOOP", "EHLO", "STARTTLS", "QUIT"}
+
 # endregion
 
 
@@ -403,7 +406,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                     continue
                 if (self.require_starttls
                         and not self._tls_protocol
-                        and command not in ['EHLO', 'STARTTLS', 'QUIT']):
+                        and command not in ALLOWED_BEFORE_STARTTLS):
                     # RFC3207 part 4
                     await self.push('530 Must issue a STARTTLS command first')
                     continue

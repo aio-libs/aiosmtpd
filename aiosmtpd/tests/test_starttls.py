@@ -292,6 +292,18 @@ class TestRequireTLS(unittest.TestCase):
             code, response = client.docmd('DATA')
             self.assertEqual(code, 530)
 
+    def test_noop_okay(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd('NOOP')
+            self.assertEqual(code, 250)
+
+    def test_quit_okay(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            code, response = client.docmd('QUIT')
+            self.assertEqual(code, 221)
+
 
 class TestRequireTLSAUTH(unittest.TestCase):
     def setUp(self):
