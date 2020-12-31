@@ -177,12 +177,16 @@ have been configured and tested:
 Environment Variables
 -------------------------
 
-``PLATFORM``
+.. envvar:: PLATFORM
+
     Used on non-native-Linux operating systems to specify tests to skip.
     Valid values:
 
-    * ``mswin`` -- when running tox on Microsoft Windows
-    * ``wsl`` -- when running tox on Windows Subsystem for Linux (WSL)
+    +-----------+-------------------------------------------------------+
+    | ``mswin`` | when running tox on Microsoft Windows (non-Cygwin)    |
+    +-----------+-------------------------------------------------------+
+    | ``wsl``   | when running tox on Windows Subsystem for Linux (WSL) |
+    +-----------+-------------------------------------------------------+
 
 
 Different Python Versions
