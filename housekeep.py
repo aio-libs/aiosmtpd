@@ -37,6 +37,7 @@ WORKDIRS = (
     "_dynamic",
     "aiosmtpd.egg-info",
     "build",
+    "dist",
     "htmlcov",
     "prof",
 )
