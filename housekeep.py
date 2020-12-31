@@ -89,11 +89,13 @@ def dump_env():
 def move_prof():
     """Move profiling files to per-testenv dirs"""
     profpath = Path("prof")
+    # fmt: off
     prof_files = [
-        f
-        for p in ("*.prof", "*.svg")
-        for f in profpath.glob(p)
+        filepath
+        for fileglob in ("*.prof", "*.svg")
+        for filepath in profpath.glob(fileglob)
     ]
+    # fmt: on
     if not prof_files:
         return
     targpath = profpath / TOX_ENV_NAME
@@ -200,10 +202,11 @@ def get_opts(argv):
     parser.add_argument(
         "--force", "-F", action="store_true", help="Force action even if in CI"
     )
+
+    # From: https://stackoverflow.com/a/49999185/149900
     parser.add_argument(
         "cmd", metavar="COMMAND", choices=sorted(dispers.keys()), help="(See below)"
     )
-
     cgrp = parser.add_argument_group(title="COMMAND is one of")
     for name, doc in sorted(dispers.items()):
         cgrp.add_argument(name, help=doc, action="no_action")
