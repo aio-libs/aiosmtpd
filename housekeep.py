@@ -43,6 +43,14 @@ WORKDIRS = (
     "prof",
 )
 
+WORKFILES = (
+    ".coverage",
+    "coverage.xml",
+    "diffcov.html",
+    "coverage-*.xml",
+    "diffcov-*.html",
+)
+
 
 # region #### Helper funcs ############################################################
 
@@ -121,17 +129,10 @@ def rm_work():
         deldir(Path(dd))
         print(" ", end="", flush=True)
     print(f"\n{Style.BRIGHT}Removing work files ...", end="")
-    for fn in (".coverage", "coverage.xml", "diffcov.html"):
-        print(".", end="", flush=True)
-        fp = Path(fn)
-        if fp.exists():
-            fp.unlink()
-    for fp in Path(".").glob("coverage-*.xml"):
-        print(".", end="", flush=True)
-        fp.unlink()
-    for fp in Path(".").glob("diffcov-*.html"):
-        print(".", end="", flush=True)
-        fp.unlink()
+    for fnglob in WORKFILES:
+        for fp in Path(".").glob(fnglob):
+            print(".", end="", flush=True)
+            fp.exists() and fp.unlink()
     print()
 
 
