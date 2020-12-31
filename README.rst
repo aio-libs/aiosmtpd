@@ -86,8 +86,8 @@ You can install this package in a virtual environment like so::
     $ source /path/to/venv/bin/activate
     $ python setup.py install
 
-This will give you a command line script called ``smtpd`` which implements the
-SMTP server.  Use ``smtpd --help`` for details.
+This will give you a command line script called ``aiosmtpd`` which implements the
+SMTP server.  Use ``aiosmtpd --help`` for details.
 
 You will also have access to the ``aiosmtpd`` library, which you can use as a
 testing environment for your SMTP clients.  See the documentation links above
