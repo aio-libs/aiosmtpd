@@ -104,17 +104,28 @@ test suite for Python 3.  Once you've got that, run::
 
 Individual tests can be run like this::
 
-    $ tox -e py36-nocov -- -P <pattern>
+    $ tox -- <testname>
 
-where *<pattern>* is a Python regular expression matching a test name.
+where ``<testname>`` is the "node id" of the test case to run, as explained
+in `the pytest documentation`_. The command above will run that one test case
+against all testenvs defined in ``tox.ini`` (see below).
 
-You can also add the ``-E`` option to boost debugging output, e.g.::
+If you want test to stop as soon as it hit a failure, use the ``-x``/``--exitfirst``
+option::
 
-    $ tox -e py36-nocov -- -E
+    $ tox -- -x
 
-and these options can be combined::
+You can also add the ``-s``/``--capture=no`` option to show output, e.g.::
 
-    $ tox -e py36-nocov -- -P test_connection_reset_during_DATA -E
+    $ tox -e py36-nocov -- -s
+
+(The ``-e`` parameter is explained in the next section about 'testenvs'.
+In general, you'll want to choose the ``nocov`` testenvs if you want to show output,
+so you can see which test is generating which output.)
+
+The `-x` and `-s` options can be combined::
+
+    $ tox -e py36-nocov -- -x -s <testname>
 
 
 Supported 'testenvs'
@@ -209,3 +220,9 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+
+.. _`GitHub Actions`: https://docs.github.com/en/free-pro-team@latest/actions/guides/building-and-testing-python#running-tests-with-tox
+.. |GitHub Actions| replace:: **GitHub Actions**
+.. _`pytest doctest`: https://docs.pytest.org/en/stable/doctest.html
+.. _`the pytest documentation`: https://docs.pytest.org/en/stable/usage.html#specifying-tests-selecting-tests
