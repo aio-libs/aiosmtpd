@@ -147,9 +147,23 @@ have been configured and tested:
   - ``profile`` = no coverage testing, but code profiling instead.
     This must be **invoked manually** using the ``-e`` parameter
 
-  **Note:** Due to possible 'complications' when setting up PyPy on
+  **Note 1:** Due to possible 'complications' when setting up PyPy on
   systems without pyenv, ``pypy3`` tests also will not be automatically
-  run; you must invoke them manually.
+  run; you must invoke them manually. For example::
+
+    $ tox -e pypy3-nocov
+
+  **Note 2:** It is also possible to use whatever Python version is used when
+  invoking ``tox`` by using the ``py`` target, but you must explicitly include
+  the type of testing you want. For example::
+
+    $ tox -e "py-{nocov,cov,diffcov}"
+
+  (Don't forget the quotes if you want to use braces!)
+
+  You might want to do this for CI platforms where the exact Python version
+  is pre-prepared, such as Travis CI or |GitHub Actions|_; this will definitely
+  save some time during tox's testenv prepping.
 
 * ``qa``
 
