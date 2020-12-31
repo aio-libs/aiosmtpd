@@ -31,6 +31,8 @@ except ImportError:
 TOX_ENV_NAME = os.environ.get("TOX_ENV_NAME", None)
 
 WORKDIRS = (
+    ".mypy_cache",
+    ".pytype",
     ".pytest-cache",
     ".pytest_cache",
     ".tox",
