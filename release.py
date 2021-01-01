@@ -6,6 +6,9 @@ import sys
 
 import aiosmtpd.smtp as smtpd
 
+TWINE_CONFIG = "~/.pypirc"
+UPSTREAM_REMOTE = "upstream"
+
 version = smtpd.__version__
 
 choice = input(f"Release aiosmtpd {version} - correct? [y/N]: ")
@@ -24,10 +27,10 @@ else:
             "twine",
             "upload",
             "--config-file",
-            "~/.pypirc",
+            TWINE_CONFIG,
             "-r",
             "aiosmtpd",
-            "dist/aiosmptd-{version}.tar.gz",
+            f"dist/aiosmptd-{version}.tar.gz",
         ]
     )
     # Only tag when we've actually built and uploaded. If something goes wrong
@@ -35,4 +38,4 @@ else:
     # The annotation information should come from the changelog
     subprocess.run(["git", "tag", "-a", version])
     # And now push the tag, of course.
-    subprocess.run(["git", "push", "upstream", "--tags"])
+    subprocess.run(["git", "push", UPSTREAM_REMOTE, "--tags"])
