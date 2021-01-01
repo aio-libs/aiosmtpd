@@ -21,6 +21,9 @@ Fixed/Improved
 * Implement waiting for SSL setup/handshake within STARTTLS handler to be able to catch and handle
   (log) errors and to avoid session hanging around until timeout in such cases
 * Add session peer information to some logging output where it was missing
+* Support AUTH mechanisms with dash(es) in their names (Closes #224)
+* Remove some double-logging of commands sent by clients
+
 
 1.2.2 (2020-11-08)
 ==================
