@@ -14,9 +14,12 @@
 
 import sys
 import os
+import re
 import datetime
 
 from pathlib import Path
+
+RE__VERSION = re.compile(r"""__version__ = (['"])(?P<ver>[^'"]+)(\1)""")
 
 YELLOW = "\x1b[1;93m"
 NORM = "\x1b[0m"
@@ -67,8 +70,9 @@ copyright = f'2015-{datetime.datetime.now().year}, {author}'
 __version__ = None
 with open('aiosmtpd/smtp.py') as fp:
     for line in fp:
-        if line.startswith('__version__'):
-            exec(line)
+        m = RE__VERSION.match(line.strip())
+        if m:
+            __version__ = m.group("ver")
             break
 if __version__ is None:
     raise RuntimeError("No __version__ found in aiosmtpd/smtp.py!")
