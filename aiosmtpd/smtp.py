@@ -437,6 +437,9 @@ class SMTP(asyncio.StreamReaderProtocol):
                 if self._enforce_call_limit:
                     budget = call_limit[command]
                     if budget < 1:
+                        log.warning(
+                            "%r over limit for %s", self.session.peer, command
+                        )
                         await self.push(
                             f"421 4.7.0 {command} sent too many times"
                         )
