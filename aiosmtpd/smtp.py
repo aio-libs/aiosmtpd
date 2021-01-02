@@ -280,7 +280,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                  auth_callback: AuthCallbackType = None,
                  command_call_limit: Union[int, Dict[str, int], None] = None,
                  authenticator: AuthenticatorType = None,
-                 loop=None):
+                 proxy_protocol_timeout: Optional[float] = None,
+            loop=None):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
         super().__init__(
@@ -309,6 +310,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                             "this might cause client connection problems")
         self.require_starttls = tls_context and require_starttls
         self._timeout_duration = timeout
+        self._proxy_timeout = proxy_protocol_timeout
+        self._proxy_result: Optional[bool] = None
         self._timeout_handle = None
         self._tls_handshake_okay = True
         self._tls_protocol = None
@@ -475,12 +478,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             return False
         return super().eof_received()
 
-    def _reset_timeout(self):
+    def _reset_timeout(self, duration=None):
         if self._timeout_handle is not None:
             self._timeout_handle.cancel()
-
         self._timeout_handle = self.loop.call_later(
-            self._timeout_duration, self._timeout_cb)
+            duration or self._timeout_duration, self._timeout_cb
+        )
 
     def _timeout_cb(self):
         log.info('%r connection timeout', self.session.peer)
@@ -540,7 +543,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         while self.transport is not None:   # pragma: nobranch
             try:
                 try:
-                    line = await self._reader.readuntil()
+                    line: bytes = await self._reader.readuntil()
                 except asyncio.LimitOverrunError as error:
                     # Line too long. Read until end of line before sending 500.
                     await self._reader.read(error.consumed)
