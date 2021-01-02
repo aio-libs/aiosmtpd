@@ -1863,8 +1863,8 @@ class TestLimits(unittest.TestCase):
                 code, mesg = client.noop()
                 self.assertEqual(250, code)
             code, mesg = client.noop()
-            self.assertEqual(503, code)
-            self.assertEqual(b"NOOP sent too many times", mesg)
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 NOOP sent too many times", mesg)
             with self.assertRaises(SMTPServerDisconnected):
                 client.noop()
 
@@ -1883,8 +1883,8 @@ class TestLimits(unittest.TestCase):
                 code, mesg = client.noop()
                 self.assertEqual(250, code)
             code, mesg = client.noop()
-            self.assertEqual(503, code)
-            self.assertEqual(b"NOOP sent too many times", mesg)
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 NOOP sent too many times", mesg)
             with self.assertRaises(SMTPServerDisconnected):
                 client.noop()
         with SMTP(controller.hostname, controller.port) as client:
@@ -1894,8 +1894,8 @@ class TestLimits(unittest.TestCase):
                 code, mesg = client.expn("alice@example.com")
                 self.assertEqual(502, code)
             code, mesg = client.expn("alice@example.com")
-            self.assertEqual(503, code)
-            self.assertEqual(b"EXPN sent too many times", mesg)
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 EXPN sent too many times", mesg)
             with self.assertRaises(SMTPServerDisconnected):
                 client.noop()
         with SMTP(controller.hostname, controller.port) as client:
@@ -1905,8 +1905,8 @@ class TestLimits(unittest.TestCase):
                 code, mesg = client.vrfy("alice@example.com")
                 self.assertEqual(252, code)
             code, mesg = client.vrfy("alice@example.com")
-            self.assertEqual(503, code)
-            self.assertEqual(b"VRFY sent too many times", mesg)
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 VRFY sent too many times", mesg)
             with self.assertRaises(SMTPServerDisconnected):
                 client.noop()
 
@@ -1929,8 +1929,8 @@ class TestLimits(unittest.TestCase):
                 code, mesg = client.noop()
                 self.assertEqual(250, code)
             code, mesg = client.noop()
-            self.assertEqual(503, code)
-            self.assertEqual(b"NOOP sent too many times", mesg)
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 NOOP sent too many times", mesg)
             with self.assertRaises(SMTPServerDisconnected):
                 client.noop()
         with SMTP(controller.hostname, controller.port) as client:
@@ -1940,8 +1940,8 @@ class TestLimits(unittest.TestCase):
                 code, mesg = client.expn("alice@example.com")
                 self.assertEqual(502, code)
             code, mesg = client.expn("alice@example.com")
-            self.assertEqual(503, code)
-            self.assertEqual(b"EXPN sent too many times", mesg)
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 EXPN sent too many times", mesg)
             with self.assertRaises(SMTPServerDisconnected):
                 client.noop()
         with SMTP(controller.hostname, controller.port) as client:
@@ -1951,8 +1951,8 @@ class TestLimits(unittest.TestCase):
                 code, mesg = client.vrfy("alice@example.com")
                 self.assertEqual(252, code)
             code, mesg = client.vrfy("alice@example.com")
-            self.assertEqual(503, code)
-            self.assertEqual(b"VRFY sent too many times", mesg)
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 VRFY sent too many times", mesg)
             with self.assertRaises(SMTPServerDisconnected):
                 client.noop()
 
