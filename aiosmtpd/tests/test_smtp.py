@@ -807,7 +807,8 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 250)
             self.assertEqual(response, b'OK')
 
-    def test_unknown_command(self):
+    @patch("logging.Logger.warning")
+    def test_unknown_command(self, mock_warning):
         with SMTP(*self.address) as client:
             code, response = client.docmd('FOOBAR')
             self.assertEqual(code, 500)
@@ -1895,7 +1896,8 @@ class TestAuthArgs(unittest.TestCase):
 
 
 class TestLimits(unittest.TestCase):
-    def test_all_limit_15(self):
+    @patch("logging.Logger.warning")
+    def test_all_limit_15(self, mock_warning):
         kwargs = dict(
             command_call_limit=15,
         )
@@ -1914,7 +1916,8 @@ class TestLimits(unittest.TestCase):
             with self.assertRaises(SMTPServerDisconnected):
                 client.noop()
 
-    def test_different_limits(self):
+    @patch("logging.Logger.warning")
+    def test_different_limits(self, mock_warning):
         noop_max, expn_max = 15, 5
         kwargs = dict(
             command_call_limit={"NOOP": noop_max, "EXPN": expn_max},
@@ -1956,7 +1959,8 @@ class TestLimits(unittest.TestCase):
             with self.assertRaises(SMTPServerDisconnected):
                 client.noop()
 
-    def test_different_limits_custom_default(self):
+    @patch("logging.Logger.warning")
+    def test_different_limits_custom_default(self, mock_warning):
         # Important: make sure default_max > CALL_LIMIT_DEFAULT
         # Others can be set small to cut down on testing time, but must be different
         noop_max, expn_max, default_max = 7, 5, 25
@@ -2019,3 +2023,26 @@ class TestLimits(unittest.TestCase):
         self.addCleanup(controller.stop)
         with self.assertRaises(TypeError):
             controller.start()
+
+    @patch("logging.Logger.warning")
+    def test_limit_bogus(self, mock_warning):
+        # Extreme limit.
+        kwargs = dict(
+            command_call_limit=1,
+        )
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        self.addCleanup(controller.stop)
+        controller.start()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for i in range(0, 4):
+                code, mesg = client.docmd(f"BOGUS{i}")
+                self.assertEqual(500, code)
+                expected = f"Error: command \"BOGUS{i}\" not recognized"
+                self.assertEqual(expected, mesg.decode("ascii"))
+            code, mesg = client.docmd("LASTBOGUS")
+            self.assertEqual(502, code)
+            self.assertEqual(
+                b"5.5.1 Too many unrecognized commands, goodbye.", mesg
+            )

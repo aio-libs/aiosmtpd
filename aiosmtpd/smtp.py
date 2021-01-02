@@ -64,6 +64,7 @@ __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
 
+BOGUS_LIMIT = 5
 CALL_LIMIT_DEFAULT = 20
 DATA_SIZE_DEFAULT = 2**25  # Where does this number come from, I wonder...
 EMPTY_BARR = bytearray()
@@ -406,6 +407,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         else:
             # Not used, but this silences code inspection tools
             call_limit = {}
+        bogus_budget = BOGUS_LIMIT
         while self.transport is not None:   # pragma: nobranch
             try:
                 try:
@@ -498,6 +500,15 @@ class SMTP(asyncio.StreamReaderProtocol):
 
                 method = self._smtp_methods.get(command)
                 if method is None:
+                    log.warning("%r unrecognised: %s", self.session.peer, command)
+                    bogus_budget -= 1
+                    if bogus_budget < 1:
+                        log.warning("%r too many bogus commands", self.session.peer)
+                        await self.push(
+                            "502 5.5.1 Too many unrecognized commands, goodbye."
+                        )
+                        self.transport.close()
+                        continue
                     await self.push(
                         '500 Error: command "%s" not recognized' % command)
                     continue
