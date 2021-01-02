@@ -13,7 +13,7 @@ from aiosmtpd.smtp import (
     MISSING,
     Session as SMTPSess,
     SMTP as Server,
-    __ident__ as GREETING
+    __ident__ as GREETING, auth_mechanism
 )
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
@@ -79,6 +79,16 @@ class PeekerHandler:
             self, server, args
     ):
         return MISSING
+
+    async def auth_WITH_UNDERSCORE(self, server, args):
+        return "250 OK"
+
+    @auth_mechanism("with-dash")
+    async def auth_WITH_DASH(self, server, args):
+        return "250 OK"
+
+    async def auth_WITH__MULTI__DASH(self, server, args):
+        return "250 OK"
 
 
 class PeekerAuth:
@@ -976,7 +986,7 @@ class TestSMTPAuth(unittest.TestCase):
                 bytes(socket.getfqdn(), 'utf-8'),
                 b'SIZE 33554432',
                 b'SMTPUTF8',
-                b'AUTH LOGIN NULL PLAIN',
+                b'AUTH LOGIN NULL PLAIN WITH-DASH WITH-MULTI-DASH WITH_UNDERSCORE',
                 b'HELP',
             )
             for actual, expected in zip(lines, expecteds):
@@ -1055,6 +1065,37 @@ class TestSMTPAuth(unittest.TestCase):
             self.assertEqual(code, 504)
             self.assertEqual(response,
                              b"5.5.4 Unrecognized authentication type")
+
+    def test_rset_maintain_authenticated(self):
+        """RSET resets only Envelope not Session"""
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, mesg = client.docmd("AUTH PLAIN")
+            self.assertEqual(code, 334)
+            self.assertEqual(mesg, b"")
+            code, mesg = client.docmd('=')
+            assert_auth_success(self, code, mesg)
+            self.assertEqual(auth_peeker.login, None)
+            self.assertEqual(auth_peeker.password, None)
+            code, mesg = client.mail("alice@example.com")
+            sess: SMTPSess = self.handler.session
+            self.assertEqual(sess.login_data, b"")
+            code, mesg = client.rset()
+            self.assertEqual(code, 250)
+            code, mesg = client.docmd("AUTH PLAIN")
+            self.assertEqual(503, code)
+            self.assertEqual(b'Already authenticated', mesg)
+
+    def test_auth_individually(self):
+        """AUTH state of different clients must be independent"""
+        with SMTP(*self.address) as client1, SMTP(*self.address) as client2:
+            for client in client1, client2:
+                client.ehlo("example.com")
+                code, mesg = client.docmd("AUTH PLAIN")
+                self.assertEqual(code, 334)
+                self.assertEqual(mesg, b"")
+                code, mesg = client.docmd('=')
+                assert_auth_success(self, code, mesg)
 
 
 class TestRequiredAuthentication(unittest.TestCase):
@@ -1528,7 +1569,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 451)
+        self.assertEqual(code, 500)
         self.assertEqual(mesg, b'Error: (ValueError) test')
         # handler.error did not change because the handler does not have a
         # handle_exception() method.
@@ -1558,7 +1599,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 451)
+        self.assertEqual(code, 500)
         self.assertEqual(mesg, b'Error: (ValueError) ErroringErrorHandler test')
         self.assertIsInstance(handler.error, ValueError)
 
@@ -1599,7 +1640,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 451)
+        self.assertEqual(code, 500)
         self.assertEqual(mesg, b'Error: Cannot describe error')
         self.assertIsInstance(handler.error, ValueError)
 
@@ -1846,6 +1887,11 @@ class TestAuthArgs(unittest.TestCase):
         mock_info.assert_any_call(
             f"Available AUTH mechanisms: {' '.join(auth_mechs)}"
         )
+
+    def test_authmechname_decorator_badname(self):
+        self.assertRaises(ValueError, auth_mechanism, "has space")
+        self.assertRaises(ValueError, auth_mechanism, "has.dot")
+        self.assertRaises(ValueError, auth_mechanism, "has/slash")
 
 
 class TestLimits(unittest.TestCase):

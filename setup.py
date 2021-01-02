@@ -2,7 +2,7 @@ from setup_helpers import require_python, get_version
 from setuptools import setup, find_packages
 
 
-require_python(0x30600f0)
+require_python(0x03_06_00_f0)
 __version__ = get_version('aiosmtpd/smtp.py')
 
 
