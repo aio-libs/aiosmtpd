@@ -636,7 +636,7 @@ class TestSMTP(unittest.TestCase):
     def test_bpo27931fix_smtp(self):
         with SMTP(*self.address) as client:
             client.helo("testbpo27931.example.com")
-            resp = client.docmd("MAIL FROM: <""@example.com>")
+            resp = client.docmd("MAIL FROM: <\"\"@example.com>")
             self.assertEqual((250, b"OK"), resp)
 
     def test_mail_from_invalid(self):
