@@ -104,9 +104,10 @@ SMTP API
 ========
 
 .. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, \
-   decode_data=False, hostname=None, ident=None, tls_context=None, require_starttls=False, \
-   timeout=300, auth_required=False, auth_require_tls=True, auth_exclude_mechanism=None, \
-   auth_callback=None, loop=None)
+   decode_data=False, hostname=None, ident=None, tls_context=None, \
+   require_starttls=False, timeout=300, auth_required=False, \
+   auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, \
+   loop=None)
 
    :boldital:`handler` is an instance of a :ref:`handler <handlers>` class.
 
@@ -158,7 +159,23 @@ SMTP API
    attempt is accepted/successful or not.
 
    :boldital:`loop` is the asyncio event loop to use.  If not given,
-   :func:`asyncio.new_event_loop` is called to create the event loop.
+   :meth:`asyncio.new_event_loop()` is called to create the event loop.
+
+   .. py:attribute:: line_length_limit
+
+      The maximum line length, in octets (not characters; one UTF-8 character
+      may result in more than one octet).
+      Defaults to ``1001`` in compliance with
+      :rfc:`RFC 5321 § 4.5.3.1.6 <5321#section-4.5.3.1.6>`
+
+      .. attention::
+
+         This sets the *stream limit* of :meth:`asyncio.StreamReader.readuntil`,
+         thus impacting how the method works.
+         In previous versions of aiosmtpd, the limit is not set.
+         To return to the behavior of the previous versions, set
+         :attr:`line_length_limit` to ``2**16`` *before* instantiating the
+         :class:`SMTP` class.
 
    .. attribute:: event_handler
 

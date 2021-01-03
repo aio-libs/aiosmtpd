@@ -275,7 +275,24 @@ Controller API
       Start the server in the subthread.  The subthread is always a daemon
       thread (i.e. we always set ``thread.daemon=True``.  Exceptions can be
       raised if the server does not start within the *ready_timeout*, or if
-      any other exception occurs in while creating the server.
+      any other exception occurs in :meth:`factory` while creating the server.
+
+      .. important::
+
+         If :meth:`start` raises an Exception,
+         :class:`Controller` does not automatically perform cleanup,
+         to support deep inspection post-exception (if you wish to do so.)
+         Cleanup must still be performed manually by calling :meth:`stop`
+
+         For example::
+
+             controller = Controller(handler)
+             try:
+                 controller.start()
+             except ...:
+                 ... exception handling and/or inspection ...
+             finally:
+                 controller.stop()
 
    .. method:: stop()
 

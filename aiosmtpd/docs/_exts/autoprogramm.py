@@ -2,7 +2,7 @@
     autoprogramm
     ~~~~~~~~~~~~
 
-    ``autoprogram-modified`` (hence the two "m"s at the end of the name.
+    ``autoprogram-modified`` (hence the two "m"s at the end of the name.)
 
     Documenting CLI programs.
 
@@ -25,7 +25,7 @@
     together in a half-day by pepoluan <== all blame goes to him!
 
     :copyright: Copyright 2014 by Hong Minhee
-    :license: BSD, see LICENSE for details.
+    :license: BSD
 
 """
 import argparse
