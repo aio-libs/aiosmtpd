@@ -293,6 +293,66 @@ class TestProtocol(unittest.TestCase):
 
 
 class TestSMTP(unittest.TestCase):
+    valid_mailfrom_addresses = [
+        # no space between colon and address
+        "anne@example.com",
+        "<anne@example.com>",
+        # one space between colon and address
+        " anne@example.com",
+        " <anne@example.com>",
+        # multiple spaces between colon and address
+        "  anne@example.com",
+        "  <anne@example.com>",
+        # non alphanums in local part
+        "anne.arthur@example.com",
+        "anne+promo@example.com",
+        "anne-arthur@example.com",
+        "anne_arthur@example.com",
+        "_@example.com",
+        # IP address in domain part
+        "anne@127.0.0.1",
+        "anne@[127.0.0.1]",
+        "anne@[IPv6:2001:db8::1]",
+        "anne@[IPv6::1]",
+        # email with comments -- obsolete, but still valid
+        "anne(comment)@example.com",
+        "(comment)anne@example.com",
+        "anne@example.com(comment)",
+        "anne@machine(comment).  example",  # RFC5322 § A.6.3
+        # source route -- RFC5321 § 4.1.2 "MUST BE accepted"
+        "<@example.org:anne@example.com>",
+        "<@example.net,@example.org:anne@example.com>",
+        # strange -- but valid -- addresses
+        "anne@mail",
+        '""@example.com',
+        '<""@example.com>',
+        '" "@example.com',
+        '"anne..arthur"@example.com',
+        "mailhost!anne@example.com",
+        "anne%example.org@example.com",
+        'much."more\\ unusual"@example.com',
+        'very."(),:;<>[]".VERY."very@\\ "very.unusual@strange.example.com',
+        # more from RFC3696 § 3
+        # 'Abc\\@def@example.com', -- get_addr_spec does not support this
+        "Fred\\ Bloggs@example.com",
+        "Joe.\\\\Blow@example.com",
+        '"Abc@def"@example.com',
+        '"Fred Bloggs"@example.com',
+        "customer/department=shipping@example.com",
+        "$A12345@example.com",
+        "!def!xyz%abc@example.com",
+    ]
+
+    valid_rcptto_addresses = valid_mailfrom_addresses + [
+        # Postmaster -- RFC5321 § 4.1.1.3
+        "<Postmaster>",
+    ]
+
+    invalid_email_addresses = [
+        "<@example.com>",  # no local part
+        "a" * 65 + "@example.com",  # local-part > 64 chars
+    ]
+
     def setUp(self):
         controller = DecodingController(Sink)
         controller.start()
@@ -511,6 +571,21 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 503)
             self.assertEqual(response, b'Error: send HELO first')
 
+    def test_mail_from_empty(self):
+        with SMTP(*self.address) as client:
+            client.helo('example.com')
+            code, response = client.docmd('MAIL FROM:')
+            self.assertEqual(code, 501)
+            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
+
+    def test_mail_valid_address(self):
+        for mailfrom in self.valid_mailfrom_addresses:
+            with SMTP(*self.address) as client:
+                client.ehlo("mailfrom.example.com")
+                code, mesg = client.docmd(f"MAIL FROM: {mailfrom}")
+                self.assertEqual(250, code)
+                self.assertEqual(b"OK", mesg)
+
     def test_mail_no_arg(self):
         with SMTP(*self.address) as client:
             client.helo('example.com')
@@ -558,6 +633,18 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 501)
             self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
 
+    def test_bpo27931fix_smtp(self):
+        with SMTP(*self.address) as client:
+            client.helo("testbpo27931.example.com")
+            resp = client.docmd("MAIL FROM: <""@example.com>")
+
+    def test_mail_from_invalid(self):
+        for addr in self.invalid_email_addresses:
+            with SMTP(*self.address) as client:
+                client.helo("testmailfrom.example.com")
+                resp = client.docmd(f"MAIL FROM: {addr}")
+                self.assertEqual((553, b'5.1.3 Error: malformed address'), resp)
+
     def test_mail_malformed_params_esmtp(self):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
@@ -596,16 +683,6 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(
                 response,
                 b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')
-
-    # Test the workaround http://bugs.python.org/issue27931
-    @patch('email._header_value_parser.AngleAddr.addr_spec',
-           side_effect=IndexError, new_callable=PropertyMock)
-    def test_mail_fail_parse_email(self, addr_spec):
-        with SMTP(*self.address) as client:
-            client.helo('example.com')
-            code, response = client.docmd('MAIL FROM: <""@example.com>')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
 
     def test_rcpt_no_helo(self):
         with SMTP(*self.address) as client:
@@ -702,21 +779,21 @@ class TestSMTP(unittest.TestCase):
                 response,
                 b'RCPT TO parameters not recognized or not implemented')
 
-    # Test the workaround http://bugs.python.org/issue27931
-    @patch('email._header_value_parser.AngleAddr.addr_spec',
-           new_callable=PropertyMock)
-    def test_rcpt_fail_parse_email(self, addr_spec):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            addr_spec.side_effect = IndexError
-            code, response = client.docmd('RCPT TO: <""@example.com>')
-            self.assertEqual(code, 501)
-            self.assertEqual(
-                response,
-                b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
+    def test_rcpt_address_valid(self):
+        for rcpt in self.valid_rcptto_addresses:
+            with SMTP(*self.address) as client:
+                client.helo("testrcpt.example.com")
+                client.docmd("MAIL FROM: <tester@example.com>")
+                resp = client.docmd(f"RCPT TO: {rcpt}")
+                self.assertEqual((250, b"OK"), resp)
+
+    def test_rcpt_address_invalid(self):
+        for addr in self.invalid_email_addresses:
+            with SMTP(*self.address) as client:
+                client.helo("testrcpt.example.com")
+                client.docmd("MAIL FROM: <tester@example.com>")
+                resp = client.docmd(f"RCPT TO: {addr}")
+                self.assertEqual((553, b'5.1.3 Error: malformed address'), resp)
 
     def test_rset(self):
         with SMTP(*self.address) as client:
