@@ -531,7 +531,7 @@ class HELOHandler:
         return '250 geddy.example.com'
 
 
-class EHLOHandler:
+class EHLOHandlerDeprecated:
     hostname = None
 
     async def handle_EHLO(self, server, session, envelope, hostname):
@@ -623,7 +623,7 @@ Subject: Test
 
     def test_ehlo_hook_oldsystem(self):
         declare_myself = "me"
-        handler = EHLOHandler()
+        handler = EHLOHandlerDeprecated()
         controller = Controller(handler)
         controller.start()
         self.addCleanup(controller.stop)
