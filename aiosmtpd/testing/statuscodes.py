@@ -99,7 +99,7 @@ class SMTP_STATUS_CODES:
     S454_TLS_NA = StatusCode(454, b"TLS not available")
 
     S500_BAD_SYNTAX = StatusCode(500, b"Error: bad syntax")
-    S500_LINE_TOO_LONG = StatusCode(500, b"Error: line too long")
+    S500_LINE_TOO_LONG = StatusCode(500, b"Command line too long")
     S500_STRICT_ASCII = StatusCode(500, b"Error: strict ASCII mode")
 
     S500_CMD_UNRECOG = StatusCode(500, b'Error: command "%b" not recognized')
