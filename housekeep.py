@@ -37,6 +37,7 @@ WORKDIRS = (
     "_dynamic",
     "aiosmtpd.egg-info",
     "build",
+    "dist",
     "htmlcov",
     "prof",
 )
@@ -139,9 +140,9 @@ def rm_work():
 # region #### Dispatchers #############################################################
 
 
-def dispatch_setup():
+def dispatch_prep():
     """
-    Set up work directories and dump env vars
+    Prepare work directories and dump env vars
     """
     dump_env()
 
