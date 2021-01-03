@@ -22,6 +22,7 @@ from typing import (
     List,
     NamedTuple,
     Optional,
+    Tuple,
     Union,
 )
 from warnings import warn
@@ -766,19 +767,28 @@ class SMTP(asyncio.StreamReaderProtocol):
             return arg[keylen:].strip()
         return None
 
-    def _getaddr(self, arg):
+    def _getaddr(self, arg) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Try to parse address given in SMTP command.
+
+        Returns address=None if arg can't be parsed properly (get_angle_addr /
+        get_addr_spec raised HeaderParseError)
+        """
         if not arg:
             return '', ''
-        if arg.lstrip().startswith('<'):
-            address, rest = get_angle_addr(arg)
-        else:
-            address, rest = get_addr_spec(arg)
         try:
-            address = address.addr_spec
-        except IndexError:
-            # Workaround http://bugs.python.org/issue27931
-            address = None
-        return address, rest
+            if arg.lstrip().startswith('<'):
+                address, rest = get_angle_addr(arg)
+            else:
+                address, rest = get_addr_spec(arg)
+        except HeaderParseError:
+            return None, None
+        address = address.addr_spec
+        localpart, atsign, domainpart = address.rpartition("@")
+        if len(localpart) > 64:  # RFC 5321 § 4.5.3.1.1
+            return None, None
+        else:
+            return address, rest
 
     def _getparams(self, params):
         # Return params as dictionary. Return None if not all parameters
@@ -826,10 +836,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if await self.check_auth_needed("VRFY"):
             return
         if arg:
-            try:
-                address, params = self._getaddr(arg)
-            except HeaderParseError:
-                address = None
+            address, params = self._getaddr(arg)
             if address is None:
                 await self.push('502 Could not VRFY %s' % arg)
             else:
@@ -859,8 +866,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         address, params = self._getaddr(arg)
         if address is None:
-            await self.push(syntaxerr)
-            return
+            return await self.push("553 5.1.3 Error: malformed address")
+        if not address:
+            return await self.push(syntaxerr)
         if not self.session.extended_smtp and params:
             await self.push(syntaxerr)
             return
@@ -928,9 +936,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push(syntaxerr)
             return
         address, params = self._getaddr(arg)
+        if address is None:
+            return await self.push("553 5.1.3 Error: malformed address")
         if not address:
-            await self.push(syntaxerr)
-            return
+            return await self.push(syntaxerr)
         if not self.session.extended_smtp and params:
             await self.push(syntaxerr)
             return
