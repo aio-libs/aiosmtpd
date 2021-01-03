@@ -2046,3 +2046,5 @@ class TestLimits(unittest.TestCase):
             self.assertEqual(
                 b"5.5.1 Too many unrecognized commands, goodbye.", mesg
             )
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
