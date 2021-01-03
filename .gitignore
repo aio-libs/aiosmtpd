@@ -32,3 +32,4 @@ coverage-*.xml
 diffcov.html
 diffcov-*.html
 .python-version
+.pytype/
