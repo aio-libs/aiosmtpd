@@ -1,7 +1,9 @@
+import re
 import ssl
 import enum
 import socket
 import asyncio
+import inspect
 import logging
 import binascii
 import collections
@@ -42,6 +44,7 @@ class _DataState(enum.Enum):
     TOO_MUCH = enum.auto()
 
 
+AuthCallbackType = Callable[[str, Optional[bytes], Optional[bytes]], bool]
 AuthMechanismType = Callable[["SMTP", List[str]], Awaitable[Any]]
 _TriStateType = Union[None, _Missing, bytes]
 
@@ -51,6 +54,11 @@ _TriStateType = Union[None, _Missing, bytes]
 
 # region #### Constant & Constant-likes ###############################################
 
+__all__ = [
+    "AuthCallbackType",
+    "AuthMechanismType",
+    "MISSING",
+]  # Will be added to by @public
 __version__ = '1.2.3a5'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
@@ -61,6 +69,7 @@ EMPTY_BARR = bytearray()
 EMPTYBYTES = b''
 MISSING = _Missing()
 NEWLINE = '\n'
+VALID_AUTHMECH = re.compile(r"[A-Z0-9_-]+\Z")
 
 # https://tools.ietf.org/html/rfc3207.html#page-3
 ALLOWED_BEFORE_STARTTLS = {"NOOP", "EHLO", "STARTTLS", "QUIT"}
@@ -77,6 +86,10 @@ class Session:
         self.extended_smtp = False
         self.loop = loop
         self.login_data = None
+
+    @property
+    def authenticated(self):
+        return self.login_data is not None
 
 
 @public
@@ -98,12 +111,39 @@ def make_loop():
     return asyncio.get_event_loop()
 
 
-def syntax(text, extended=None, when=None):
+@public
+def syntax(text, extended=None, when: Optional[str] = None):
+    """
+    Provides helptext for (E)SMTP HELP. Applies for smtp_* methods only!
+
+    :param text: Help text for (E)SMTP HELP
+    :param extended: Additional text for ESMTP HELP (appended to text)
+    :param when: The name of the attribute of SMTP class to check; if the value
+        of the attribute is false-y then HELP will not be available for the command
+    """
     def decorator(f):
         f.__smtp_syntax__ = text
         f.__smtp_syntax_extended__ = extended
         f.__smtp_syntax_when__ = when
         return f
+    return decorator
+
+
+@public
+def auth_mechanism(actual_name: str):
+    """
+    Explicitly specifies the name of the AUTH mechanism implemented by
+    the function/method this decorates
+
+    :param actual_name: Name of AUTH mechanism. Must consists of [A-Z0-9_-] only.
+        Will be converted to uppercase
+    """
+    def decorator(f):
+        f.__auth_mechanism_name__ = actual_name
+        return f
+    actual_name = actual_name.upper()
+    if not VALID_AUTHMECH.match(actual_name):
+        raise ValueError(f"Invalid AUTH mechanism name: {actual_name}")
     return decorator
 
 
@@ -140,7 +180,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             auth_required=False,
             auth_require_tls=True,
             auth_exclude_mechanism: Optional[Iterable[str]] = None,
-            auth_callback: Callable[[str, bytes, bytes], bool] = None,
+            auth_callback: AuthCallbackType = None,
             loop=None,
     ):
         self.__ident__ = ident or __ident__
@@ -186,21 +226,25 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._auth_require_tls = auth_require_tls
         self._auth_callback = auth_callback or login_always_fail
         self._auth_required = auth_required
-        self.authenticated = False
         # Get hooks & methods to significantly speedup getattr's
         self._auth_methods: Dict[str, _AuthMechAttr] = {
-            m.replace("auth_", ""): _AuthMechAttr(getattr(h, m), h is self)
-            for h in (self, handler)
-            for m in dir(h)
-            if m.startswith("auth_")
+            getattr(
+                mfunc, "__auth_mechanism_name__",
+                mname.replace("auth_", "").replace("__", "-")
+            ): _AuthMechAttr(mfunc, obj is self)
+            for obj in (self, handler)
+            for mname, mfunc in inspect.getmembers(obj)
+            if mname.startswith("auth_")
         }
         for m in (auth_exclude_mechanism or []):
             self._auth_methods.pop(m, None)
-        msg = "Available AUTH mechanisms:"
-        for m, impl in sorted(
-                self._auth_methods.items()):  # type: str, _AuthMechAttr
-            msg += f" {m}{'(builtin)' if impl.is_builtin else ''}"
-        log.info(msg)
+        log.info(
+            "Available AUTH mechanisms: "
+            + " ".join(
+                m + "(builtin)" if impl.is_builtin else m
+                for m, impl in sorted(self._auth_methods.items())
+            )
+        )
         self._handle_hooks: Dict[str, Callable] = {
             m.replace("handle_", ""): getattr(handler, m)
             for m in dir(handler)
@@ -318,7 +362,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         response = bytes(
             status + '\r\n', 'utf-8' if self.enable_SMTPUTF8 else 'ascii')
         self._writer.write(response)
-        log.debug(response)
+        log.debug("%r << %r", self.session.peer, response)
         await self._writer.drain()
 
     async def handle_exception(self, error):
@@ -353,10 +397,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                     # send error response and read the next command line.
                     await self.push('500 Command line too long')
                     continue
-                log.debug('_handle_client readline: %s', line)
+                log.debug('_handle_client readline: %r', line)
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.rstrip(b'\r\n')
-                log.info('%r Data: %s', self.session.peer, line)
+                log.info('%r >> %r', self.session.peer, line)
                 if not line:
                     await self.push('500 Error: bad syntax')
                     continue
@@ -470,7 +514,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         :param caller_method: The SMTP method needing a check (for logging)
         :return: True if AUTH is needed
         """
-        if self._auth_required and not self.authenticated:
+        if self._auth_required and not self.session.authenticated:
             log.info(f'{caller_method}: Authentication required')
             await self.push('530 5.7.0 Authentication required')
             return True
@@ -539,7 +583,6 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     @syntax('STARTTLS', when='tls_context')
     async def smtp_STARTTLS(self, arg):
-        log.info('%r STARTTLS', self.session.peer)
         if arg:
             await self.push('501 Syntax: STARTTLS')
             return
@@ -583,7 +626,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         elif self._auth_require_tls and not self._tls_protocol:
             await self.push("538 5.7.11 Encryption required for requested "
                             "authentication mechanism")
-        elif self.authenticated:
+        elif self.session.authenticated:
             await self.push('503 Already authenticated')
         elif not arg:
             await self.push('501 Not enough value')
@@ -618,7 +661,6 @@ class SMTP(asyncio.StreamReaderProtocol):
                     # is rejected / not valid
                     status = '535 5.7.8 Authentication credentials invalid'
                 else:
-                    self.authenticated = True
                     self.session.login_data = login_data
                     status = '235 2.7.0 Authentication successful'
             if status is not None:  # pragma: no branch
@@ -631,15 +673,16 @@ class SMTP(asyncio.StreamReaderProtocol):
         blob = line.strip()
         # '=' and '*' handling are in accordance with RFC4954
         if blob == b"=":
-            log.debug("User responded with '='")
+            log.debug("%r responded with '='", self.session.peer)
             return None
         if blob == b"*":
-            log.warning("User requested abort with '*'")
+            log.warning("%r aborted with '*'", self.session.peer)
             await self.push("501 Auth aborted")
             return MISSING
         try:
             decoded_blob = b64decode(blob, validate=True)
         except binascii.Error:
+            log.debug("%r can't decode base64: %s", self.session.peer, blob)
             await self.push("501 5.5.2 Can't decode base64")
             return MISSING
         return decoded_blob
@@ -659,37 +702,40 @@ class SMTP(asyncio.StreamReaderProtocol):
     #        nism. Might be a session key, a one-time user ID, or any kind of
     #        object, actually.
     #      - If the client provides "=" for username during interaction, the
-    #        method MUST return b"" (empty bytes)
+    #        method MUST return b"" (empty bytes) NOT None, because None has been
+    #        used to indicate error/login failure.
     # 3. Auth credentials checking is performed in the auth_* methods because
     #    more advanced auth mechanism might not return login+password pair
     #    (see #2 above)
 
     async def auth_PLAIN(self, _, args: List[str]):
-        loginpassword: _TriStateType
+        login_and_password: _TriStateType
         if len(args) == 1:
             # Trailing space is MANDATORY
-            # See https://tools.ietf.org/html/rfc4954#page-4
-            loginpassword = await self._auth_interact("334 ")
-            if loginpassword is MISSING:
+            # See https://tools.ietf.org/html/rfc4954#page-4 ¶ 5
+            login_and_password = await self._auth_interact("334 ")
+            if login_and_password is MISSING:
                 return
         else:
-            blob = args[1].encode()
-            if blob == b"=":
-                loginpassword = None
+            blob = args[1]
+            if blob == "=":
+                login_and_password = None
             else:
                 try:
-                    loginpassword = b64decode(blob, validate=True)
+                    login_and_password = b64decode(blob, validate=True)
                 except Exception:
                     await self.push("501 5.5.2 Can't decode base64")
                     return
-        if loginpassword is None:
+        # Decode login data
+        if login_and_password is None:
             login = password = None
         else:
             try:
-                _, login, password = loginpassword.split(b"\x00")
+                _, login, password = login_and_password.split(b"\x00")
             except ValueError:  # not enough args
                 await self.push("501 5.5.2 Can't split auth value")
                 return
+        # Verify login data
         if self._auth_callback("PLAIN", login, password):
             if login is None:
                 login = EMPTYBYTES
@@ -804,7 +850,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         if await self.check_auth_needed("MAIL"):
             return
-        log.debug('===> MAIL %s', arg)
         syntaxerr = '501 Syntax: MAIL FROM: <address>'
         if self.session.extended_smtp:
             syntaxerr += ' [SP <mail-parameters>]'
@@ -872,7 +917,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         if await self.check_auth_needed("RCPT"):
             return
-        log.debug('===> RCPT %s', arg)
         if not self.envelope.mail_from:
             await self.push('503 Error: need MAIL command')
             return

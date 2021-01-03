@@ -30,3 +30,4 @@ _dynamic/
 coverage.xml
 diffcov.html
 .python-version
+.pytype/
