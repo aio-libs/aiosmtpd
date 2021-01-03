@@ -852,7 +852,7 @@ Testing
     @patch("aiosmtpd.smtp.warn")
     def test_handle_ehlo_4arg_deprecation(self, mock_warn: Mock):
         handler = EHLOHandlerDeprecated()
-        server = Server(handler)
+        _ = Server(handler)
         mock_warn.assert_called_with(
             "Use the 5-argument handle_EHLO() hook instead of "
             "the 4-argument handle_EHLO() hook; "
