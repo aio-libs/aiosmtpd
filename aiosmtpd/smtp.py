@@ -257,8 +257,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             ehlo_hook_params = inspect.signature(ehlo_hook).parameters
             if len(ehlo_hook_params) == 4:
                 self._ehlo_hook_ver = "old"
-                warn('The 4-argument handle_EHLO hook will be deprecated '
-                     'in a future version.',
+                warn("Use the 5-argument handle_EHLO() hook instead of "
+                     "the 4-argument handle_EHLO() hook; "
+                     "support for the 4-argument handle_EHLO() hook will be "
+                     "removed in version 2.0",
                      DeprecationWarning)
             elif len(ehlo_hook_params) == 5:
                 self._ehlo_hook_ver = "new"

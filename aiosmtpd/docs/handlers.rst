@@ -78,7 +78,7 @@ The following hooks are currently defined:
     This hook may push *additional* ``250-<command>`` responses to the client by doing
     ``await server.push(status)`` before returning ``"250 HELP"`` as the final response.
 
-    **The 4-argument form will be deprecated in a future version.**
+    **The 4-argument form will be deprecated in version 2.0**
 
     The second form accept 5 (five) arguments.
     ``responses`` is a list strings representing the 'planned' responses to the ``EHLO`` command,
