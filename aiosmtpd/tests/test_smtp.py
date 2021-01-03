@@ -25,7 +25,7 @@ from contextlib import ExitStack
 from smtplib import (
     SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected)
 from typing import ContextManager, cast
-from unittest.mock import Mock, PropertyMock, patch
+from unittest.mock import Mock, patch
 
 CRLF = '\r\n'
 BCRLF = b'\r\n'
@@ -637,6 +637,7 @@ class TestSMTP(unittest.TestCase):
         with SMTP(*self.address) as client:
             client.helo("testbpo27931.example.com")
             resp = client.docmd("MAIL FROM: <""@example.com>")
+            self.assertEqual((250, b"OK"), resp)
 
     def test_mail_from_invalid(self):
         for addr in self.invalid_email_addresses:
