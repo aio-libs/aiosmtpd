@@ -59,7 +59,7 @@ __all__ = [
     "AuthMechanismType",
     "MISSING",
 ]  # Will be added to by @public
-__version__ = '1.3.0a1'
+__version__ = '1.2.3a6'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
@@ -72,6 +72,9 @@ EMPTYBYTES = b''
 MISSING = _Missing()
 NEWLINE = '\n'
 VALID_AUTHMECH = re.compile(r"[A-Z0-9_-]+\Z")
+
+# https://tools.ietf.org/html/rfc3207.html#page-3
+ALLOWED_BEFORE_STARTTLS = {"NOOP", "EHLO", "STARTTLS", "QUIT"}
 
 # endregion
 
@@ -260,6 +263,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             for m in dir(self)
             if m.startswith("smtp_")
         }
+
         if command_call_limit is None:
             self._enforce_call_limit = False
         else:
@@ -480,7 +484,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                     continue
                 if (self.require_starttls
                         and not self._tls_protocol
-                        and command not in ['EHLO', 'STARTTLS', 'QUIT']):
+                        and command not in ALLOWED_BEFORE_STARTTLS):
                     # RFC3207 part 4
                     await self.push('530 Must issue a STARTTLS command first')
                     continue
