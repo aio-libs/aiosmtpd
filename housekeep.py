@@ -31,6 +31,8 @@ except ImportError:
 TOX_ENV_NAME = os.environ.get("TOX_ENV_NAME", None)
 
 WORKDIRS = (
+    ".mypy_cache",
+    ".pytype",
     ".pytest-cache",
     ".pytest_cache",
     ".tox",
@@ -40,6 +42,14 @@ WORKDIRS = (
     "dist",
     "htmlcov",
     "prof",
+)
+
+WORKFILES = (
+    ".coverage",
+    "coverage.xml",
+    "diffcov.html",
+    "coverage-*.xml",
+    "diffcov-*.html",
 )
 
 
@@ -80,11 +90,13 @@ def dump_env():
 def move_prof():
     """Move profiling files to per-testenv dirs"""
     profpath = Path("prof")
+    # fmt: off
     prof_files = [
-        f
-        for p in ("*.prof", "*.svg")
-        for f in profpath.glob(p)
+        filepath
+        for fileglob in ("*.prof", "*.svg")
+        for filepath in profpath.glob(fileglob)
     ]
+    # fmt: on
     if not prof_files:
         return
     targpath = profpath / TOX_ENV_NAME
@@ -120,17 +132,10 @@ def rm_work():
         deldir(Path(dd))
         print(" ", end="", flush=True)
     print(f"\n{Style.BRIGHT}Removing work files ...", end="")
-    for fn in (".coverage", "coverage.xml", "diffcov.html"):
-        print(".", end="", flush=True)
-        fp = Path(fn)
-        if fp.exists():
-            fp.unlink()
-    for fp in Path(".").glob("coverage-*.xml"):
-        print(".", end="", flush=True)
-        fp.unlink()
-    for fp in Path(".").glob("diffcov-*.html"):
-        print(".", end="", flush=True)
-        fp.unlink()
+    for fnglob in WORKFILES:
+        for fp in Path(".").glob(fnglob):
+            print(".", end="", flush=True)
+            fp.exists() and fp.unlink()
     print()
 
 
@@ -198,10 +203,11 @@ def get_opts(argv):
     parser.add_argument(
         "--force", "-F", action="store_true", help="Force action even if in CI"
     )
+
+    # From: https://stackoverflow.com/a/49999185/149900
     parser.add_argument(
         "cmd", metavar="COMMAND", choices=sorted(dispers.keys()), help="(See below)"
     )
-
     cgrp = parser.add_argument_group(title="COMMAND is one of")
     for name, doc in sorted(dispers.items()):
         cgrp.add_argument(name, help=doc, action="no_action")
