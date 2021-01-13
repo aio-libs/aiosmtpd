@@ -109,7 +109,8 @@ auth_peeker = PeekerAuth()
 
 class DecodingControllerPeekAuth(Controller):
     def factory(self):
-        return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
+        self.server_kwargs["enable_SMTPUTF8"] = True
+        return Server(self.handler, decode_data=True,
                       auth_require_tls=False,
                       auth_callback=auth_peeker.authenticate,
                       **self.server_kwargs)

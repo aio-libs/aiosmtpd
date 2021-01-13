@@ -31,7 +31,7 @@ def tearDownModule():
     ModuleResources.close()
 
 
-class TestHandler1:
+class HandlerWithFromCli:
     def __init__(self, called):
         self.called = called
 
@@ -40,7 +40,7 @@ class TestHandler1:
         return cls(*args)
 
 
-class TestHandler2:
+class HandlerWithoutFromCli:
     pass
 
 
@@ -168,19 +168,19 @@ class TestParseArgs(unittest.TestCase):
     def test_handler_from_cli(self):
         # Ignore the host:port positional argument.
         parser, args = parseargs(
-            ('-c', 'aiosmtpd.tests.test_main.TestHandler1', '--', 'FOO'))
-        self.assertIsInstance(args.handler, TestHandler1)
+            ('-c', 'aiosmtpd.tests.test_main.HandlerWithFromCli', '--', 'FOO'))
+        self.assertIsInstance(args.handler, HandlerWithFromCli)
         self.assertEqual(args.handler.called, 'FOO')
 
     def test_handler_no_from_cli(self):
         # Ignore the host:port positional argument.
         parser, args = parseargs(
-            ('-c', 'aiosmtpd.tests.test_main.TestHandler2'))
-        self.assertIsInstance(args.handler, TestHandler2)
+            ('-c', 'aiosmtpd.tests.test_main.HandlerWithoutFromCli'))
+        self.assertIsInstance(args.handler, HandlerWithoutFromCli)
 
     def test_handler_from_cli_exception(self):
         self.assertRaises(TypeError, parseargs,
-                          ('-c', 'aiosmtpd.tests.test_main.TestHandler1',
+                          ('-c', 'aiosmtpd.tests.test_main.HandlerWithFromCli',
                            'FOO', 'BAR'))
 
     def test_handler_no_from_cli_exception(self):
@@ -188,7 +188,7 @@ class TestParseArgs(unittest.TestCase):
         with patch('sys.stderr', stderr):
             with self.assertRaises(SystemExit) as cm:
                 parseargs(
-                    ('-c', 'aiosmtpd.tests.test_main.TestHandler2',
+                    ('-c', 'aiosmtpd.tests.test_main.HandlerWithoutFromCli',
                      'FOO', 'BAR'))
             self.assertEqual(cm.exception.code, 2)
         usage_lines = stderr.getvalue().splitlines()

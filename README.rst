@@ -29,16 +29,13 @@
    :alt: Discourse status
 
 The Python standard library includes a basic
-`SMTP <http://www.faqs.org/rfcs/rfc5321.html>`__ server in the
-`smtpd <https://docs.python.org/3/library/smtpd.html>`__ module, based on the
-old asynchronous libraries
-`asyncore <https://docs.python.org/3/library/asyncore.html>`__ and
-`asynchat <https://docs.python.org/3/library/asynchat.html>`__.  These modules
-are quite old and are definitely showing their age.  asyncore and asynchat are
+:rfc:`SMTP <5321>` server in the
+:mod:`smtpd` module, based on the
+old asynchronous libraries :mod:`asyncore` and :mod:`asynchat`.  These modules
+are quite old and are definitely showing their age.  ``asyncore`` and ``asynchat`` are
 difficult APIs to work with, understand, extend, and fix.
 
-With the introduction of the
-`asyncio <https://docs.python.org/3/library/asyncio.html>`__ module in Python
+With the introduction of the :mod:`asyncio` module in Python
 3.4, a much better way of doing asynchronous I/O is now available.  It seems
 obvious that an asyncio-based version of the SMTP and related protocols are
 needed for Python 3.  This project brings together several highly experienced
@@ -86,8 +83,8 @@ You can install this package in a virtual environment like so::
     $ source /path/to/venv/bin/activate
     $ python setup.py install
 
-This will give you a command line script called ``smtpd`` which implements the
-SMTP server.  Use ``smtpd --help`` for details.
+This will give you a command line script called ``aiosmtpd`` which implements the
+SMTP server.  Use ``aiosmtpd --help`` for details.
 
 You will also have access to the ``aiosmtpd`` library, which you can use as a
 testing environment for your SMTP clients.  See the documentation links above
@@ -104,17 +101,28 @@ test suite for Python 3.  Once you've got that, run::
 
 Individual tests can be run like this::
 
-    $ tox -e py36-nocov -- -P <pattern>
+    $ tox -- <testname>
 
-where *<pattern>* is a Python regular expression matching a test name.
+where ``<testname>`` is the "node id" of the test case to run, as explained
+in `the pytest documentation`_. The command above will run that one test case
+against all testenvs defined in ``tox.ini`` (see below).
 
-You can also add the ``-E`` option to boost debugging output, e.g.::
+If you want test to stop as soon as it hit a failure, use the ``-x``/``--exitfirst``
+option::
 
-    $ tox -e py36-nocov -- -E
+    $ tox -- -x
 
-and these options can be combined::
+You can also add the ``-s``/``--capture=no`` option to show output, e.g.::
 
-    $ tox -e py36-nocov -- -P test_connection_reset_during_DATA -E
+    $ tox -e py36-nocov -- -s
+
+(The ``-e`` parameter is explained in the next section about 'testenvs'.
+In general, you'll want to choose the ``nocov`` testenvs if you want to show output,
+so you can see which test is generating which output.)
+
+The `-x` and `-s` options can be combined::
+
+    $ tox -e py36-nocov -- -x -s <testname>
 
 
 Supported 'testenvs'
@@ -136,9 +144,23 @@ have been configured and tested:
   - ``profile`` = no coverage testing, but code profiling instead.
     This must be **invoked manually** using the ``-e`` parameter
 
-  **Note:** Due to possible 'complications' when setting up PyPy on
+  **Note 1:** Due to possible 'complications' when setting up PyPy on
   systems without pyenv, ``pypy3`` tests also will not be automatically
-  run; you must invoke them manually.
+  run; you must invoke them manually. For example::
+
+    $ tox -e pypy3-nocov
+
+  **Note 2:** It is also possible to use whatever Python version is used when
+  invoking ``tox`` by using the ``py`` target, but you must explicitly include
+  the type of testing you want. For example::
+
+    $ tox -e "py-{nocov,cov,diffcov}"
+
+  (Don't forget the quotes if you want to use braces!)
+
+  You might want to do this for CI platforms where the exact Python version
+  is pre-prepared, such as Travis CI or |GitHub Actions|_; this will definitely
+  save some time during tox's testenv prepping.
 
 * ``qa``
 
@@ -152,12 +174,16 @@ have been configured and tested:
 Environment Variables
 -------------------------
 
-``PLATFORM``
+.. envvar:: PLATFORM
+
     Used on non-native-Linux operating systems to specify tests to skip.
     Valid values:
 
-    * ``mswin`` -- when running tox on Microsoft Windows
-    * ``wsl`` -- when running tox on Windows Subsystem for Linux (WSL)
+    +-----------+-------------------------------------------------------+
+    | ``mswin`` | when running tox on Microsoft Windows (non-Cygwin)    |
+    +-----------+-------------------------------------------------------+
+    | ``wsl``   | when running tox on Windows Subsystem for Linux (WSL) |
+    +-----------+-------------------------------------------------------+
 
 
 Different Python Versions
@@ -227,3 +253,9 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+
+.. _`GitHub Actions`: https://docs.github.com/en/free-pro-team@latest/actions/guides/building-and-testing-python#running-tests-with-tox
+.. |GitHub Actions| replace:: **GitHub Actions**
+.. _`pytest doctest`: https://docs.pytest.org/en/stable/doctest.html
+.. _`the pytest documentation`: https://docs.pytest.org/en/stable/usage.html#specifying-tests-selecting-tests

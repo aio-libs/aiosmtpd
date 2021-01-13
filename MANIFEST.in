@@ -1,3 +1,3 @@
 graft aiosmtpd
-include LICENSE *.cfg *.ini *.py *.rst *.yml
+include LICENSE *.cfg *.ini *.py *.rst *.yml *.toml
 global-exclude *.py[oc]
