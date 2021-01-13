@@ -4,7 +4,7 @@ from public import public
 
 @public
 class LMTP(SMTP):
-    show_smtp_greeting = False
+    show_smtp_greeting: bool = False
 
     @syntax('LHLO hostname')
     async def smtp_LHLO(self, arg):

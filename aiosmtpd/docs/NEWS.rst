@@ -9,6 +9,7 @@
 Added
 -----
 * Test for ``SMTP.__init__`` behavior after taking out code that edits TLS Context
+* Implement mechanism to limit the number of commands sent (Closes #145)
 
 Fixed/Improved
 --------------

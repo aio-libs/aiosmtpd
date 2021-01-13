@@ -9,7 +9,11 @@ import warnings
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import (
-    MISSING, Session as SMTPSess, SMTP as Server, __ident__ as GREETING, auth_mechanism
+    CALL_LIMIT_DEFAULT,
+    MISSING,
+    Session as SMTPSess,
+    SMTP as Server,
+    __ident__ as GREETING, auth_mechanism
 )
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
@@ -803,7 +807,8 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 250)
             self.assertEqual(response, b'OK')
 
-    def test_unknown_command(self):
+    @patch("logging.Logger.warning")
+    def test_unknown_command(self, mock_warning):
         with SMTP(*self.address) as client:
             code, response = client.docmd('FOOBAR')
             self.assertEqual(code, 500)
@@ -1888,3 +1893,158 @@ class TestAuthArgs(unittest.TestCase):
         self.assertRaises(ValueError, auth_mechanism, "has space")
         self.assertRaises(ValueError, auth_mechanism, "has.dot")
         self.assertRaises(ValueError, auth_mechanism, "has/slash")
+
+
+class TestLimits(unittest.TestCase):
+    @patch("logging.Logger.warning")
+    def test_all_limit_15(self, mock_warning):
+        kwargs = dict(
+            command_call_limit=15,
+        )
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        self.addCleanup(controller.stop)
+        controller.start()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, 15):
+                code, mesg = client.noop()
+                self.assertEqual(250, code)
+            code, mesg = client.noop()
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 NOOP sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+
+    @patch("logging.Logger.warning")
+    def test_different_limits(self, mock_warning):
+        noop_max, expn_max = 15, 5
+        kwargs = dict(
+            command_call_limit={"NOOP": noop_max, "EXPN": expn_max},
+        )
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        self.addCleanup(controller.stop)
+        controller.start()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, noop_max):
+                code, mesg = client.noop()
+                self.assertEqual(250, code)
+            code, mesg = client.noop()
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 NOOP sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, expn_max):
+                code, mesg = client.expn("alice@example.com")
+                self.assertEqual(502, code)
+            code, mesg = client.expn("alice@example.com")
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 EXPN sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, CALL_LIMIT_DEFAULT):
+                code, mesg = client.vrfy("alice@example.com")
+                self.assertEqual(252, code)
+            code, mesg = client.vrfy("alice@example.com")
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 VRFY sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+
+    @patch("logging.Logger.warning")
+    def test_different_limits_custom_default(self, mock_warning):
+        # Important: make sure default_max > CALL_LIMIT_DEFAULT
+        # Others can be set small to cut down on testing time, but must be different
+        noop_max, expn_max, default_max = 7, 5, 25
+        self.assertGreater(default_max, CALL_LIMIT_DEFAULT)
+        self.assertNotEqual(noop_max, expn_max)
+        kwargs = dict(
+            command_call_limit={"NOOP": noop_max, "EXPN": expn_max, "*": default_max},
+        )
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        self.addCleanup(controller.stop)
+        controller.start()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, noop_max):
+                code, mesg = client.noop()
+                self.assertEqual(250, code)
+            code, mesg = client.noop()
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 NOOP sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, expn_max):
+                code, mesg = client.expn("alice@example.com")
+                self.assertEqual(502, code)
+            code, mesg = client.expn("alice@example.com")
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 EXPN sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, default_max):
+                code, mesg = client.vrfy("alice@example.com")
+                self.assertEqual(252, code)
+            code, mesg = client.vrfy("alice@example.com")
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 VRFY sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+
+    def test_limit_wrong_type(self):
+        kwargs = dict(
+            command_call_limit="invalid",
+        )
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        self.addCleanup(controller.stop)
+        with self.assertRaises(TypeError):
+            controller.start()
+
+    def test_limit_wrong_value_type(self):
+        kwargs = dict(
+            command_call_limit={"NOOP": "invalid"},
+        )
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        self.addCleanup(controller.stop)
+        with self.assertRaises(TypeError):
+            controller.start()
+
+    @patch("logging.Logger.warning")
+    def test_limit_bogus(self, mock_warning):
+        # Extreme limit.
+        kwargs = dict(
+            command_call_limit=1,
+        )
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        self.addCleanup(controller.stop)
+        controller.start()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for i in range(0, 4):
+                code, mesg = client.docmd(f"BOGUS{i}")
+                self.assertEqual(500, code)
+                expected = f"Error: command \"BOGUS{i}\" not recognized"
+                self.assertEqual(expected, mesg.decode("ascii"))
+            code, mesg = client.docmd("LASTBOGUS")
+            self.assertEqual(502, code)
+            self.assertEqual(
+                b"5.5.1 Too many unrecognized commands, goodbye.", mesg
+            )
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
