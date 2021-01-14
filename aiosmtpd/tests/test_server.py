@@ -155,19 +155,6 @@ class TestFactory(unittest.TestCase):
         finally:
             cont.stop()
 
-    def test_conflict_smtputf8(self):
-        kwargs = dict(enable_SMTPUTF8=True)
-        cont = Controller(Sink(), server_kwargs=kwargs)
-        try:
-            with self.assertRaises(TypeError) as cm:
-                cont.start()
-            self.assertIsNone(cont.smtpd)
-            excm = str(cm.exception)
-            self.assertIn("multiple values", excm)
-            self.assertIn("enable_SMTPUTF8", excm)
-        finally:
-            cont.stop()
-
     def test_factory_none(self):
         # Hypothetical situation where factory() did not raise an Exception
         # but returned None instead

@@ -39,5 +39,5 @@ Other references
 * `Wikipedia page on SMTP <https://en.wikipedia.org/wiki/Simple_Mail_Transfer_Protocol>`__
 * `asyncio module documentation <https://docs.python.org/3/library/asyncio.html>`__
 * `Developing with asyncio <https://docs.python.org/3/library/asyncio-dev.html#asyncio-dev>`__
-* `Python issue #25508 <http://bugs.python.org/issue25008>`__ which started
+* `Python issue #25008 <http://bugs.python.org/issue25008>`__ which started
   the whole thing.
