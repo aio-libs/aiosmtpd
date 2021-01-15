@@ -741,14 +741,15 @@ class SMTP(asyncio.StreamReaderProtocol):
         :param encode_to_b64: If true, then perform Base64 encoding on challenge
         :return: Response from client, or MISSING
         """
-        if isinstance(challenge, str):
-            challenge = challenge.encode("ascii")
+        challenge = (
+            challenge.encode("ascii") if isinstance(challenge, str) else challenge
+        )
         assert isinstance(challenge, bytes)
-        if encode_to_b64:
-            challenge = b64encode(challenge)
         # Trailing space is MANDATORY even if server_message is empty.
         # See https://tools.ietf.org/html/rfc4954#page-4 ¶ 5
-        await self.push(b"334 " + challenge)
+        await self.push(
+            b"334 " + (b64encode(challenge) if encode_to_b64 else challenge)
+        )
         line = await self._reader.readline()
         blob: bytes = line.strip()
         # '*' handling in accordance with RFC4954
