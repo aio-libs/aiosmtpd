@@ -819,9 +819,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push("501 5.5.2 Can't split auth value")
             return
         # Verify login data
+        assert login is not None
+        assert password is not None
         if self._auth_callback("PLAIN", login, password):
-            if login is None:
-                login = EMPTYBYTES
             return login
         else:
             return MISSING
@@ -837,9 +837,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         if password is MISSING:
             return
 
+        assert login is not None
+        assert password is not None
         if self._auth_callback("LOGIN", login, password):
-            if login is None:  # pragma: no branch
-                login = EMPTYBYTES
             return login
         else:
             return MISSING
