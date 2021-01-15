@@ -9,12 +9,13 @@ import binascii
 import collections
 import asyncio.sslproto as sslproto
 
-from base64 import b64decode
+from base64 import b64decode, b64encode
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
 from public import public
 from typing import (
     Any,
+    AnyStr,
     Awaitable,
     Callable,
     Dict,
@@ -59,7 +60,7 @@ __all__ = [
     "AuthMechanismType",
     "MISSING",
 ]  # Will be added to by @public
-__version__ = '1.2.3'
+__version__ = '1.2.4a1'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
@@ -383,10 +384,14 @@ class SMTP(asyncio.StreamReaderProtocol):
         """Reset all state variables except the greeting."""
         self._set_post_data_state()
 
-    async def push(self, status):
-        response = bytes(
-            status + '\r\n', 'utf-8' if self.enable_SMTPUTF8 else 'ascii')
-        self._writer.write(response)
+    async def push(self, status: AnyStr):
+        if isinstance(status, str):
+            response = bytes(
+                status, 'utf-8' if self.enable_SMTPUTF8 else 'ascii')
+        else:
+            response = status
+        assert isinstance(response, bytes)
+        self._writer.write(response + b"\r\n")
         log.debug("%r << %r", self.session.peer, response)
         await self._writer.drain()
 
@@ -723,18 +728,33 @@ class SMTP(asyncio.StreamReaderProtocol):
             if status is not None:  # pragma: no branch
                 await self.push(status)
 
-    async def _auth_interact(self, server_message) -> _TriStateType:
-        blob: bytes
-        await self.push(server_message)
+    async def challenge_auth(
+            self,
+            challenge: AnyStr,
+            encode_to_b64: bool = True,
+    ) -> Union[_Missing, bytes]:
+        """
+        Send challenge during authentication. "334 " will be prefixed, so do NOT
+        put "334 " at start of server_message.
+
+        :param challenge: Challenge to send to client. Must be ASCII-encodable
+        :param encode_to_b64: If true, then perform Base64 encoding on challenge
+        :return: Response from client, or MISSING
+        """
+        if isinstance(challenge, str):
+            challenge = challenge.encode("ascii")
+        assert isinstance(challenge, bytes)
+        if encode_to_b64:
+            challenge = b64encode(challenge)
+        # Trailing space is MANDATORY even if server_message is empty.
+        # See https://tools.ietf.org/html/rfc4954#page-4 ¶ 5
+        await self.push(b"334 " + challenge)
         line = await self._reader.readline()
-        blob = line.strip()
-        # '=' and '*' handling are in accordance with RFC4954
-        if blob == b"=":
-            log.debug("%r responded with '='", self.session.peer)
-            return None
+        blob: bytes = line.strip()
+        # '*' handling in accordance with RFC4954
         if blob == b"*":
-            log.warning("%r aborted with '*'", self.session.peer)
-            await self.push("501 Auth aborted")
+            log.warning("%r aborted AUTH with '*'", self.session.peer)
+            await self.push("501 5.7.0 Auth aborted")
             return MISSING
         try:
             decoded_blob = b64decode(blob, validate=True)
@@ -743,6 +763,19 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push("501 5.5.2 Can't decode base64")
             return MISSING
         return decoded_blob
+
+    _334_PREFIX = re.compile(r"^334 ")
+
+    async def _auth_interact(self, server_message: str) -> Union[_Missing, bytes]:
+        warn(
+            "_auth_interact will be deprecated in version 2.0. "
+            "Please use challenge_auth() instead.",
+            DeprecationWarning
+        )
+        return await self.challenge_auth(
+            challenge=self._334_PREFIX.sub("", server_message),
+            encode_to_b64=False,
+        )
 
     # IMPORTANT NOTES FOR THE auth_* METHODS
     #
@@ -768,30 +801,23 @@ class SMTP(asyncio.StreamReaderProtocol):
     async def auth_PLAIN(self, _, args: List[str]):
         login_and_password: _TriStateType
         if len(args) == 1:
-            # Trailing space is MANDATORY
-            # See https://tools.ietf.org/html/rfc4954#page-4 ¶ 5
-            login_and_password = await self._auth_interact("334 ")
+            login_and_password = await self.challenge_auth("")
             if login_and_password is MISSING:
                 return
         else:
-            blob = args[1]
-            if blob == "=":
-                login_and_password = None
-            else:
-                try:
-                    login_and_password = b64decode(blob, validate=True)
-                except Exception:
-                    await self.push("501 5.5.2 Can't decode base64")
-                    return
-        # Decode login data
-        if login_and_password is None:
-            login = password = None
-        else:
             try:
-                _, login, password = login_and_password.split(b"\x00")
-            except ValueError:  # not enough args
-                await self.push("501 5.5.2 Can't split auth value")
+                login_and_password = b64decode(args[1].encode(), validate=True)
+            except Exception:
+                await self.push("501 5.5.2 Can't decode base64")
                 return
+        try:
+            # login data is "{authz_id}\x00{login_id}\x00{password}"
+            # authz_id can be null, and currently ignored
+            # See https://tools.ietf.org/html/rfc4616#page-3
+            _, login, password = login_and_password.split(b"\x00")
+        except ValueError:  # not enough args
+            await self.push("501 5.5.2 Can't split auth value")
+            return
         # Verify login data
         if self._auth_callback("PLAIN", login, password):
             if login is None:
@@ -802,14 +828,12 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     async def auth_LOGIN(self, _, args: List[str]):
         login: _TriStateType
-        # 'User Name\x00'
-        login = await self._auth_interact("334 VXNlciBOYW1lAA==")
+        login = await self.challenge_auth(b"User Name\x00")
         if login is MISSING:
             return
 
         password: _TriStateType
-        # 'Password\x00'
-        password = await self._auth_interact("334 UGFzc3dvcmQA")
+        password = await self.challenge_auth(b"Password\x00")
         if password is MISSING:
             return
 
