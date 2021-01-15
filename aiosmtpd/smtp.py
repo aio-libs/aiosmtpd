@@ -767,7 +767,10 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     _334_PREFIX = re.compile(r"^334 ")
 
-    async def _auth_interact(self, server_message: str) -> Union[_Missing, bytes]:
+    async def _auth_interact(
+            self,
+            server_message: str
+    ) -> Union[_Missing, bytes]:  # pragma: nocover
         warn(
             "_auth_interact will be deprecated in version 2.0. "
             "Please use challenge_auth() instead.",
