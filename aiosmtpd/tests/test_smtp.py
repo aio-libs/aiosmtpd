@@ -1126,8 +1126,8 @@ class TestSMTPAuth(unittest.TestCase):
             assert_auth_success(self, code, response)
             self.assertEqual(auth_peeker.login, b"")
             self.assertEqual(auth_peeker.password, b"")
-            code, response = client.mail("alice@example.com")
-            self.assertEqual(self.handler.sess.login_data, None)
+            response = client.mail("alice@example.com")
+            assert response == (250, b"OK")
 
     def test_auth_login_null_credential(self):
         with SMTP(*self.address) as client:
@@ -1140,10 +1140,11 @@ class TestSMTPAuth(unittest.TestCase):
             self.assertEqual(response, b"UGFzc3dvcmQA")
             code, response = client.docmd('=')
             assert_auth_success(self, code, response)
-            self.assertEqual(auth_peeker.login, b"")
-            self.assertEqual(auth_peeker.password, b"")
-            code, response = client.mail("alice@example.com")
-            self.assertEqual(self.handler.sess.login_data, None)
+            assert auth_peeker.mechanism == "LOGIN"
+            assert auth_peeker.login == b""
+            assert auth_peeker.password == b""
+            response = client.mail("alice@example.com")
+            assert response == (250, b"OK")
 
     def test_auth_login_abort_login(self):
         with SMTP(*self.address) as client:
