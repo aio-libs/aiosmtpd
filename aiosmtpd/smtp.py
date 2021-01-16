@@ -1,5 +1,6 @@
 import re
 import ssl
+import attr
 import enum
 import socket
 import asyncio
@@ -81,18 +82,27 @@ ALLOWED_BEFORE_STARTTLS = {"NOOP", "EHLO", "STARTTLS", "QUIT"}
 # endregion
 
 
-class AuthResult(NamedTuple):
-    success: bool
+@attr.s
+class AuthResult:
+    """
+    Contains the result of authentication, to be returned to the smtp_AUTH method.
+    All initialization arguments _must_ be keyworded!
+    """
+
+    success: bool = attr.ib(kw_only=True)
     """Indicates authentication is successful or not"""
-    handled: bool = True
+
+    handled: bool = attr.ib(kw_only=True, default=True)
     """
     True means everything (including sending of status code) has been handled by the
     AUTH handler and smtp_AUTH should not do anything else.
     Applicable only if success == False.
     """
-    message: Optional[str] = None
+
+    message: Optional[str] = attr.ib(kw_only=True, default=None)
     """Optional message for additional handling by smtp_AUTH"""
-    auth_data: Optional[Any] = None
+
+    auth_data: Optional[Any] = attr.ib(kw_only=True, default=None)
     """
     Optional free-form authentication data. For the built-in mechanisms, it is usually
     an instance of _LoginPassword. Other implementations are free to use any data
@@ -858,7 +868,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             if self._auth_callback(mechanism, *auth_data):
                 return AuthResult(success=True, handled=True, auth_data=auth_data)
             else:
-                return AuthResult(False, False)
+                return AuthResult(success=False, handled=False)
 
     # IMPORTANT NOTES FOR THE auth_* METHODS
     # ======================================
