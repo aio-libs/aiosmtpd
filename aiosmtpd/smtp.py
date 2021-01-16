@@ -795,9 +795,6 @@ class SMTP(asyncio.StreamReaderProtocol):
     #      - 'identity' is not always username, depending on the auth mecha-
     #        nism. Might be a session key, a one-time user ID, or any kind of
     #        object, actually.
-    #      - If the client provides "=" for username during interaction, the
-    #        method MUST return b"" (empty bytes) NOT None, because None has been
-    #        used to indicate error/login failure.
     # 3. Auth credentials checking is performed in the auth_* methods because
     #    more advanced auth mechanism might not return login+password pair
     #    (see #2 above)
