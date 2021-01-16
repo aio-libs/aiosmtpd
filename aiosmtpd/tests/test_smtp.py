@@ -121,6 +121,8 @@ class PeekerAuth:
     def auth_callback(
             self, mechanism: str, login: bytes, password: bytes
     ) -> bool:
+        assert login is not None
+        assert password is not None
         self.mechanism = mechanism
         self.login = login
         self.password = password
@@ -140,10 +142,14 @@ class PeekerAuth:
         userb, passb = login_data
         if userb == b"failme_with454":
             return AuthResult(
-                False, False, "454 4.7.0 Temporary authentication failure"
+                success=False,
+                handled=False,
+                message="454 4.7.0 Temporary authentication failure",
             )
         else:
-            return AuthResult(True)
+            self.login = userb
+            self.password = passb
+            return AuthResult(success=True, auth_data=login_data)
 
 
 auth_peeker = PeekerAuth()
