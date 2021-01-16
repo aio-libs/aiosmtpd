@@ -57,7 +57,7 @@ def tearDownModule():
     ModuleResources.close()
 
 
-def authenticator(mechanism, login, password):
+def auth_callback(mechanism, login, password):
     if login and login.decode() == 'goodlogin':
         return True
     else:
@@ -67,7 +67,7 @@ def authenticator(mechanism, login, password):
 class DecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
-                      auth_require_tls=False, auth_callback=authenticator)
+                      auth_require_tls=False, auth_callback=auth_callback)
 
 
 class PeekerHandler:
@@ -181,7 +181,7 @@ class TimeoutController(Controller):
 class RequiredAuthDecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
-                      auth_require_tls=False, auth_callback=authenticator,
+                      auth_require_tls=False, auth_callback=auth_callback,
                       auth_required=True)
 
 
