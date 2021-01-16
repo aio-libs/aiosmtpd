@@ -9,14 +9,14 @@ import warnings
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import (
+    AuthResult,
     CALL_LIMIT_DEFAULT,
+    Envelope as SMTPEnvelope,
     MISSING,
     SMTP as Server,
+    Session as SMTPSession,
     __ident__ as GREETING,
     auth_mechanism,
-    AuthResult,
-    Envelope as SMTPEnvelope,
-    Session as SMTPSession,
 )
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
