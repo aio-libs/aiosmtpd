@@ -812,12 +812,12 @@ class SMTP(asyncio.StreamReaderProtocol):
         Send challenge during authentication. "334 " will be prefixed, so do NOT
         put "334 " at start of server_message.
 
-        :param challenge: Challenge to send to client. Must be ASCII-encodable
+        :param challenge: Challenge to send to client. If str, will be utf8-encoded.
         :param encode_to_b64: If true, then perform Base64 encoding on challenge
         :return: Response from client, or MISSING
         """
         challenge = (
-            challenge.encode("ascii") if isinstance(challenge, str) else challenge
+            challenge.encode() if isinstance(challenge, str) else challenge
         )
         assert isinstance(challenge, bytes)
         # Trailing space is MANDATORY even if server_message is empty.
