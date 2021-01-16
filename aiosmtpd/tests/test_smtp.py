@@ -932,9 +932,8 @@ class TestSMTP(unittest.TestCase):
     def test_auth_login_bad_base64_encoding(self):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
-            code, response = client.docmd('AUTH LOGIN not-b64')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b"5.5.2 Can't decode base64")
+            response = client.docmd('AUTH LOGIN not-b64')
+            assert response == (501, b"5.5.2 Can't decode base64")
 
     def test_auth_plain_bad_base64_length(self):
         with SMTP(*self.address) as client:
@@ -1345,9 +1344,8 @@ class TestRequiredAuthentication(unittest.TestCase):
                 b64encode(b'\0goodlogin\0goodpasswd').decode()
             )
             assert_auth_success(self, code, response)
-            code, response = client.docmd('HELP')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, SUPPORTED_COMMANDS_NOTLS)
+            response = client.docmd('HELP')
+            assert response == (250, SUPPORTED_COMMANDS_NOTLS)
 
     def test_vrfy_authenticated(self):
         with SMTP(*self.address) as client:
