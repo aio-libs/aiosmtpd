@@ -113,12 +113,19 @@ class Session:
         self.host_name = None
         self.extended_smtp = False
         self.loop = loop
-        self.login_data = None
-        self.auth_data = None
 
-    @property
-    def authenticated(self):
-        return self.login_data is not None
+        self.login_data = None
+        """Legacy login_data, usually containing the username"""
+
+        self.auth_data = None
+        """
+        New system *optional* authentication data;
+        can contain anything returned by the authenticator callback.
+        Can even be None; check `authenticated` attribute to determine
+        if AUTH successful or not.
+        """
+
+        self.authenticated = None
 
 
 @public
@@ -202,10 +209,8 @@ class SMTP(asyncio.StreamReaderProtocol):
     # (RFC 5322 s 2.1.1 + RFC 6532 s 3.4) 998 octets + CRLF = 1000 octets
     # (RFC 5321 s 4.5.3.1.6) 1000 octets + "transparent dot" = 1001 octets
 
-    # base64-encoded 'User Name\x00'
-    AuthLoginUsernameChallenge = "VXNlciBOYW1lAA=="
-    # base64-encoded 'Password\x00'
-    AuthLoginPasswordChallenge = "UGFzc3dvcmQA"
+    AuthLoginUsernameChallenge = "User Name\x00"
+    AuthLoginPasswordChallenge = "Password\x00"
 
     def __init__(self, handler,
                  *,
@@ -754,8 +759,8 @@ class SMTP(asyncio.StreamReaderProtocol):
 
             # New system using `authenticator` and AuthResult
             if isinstance(auth_result, AuthResult):
-                self.authenticated = auth_result.success
                 if auth_result.success:
+                    self.session.authenticated = True
                     _auth_data = auth_result.auth_data
                     self.session.auth_data = _auth_data
                     # Custom mechanisms might not implement the "login" attribute, and
@@ -851,7 +856,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             assert self._auth_callback is not None
             assert isinstance(auth_data, _LoginPassword)
             if self._auth_callback(mechanism, *auth_data):
-                return AuthResult(True, True, None, auth_data.login)
+                return AuthResult(success=True, handled=True, auth_data=auth_data)
             else:
                 return AuthResult(False, False)
 
