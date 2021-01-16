@@ -105,12 +105,13 @@ class AuthResult:
     auth_data: Optional[Any] = attr.ib(kw_only=True, default=None)
     """
     Optional free-form authentication data. For the built-in mechanisms, it is usually
-    an instance of _LoginPassword. Other implementations are free to use any data
+    an instance of LoginPassword. Other implementations are free to use any data
     structure here.
     """
 
 
-class _LoginPassword(NamedTuple):
+@public
+class LoginPassword(NamedTuple):
     login: bytes
     password: bytes
 
@@ -194,7 +195,7 @@ def auth_mechanism(actual_name: str):
 
 
 def login_always_fail(
-        mechanism: str, session: Session, login_data: _LoginPassword
+        mechanism: str, session: Session, login_data: LoginPassword
 ) -> bool:
     return False
 
@@ -864,7 +865,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             )
         else:
             assert self._auth_callback is not None
-            assert isinstance(auth_data, _LoginPassword)
+            assert isinstance(auth_data, LoginPassword)
             if self._auth_callback(mechanism, *auth_data):
                 return AuthResult(success=True, handled=True, auth_data=auth_data)
             else:
@@ -918,7 +919,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         # Verify login data
         assert login is not None
         assert password is not None
-        return self._authenticate("PLAIN", _LoginPassword(login, password))
+        return self._authenticate("PLAIN", LoginPassword(login, password))
 
     async def auth_LOGIN(self, _, args: List[str]):
         login: _TriStateType
@@ -931,7 +932,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if password is MISSING:
             return AuthResult(success=False)
 
-        return self._authenticate("LOGIN", _LoginPassword(login, password))
+        return self._authenticate("LOGIN", LoginPassword(login, password))
 
     def _strip_command_keyword(self, keyword, arg):
         keylen = len(keyword)
