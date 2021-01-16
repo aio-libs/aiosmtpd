@@ -923,14 +923,25 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     async def auth_LOGIN(self, _, args: List[str]):
         login: _TriStateType
-        login = await self.challenge_auth(self.AuthLoginUsernameChallenge)
-        if login is MISSING:
-            return AuthResult(success=False)
+        if len(args) == 1:
+            # Client sent only "AUTH LOGIN"
+            login = await self.challenge_auth(self.AuthLoginUsernameChallenge)
+            if login is MISSING:
+                return AuthResult(success=False)
+        else:
+            # Client sent "AUTH LOGIN <b64-encoded-username>"
+            try:
+                login = b64decode(args[1].encode(), validate=True)
+            except Exception:
+                await self.push("501 5.5.2 Can't decode base64")
+                return AuthResult(success=False, handled=True)
+        assert login is not None
 
         password: _TriStateType
         password = await self.challenge_auth(self.AuthLoginPasswordChallenge)
         if password is MISSING:
             return AuthResult(success=False)
+        assert password is not None
 
         return self._authenticate("LOGIN", LoginPassword(login, password))
 
