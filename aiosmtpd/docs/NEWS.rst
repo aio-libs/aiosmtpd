@@ -2,14 +2,33 @@
  NEWS for aiosmtpd
 ===================
 
-1.2.3 (aiosmtpd-next)
+
+1.3.0 (aiosmtpd-next-next)
+==========================
+
+Added
+-----
+* authenticator system improves on auth_callback by enabling the called function to see the
+  SMTP Session and other info. (We can deprecate auth_callback in a future version)
+
+
+1.2.4 (aiosmtpd-next)
 =====================
+
+Fixed/Improved
+--------------
+* Remove special handling for lone ``=`` during AUTH;
+  it is now treated as simple Base64-encoded ``b""``.
+  This is the correct, strict interpretation of :rfc:`4954` mentions about ``=``
+
+
+1.2.3 (2021-01-14)
+==================
 
 Added
 -----
 * Test for ``SMTP.__init__`` behavior after taking out code that edits TLS Context
-* authenticator system improves on auth_callback by enabling the called function to see the
-  SMTP Session and other info. (We can deprecate auth_callback in a future version)
+* Implement mechanism to limit the number of commands sent (Closes #145)
 
 Fixed/Improved
 --------------
@@ -17,7 +36,14 @@ Fixed/Improved
 * Implement & enforce line-length-limit, thus becoming Compliant with RFC 5321 § 4.5.3.1.6
 * Delay all SMTP Status Code replies during ``DATA`` phase until the phase termination (Closes #9)
 * Now catches ``Controller.factory()`` failure during ``Controller.start()`` (Closes #212)
-* :class:`SMTP` no longer edits user-supplied SSL Context (closes #191)
+* :class:`SMTP` no longer edits user-supplied SSL Context (Closes #191)
+* Implement waiting for SSL setup/handshake within ``STARTTLS`` handler to be able to catch and handle
+  (log) errors and to avoid session hanging around until timeout in such cases
+* Add session peer information to some logging output where it was missing
+* Support AUTH mechanisms with dash(es) in their names (Closes #224)
+* Remove some double-logging of commands sent by clients
+* LMTP servers now correctly advertise extensions in reply to ``LHLO`` (Closes #123, #124)
+* ``NOOP`` now accepted before ``STARTTLS`` even if ``require_starttls=True`` (Closes #124)
 
 
 1.2.2 (2020-11-08)

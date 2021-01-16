@@ -65,19 +65,25 @@ def start(plugin):
         warnings.filterwarnings('always', category=ResourceWarning)
 
 
-def assert_auth_success(testcase: TestCase, code, response):
-    testcase.assertEqual(code, 235)
-    testcase.assertEqual(response, b"2.7.0 Authentication successful")
+def assert_auth_success(testcase: TestCase, *response):
+    testcase.assertEqual(
+        (235, b"2.7.0 Authentication successful"),
+        response
+    )
 
 
-def assert_auth_invalid(testcase: TestCase, code, response):
-    testcase.assertEqual(code, 535)
-    testcase.assertEqual(response, b'5.7.8 Authentication credentials invalid')
+def assert_auth_invalid(testcase: TestCase, *response):
+    testcase.assertEqual(
+        (535, b"5.7.8 Authentication credentials invalid"),
+        response
+    )
 
 
-def assert_auth_required(testcase: TestCase, code, response):
-    testcase.assertEqual(code, 530)
-    testcase.assertEqual(response, b'5.7.0 Authentication required')
+def assert_auth_required(testcase: TestCase, *response):
+    testcase.assertEqual(
+        (530, b"5.7.0 Authentication required"),
+        response
+    )
 
 
 SUPPORTED_COMMANDS_TLS: bytes = (

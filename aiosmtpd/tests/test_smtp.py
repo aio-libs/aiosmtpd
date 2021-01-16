@@ -9,10 +9,12 @@ import warnings
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import (
-    AuthResult,
+    CALL_LIMIT_DEFAULT,
     MISSING,
     SMTP as Server,
     __ident__ as GREETING,
+    auth_mechanism,
+    AuthResult,
     Envelope as SMTPEnvelope,
     Session as SMTPSession,
 )
@@ -97,6 +99,16 @@ class PeekerHandler:
     ):
         return MISSING
 
+    async def auth_WITH_UNDERSCORE(self, server, args):
+        return "250 OK"
+
+    @auth_mechanism("with-dash")
+    async def auth_WITH_DASH(self, server, args):
+        return "250 OK"
+
+    async def auth_WITH__MULTI__DASH(self, server, args):
+        return "250 OK"
+
 
 class PeekerAuth:
     login: bytes = None
@@ -139,7 +151,8 @@ auth_peeker = PeekerAuth()
 
 class DecodingControllerPeekAuth(Controller):
     def factory(self):
-        return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
+        self.server_kwargs["enable_SMTPUTF8"] = True
+        return Server(self.handler, decode_data=True,
                       auth_require_tls=False,
                       auth_callback=auth_peeker.auth_callback,
                       **self.server_kwargs)
@@ -845,7 +858,8 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 250)
             self.assertEqual(response, b'OK')
 
-    def test_unknown_command(self):
+    @patch("logging.Logger.warning")
+    def test_unknown_command(self, mock_warning):
         with SMTP(*self.address) as client:
             code, response = client.docmd('FOOBAR')
             self.assertEqual(code, 500)
@@ -964,7 +978,7 @@ class TestSMTP(unittest.TestCase):
             with patch("logging.Logger.warning"):
                 code, response = client.docmd('*')
             self.assertEqual(code, 501)
-            self.assertEqual(response, b'Auth aborted')
+            self.assertEqual(response, b"5.7.0 Auth aborted")
 
     def test_auth_two_steps_bad_base64_encoding(self):
         with SMTP(*self.address) as client:
@@ -996,11 +1010,14 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('Z29vZHBhc3N3ZA==')  # "goodpassword"
             assert_auth_success(self, code, response)
 
-    def test_auth_no_credentials(self):
+    def test_auth_plain_null(self):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
-            code, response = client.docmd('AUTH PLAIN =')
-            assert_auth_invalid(self, code, response)
+            response = client.docmd('AUTH PLAIN =')
+            self.assertEqual(
+                (501, b"5.5.2 Can't split auth value"),
+                response
+            )
 
     def test_auth_two_steps_no_credentials(self):
         with SMTP(*self.address) as client:
@@ -1008,7 +1025,9 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('AUTH PLAIN')
             self.assertEqual(code, 334)
             self.assertEqual(response, b'')
-            code, response = client.docmd('=')
+            # "AAA=" is Base64 encoded "\x00\x00", representing null username and null
+            # password. See https://tools.ietf.org/html/rfc4616#page-3
+            code, response = client.docmd("AAA=")
             assert_auth_invalid(self, code, response)
 
     def test_auth_login_multisteps_no_credentials(self):
@@ -1043,7 +1062,7 @@ class TestSMTPAuth(unittest.TestCase):
                 bytes(socket.getfqdn(), 'utf-8'),
                 b'SIZE 33554432',
                 b'SMTPUTF8',
-                b'AUTH DENYFALSE DENYMISSING LOGIN NONE NULL PLAIN',
+                b'AUTH DENYFALSE DENYMISSING LOGIN NONE NULL PLAIN WITH-DASH WITH-MULTI-DASH WITH_UNDERSCORE',
                 b'HELP',
             )
             for actual, expected in zip(lines, expecteds):
@@ -1098,10 +1117,12 @@ class TestSMTPAuth(unittest.TestCase):
             code, response = client.docmd("AUTH PLAIN")
             self.assertEqual(code, 334)
             self.assertEqual(response, b"")
-            code, response = client.docmd('=')
+            # "AAA=" is Base64 encoded "\x00\x00", representing null username and
+            # null password. See https://tools.ietf.org/html/rfc4616#page-3
+            code, response = client.docmd("AAA=")
             assert_auth_success(self, code, response)
-            self.assertEqual(auth_peeker.login, None)
-            self.assertEqual(auth_peeker.password, None)
+            self.assertEqual(auth_peeker.login, b"")
+            self.assertEqual(auth_peeker.password, b"")
             code, response = client.mail("alice@example.com")
             self.assertEqual(self.handler.sess.login_data, None)
 
@@ -1116,8 +1137,8 @@ class TestSMTPAuth(unittest.TestCase):
             self.assertEqual(response, b"UGFzc3dvcmQA")
             code, response = client.docmd('=')
             assert_auth_success(self, code, response)
-            self.assertEqual(auth_peeker.login, None)
-            self.assertEqual(auth_peeker.password, None)
+            self.assertEqual(auth_peeker.login, b"")
+            self.assertEqual(auth_peeker.password, b"")
             code, response = client.mail("alice@example.com")
             self.assertEqual(self.handler.sess.login_data, None)
 
@@ -1131,7 +1152,7 @@ class TestSMTPAuth(unittest.TestCase):
             with patch("logging.Logger.warning"):
                 code, response = client.docmd('*')
             self.assertEqual(code, 501)
-            self.assertEqual(response, b"Auth aborted")
+            self.assertEqual(response, b"5.7.0 Auth aborted")
 
     def test_auth_login_abort_password(self):
         auth_peeker.return_val = False
@@ -1147,7 +1168,7 @@ class TestSMTPAuth(unittest.TestCase):
             with patch("logging.Logger.warning"):
                 code, response = client.docmd('*')
             self.assertEqual(code, 501)
-            self.assertEqual(response, b"Auth aborted")
+            self.assertEqual(response, b"5.7.0 Auth aborted")
 
     def test_auth_custom_mechanism(self):
         auth_peeker.return_val = False
@@ -1163,6 +1184,41 @@ class TestSMTPAuth(unittest.TestCase):
             self.assertEqual(code, 504)
             self.assertEqual(response,
                              b"5.5.4 Unrecognized authentication type")
+
+    def test_rset_maintain_authenticated(self):
+        """RSET resets only Envelope not Session"""
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, mesg = client.docmd("AUTH PLAIN")
+            self.assertEqual(code, 334)
+            self.assertEqual(mesg, b"")
+            # "AAA=" is Base64 encoded "\x00\x00", representing null username and
+            # null password. See https://tools.ietf.org/html/rfc4616#page-3
+            code, mesg = client.docmd("AAA=")
+            assert_auth_success(self, code, mesg)
+            self.assertEqual(auth_peeker.login, b"")
+            self.assertEqual(auth_peeker.password, b"")
+            code, mesg = client.mail("alice@example.com")
+            sess: SMTPSession = self.handler.sess
+            self.assertEqual(sess.login_data, b"")
+            code, mesg = client.rset()
+            self.assertEqual(code, 250)
+            code, mesg = client.docmd("AUTH PLAIN")
+            self.assertEqual(503, code)
+            self.assertEqual(b'Already authenticated', mesg)
+
+    def test_auth_individually(self):
+        """AUTH state of different clients must be independent"""
+        with SMTP(*self.address) as client1, SMTP(*self.address) as client2:
+            for client in client1, client2:
+                client.ehlo("example.com")
+                code, mesg = client.docmd("AUTH PLAIN")
+                self.assertEqual(code, 334)
+                self.assertEqual(mesg, b"")
+                # "AAA=" is Base64 encoded "\x00\x00", representing null username and
+                # null password. See https://tools.ietf.org/html/rfc4616#page-3
+                code, mesg = client.docmd("AAA=")
+                assert_auth_success(self, code, mesg)
 
     def test_auth_NONE(self):
         with SMTP(*self.address) as client:
@@ -1697,7 +1753,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 451)
+        self.assertEqual(code, 500)
         self.assertEqual(mesg, b'Error: (ValueError) test')
         # handler.error did not change because the handler does not have a
         # handle_exception() method.
@@ -1727,7 +1783,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 451)
+        self.assertEqual(code, 500)
         self.assertEqual(mesg, b'Error: (ValueError) ErroringErrorHandler test')
         self.assertIsInstance(handler.error, ValueError)
 
@@ -1768,7 +1824,7 @@ Testing
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
             code, mesg = client.helo('example.com')
-        self.assertEqual(code, 451)
+        self.assertEqual(code, 500)
         self.assertEqual(mesg, b'Error: Cannot describe error')
         self.assertIsInstance(handler.error, ValueError)
 
@@ -2015,3 +2071,163 @@ class TestAuthArgs(unittest.TestCase):
         mock_info.assert_any_call(
             f"Available AUTH mechanisms: {' '.join(auth_mechs)}"
         )
+
+    def test_authmechname_decorator_badname(self):
+        self.assertRaises(ValueError, auth_mechanism, "has space")
+        self.assertRaises(ValueError, auth_mechanism, "has.dot")
+        self.assertRaises(ValueError, auth_mechanism, "has/slash")
+
+
+class TestLimits(unittest.TestCase):
+    @patch("logging.Logger.warning")
+    def test_all_limit_15(self, mock_warning):
+        kwargs = dict(
+            command_call_limit=15,
+        )
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        self.addCleanup(controller.stop)
+        controller.start()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, 15):
+                code, mesg = client.noop()
+                self.assertEqual(250, code)
+            code, mesg = client.noop()
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 NOOP sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+
+    @patch("logging.Logger.warning")
+    def test_different_limits(self, mock_warning):
+        noop_max, expn_max = 15, 5
+        kwargs = dict(
+            command_call_limit={"NOOP": noop_max, "EXPN": expn_max},
+        )
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        self.addCleanup(controller.stop)
+        controller.start()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, noop_max):
+                code, mesg = client.noop()
+                self.assertEqual(250, code)
+            code, mesg = client.noop()
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 NOOP sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, expn_max):
+                code, mesg = client.expn("alice@example.com")
+                self.assertEqual(502, code)
+            code, mesg = client.expn("alice@example.com")
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 EXPN sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, CALL_LIMIT_DEFAULT):
+                code, mesg = client.vrfy("alice@example.com")
+                self.assertEqual(252, code)
+            code, mesg = client.vrfy("alice@example.com")
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 VRFY sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+
+    @patch("logging.Logger.warning")
+    def test_different_limits_custom_default(self, mock_warning):
+        # Important: make sure default_max > CALL_LIMIT_DEFAULT
+        # Others can be set small to cut down on testing time, but must be different
+        noop_max, expn_max, default_max = 7, 5, 25
+        self.assertGreater(default_max, CALL_LIMIT_DEFAULT)
+        self.assertNotEqual(noop_max, expn_max)
+        kwargs = dict(
+            command_call_limit={"NOOP": noop_max, "EXPN": expn_max, "*": default_max},
+        )
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        self.addCleanup(controller.stop)
+        controller.start()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, noop_max):
+                code, mesg = client.noop()
+                self.assertEqual(250, code)
+            code, mesg = client.noop()
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 NOOP sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, expn_max):
+                code, mesg = client.expn("alice@example.com")
+                self.assertEqual(502, code)
+            code, mesg = client.expn("alice@example.com")
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 EXPN sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for _ in range(0, default_max):
+                code, mesg = client.vrfy("alice@example.com")
+                self.assertEqual(252, code)
+            code, mesg = client.vrfy("alice@example.com")
+            self.assertEqual(421, code)
+            self.assertEqual(b"4.7.0 VRFY sent too many times", mesg)
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()
+
+    def test_limit_wrong_type(self):
+        kwargs = dict(
+            command_call_limit="invalid",
+        )
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        self.addCleanup(controller.stop)
+        with self.assertRaises(TypeError):
+            controller.start()
+
+    def test_limit_wrong_value_type(self):
+        kwargs = dict(
+            command_call_limit={"NOOP": "invalid"},
+        )
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        self.addCleanup(controller.stop)
+        with self.assertRaises(TypeError):
+            controller.start()
+
+    @patch("logging.Logger.warning")
+    def test_limit_bogus(self, mock_warning):
+        # Extreme limit.
+        kwargs = dict(
+            command_call_limit=1,
+        )
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        self.addCleanup(controller.stop)
+        controller.start()
+        with SMTP(controller.hostname, controller.port) as client:
+            code, mesg = client.ehlo('example.com')
+            self.assertEqual(250, code)
+            for i in range(0, 4):
+                code, mesg = client.docmd(f"BOGUS{i}")
+                self.assertEqual(500, code)
+                expected = f"Error: command \"BOGUS{i}\" not recognized"
+                self.assertEqual(expected, mesg.decode("ascii"))
+            code, mesg = client.docmd("LASTBOGUS")
+            self.assertEqual(502, code)
+            self.assertEqual(
+                b"5.5.1 Too many unrecognized commands, goodbye.", mesg
+            )
+            with self.assertRaises(SMTPServerDisconnected):
+                client.noop()

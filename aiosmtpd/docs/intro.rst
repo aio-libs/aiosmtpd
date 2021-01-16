@@ -2,13 +2,12 @@
  Introduction
 ==============
 
-This library provides an `asyncio <https://pypi.python.org/pypi/asyncio>`__
-based implementation of a server for
-`RFC 5321 <http://www.faqs.org/rfcs/rfc5321.html>`__ -
+This library provides an :mod:`asyncio`-based implementation of a server for
+:rfc:`5321` -
 Simple Mail Transfer Protocol (SMTP) and
-`RFC 2033 <http://www.faqs.org/rfcs/rfc2033.html>`__ -
+:rfc:`2033` -
 Local Mail Transfer Protocol (LMTP).  It is derived from
-`Python 3's smtpd.py <https://hg.python.org/cpython/file/3.5/Lib/smtpd.py>`__
+`Python 3.5's smtpd.py <https://hg.python.org/cpython/file/3.5/Lib/smtpd.py>`__
 standard library module, and provides both a command line interface and an API
 for use in testing applications that send email.
 
@@ -24,17 +23,15 @@ Inspiration for this library comes from several other packages:
 Relevant RFCs
 =============
 
-* `RFC 5321 <http://www.faqs.org/rfcs/rfc5321.html>`__ - Simple Mail Transfer
-  Protocol (SMTP)
-* `RFC 2033 <http://www.faqs.org/rfcs/rfc2033.html>`__ - Local Mail Transfer
-  Protocol (LMTP)
-* `RFC 2034 <http://www.faqs.org/rfcs/rfc2034.html>`__ - SMTP Service
-  Extension for Returning Enhanced Error Codes
-* `RFC 6531 <http://www.faqs.org/rfcs/rfc6531.html>`__ - SMTP Extension for
-  Internationalized Email
-* `RFC 4954 <http://www.faqs.org/rfcs/rfc4954.html>`__ - SMTP Service Extension
-  for Authentication
-
+* :rfc:`5321` - Simple Mail Transfer Protocol (SMTP)
+* :rfc:`2033` - Local Mail Transfer Protocol (LMTP)
+* :rfc:`2034` - SMTP Service Extension for Returning Enhanced Error Codes
+* :rfc:`6531` - SMTP Extension for Internationalized Email
+* :rfc:`4954` - SMTP Service Extension for Authentication
+* :rfc:`5322` - Internet Message Format
+* :rfc:`3696` - Application Techniques for Checking and Transformation of Names
+* :rfc:`2034` - SMTP Service Extension for Returning Enhanced Error Codes
+* :rfc:`1870` - SMTP Service Extension for Message Size Declaration
 
 Other references
 ================
@@ -42,5 +39,5 @@ Other references
 * `Wikipedia page on SMTP <https://en.wikipedia.org/wiki/Simple_Mail_Transfer_Protocol>`__
 * `asyncio module documentation <https://docs.python.org/3/library/asyncio.html>`__
 * `Developing with asyncio <https://docs.python.org/3/library/asyncio-dev.html#asyncio-dev>`__
-* `Python issue #25508 <http://bugs.python.org/issue25008>`__ which started
+* `Python issue #25008 <http://bugs.python.org/issue25008>`__ which started
   the whole thing.
