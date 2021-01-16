@@ -1059,15 +1059,17 @@ class TestSMTPAuth(unittest.TestCase):
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
             lines = response.splitlines()
-            expecteds = (
+            expecteds = [
                 bytes(socket.getfqdn(), 'utf-8'),
                 b'SIZE 33554432',
                 b'SMTPUTF8',
-                b'AUTH DENYFALSE DENYMISSING LOGIN NONE NULL PLAIN WITH-DASH WITH-MULTI-DASH WITH_UNDERSCORE',
+                (
+                    b'AUTH DENYFALSE DENYMISSING LOGIN NONE NULL PLAIN '
+                    b'WITH-DASH WITH-MULTI-DASH WITH_UNDERSCORE'
+                ),
                 b'HELP',
-            )
-            for actual, expected in zip(lines, expecteds):
-                self.assertEqual(actual, expected)
+            ]
+            assert lines == expecteds
 
     def test_auth_byclient_plain(self):
         with SMTP(*self.address) as client:
