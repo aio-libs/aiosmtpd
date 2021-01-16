@@ -1263,8 +1263,10 @@ class TestSMTPAuthNew(unittest.TestCase):
         peer = auth_peeker.sess.peer
         self.assertIn(peer[0], {"::1", "127.0.0.1", "localhost"})
         self.assertGreater(peer[1], 0)
-        self.assertIsNone(auth_peeker.sess.login_data)
-        self.assertEqual((b"gooduser", b"goodpass"), auth_peeker.login_data)
+        assert auth_peeker.sess.authenticated
+        assert auth_peeker.sess.login_data
+        assert auth_peeker.sess.auth_data == (b"gooduser", b"goodpass")
+        assert auth_peeker.login_data == (b"gooduser", b"goodpass")
 
     def test_newauth_fail_withmessage(self):
         with SMTP(*self.address) as client:
