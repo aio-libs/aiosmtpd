@@ -745,11 +745,13 @@ class SMTP(asyncio.StreamReaderProtocol):
             challenge.encode() if isinstance(challenge, str) else challenge
         )
         assert isinstance(challenge, bytes)
-        # Trailing space is MANDATORY even if server_message is empty.
-        # See https://tools.ietf.org/html/rfc4954#page-4 ¶ 5
-        await self.push(
-            b"334 " + (b64encode(challenge) if encode_to_b64 else challenge)
-        )
+        # Trailing space is MANDATORY even if challenge is empty.
+        # See:
+        #   - https://tools.ietf.org/html/rfc4954#page-4 ¶ 5
+        #   - https://tools.ietf.org/html/rfc4954#page-13 "continue-req"
+        challenge = b"334 " + (b64encode(challenge) if encode_to_b64 else challenge)
+        log.debug("Send challenge to %r: %r", self.session.peer, challenge)
+        await self.push(challenge)
         line = await self._reader.readline()
         blob: bytes = line.strip()
         # '*' handling in accordance with RFC4954
