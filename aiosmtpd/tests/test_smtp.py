@@ -262,6 +262,7 @@ class TestProtocol(unittest.TestCase):
     def setUp(self):
         self.transport = Mock()
         self.transport.write = self._write
+        self.transport.get_extra_info.return_value = "MockedPeer"
         self.responses = []
         self._old_loop = asyncio.get_event_loop()
         self.loop = asyncio.new_event_loop()
