@@ -65,9 +65,8 @@ def start(plugin):
         warnings.filterwarnings('always', category=ResourceWarning)
 
 
-def assert_auth_success(testcase: TestCase, code, response):
-    testcase.assertEqual(code, 235)
-    testcase.assertEqual(response, b"2.7.0 Authentication successful")
+def assert_auth_success(testcase: TestCase, *response):
+    assert response == (235, b"2.7.0 Authentication successful")
 
 
 def assert_auth_invalid(testcase: TestCase, code, response):
