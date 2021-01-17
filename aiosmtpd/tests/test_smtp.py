@@ -1,8 +1,10 @@
 """Test the SMTP protocol."""
 
+import os
 import time
 import socket
 import asyncio
+import logging
 import unittest
 import warnings
 
@@ -36,12 +38,31 @@ BCRLF = b'\r\n'
 
 
 ModuleResources = ExitStack()
+mail_logger = logging.getLogger('mail.log')
 
 
 def setUpModule():
     # Needed especially on FreeBSD because socket.getfqdn() is slow on that OS,
     # and oftentimes (not always, though) leads to Error
     ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
+
+    loglevel = int(os.environ.get("AIOSMTPD_TESTLOGLEVEL", "INFO"))
+    mail_logger.setLevel(loglevel)
+
+    if "AIOSMTPD_TESTLOGFILE" in os.environ:
+        fhandler = logging.FileHandler(
+            os.environ["AIOSMTPD_TESTLOGFILE"],
+            mode="a",
+            encoding="latin1",
+        )
+        fhandler.setLevel(1)
+        fhandler.setFormatter(
+            logging.Formatter(
+                u"{asctime} - {name} - {levelname} - {message}",
+                style="{",
+            )
+        )
+        mail_logger.addHandler(fhandler)
 
 
 def tearDownModule():
