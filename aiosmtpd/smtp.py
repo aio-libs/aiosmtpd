@@ -76,6 +76,11 @@ VALID_AUTHMECH = re.compile(r"[A-Z0-9_-]+\Z")
 # https://tools.ietf.org/html/rfc3207.html#page-3
 ALLOWED_BEFORE_STARTTLS = {"NOOP", "EHLO", "STARTTLS", "QUIT"}
 
+# Auth hiding regexes
+CLIENT_AUTH_B = re.compile(
+    br"(?P<authm>\s*AUTH\s+\S+[^\S\r\n]+)(\S+)(?P<crlf>(?:\r\n)?)", re.IGNORECASE
+)
+
 # endregion
 
 
@@ -160,6 +165,14 @@ def is_int(o):
 @public
 class TLSSetupException(Exception):
     pass
+
+
+@public
+def sanitize(text: bytes) -> bytes:
+    m = CLIENT_AUTH_B.match(text)
+    if m:
+        return m.group("authm") + b"********" + m.group("crlf")
+    return text
 
 
 @public
@@ -431,10 +444,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                     # send error response and read the next command line.
                     await self.push('500 Command line too long')
                     continue
-                log.debug('_handle_client readline: %r', line)
+                log.debug('_handle_client readline: %r', sanitize(line))
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.rstrip(b'\r\n')
-                log.info('%r >> %r', self.session.peer, line)
+                log.info('%r >> %r', self.session.peer, sanitize(line))
                 if not line:
                     await self.push('500 Error: bad syntax')
                     continue
