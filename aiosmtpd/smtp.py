@@ -30,7 +30,8 @@ from warnings import warn
 # region #### Custom Data Types #######################################################
 
 class _Missing:
-    pass
+    def __repr__(self):
+        return "MISSING"
 
 
 class _AuthMechAttr(NamedTuple):
