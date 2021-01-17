@@ -737,10 +737,26 @@ class SMTP(asyncio.StreamReaderProtocol):
             if status is not None:  # pragma: no branch
                 await self.push(status)
 
-    async def _auth_interact(self, server_message) -> _TriStateType:
+    async def _auth_interact(
+            self,
+            server_message,
+            log_client_response: bool = False
+    ) -> _TriStateType:
+        """
+        Sends a challenge, and wait for client response.
+
+        :param server_message: Challenge to send
+        :param log_client_response: Perform logging of client's response.
+            WARNING: Might cause leak of sensitive information! Do not turn on
+            unless _absolutely_ necessary!
+        """
         blob: bytes
         await self.push(server_message)
         line = await self._reader.readline()
+        if log_client_response:
+            warn("AUTH interaction logging is enabled!")
+            warn("Sensitive information might be leaked!")
+            log.debug("%r >> %r", self.session.peer, line)
         blob = line.strip()
         # '=' and '*' handling are in accordance with RFC4954
         if blob == b"=":
