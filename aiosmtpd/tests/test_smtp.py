@@ -46,7 +46,7 @@ def setUpModule():
     # and oftentimes (not always, though) leads to Error
     ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
 
-    loglevel = int(os.environ.get("AIOSMTPD_TESTLOGLEVEL", "INFO"))
+    loglevel = int(os.environ.get("AIOSMTPD_TESTLOGLEVEL", logging.INFO))
     mail_logger.setLevel(loglevel)
 
     if "AIOSMTPD_TESTLOGFILE" in os.environ:
