@@ -102,6 +102,11 @@ class PeekerHandler:
         return MISSING
 
     async def auth_WITH_UNDERSCORE(self, server, args):
+        """
+        Be careful when using this AUTH mechanism; log_client_response is set to
+        True, and this will raise some severe warnings.
+        """
+        await server._auth_interact("334 challenge", log_client_response=True)
         return "250 OK"
 
     @auth_mechanism("with-dash")
@@ -1120,6 +1125,19 @@ class TestSMTPAuth(unittest.TestCase):
                 self.assertEqual(mesg, b"")
                 code, mesg = client.docmd('=')
                 assert_auth_success(self, code, mesg)
+
+    def test_auth_loginteract_warning(self):
+        """AUTH state of different clients must be independent"""
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            resp = client.docmd("AUTH WITH_UNDERSCORE")
+            assert resp == (334, b"challenge")
+            with warnings.catch_warnings(record=True) as w:
+                code, mesg = client.docmd('=')
+            assert_auth_success(self, code, mesg)
+            assert len(w) > 0
+            assert str(w[0].message) == "AUTH interaction logging is enabled!"
+            assert str(w[1].message) == "Sensitive information might be leaked!"
 
 
 class TestRequiredAuthentication(unittest.TestCase):
