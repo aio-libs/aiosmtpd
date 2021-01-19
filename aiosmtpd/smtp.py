@@ -79,7 +79,15 @@ ALLOWED_BEFORE_STARTTLS = {"NOOP", "EHLO", "STARTTLS", "QUIT"}
 
 # Auth hiding regexes
 CLIENT_AUTH_B = re.compile(
-    br"(?P<authm>\s*AUTH\s+\S+[^\S\r\n]+)(\S+)(?P<crlf>(?:\r\n)?)", re.IGNORECASE
+    # Matches "AUTH" <mechanism> <whitespace_but_not_\r_nor_\n>
+    br"(?P<authm>\s*AUTH\s+\S+[^\S\r\n]+)"
+    # Param to AUTH <mechanism>. We only need to sanitize if param is given, which
+    # for some mechanisms contain sensitive info. If no param is given, then we
+    # can skip (match fails)
+    br"(\S+)"
+    # Optional bCRLF at end. Why optional? Because we also want to sanitize the
+    # stripped line. If no bCRLF, then this group will be b""
+    br"(?P<crlf>(?:\r\n)?)", re.IGNORECASE
 )
 
 # endregion
