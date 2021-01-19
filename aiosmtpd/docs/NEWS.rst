@@ -3,6 +3,16 @@
 ===================
 
 
+1.2.4 (aiosmtpd-next)
+=====================
+
+Fixed/Improved
+--------------
+* Remove special handling for lone ``=`` during AUTH;
+  it is now treated as simple Base64-encoded ``b""``.
+  This is the correct, strict interpretation of :rfc:`4954` mentions about ``=``
+
+
 1.2.3 (2021-01-14)
 ==================
 
