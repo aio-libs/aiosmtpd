@@ -1,3 +1,6 @@
+# Copyright 2014-2021 The aiosmtpd Developers
+# SPDX-License-Identifier: Apache-2.0
+
 """Handlers which provide custom processing at various events.
 
 At certain times in the SMTP protocol, various events can be processed.  These
