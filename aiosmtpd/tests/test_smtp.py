@@ -101,12 +101,14 @@ class PeekerHandler:
     ):
         return MISSING
 
-    async def auth_WITH_UNDERSCORE(self, server, args):
+    async def auth_WITH_UNDERSCORE(self, server: Server, args):
         """
         Be careful when using this AUTH mechanism; log_client_response is set to
         True, and this will raise some severe warnings.
         """
-        await server._auth_interact("334 challenge", log_client_response=True)
+        await server.challenge_auth(
+            "challenge", encode_to_b64=False, log_client_response=True
+        )
         return "250 OK"
 
     @auth_mechanism("with-dash")
