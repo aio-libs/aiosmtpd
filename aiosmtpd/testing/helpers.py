@@ -69,14 +69,12 @@ def assert_auth_success(testcase: TestCase, *response):
     assert response == (235, b"2.7.0 Authentication successful")
 
 
-def assert_auth_invalid(testcase: TestCase, code, response):
-    testcase.assertEqual(code, 535)
-    testcase.assertEqual(response, b'5.7.8 Authentication credentials invalid')
+def assert_auth_invalid(testcase: TestCase, *response):
+    assert response == (535, b"5.7.8 Authentication credentials invalid")
 
 
-def assert_auth_required(testcase: TestCase, code, response):
-    testcase.assertEqual(code, 530)
-    testcase.assertEqual(response, b'5.7.0 Authentication required')
+def assert_auth_required(testcase: TestCase, *response):
+    assert response == (530, b"5.7.0 Authentication required")
 
 
 SUPPORTED_COMMANDS_TLS: bytes = (
