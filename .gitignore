@@ -28,6 +28,8 @@ __pycache__/
 htmlcov/
 _dynamic/
 coverage.xml
+coverage-*.xml
 diffcov.html
+diffcov-*.html
 .python-version
 .pytype/

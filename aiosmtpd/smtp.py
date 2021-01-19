@@ -64,12 +64,17 @@ __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
 
+BOGUS_LIMIT = 5
+CALL_LIMIT_DEFAULT = 20
 DATA_SIZE_DEFAULT = 2**25  # Where does this number come from, I wonder...
 EMPTY_BARR = bytearray()
 EMPTYBYTES = b''
 MISSING = _Missing()
 NEWLINE = '\n'
 VALID_AUTHMECH = re.compile(r"[A-Z0-9_-]+\Z")
+
+# https://tools.ietf.org/html/rfc3207.html#page-3
+ALLOWED_BEFORE_STARTTLS = {"NOOP", "EHLO", "STARTTLS", "QUIT"}
 
 # endregion
 
@@ -148,6 +153,11 @@ def login_always_fail(mechanism, login, password):
     return False
 
 
+def is_int(o):
+    return isinstance(o, int)
+
+
+@public
 class TLSSetupException(Exception):
     pass
 
@@ -178,6 +188,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             auth_require_tls=True,
             auth_exclude_mechanism: Optional[Iterable[str]] = None,
             auth_callback: AuthCallbackType = None,
+            command_call_limit: Union[int, Dict[str, int], None] = None,
             loop=None,
     ):
         self.__ident__ = ident or __ident__
@@ -248,6 +259,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             for m in dir(handler)
             if m.startswith("handle_")
         }
+
         # When we've deprecated the 4-arg form of handle_EHLO,
         # we can -- and should -- remove this whole code block
         ehlo_hook = self._handle_hooks.get("EHLO", None)
@@ -272,6 +284,23 @@ class SMTP(asyncio.StreamReaderProtocol):
             for m in dir(self)
             if m.startswith("smtp_")
         }
+
+        if command_call_limit is None:
+            self._enforce_call_limit = False
+        else:
+            self._enforce_call_limit = True
+            if isinstance(command_call_limit, int):
+                self._call_limit_base = {}
+                self._call_limit_default: int = command_call_limit
+            elif isinstance(command_call_limit, dict):
+                if not all(map(is_int, command_call_limit.values())):
+                    raise TypeError("All command_call_limit values must be int")
+                self._call_limit_base = command_call_limit
+                self._call_limit_default: int = command_call_limit.get(
+                    "*", CALL_LIMIT_DEFAULT
+                )
+            else:
+                raise TypeError("command_call_limit must be int or Dict[str, int]")
 
     def _create_session(self):
         return Session(self.loop)
@@ -395,6 +424,15 @@ class SMTP(asyncio.StreamReaderProtocol):
     async def _handle_client(self):
         log.info('%r handling connection', self.session.peer)
         await self.push('220 {} {}'.format(self.hostname, self.__ident__))
+        if self._enforce_call_limit:
+            call_limit = collections.defaultdict(
+                lambda x=self._call_limit_default: x,
+                self._call_limit_base
+            )
+        else:
+            # Not used, but this silences code inspection tools
+            call_limit = {}
+        bogus_budget = BOGUS_LIMIT
         while self.transport is not None:   # pragma: nobranch
             try:
                 try:
@@ -467,12 +505,35 @@ class SMTP(asyncio.StreamReaderProtocol):
                     continue
                 if (self.require_starttls
                         and not self._tls_protocol
-                        and command not in ['EHLO', 'STARTTLS', 'QUIT']):
+                        and command not in ALLOWED_BEFORE_STARTTLS):
                     # RFC3207 part 4
                     await self.push('530 Must issue a STARTTLS command first')
                     continue
+
+                if self._enforce_call_limit:
+                    budget = call_limit[command]
+                    if budget < 1:
+                        log.warning(
+                            "%r over limit for %s", self.session.peer, command
+                        )
+                        await self.push(
+                            f"421 4.7.0 {command} sent too many times"
+                        )
+                        self.transport.close()
+                        continue
+                    call_limit[command] = budget - 1
+
                 method = self._smtp_methods.get(command)
                 if method is None:
+                    log.warning("%r unrecognised: %s", self.session.peer, command)
+                    bogus_budget -= 1
+                    if bogus_budget < 1:
+                        log.warning("%r too many bogus commands", self.session.peer)
+                        await self.push(
+                            "502 5.5.1 Too many unrecognized commands, goodbye."
+                        )
+                        self.transport.close()
+                        continue
                     await self.push(
                         '500 Error: command "%s" not recognized' % command)
                     continue

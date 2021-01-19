@@ -2,14 +2,23 @@
  NEWS for aiosmtpd
 ===================
 
-1.2.3 (aiosmtpd-next)
+
+1.2.4 (aiosmtpd-next)
 =====================
 
 Added
 -----
-* Test for ``SMTP.__init__`` behavior after taking out code that edits TLS Context
 * New :meth:`handle_EHLO` interaction where said method can now modify list of responses
   to the EHLO command (Closes #155)
+
+
+1.2.3 (2021-01-14)
+==================
+
+Added
+-----
+* Test for ``SMTP.__init__`` behavior after taking out code that edits TLS Context
+* Implement mechanism to limit the number of commands sent (Closes #145)
 
 Fixed/Improved
 --------------
@@ -18,11 +27,13 @@ Fixed/Improved
 * Delay all SMTP Status Code replies during ``DATA`` phase until the phase termination (Closes #9)
 * Now catches ``Controller.factory()`` failure during ``Controller.start()`` (Closes #212)
 * :class:`SMTP` no longer edits user-supplied SSL Context (Closes #191)
-* Implement waiting for SSL setup/handshake within STARTTLS handler to be able to catch and handle
+* Implement waiting for SSL setup/handshake within ``STARTTLS`` handler to be able to catch and handle
   (log) errors and to avoid session hanging around until timeout in such cases
 * Add session peer information to some logging output where it was missing
 * Support AUTH mechanisms with dash(es) in their names (Closes #224)
 * Remove some double-logging of commands sent by clients
+* LMTP servers now correctly advertise extensions in reply to ``LHLO`` (Closes #123, #124)
+* ``NOOP`` now accepted before ``STARTTLS`` even if ``require_starttls=True`` (Closes #124)
 
 
 1.2.2 (2020-11-08)
