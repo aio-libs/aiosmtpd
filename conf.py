@@ -13,7 +13,6 @@
 # serve to show the default.
 
 import sys
-import os
 import re
 import datetime
 
