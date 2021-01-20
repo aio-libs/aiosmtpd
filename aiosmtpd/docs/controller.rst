@@ -128,6 +128,7 @@ use to do some common tasks, and it's easy to write your own handler.  For a
 full overview of the methods that handler classes may implement, see the
 section on :ref:`handler hooks <hooks>`.
 
+.. _enablesmtputf8:
 
 Enabling SMTPUTF8
 =================
@@ -159,15 +160,14 @@ The EHLO response does not include the ``SMTPUTF8`` ESMTP option.
 
     >>> controller.stop()
 
-**IMPORTANT NOTE:** In future versions, this option will be deprecated. If you
-need to disable ``SMTPUTF8``, you must pass the ``enable_SMTPUTF8=false`` flag
-inside the ``server_kwargs`` parameter.
-
 
 Controller API
 ==============
 
-.. class:: Controller(handler, loop=None, hostname=None, port=8025, *, ready_timeout=1.0, enable_SMTPUTF8=None, ssl_context=None, server_kwargs=None)
+.. class:: Controller(\
+   handler, loop=None, hostname=None, port=8025, *, ready_timeout=1.0, \
+   ssl_context=None, \
+   **SMTP_parameters)
 
    **Parameters**
 
@@ -195,47 +195,37 @@ Controller API
    a float number of seconds, which takes precedence over the *ready_timeout*
    argument value.
 
-   :boldital:`enable_SMTPUTF8` is a flag which is passed directly to the same named
-   argument to the ``SMTP`` constructor.  When True, the ESMTP ``SMTPUTF8``
-   option is returned to the client in response to ``EHLO``, and UTF-8 content
-   is accepted. If not set, this will be treated as True.
-
-      **Deprecation Notice:**
-
-      The ``enable_SMTPUTF8`` parameter will be removed in a future version.
-      Please pass the flag through the ``server_kwargs`` parameter instead.
-
-      During the transition period, ``enable_SMTPUTF8`` *if set* will be transferred
-      into ``server_kwargs`` automatically, overriding any similar flag in the dict.
-      *If not set*, then if ``server_kwargs`` does not contain the ``enable_SMTPUTF8``
-      it will be set to True.
-
-      >>> from aiosmtpd.handlers import Sink
-      >>> controller = Controller(Sink())
-      >>> controller.server_kwargs["enable_SMTPUTF8"]
-      True
-
-      >>> controller = Controller(Sink(), enable_SMTPUTF8=False)
-      >>> controller.server_kwargs["enable_SMTPUTF8"]
-      False
-
-      >>> controller = Controller(Sink(), server_kwargs=dict(enable_SMTPUTF8=False))
-      >>> controller.server_kwargs["enable_SMTPUTF8"]
-      False
-
-      >>> controller = Controller(Sink(), enable_SMTPUTF8=True, server_kwargs=dict(enable_SMTPUTF8=False))
-      >>> controller.server_kwargs["enable_SMTPUTF8"]
-      True
-
    :boldital:`ssl_context` is an ``SSLContext`` that will be used by the loop's
    server. It is passed directly to the :meth:`asyncio.loop.create_server`
    method. Note that this implies unconditional encryption of the connection,
    and prevents use of the ``STARTTLS`` mechanism.
 
-   :boldital:`server_kwargs` is a dict that will be passed through as keyword arguments
+   :boldital:`SMTP_parameters` are *optional* keyword arguments
+   that will be passed as-is to the ``SMTP`` constructor.
+   Please see the documentation for the :class:`SMTP` class for a list of accepted keyword arguments.
+
+      .. important::
+
+         Explicitly defined keyword arguments will override keyword arguments of the
+         same names defined in the (deprecated) ``server_kwargs`` argument.
+
+         >>> from aiosmtpd.handlers import Sink
+         >>> controller = Controller(Sink(), timeout=200, server_kwargs=dict(timeout=400))
+         >>> controller.SMTP_kwargs["timeout"]
+         200
+
+   One example is the ``enable_SMTPUTF8`` flag described in the
+   :ref:`Enabling SMTPUTF8 section <enablesmtputf8>` above.
+
+   :boldital:`server_kwargs` *DEPRECATED* is a dict that will be passed through as keyword arguments
    to the server's class during server creation in the :meth:`Controller.factory`
    method. Please see the documentation for the :class:`SMTP` class for a list of
    accepted keyword arguments.
+
+      **Deprecation Notice**
+
+      The ``server_kwargs`` parameter will be removed in version 2.0
+
 
    **Attributes**
 
