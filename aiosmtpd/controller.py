@@ -52,7 +52,7 @@ class Controller:
         ssl_context: ssl.SSLContext = None,
         # SMTP parameters
         server_kwargs: Dict[str, Any] = None,
-        **kwargs,
+        **SMTP_parameters,
     ):
         """
         `Documentation can be found here
@@ -73,12 +73,15 @@ class Controller:
             warn(
                 "server_kwargs will be removed in version 2.0. "
                 "Just specify the keyword arguments to forward to SMTP "
-                "as kwargs to this __init__ function.",
+                "as kwargs to this __init__ method.",
                 DeprecationWarning
             )
         self.server_kwargs: Dict[str, Any] = server_kwargs or {}
+        self.server_kwargs.update(SMTP_parameters)
+        # Emulate previous behavior of defaulting enable_SMTPUTF8 to True
+        # It actually conflicts with SMTP class's default, but the reasoning is
+        # discussed in the docs.
         self.server_kwargs.setdefault("enable_SMTPUTF8", True)
-        self.server_kwargs.update(kwargs)
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
