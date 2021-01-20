@@ -76,17 +76,17 @@ class Controller:
                 "as kwargs to this __init__ method.",
                 DeprecationWarning
             )
-        self.server_kwargs: Dict[str, Any] = server_kwargs or {}
-        self.server_kwargs.update(SMTP_parameters)
+        self.SMTP_kwargs: Dict[str, Any] = server_kwargs or {}
+        self.SMTP_kwargs.update(SMTP_parameters)
         # Emulate previous behavior of defaulting enable_SMTPUTF8 to True
         # It actually conflicts with SMTP class's default, but the reasoning is
         # discussed in the docs.
-        self.server_kwargs.setdefault("enable_SMTPUTF8", True)
+        self.SMTP_kwargs.setdefault("enable_SMTPUTF8", True)
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
         return SMTP(
-            self.handler, **self.server_kwargs
+            self.handler, **self.SMTP_kwargs
         )
 
     def _factory_invoker(self):

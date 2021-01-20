@@ -80,20 +80,20 @@ class TestController:
     def test_enablesmtputf8_flag(self):
         # Default is True
         controller = Controller(Sink())
-        assert controller.server_kwargs["enable_SMTPUTF8"]
+        assert controller.SMTP_kwargs["enable_SMTPUTF8"]
         # Explicit set must be reflected in server_kwargs
         controller = Controller(Sink(), enable_SMTPUTF8=True)
-        assert controller.server_kwargs["enable_SMTPUTF8"]
+        assert controller.SMTP_kwargs["enable_SMTPUTF8"]
         controller = Controller(Sink(), enable_SMTPUTF8=False)
-        assert not controller.server_kwargs["enable_SMTPUTF8"]
+        assert not controller.SMTP_kwargs["enable_SMTPUTF8"]
         # Explicit set must override server_kwargs
         kwargs = dict(enable_SMTPUTF8=False)
         controller = Controller(Sink(), enable_SMTPUTF8=True, server_kwargs=kwargs)
-        assert controller.server_kwargs["enable_SMTPUTF8"]
+        assert controller.SMTP_kwargs["enable_SMTPUTF8"]
         kwargs = dict(enable_SMTPUTF8=True)
         controller = Controller(Sink(), enable_SMTPUTF8=False, server_kwargs=kwargs)
-        assert not controller.server_kwargs["enable_SMTPUTF8"]
+        assert not controller.SMTP_kwargs["enable_SMTPUTF8"]
         # Set through server_kwargs must not be overridden if no explicit set
         kwargs = dict(enable_SMTPUTF8=False)
         controller = Controller(Sink(), server_kwargs=kwargs)
-        assert not controller.server_kwargs["enable_SMTPUTF8"]
+        assert not controller.SMTP_kwargs["enable_SMTPUTF8"]
