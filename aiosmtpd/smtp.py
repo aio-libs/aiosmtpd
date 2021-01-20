@@ -9,12 +9,13 @@ import binascii
 import collections
 import asyncio.sslproto as sslproto
 
-from base64 import b64decode
+from base64 import b64decode, b64encode
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
 from public import public
 from typing import (
     Any,
+    AnyStr,
     Awaitable,
     Callable,
     Dict,
@@ -60,17 +61,22 @@ __all__ = [
     "AuthMechanismType",
     "MISSING",
 ]  # Will be added to by @public
-__version__ = '1.2.3a4'
+__version__ = '1.2.4a1'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
 
+BOGUS_LIMIT = 5
+CALL_LIMIT_DEFAULT = 20
 DATA_SIZE_DEFAULT = 2**25  # Where does this number come from, I wonder...
 EMPTY_BARR = bytearray()
 EMPTYBYTES = b''
 MISSING = _Missing()
 NEWLINE = '\n'
 VALID_AUTHMECH = re.compile(r"[A-Z0-9_-]+\Z")
+
+# https://tools.ietf.org/html/rfc3207.html#page-3
+ALLOWED_BEFORE_STARTTLS = {"NOOP", "EHLO", "STARTTLS", "QUIT"}
 
 # endregion
 
@@ -149,6 +155,11 @@ def login_always_fail(mechanism, login, password):
     return False
 
 
+def is_int(o):
+    return isinstance(o, int)
+
+
+@public
 class TLSSetupException(Exception):
     pass
 
@@ -179,6 +190,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             auth_require_tls=True,
             auth_exclude_mechanism: Optional[Iterable[str]] = None,
             auth_callback: AuthCallbackType = None,
+            command_call_limit: Union[int, Dict[str, int], None] = None,
             loop=None,
     ):
         self.__ident__ = ident or __ident__
@@ -253,6 +265,23 @@ class SMTP(asyncio.StreamReaderProtocol):
             for m in dir(self)
             if m.startswith("smtp_")
         }
+
+        if command_call_limit is None:
+            self._enforce_call_limit = False
+        else:
+            self._enforce_call_limit = True
+            if isinstance(command_call_limit, int):
+                self._call_limit_base = {}
+                self._call_limit_default: int = command_call_limit
+            elif isinstance(command_call_limit, dict):
+                if not all(map(is_int, command_call_limit.values())):
+                    raise TypeError("All command_call_limit values must be int")
+                self._call_limit_base = command_call_limit
+                self._call_limit_default: int = command_call_limit.get(
+                    "*", CALL_LIMIT_DEFAULT
+                )
+            else:
+                raise TypeError("command_call_limit must be int or Dict[str, int]")
 
     def _create_session(self):
         return Session(self.loop)
@@ -356,10 +385,14 @@ class SMTP(asyncio.StreamReaderProtocol):
         """Reset all state variables except the greeting."""
         self._set_post_data_state()
 
-    async def push(self, status):
-        response = bytes(
-            status + '\r\n', 'utf-8' if self.enable_SMTPUTF8 else 'ascii')
-        self._writer.write(response)
+    async def push(self, status: AnyStr):
+        if isinstance(status, str):
+            response = bytes(
+                status, 'utf-8' if self.enable_SMTPUTF8 else 'ascii')
+        else:
+            response = status
+        assert isinstance(response, bytes)
+        self._writer.write(response + b"\r\n")
         log.debug("%r << %r", self.session.peer, response)
         await self._writer.drain()
 
@@ -376,6 +409,15 @@ class SMTP(asyncio.StreamReaderProtocol):
     async def _handle_client(self):
         log.info('%r handling connection', self.session.peer)
         await self.push('220 {} {}'.format(self.hostname, self.__ident__))
+        if self._enforce_call_limit:
+            call_limit = collections.defaultdict(
+                lambda x=self._call_limit_default: x,
+                self._call_limit_base
+            )
+        else:
+            # Not used, but this silences code inspection tools
+            call_limit = {}
+        bogus_budget = BOGUS_LIMIT
         while self.transport is not None:   # pragma: nobranch
             try:
                 try:
@@ -448,12 +490,35 @@ class SMTP(asyncio.StreamReaderProtocol):
                     continue
                 if (self.require_starttls
                         and not self._tls_protocol
-                        and command not in ['EHLO', 'STARTTLS', 'QUIT']):
+                        and command not in ALLOWED_BEFORE_STARTTLS):
                     # RFC3207 part 4
                     await self.push('530 Must issue a STARTTLS command first')
                     continue
+
+                if self._enforce_call_limit:
+                    budget = call_limit[command]
+                    if budget < 1:
+                        log.warning(
+                            "%r over limit for %s", self.session.peer, command
+                        )
+                        await self.push(
+                            f"421 4.7.0 {command} sent too many times"
+                        )
+                        self.transport.close()
+                        continue
+                    call_limit[command] = budget - 1
+
                 method = self._smtp_methods.get(command)
                 if method is None:
+                    log.warning("%r unrecognised: %s", self.session.peer, command)
+                    bogus_budget -= 1
+                    if bogus_budget < 1:
+                        log.warning("%r too many bogus commands", self.session.peer)
+                        await self.push(
+                            "502 5.5.1 Too many unrecognized commands, goodbye."
+                        )
+                        self.transport.close()
+                        continue
                     await self.push(
                         '500 Error: command "%s" not recognized' % command)
                     continue
@@ -664,18 +729,36 @@ class SMTP(asyncio.StreamReaderProtocol):
             if status is not None:  # pragma: no branch
                 await self.push(status)
 
-    async def _auth_interact(self, server_message) -> _TriStateType:
-        blob: bytes
-        await self.push(server_message)
+    async def challenge_auth(
+            self,
+            challenge: AnyStr,
+            encode_to_b64: bool = True,
+    ) -> Union[_Missing, bytes]:
+        """
+        Send challenge during authentication. "334 " will be prefixed, so do NOT
+        put "334 " at start of server_message.
+
+        :param challenge: Challenge to send to client. If str, will be utf8-encoded.
+        :param encode_to_b64: If true, then perform Base64 encoding on challenge
+        :return: Response from client, or MISSING
+        """
+        challenge = (
+            challenge.encode() if isinstance(challenge, str) else challenge
+        )
+        assert isinstance(challenge, bytes)
+        # Trailing space is MANDATORY even if challenge is empty.
+        # See:
+        #   - https://tools.ietf.org/html/rfc4954#page-4 ¶ 5
+        #   - https://tools.ietf.org/html/rfc4954#page-13 "continue-req"
+        challenge = b"334 " + (b64encode(challenge) if encode_to_b64 else challenge)
+        log.debug("Send challenge to %r: %r", self.session.peer, challenge)
+        await self.push(challenge)
         line = await self._reader.readline()
-        blob = line.strip()
-        # '=' and '*' handling are in accordance with RFC4954
-        if blob == b"=":
-            log.debug("%r responded with '='", self.session.peer)
-            return None
+        blob: bytes = line.strip()
+        # '*' handling in accordance with RFC4954
         if blob == b"*":
-            log.warning("%r aborted with '*'", self.session.peer)
-            await self.push("501 Auth aborted")
+            log.warning("%r aborted AUTH with '*'", self.session.peer)
+            await self.push("501 5.7.0 Auth aborted")
             return MISSING
         try:
             decoded_blob = b64decode(blob, validate=True)
@@ -684,6 +767,22 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push("501 5.5.2 Can't decode base64")
             return MISSING
         return decoded_blob
+
+    _334_PREFIX = re.compile(r"^334 ")
+
+    async def _auth_interact(
+            self,
+            server_message: str
+    ) -> Union[_Missing, bytes]:  # pragma: nocover
+        warn(
+            "_auth_interact will be deprecated in version 2.0. "
+            "Please use challenge_auth() instead.",
+            DeprecationWarning
+        )
+        return await self.challenge_auth(
+            challenge=self._334_PREFIX.sub("", server_message),
+            encode_to_b64=False,
+        )
 
     # IMPORTANT NOTES FOR THE auth_* METHODS
     #
@@ -699,9 +798,6 @@ class SMTP(asyncio.StreamReaderProtocol):
     #      - 'identity' is not always username, depending on the auth mecha-
     #        nism. Might be a session key, a one-time user ID, or any kind of
     #        object, actually.
-    #      - If the client provides "=" for username during interaction, the
-    #        method MUST return b"" (empty bytes) NOT None, because None has been
-    #        used to indicate error/login failure.
     # 3. Auth credentials checking is performed in the auth_* methods because
     #    more advanced auth mechanism might not return login+password pair
     #    (see #2 above)
@@ -709,54 +805,45 @@ class SMTP(asyncio.StreamReaderProtocol):
     async def auth_PLAIN(self, _, args: List[str]):
         login_and_password: _TriStateType
         if len(args) == 1:
-            # Trailing space is MANDATORY
-            # See https://tools.ietf.org/html/rfc4954#page-4 ¶ 5
-            login_and_password = await self._auth_interact("334 ")
+            login_and_password = await self.challenge_auth("")
             if login_and_password is MISSING:
                 return
         else:
-            blob = args[1]
-            if blob == "=":
-                login_and_password = None
-            else:
-                try:
-                    login_and_password = b64decode(blob, validate=True)
-                except Exception:
-                    await self.push("501 5.5.2 Can't decode base64")
-                    return
-        # Decode login data
-        if login_and_password is None:
-            login = password = None
-        else:
             try:
-                _, login, password = login_and_password.split(b"\x00")
-            except ValueError:  # not enough args
-                await self.push("501 5.5.2 Can't split auth value")
+                login_and_password = b64decode(args[1].encode(), validate=True)
+            except Exception:
+                await self.push("501 5.5.2 Can't decode base64")
                 return
+        try:
+            # login data is "{authz_id}\x00{login_id}\x00{password}"
+            # authz_id can be null, and currently ignored
+            # See https://tools.ietf.org/html/rfc4616#page-3
+            _, login, password = login_and_password.split(b"\x00")
+        except ValueError:  # not enough args
+            await self.push("501 5.5.2 Can't split auth value")
+            return
         # Verify login data
+        assert login is not None
+        assert password is not None
         if self._auth_callback("PLAIN", login, password):
-            if login is None:
-                login = EMPTYBYTES
             return login
         else:
             return MISSING
 
     async def auth_LOGIN(self, _, args: List[str]):
         login: _TriStateType
-        # 'User Name\x00'
-        login = await self._auth_interact("334 VXNlciBOYW1lAA==")
+        login = await self.challenge_auth(b"User Name\x00")
         if login is MISSING:
             return
 
         password: _TriStateType
-        # 'Password\x00'
-        password = await self._auth_interact("334 UGFzc3dvcmQA")
+        password = await self.challenge_auth(b"Password\x00")
         if password is MISSING:
             return
 
+        assert login is not None
+        assert password is not None
         if self._auth_callback("LOGIN", login, password):
-            if login is None:  # pragma: no branch
-                login = EMPTYBYTES
             return login
         else:
             return MISSING
