@@ -120,6 +120,14 @@ and these options can be combined::
 
     $ tox -e py36-nocov -- -x -s <testname>
 
+(The ``-e`` parameter is explained in the next section about 'testenvs'.
+In general, you'll want to choose the ``nocov`` testenvs if you want to show output,
+so you can see which test is generating which output.)
+
+The `-x` and `-s` options can be combined::
+
+    $ tox -e py36-nocov -- -x -s <testname>
+
 
 Supported 'testenvs'
 ------------------------
@@ -216,23 +224,28 @@ versions on your system by using ``pyenv``. General steps:
    documentation about this option)
 
 
-Housekeeping
+``housekeep.py``
 ----------------
 
-Between runs of ``tox``, sometimes you want to cleanup artifacts from previous
-runs. For example, you want to force Sphinx to rebuild all documentation. Or,
-you're sharing a repo between environments and the cached Python bytecode
-messes up file access (e.g., sharing the exact same directory between Windows
-PowerShell and Cygwin will cause problems as Python becomes confused about the
-locations of the source code).
+If you ever need to 'reset' your repo, you can use the ``housekeep.py`` utility
+like so::
 
-The ``housekeep.py`` script is provided to help ensure clean testing
-environment between run. Simply invoke as such::
+    $ python housekeep.py superclean
 
-    $ python ./housekeep.py superclean
+It is `strongly` recommended to NOT do superclean too often, though.
+Every time you invoke ``superclean``,
+tox will have to recreate all its testenvs,
+and this will make testing `much` longer to finish.
 
-(The same script is actually called before and after runs on ``py*-*``
-testenvs, as you can see in ``tox.ini``, but with less destructive commands.)
+``superclean`` is typically only needed when you switch branches,
+or if you want to really ensure that artifacts from previous testing sessions
+won't interfere with your next testing sessions.
+
+For example, you want to force Sphinx to rebuild all documentation.
+Or, you're sharing a repo between environments and the cached Python bytecode
+messes up file access
+(e.g., sharing the exact same directory between Windows PowerShell and Cygwin
+will cause problems as Python becomes confused about the locations of the source code).
 
 
 Contents
