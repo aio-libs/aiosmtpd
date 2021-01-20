@@ -183,7 +183,7 @@ those methods of the handler instance will override the built-in methods.
 
   :boldital:`server` is the instance of the ``SMTP`` class invoking the AUTH hook.
   This allows the AUTH hook implementation to invoke facilities such as the
-  ``push()`` and ``_auth_interact()`` methods.
+  ``push()`` and ``challenge_auth()`` methods.
 
   :boldital:`args` is a list of string split from the string after the ``AUTH`` command.
   ``args[0]`` is always equal to ``MECHANISM``.
