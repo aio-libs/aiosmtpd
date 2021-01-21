@@ -23,7 +23,12 @@ from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from .conftest import ExposingController, Global
 from base64 import b64encode
 from contextlib import suppress
-from smtplib import SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected
+from smtplib import (
+    SMTP as SMTPClient,
+    SMTPDataError,
+    SMTPResponseException,
+    SMTPServerDisconnected,
+)
 from textwrap import dedent
 from typing import AnyStr, Callable, List, Tuple
 from unittest.mock import MagicMock
@@ -70,7 +75,7 @@ class PeekerHandler:
     def authenticate(self, mechanism: str, login: bytes, password: bytes) -> bool:
         self.login = login
         self.password = password
-        return True
+        return login == b"goodlogin" and password == b"goodpasswd"
 
     async def handle_MAIL(
         self, server, session: SMTPSession, envelope, address, mail_options
@@ -332,20 +337,15 @@ def strictascii_controller(get_handler, get_controller) -> ExposingController:
 class _CommonMethods:
     """Contain snippets that keep being performed again and again and again..."""
 
-    def _helo(self, client: SMTP, domain: str = "example.org") -> bytes:
+    def _helo(self, client: SMTPClient, domain: str = "example.org") -> bytes:
         code, mesg = client.helo(domain)
         assert code == 250
         return mesg
 
-    def _ehlo(self, client: SMTP, domain: str = "example.com") -> bytes:
+    def _ehlo(self, client: SMTPClient, domain: str = "example.com") -> bytes:
         code, mesg = client.ehlo(domain)
         assert code == 250
         return mesg
-
-    def _auth_login_noarg(self, client: SMTP):
-        self._ehlo(client)
-        resp = client.docmd("AUTH LOGIN")
-        assert resp == S.S334_AUTH_USERNAME
 
 
 class TestProtocol:
@@ -679,9 +679,15 @@ class TestSMTP(_CommonMethods):
         invalid_email_addresses,
         ids=itertools.count(),
     )
-    def test_mail_smtp_malformed(self, client, address):
+    def test_mail_invalid_address(self, client, address):
         self._helo(client)
         resp = client.docmd(f"MAIL FROM: {address}")
+        assert resp == S.S553_MALFORMED
+
+    @pytest.mark.parametrize("address", invalid_email_addresses, ids=itertools.count())
+    def test_mail_esmtp_invalid_address(self, client, address):
+        self._ehlo(client)
+        resp = client.docmd(f"MAIL FROM: {address} SIZE=28113")
         assert resp == S.S553_MALFORMED
 
     def test_rcpt_no_mail(self, client):
@@ -741,7 +747,7 @@ class TestSMTP(_CommonMethods):
         assert resp == S.S250_OK
 
     @pytest.mark.parametrize("address", invalid_email_addresses, ids=itertools.count())
-    def test_rcpt_address_malformed(self, client, address):
+    def test_rcpt_invalid_address(self, client, address):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == S.S250_OK
@@ -769,12 +775,6 @@ class TestSMTP(_CommonMethods):
         assert resp == S.S250_OK
         resp = client.docmd('RCPT TO: <""@example.org>')
         assert resp == S.S250_OK
-
-    @pytest.mark.parametrize("address", invalid_email_addresses, ids=itertools.count())
-    def test_mail_esmtp_malformed(self, client, address):
-        self._ehlo(client)
-        resp = client.docmd(f"MAIL FROM: {address} SIZE=28113")
-        assert resp == S.S553_MALFORMED
 
     def test_rset(self, client):
         resp = client.rset()
@@ -847,32 +847,21 @@ class TestSMTPNonDecoding(_CommonMethods):
 
 @pytest.mark.usefixtures("decoding_authnotls_controller")
 class TestSMTPAuth(_CommonMethods):
-    def test_auth_no_ehlo(self, client):
+    def test_no_ehlo(self, client):
         resp = client.docmd("AUTH")
         assert resp == S.S503_EHLO_FIRST
 
-    def test_auth_helo(self, client):
+    def test_helo(self, client):
         self._helo(client)
         resp = client.docmd("AUTH")
         assert resp == S.S500_AUTH_UNRECOG
 
-    def test_auth_too_many_values(self, client):
-        self._ehlo(client)
-        resp = client.docmd("AUTH PLAIN NONE NONE")
-        assert resp == S.S501_TOO_MANY
-
-    def test_auth_not_enough_values(self, client):
+    def test_not_enough_values(self, client):
         self._ehlo(client)
         resp = client.docmd("AUTH")
         assert resp == S.S501_TOO_FEW
 
-    @pytest.mark.parametrize("mechanism", ["GSSAPI", "DIGEST-MD5", "MD5", "CRAM-MD5"])
-    def test_auth_not_supported_mechanism(self, client, mechanism):
-        self._ehlo(client)
-        resp = client.docmd("AUTH " + mechanism)
-        assert resp == S.S504_AUTH_UNRECOG
-
-    def test_auth_already_authenticated(self, client):
+    def test_already_authenticated(self, client):
         self._ehlo(client)
         resp = client.docmd(
             "AUTH PLAIN " + b64encode(b"\0goodlogin\0goodpasswd").decode()
@@ -883,80 +872,34 @@ class TestSMTPAuth(_CommonMethods):
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == S.S250_OK
 
-    def test_auth_bad_base64_encoding(self, client):
-        self._ehlo(client)
-        resp = client.docmd("AUTH PLAIN not-b64")
-        assert resp == S.S501_AUTH_NOTB64
-
-    def test_auth_bad_base64_length(self, client):
-        self._ehlo(client)
-        resp = client.docmd("AUTH PLAIN " + b64encode(b"\0onlylogin").decode())
-        assert resp == S.S501_AUTH_CANTSPLIT
-
-    def test_auth_bad_credentials(self, client):
-        self._ehlo(client)
-        resp = client.docmd(
-            "AUTH PLAIN " + b64encode(b"\0badlogin\0badpasswd").decode()
-        )
-        assert resp == S.S535_AUTH_INVALID
-
-    def _auth_two_steps(self, client):
-        self._ehlo(client)
-        resp = client.docmd("AUTH PLAIN")
-        assert resp == S.S334_AUTH_EMPTYPROMPT
-
-    def test_auth_two_steps_good_credentials(self, client):
-        self._auth_two_steps(client)
-        resp = client.docmd(b64encode(b"\0goodlogin\0goodpasswd").decode())
-        assert resp == S.S235_AUTH_SUCCESS
-
-    def test_auth_two_steps_bad_credentials(self, client):
-        self._auth_two_steps(client)
-        resp = client.docmd(b64encode(b"\0badlogin\0badpasswd").decode())
-        assert resp == S.S535_AUTH_INVALID
-
-    def test_auth_two_steps_abort(self, client):
-        self._auth_two_steps(client)
-        resp = client.docmd("*")
-        assert resp == S.S501_AUTH_ABORTED
-
-    def test_auth_two_steps_bad_base64_encoding(self, client):
-        self._auth_two_steps(client)
-        resp = client.docmd("ab@%")
-        assert resp == S.S501_AUTH_NOTB64
-
-    def test_auth_good_credentials(self, client):
-        self._ehlo(client)
-        resp = client.docmd(
-            "AUTH PLAIN " + b64encode(b"\0goodlogin\0goodpasswd").decode()
-        )
-        assert resp == S.S235_AUTH_SUCCESS
-
-    def test_auth_success(self, client):
-        self._ehlo(client)
-        resp = client.login("goodlogin", "goodpasswd", initial_response_ok=False)
-        assert resp == S.S235_AUTH_SUCCESS
-
-    def test_auth_no_credentials(self, client):
-        self._ehlo(client)
-        resp = client.docmd("AUTH PLAIN =")
-        assert resp == S.S535_AUTH_INVALID
-
-    def test_auth_two_steps_no_credentials(self, client):
-        self._auth_two_steps(client)
-        resp = client.docmd("=")
-        assert resp == S.S535_AUTH_INVALID
-
-    def test_auth_login_no_credentials(self, client):
-        self._auth_login_noarg(client)
-        resp = client.docmd("=")
-        assert resp == S.S334_AUTH_PASSWORD
-        resp = client.docmd("=")
-        assert resp == S.S535_AUTH_INVALID
-
 
 @pytest.mark.usefixtures("auth_peeker_controller")
 class TestAuthMechanisms(_CommonMethods):
+
+    @pytest.fixture
+    def do_auth_plain1(self, client) -> Callable[[str], Tuple[int, bytes]]:
+        self._ehlo(client)
+
+        def do(param: str) -> Tuple[int, bytes]:
+            return client.docmd(
+                "AUTH PLAIN " + param
+            )
+
+        do.client = client
+        yield do
+
+    @pytest.fixture
+    def do_auth_login3(self, client) -> Callable[[str], Tuple[int, bytes]]:
+        self._ehlo(client)
+        resp = client.docmd("AUTH LOGIN")
+        assert resp == S.S334_AUTH_USERNAME
+
+        def do(param: str) -> Tuple[int, bytes]:
+            return client.docmd(param)
+
+        do.client = client
+        yield do
+
     def test_ehlo(self, client):
         code, mesg = client.ehlo("example.com")
         assert code == 250
@@ -969,61 +912,145 @@ class TestAuthMechanisms(_CommonMethods):
             b"HELP",
         ]
 
-    def test_auth_custom_mechanism(self, client):
+    @pytest.mark.parametrize("mechanism", ["GSSAPI", "DIGEST-MD5", "MD5", "CRAM-MD5"])
+    def test_not_supported_mechanism(self, client, mechanism):
+        self._ehlo(client)
+        resp = client.docmd("AUTH " + mechanism)
+        assert resp == S.S504_AUTH_UNRECOG
+
+    def test_custom_mechanism(self, client):
         self._ehlo(client)
         resp = client.docmd("AUTH NULL")
         assert resp == S.S235_AUTH_SUCCESS
 
-    def test_auth_plain_null_credential(self, auth_peeker_controller, client):
-        self._ehlo(client)
-        resp = client.docmd("AUTH PLAIN")
-        assert resp == S.S334_AUTH_EMPTYPROMPT
-        resp = client.docmd("=")
-        assert resp == S.S235_AUTH_SUCCESS
-        peeker = auth_peeker_controller.handler
-        assert isinstance(peeker, PeekerHandler)
-        assert peeker.login is None
-        assert peeker.password is None
-        resp = client.mail("alice@example.com")
-        assert resp == S.S250_OK
-        assert peeker._sess.login_data == b""
-
-    def test_auth_login_null_credential(self, auth_peeker_controller, client):
-        self._auth_login_noarg(client)
-        resp = client.docmd("=")
-        assert resp == S.S334_AUTH_PASSWORD
-        resp = client.docmd("=")
-        assert resp == S.S235_AUTH_SUCCESS
-        peeker = auth_peeker_controller.handler
-        assert isinstance(peeker, PeekerHandler)
-        assert peeker.login is None
-        assert peeker.password is None
-        resp = client.mail("alice@example.com")
-        assert resp == S.S250_OK
-        assert peeker._sess.login_data == b""
-
-    def test_auth_login_abort_login(self, client):
-        self._auth_login_noarg(client)
-        resp = client.docmd("*")
-        assert resp == S.S501_AUTH_ABORTED
-
-    def test_auth_login_abort_password(self, client):
-        # self.auth_peeker.return_val = False
-        self._auth_login_noarg(client)
-        resp = client.docmd("=")
-        assert resp == S.S334_AUTH_PASSWORD
-        resp = client.docmd("*")
-        assert resp == S.S501_AUTH_ABORTED
-
-    def test_auth_disabled_mechanism(self, client):
+    def test_disabled_mechanism(self, client):
         self._ehlo(client)
         resp = client.docmd("AUTH DONT")
         assert resp == S.S504_AUTH_UNRECOG
 
+    def test_plain1_bad_base64_encoding(self, do_auth_plain1):
+        resp = do_auth_plain1("not-b64")
+        assert resp == S.S501_AUTH_NOTB64
+
+    def test_plain1_bad_base64_length(self, do_auth_plain1):
+        resp = do_auth_plain1(b64encode(b"\0onlylogin").decode())
+        assert resp == S.S501_AUTH_CANTSPLIT
+
+    def test_plain1_too_many_values(self, do_auth_plain1):
+        resp = do_auth_plain1("NONE NONE")
+        assert resp == S.S501_TOO_MANY
+
+    def test_plain1_bad_username(self, do_auth_plain1):
+        resp = do_auth_plain1(
+            b64encode(b"\0badlogin\0goodpasswd").decode()
+        )
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_plain1_bad_password(self, do_auth_plain1):
+        resp = do_auth_plain1(
+            b64encode(b"\0goodlogin\0badpasswd").decode()
+        )
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_plain1_empty(self, do_auth_plain1):
+        resp = do_auth_plain1("=")
+        assert resp == S.S501_AUTH_CANTSPLIT
+
+    def test_plain1_good_credentials(self, auth_peeker_controller, do_auth_plain1):
+        resp = do_auth_plain1(
+            b64encode(b"\0goodlogin\0goodpasswd").decode()
+        )
+        assert resp == S.S235_AUTH_SUCCESS
+        peeker = auth_peeker_controller.handler
+        assert isinstance(peeker, PeekerHandler)
+        assert peeker.login == b"goodlogin"
+        assert peeker.password == b"goodpasswd"
+        # noinspection PyUnresolvedReferences
+        resp = do_auth_plain1.client.mail("alice@example.com")
+        assert resp == S.S250_OK
+
+    @pytest.fixture
+    def client_auth_plain2(self, client) -> SMTPClient:
+        self._ehlo(client)
+        resp = client.docmd("AUTH PLAIN")
+        assert resp == S.S334_AUTH_EMPTYPROMPT
+        yield client
+
+    def test_plain2_good_credentials(self, auth_peeker_controller, client_auth_plain2):
+        resp = client_auth_plain2.docmd(b64encode(b"\0goodlogin\0goodpasswd").decode())
+        assert resp == S.S235_AUTH_SUCCESS
+        peeker = auth_peeker_controller.handler
+        assert isinstance(peeker, PeekerHandler)
+        assert peeker.login == b"goodlogin"
+        assert peeker.password == b"goodpasswd"
+        resp = client_auth_plain2.mail("alice@example.com")
+        assert resp == S.S250_OK
+
+    def test_plain2_bad_credentials(self, client_auth_plain2):
+        resp = client_auth_plain2.docmd(b64encode(b"\0badlogin\0badpasswd").decode())
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_plain2_no_credentials(self, client_auth_plain2):
+        resp = client_auth_plain2.docmd("=")
+        assert resp == S.S501_AUTH_CANTSPLIT
+
+    def test_plain2_abort(self, client_auth_plain2):
+        resp = client_auth_plain2.docmd("*")
+        assert resp == S.S501_AUTH_ABORTED
+
+    def test_plain2_bad_base64_encoding(self, client_auth_plain2):
+        resp = client_auth_plain2.docmd("ab@%")
+        assert resp == S.S501_AUTH_NOTB64
+
+    def test_login3_good_credentials(self, auth_peeker_controller, do_auth_login3):
+        resp = do_auth_login3(b64encode(b"goodlogin").decode())
+        assert resp == S.S334_AUTH_PASSWORD
+        resp = do_auth_login3(b64encode(b"goodpasswd").decode())
+        assert resp == S.S235_AUTH_SUCCESS
+        peeker = auth_peeker_controller.handler
+        assert isinstance(peeker, PeekerHandler)
+        assert peeker.login == b"goodlogin"
+        assert peeker.password == b"goodpasswd"
+        # noinspection PyUnresolvedReferences
+        resp = do_auth_login3.client.mail("alice@example.com")
+        assert resp == S.S250_OK
+
+    def test_login3_bad_base64(self, do_auth_login3):
+        resp = do_auth_login3("not-b64")
+        assert resp == S.S501_AUTH_NOTB64
+
+    def test_login3_bad_username(self, do_auth_login3):
+        resp = do_auth_login3(b64encode(b"badlogin").decode())
+        assert resp == S.S334_AUTH_PASSWORD
+        resp = do_auth_login3(b64encode(b"goodpasswd").decode())
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_login3_bad_password(self, do_auth_login3):
+        resp = do_auth_login3(b64encode(b"goodlogin").decode())
+        assert resp == S.S334_AUTH_PASSWORD
+        resp = do_auth_login3(b64encode(b"badpasswd").decode())
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_login3_empty_credentials(self, do_auth_login3):
+        resp = do_auth_login3("=")
+        assert resp == S.S334_AUTH_PASSWORD
+        resp = do_auth_login3("=")
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_login3_abort_username(self, do_auth_login3):
+        resp = do_auth_login3("*")
+        assert resp == S.S501_AUTH_ABORTED
+
+    def test_login3_abort_password(self, do_auth_login3):
+        resp = do_auth_login3("=")
+        assert resp == S.S334_AUTH_PASSWORD
+        resp = do_auth_login3("*")
+        assert resp == S.S501_AUTH_ABORTED
+
 
 @pytest.mark.usefixtures("require_auth_controller", "suppress_userwarning")
 class TestRequiredAuthentication(_CommonMethods):
-    def _login(self, client: SMTP):
+    def _login(self, client: SMTPClient):
         self._ehlo(client)
         resp = client.login("goodlogin", "goodpasswd")
         assert resp == S.S235_AUTH_SUCCESS
@@ -1096,7 +1123,12 @@ class TestResetCommands:
         ),
     ]
 
-    def _send_envelope_data(self, client: SMTP, mail_from: str, rcpt_tos: List[str]):
+    def _send_envelope_data(
+            self,
+            client: SMTPClient,
+            mail_from: str,
+            rcpt_tos: List[str],
+    ):
         client.mail(mail_from)
         for rcpt in rcpt_tos:
             client.rcpt(rcpt)
