@@ -18,6 +18,7 @@ def in_wsl():
 
 
 class TestServer:
+    """Tests for the aiosmtpd.smtp.SMTP class"""
     def test_smtp_utf8(self, plain_controller, client):
         code, mesg = client.ehlo("example.com")
         assert code == 250
@@ -44,6 +45,8 @@ class TestServer:
 
 
 class TestController:
+    """Tests for the aiosmtpd.controller.Controller class"""
+
     @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
     def test_socket_error_dupe(self, plain_controller, client):
         contr2 = Controller(
