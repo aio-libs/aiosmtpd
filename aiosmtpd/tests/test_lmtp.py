@@ -1,6 +1,7 @@
 """Test the LMTP protocol."""
 
 import pytest
+import socket
 
 from .conftest import Global
 from aiosmtpd.controller import Controller
@@ -27,8 +28,15 @@ def lmtp_controller() -> LMTPController:
 
 
 def test_lhlo(lmtp_controller, client):
-    resp = client.docmd("LHLO example.com")
-    assert resp == S.S250_FQDN
+    code, mesg = client.docmd("LHLO example.com")
+    lines = mesg.splitlines()
+    assert lines == [
+        bytes(socket.getfqdn(), "utf-8"),
+        b"SIZE 33554432",
+        b"8BITMIME",
+        b"HELP",
+    ]
+    assert code == 250
 
 
 def test_helo(lmtp_controller, client):
