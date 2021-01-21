@@ -1320,43 +1320,9 @@ class TestCustomization(_CommonMethods):
 
 class TestClientCrash(_CommonMethods):
 
-    # test_connection_reset_* test cases seem to be testing smtplib.SMTP behavior
-    # instead of aiosmtpd.smtp.SMTP behavior. Maybe we can remove these?
-
-    def test_connection_reset_during_DATA(self, plain_controller, client):
-        self._helo(client)
-        client.docmd("MAIL FROM: <anne@example.com>")
-        client.docmd("RCPT TO: <bart@example.com>")
-        client.docmd("DATA")
-        # Start sending the DATA but reset the connection before that
-        # completes, i.e. before the .\r\n
-        client.send(b"From: <anne@example.com>")
-        reset_connection(client)
-        # The connection should be disconnected, so trying to do another
-        # command from here will give us an exception.  In GH#62, the
-        # server just hung.
-        with pytest.raises(SMTPServerDisconnected):
-            client.noop()
-
-    def test_connection_reset_during_command(self, plain_controller, client):
-        self._helo(client)
-        # Start sending a command but reset the connection before that
-        # completes, i.e. before the \r\n
-        client.send("MAIL FROM: <anne")
-        reset_connection(client)
-        # The connection should be disconnected, so trying to do another
-        # command from here will give us an exception.  In GH#62, the
-        # server just hung.
-        with pytest.raises(SMTPServerDisconnected):
-            client.noop()
-
-    # test_connreset_* test cases below _actually_ test aiosmtpd.smtp.SMTP behavior
-    # A bit more invasive than I like, but can't be helped.
-
-    def test_connreset_during_DATA(self, mocker, plain_controller, client):
+    def test_connection_reset_during_DATA(self, mocker, plain_controller, client):
         # Trigger factory() to produce the smtpd server
         self._helo(client)
-        # Monkeypatching
         smtpd: Server = plain_controller.smtpd
         spy: MagicMock = mocker.spy(smtpd._writer, "close")
         # Do some stuff
@@ -1371,6 +1337,8 @@ class TestClientCrash(_CommonMethods):
             # completes, i.e. before the .\r\n
             client.send(b"From: <anne@example.com>")
             reset_connection(client)
+            with pytest.raises(SMTPServerDisconnected):
+                client.noop()
             catchup_delay()
             # Apparently within that delay, ._writer.close() invoked several times
             # That is okay; we just want to ensure that it's invoked at least once.
@@ -1378,29 +1346,22 @@ class TestClientCrash(_CommonMethods):
         finally:
             plain_controller.stop()
 
-    def test_connreset_during_command(self, mocker, plain_controller, client):
+    def test_connection_reset_during_command(self, mocker, plain_controller, client):
         # Trigger factory() to produce the smtpd server
         self._helo(client)
-        catchup_delay()
         smtpd: Server = plain_controller.smtpd
         spy: MagicMock = mocker.spy(smtpd._writer, "close")
         # Start sending a command but reset the connection before that
         # completes, i.e. before the \r\n
         client.send("MAIL FROM: <anne")
         reset_connection(client)
+        with pytest.raises(SMTPServerDisconnected):
+            client.noop()
         catchup_delay()
         # Should be called at least once. (In practice, almost certainly just once.)
         assert spy.call_count > 0
 
     def test_close_in_command(self, plain_controller, client):
-        #
-        # What exactly are we testing in this test case, actually?
-        #
-        # Don't include the CRLF.
-        client.send("FOO")
-        client.close()
-
-    def test_connclose_in_command(self, mocker, plain_controller, client):
         # Don't include the CRLF.
         client.send("FOO")
         client.close()
@@ -1413,7 +1374,7 @@ class TestClientCrash(_CommonMethods):
         # and still == True if transport is closed.
         assert writer.transport.is_closing()
 
-    def test_connclose_in_command_2(self, mocker, plain_controller, client):
+    def test_close_in_command_2(self, mocker, plain_controller, client):
         self._helo(client)
         catchup_delay()
         smtpd: Server = plain_controller.smtpd
@@ -1430,33 +1391,10 @@ class TestClientCrash(_CommonMethods):
         assert writer.transport.is_closing()
 
     def test_close_in_data(self, mocker, plain_controller, client):
-        #
-        # What exactly are we testing in this test case, actually?
-        #
-        resp = client.helo("example.com")
-        assert resp == S.S250_FQDN
-        resp = client.docmd("MAIL FROM: <anne@example.com>")
-        assert resp == S.S250_OK
-        resp = client.docmd("RCPT TO: <bart@example.com>")
-        assert resp == S.S250_OK
-        # Entering portion of code where hang is possible (upon assertion fail), so
-        # we must wrap with "try..finally". See pytest-dev/pytest#7989
-        try:
-            resp = client.docmd("DATA")
-            assert resp == S.S354_DATA_ENDWITH
-            # Don't include the CRLF.
-            client.send("FOO")
-            client.close()
-        finally:
-            plain_controller.stop()
-
-    def test_connclose_in_data(self, mocker, plain_controller, client):
         self._helo(client)
-        catchup_delay()
         smtpd: Server = plain_controller.smtpd
         writer = smtpd._writer
         spy: MagicMock = mocker.spy(writer, "close")
-
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == S.S250_OK
         resp = client.docmd("RCPT TO: <bart@example.com>")
