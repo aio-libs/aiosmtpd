@@ -105,7 +105,7 @@ class SMTP_STATUS_CODES:
     S500_CMD_UNRECOG = StatusCode(500, b'Error: command "%b" not recognized')
     S500_AUTH_UNRECOG = StatusCode(500, b"Error: command 'AUTH' not recognized")
 
-    S501_AUTH_ABORTED = StatusCode(501, b"Auth aborted")
+    S501_AUTH_ABORTED = StatusCode(501, b"5.7.0 Auth aborted")
     S501_AUTH_NOTB64 = StatusCode(501, b"5.5.2 Can't decode base64")
     S501_AUTH_CANTSPLIT = StatusCode(501, b"5.5.2 Can't split auth value")
 
