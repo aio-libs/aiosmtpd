@@ -149,6 +149,7 @@ class SleepingHeloHandler:
 
 # These are either impractical or impossible to implement using ExposingController
 
+
 class TimeoutController(ExposingController):
     Delay: float = 1.0
 
@@ -876,15 +877,12 @@ class TestSMTPAuth(_CommonMethods):
 
 @pytest.mark.usefixtures("auth_peeker_controller")
 class TestAuthMechanisms(_CommonMethods):
-
     @pytest.fixture
     def do_auth_plain1(self, client) -> Callable[[str], Tuple[int, bytes]]:
         self._ehlo(client)
 
         def do(param: str) -> Tuple[int, bytes]:
-            return client.docmd(
-                "AUTH PLAIN " + param
-            )
+            return client.docmd("AUTH PLAIN " + param)
 
         do.client = client
         yield do
@@ -942,15 +940,11 @@ class TestAuthMechanisms(_CommonMethods):
         assert resp == S.S501_TOO_MANY
 
     def test_plain1_bad_username(self, do_auth_plain1):
-        resp = do_auth_plain1(
-            b64encode(b"\0badlogin\0goodpasswd").decode()
-        )
+        resp = do_auth_plain1(b64encode(b"\0badlogin\0goodpasswd").decode())
         assert resp == S.S535_AUTH_INVALID
 
     def test_plain1_bad_password(self, do_auth_plain1):
-        resp = do_auth_plain1(
-            b64encode(b"\0goodlogin\0badpasswd").decode()
-        )
+        resp = do_auth_plain1(b64encode(b"\0goodlogin\0badpasswd").decode())
         assert resp == S.S535_AUTH_INVALID
 
     def test_plain1_empty(self, do_auth_plain1):
@@ -958,9 +952,7 @@ class TestAuthMechanisms(_CommonMethods):
         assert resp == S.S501_AUTH_CANTSPLIT
 
     def test_plain1_good_credentials(self, auth_peeker_controller, do_auth_plain1):
-        resp = do_auth_plain1(
-            b64encode(b"\0goodlogin\0goodpasswd").decode()
-        )
+        resp = do_auth_plain1(b64encode(b"\0goodlogin\0goodpasswd").decode())
         assert resp == S.S235_AUTH_SUCCESS
         peeker = auth_peeker_controller.handler
         assert isinstance(peeker, PeekerHandler)
@@ -1125,10 +1117,10 @@ class TestResetCommands:
     ]
 
     def _send_envelope_data(
-            self,
-            client: SMTPClient,
-            mail_from: str,
-            rcpt_tos: List[str],
+        self,
+        client: SMTPClient,
+        mail_from: str,
+        rcpt_tos: List[str],
     ):
         client.mail(mail_from)
         for rcpt in rcpt_tos:
@@ -1352,7 +1344,6 @@ class TestCustomization(_CommonMethods):
 
 
 class TestClientCrash(_CommonMethods):
-
     def test_connection_reset_during_DATA(self, mocker, plain_controller, client):
         # Trigger factory() to produce the smtpd server
         self._helo(client)
@@ -1529,7 +1520,7 @@ class TestAuthArgs:
         assert (
             record[0].message.args[0]
             == "Requiring AUTH while not requiring TLS can lead to "
-               "security vulnerabilities!"
+            "security vulnerabilities!"
         )
         assert caplog.record_tuples[0] == (
             "mail.log",
