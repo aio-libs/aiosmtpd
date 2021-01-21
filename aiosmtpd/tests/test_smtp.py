@@ -13,6 +13,7 @@ from aiosmtpd.smtp import (
     Session as SMTPSession,
     SMTP as Server,
     __ident__ as GREETING,
+    auth_mechanism,
 )
 from aiosmtpd.testing.helpers import (
     catchup_delay,
@@ -1518,3 +1519,46 @@ class TestTimeout(_CommonMethods):
         time.sleep(0.1 + TimeoutController.Delay)
         with pytest.raises(SMTPServerDisconnected):
             client.mail("anne@example.com")
+
+
+class TestAuthArgs:
+    def test_warn_authreqnotls(self, caplog):
+        with pytest.warns(UserWarning) as record:
+            _ = Server(Sink(), auth_required=True, auth_require_tls=False)
+        assert len(record) == 1
+        assert (
+            record[0].message.args[0]
+            == "Requiring AUTH while not requiring TLS can lead to "
+               "security vulnerabilities!"
+        )
+        assert caplog.record_tuples[0] == (
+            "mail.log",
+            logging.WARNING,
+            "auth_required == True but auth_require_tls == False",
+        )
+
+    def test_log_authmechanisms(self, caplog):
+        caplog.set_level(logging.INFO)
+        server = Server(Sink())
+        auth_mechs = sorted(
+            m.replace("auth_", "") + "(builtin)"
+            for m in dir(server)
+            if m.startswith("auth_")
+        )
+        assert (
+            caplog.record_tuples[0][-1]
+            == f"Available AUTH mechanisms: {' '.join(auth_mechs)}"
+        )
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "has space",
+            "has.dot",
+            "has/slash",
+            "has\\backslash",
+        ],
+    )
+    def test_authmechname_decorator_badname(self, name):
+        with pytest.raises(ValueError):
+            auth_mechanism(name)
