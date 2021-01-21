@@ -142,8 +142,9 @@ def get_handler(request):
     @pytest.mark.handler_data
     """
     marker = request.node.get_closest_marker("handler_data")
+    default_class = Sink
 
-    def getter(default_class=Sink) -> object:
+    def getter() -> object:
         if marker:
             class_ = marker.kwargs.get("class_", default_class)
         else:
