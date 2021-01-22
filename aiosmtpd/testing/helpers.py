@@ -3,6 +3,7 @@
 import os
 import sys
 import time
+import select
 import socket
 import struct
 
@@ -59,3 +60,19 @@ def catchup_delay(delay=ASYNCIO_CATCHUP_DELAY):
     Sleep for awhile to give asyncio's event loop time to catch up.
     """
     time.sleep(delay)
+
+
+def send_recv(
+        sock: socket.socket, data: bytes, end: bytes = b"\r\n", timeout=0.1
+) -> bytes:
+    sock.send(data + end)
+    slist = [sock]
+    result: List[bytes] = []
+    while True:
+        read_s, _, _ = select.select(slist, [], [], timeout)
+        if read_s:
+            # We can use sock instead of read_s because slist only contains sock
+            result.append(sock.recv(1024))
+        else:
+            break
+    return b"".join(result)

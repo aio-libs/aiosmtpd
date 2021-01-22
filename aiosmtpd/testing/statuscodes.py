@@ -91,6 +91,8 @@ class SMTP_STATUS_CODES:
 
     S354_DATA_ENDWITH = StatusCode(354, b"End data with <CR><LF>.<CR><LF>")
 
+    S421_TOO_MANY = StatusCode(421, b"4.7.0 %b sent too many times")
+
     S450_DEST_GREYLIST = StatusCode(
         450, b"4.2.0 Recipient address rejected: Greylisted"
     )
@@ -99,7 +101,8 @@ class SMTP_STATUS_CODES:
     S454_TLS_NA = StatusCode(454, b"TLS not available")
 
     S500_BAD_SYNTAX = StatusCode(500, b"Error: bad syntax")
-    S500_LINE_TOO_LONG = StatusCode(500, b"Command line too long")
+    S500_CMD_TOO_LONG = StatusCode(500, b"Command line too long")
+    S500_DATALINE_TOO_LONG = StatusCode(500, b"Line too long (see RFC5321 4.5.3.1.6)")
     S500_STRICT_ASCII = StatusCode(500, b"Error: strict ASCII mode")
 
     S500_CMD_UNRECOG = StatusCode(500, b'Error: command "%b" not recognized')
@@ -133,6 +136,9 @@ class SMTP_STATUS_CODES:
 
     S502_EXPN_NOTIMPL = StatusCode(502, b"EXPN not implemented")
     S502_VRFY_COULDNT = StatusCode(502, b"Could not VRFY %b")
+    S502_TOO_MANY_UNRECOG = StatusCode(
+        502, b"5.5.1 Too many unrecognized commands, goodbye."
+    )
 
     S503_ALREADY_AUTH = StatusCode(503, b"Already authenticated")
     S503_EHLO_FIRST = StatusCode(503, b"Error: send EHLO first")
@@ -157,7 +163,7 @@ class SMTP_STATUS_CODES:
     S552_EXCEED_SIZE = StatusCode(
         552, b"Error: message size exceeds fixed maximum message size"
     )
-    S552_TOO_MUCH = StatusCode(552, b"Error: Too much mail data")
+    S552_DATA_TOO_MUCH = StatusCode(552, b"Error: Too much mail data")
     S553_MALFORMED = StatusCode(553, b"5.1.3 Error: malformed address")
     S554_LACK_SECURITY = StatusCode(554, b"Command refused due to lack of security")
 

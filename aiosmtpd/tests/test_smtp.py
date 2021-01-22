@@ -9,6 +9,8 @@ import itertools
 
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import (
+    BOGUS_LIMIT,
+    CALL_LIMIT_DEFAULT,
     MISSING,
     Session as SMTPSession,
     SMTP as Server,
@@ -19,6 +21,7 @@ from aiosmtpd.testing.helpers import (
     catchup_delay,
     ReceivingHandler,
     reset_connection,
+    send_recv,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from .conftest import ExposingController, Global
@@ -117,6 +120,16 @@ class ErroringHandler:
             return "451 Temporary error: ({}) {}".format(
                 error.__class__.__name__, str(error)
             )
+
+
+class ErroringHandlerConnectionLost:
+    error = None
+
+    async def handle_DATA(self, server, session, envelope):
+        raise ConnectionResetError("ErroringHandlerConnectionLost test")
+
+    async def handle_exception(self, error):
+        self.error = error
 
 
 class ErroringErrorHandler:
@@ -259,6 +272,24 @@ def decoding_authnotls_controller(get_handler, get_controller) -> ExposingContro
 def error_controller(get_handler) -> ErrorController:
     handler = get_handler()
     controller = ErrorController(handler)
+    controller.start()
+    Global.set_addr_from(controller)
+    #
+    yield controller
+    #
+    controller.stop()
+
+
+@pytest.fixture
+def limited_controller(request, get_controller) -> ExposingController:
+    marker = request.node.get_closest_marker("controller_data")
+    if marker:
+        markerdata = marker.kwargs or {}
+    else:
+        markerdata = {}
+    limit = markerdata.get("command_call_limit", None)
+    handler = Sink()
+    controller = get_controller(handler, command_call_limit=limit)
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -834,7 +865,17 @@ class TestSMTP(_CommonMethods):
 
     def test_too_long_command(self, client):
         resp = client.docmd("a" * 513)
-        assert resp == S.S500_LINE_TOO_LONG
+        assert resp == S.S500_CMD_TOO_LONG
+
+    def test_way_too_long_command(self, client):
+        # Send a very large string to ensure it is broken
+        # into several packets, which hits the inner
+        # LimitOverrunError code path in _handle_client.
+        client.send("a" * 1_000_000)
+        response = client.docmd("a" * 1001)
+        assert response == S.S500_CMD_TOO_LONG
+        response = client.docmd("NOOP")
+        assert response == S.S250_OK
 
     def test_unknown_command(self, client):
         resp = client.docmd("FOOBAR")
@@ -874,6 +915,27 @@ class TestSMTPAuth(_CommonMethods):
         assert resp == S.S503_ALREADY_AUTH
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == S.S250_OK
+
+    def test_auth_individually(self, client):
+        """AUTH state of different clients must be independent"""
+        client1 = client
+        with SMTPClient(*Global.SrvAddr) as client2:
+            for c in client1, client2:
+                c.ehlo("example.com")
+                resp = c.login("goodlogin", "goodpasswd")
+                assert resp == S.S235_AUTH_SUCCESS
+
+    def test_rset_maintain_authenticated(self, client):
+        """RSET resets only Envelope not Session"""
+        self._ehlo(client, "example.com")
+        resp = client.login("goodlogin", "goodpasswd")
+        assert resp == S.S235_AUTH_SUCCESS
+        resp = client.mail("alice@example.com")
+        assert resp == S.S250_OK
+        resp = client.rset()
+        assert resp == S.S250_OK
+        resp = client.docmd("AUTH PLAIN")
+        assert resp == S.S503_ALREADY_AUTH
 
 
 @pytest.mark.usefixtures("auth_peeker_controller")
@@ -1053,6 +1115,11 @@ class TestRequiredAuthentication(_CommonMethods):
         resp = client.docmd("HELP")
         assert resp == S.S530_AUTH_REQUIRED
 
+    def test_help_authenticated(self, client):
+        self._login(client)
+        resp = client.docmd("HELP")
+        assert resp == S.S250_SUPPCMD_NOTLS
+
     def test_vrfy_unauthenticated(self, client):
         resp = client.docmd("VRFY <anne@example.com>")
         assert resp == S.S530_AUTH_REQUIRED
@@ -1067,15 +1134,21 @@ class TestRequiredAuthentication(_CommonMethods):
         resp = client.docmd("RCPT TO: <anne@example.com>")
         assert resp == S.S530_AUTH_REQUIRED
 
+    def test_rcpt_nomail_authenticated(self, client):
+        self._login(client)
+        resp = client.docmd("RCPT TO: <anne@example.com>")
+        assert resp == S.S503_MAIL_NEEDED
+
     def test_data_unauthenticated(self, client):
         self._ehlo(client)
         resp = client.docmd("DATA")
         assert resp == S.S530_AUTH_REQUIRED
 
-    def test_help_authenticated(self, client):
-        self._login(client)
-        resp = client.docmd("HELP")
-        assert resp == S.S250_SUPPCMD_NOTLS
+    def test_data_authenticated(self, client):
+        self._ehlo(client, "example.com")
+        client.login("goodlogin", "goodpassword")
+        resp = client.docmd("DATA")
+        assert resp != S.S530_AUTH_REQUIRED
 
     def test_vrfy_authenticated(self, client):
         self._login(client)
@@ -1086,11 +1159,6 @@ class TestRequiredAuthentication(_CommonMethods):
         self._login(client)
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp, S.S250_OK
-
-    def test_rcpt_nomail_authenticated(self, client):
-        self._login(client)
-        resp = client.docmd("RCPT TO: <anne@example.com>")
-        assert resp == S.S503_MAIL_NEEDED
 
     def test_data_norcpt_authenticated(self, client):
         self._login(client)
@@ -1299,6 +1367,29 @@ class TestSMTPWithController(_CommonMethods):
         exception_type = ErrorSMTP.exception_type
         assert isinstance(handler.error, exception_type)
 
+    @pytest.mark.handler_data(class_=ErroringHandlerConnectionLost)
+    def test_exception_handler_multiple_connections_lost(
+        self, error_controller, client
+    ):
+        client1 = client
+        code, mesg = client1.ehlo("example.com")
+        assert code == 250
+        with SMTPClient(*Global.SrvAddr) as client2:
+            code, mesg = client2.ehlo("example.com")
+            assert code == 250
+            with pytest.raises(SMTPServerDisconnected) as exc:
+                mail = CRLF.join(["Test", ".", "mail"])
+                client2.sendmail("anne@example.com", ["bart@example.com"], mail)
+            assert isinstance(exc.value, SMTPServerDisconnected)
+            assert error_controller.handler.error is None
+            # At this point connection should be down
+            with pytest.raises(SMTPServerDisconnected) as exc:
+                client2.mail("alice@example.com")
+            assert str(exc.value) == "please run connect() first"
+        # client1 shouldn't be affected.
+        resp = client1.mail("alice@example.com")
+        assert resp == S.S250_OK
+
     @pytest.mark.handler_data(class_=ReceivingHandler)
     def test_bad_encodings(self, decoding_authnotls_controller, client):
         handler: ReceivingHandler = decoding_authnotls_controller.handler
@@ -1317,6 +1408,102 @@ class TestSMTPWithController(_CommonMethods):
         assert mail_from2 == mail_from
         mail_to2 = envelope.rcpt_tos[0].encode("utf-8", errors="surrogateescape")
         assert mail_to2 == mail_to
+
+    def test_data_line_too_long(self, nodecode_controller, client):
+        self._helo(client)
+        client.helo("example.com")
+        mail = b"\r\n".join([b"a" * 5555] * 3)
+        with pytest.raises(SMTPDataError) as exc:
+            client.sendmail("anne@example.com", ["bart@example.com"], mail)
+        assert exc.value.args == S.S500_DATALINE_TOO_LONG
+
+    @pytest.mark.controller_data(size=10000)
+    def test_long_line_double_count(self, sized_controller, client):
+        controller = sized_controller
+        # With a read limit of 1001 bytes in aiosmtp.SMTP, asyncio.StreamReader
+        # returns too-long lines of length up to 2002 bytes.
+        # This test ensures that bytes in partial lines are only counted once.
+        # If the implementation has a double-counting bug, then a message of
+        # 9998 bytes + CRLF will raise SMTPResponseException.
+        client.helo("example.com")
+        mail = "z" * 9998
+        with pytest.raises(SMTPDataError) as exc:
+            client.sendmail("anne@example.com", ["bart@example.com"], mail)
+        assert exc.value.args == S.S500_DATALINE_TOO_LONG
+
+    def test_long_line_leak(self, mocker: MockFixture, plain_controller, client):
+        # Simulates situation where readuntil() does not raise LimitOverrunError,
+        # but somehow the line_fragments when join()ed resulted in a too-long line
+
+        # Hijack EMPTY_BARR.join() to return a bytes object that's definitely too long
+        mock_ebarr = mocker.patch("aiosmtpd.smtp.EMPTY_BARR")
+        mock_ebarr.join.return_value = b"a" * 1010
+
+        client.helo("example.com")
+        mail = "z" * 72  # Make sure this is small and definitely within limits
+        with pytest.raises(SMTPDataError) as exc:
+            client.sendmail("anne@example.com", ["bart@example.com"], mail)
+        assert exc.value.args == S.S500_DATALINE_TOO_LONG
+        # self.assertEqual(cm.exception.smtp_code, 500)
+        # self.assertEqual(cm.exception.smtp_error,
+        #                  b'Line too long (see RFC5321 4.5.3.1.6)')
+
+    @pytest.mark.controller_data(size=20)
+    def test_too_long_body_delay_error(self, sized_controller):
+        with socket.socket() as sock:
+            sock.connect((sized_controller.hostname, sized_controller.port))
+            rslt = send_recv(sock, b"EHLO example.com")
+            assert rslt.startswith(b"220")
+            rslt = send_recv(sock, b"MAIL FROM: <anne@example.com>")
+            assert rslt.startswith(b"250")
+            rslt = send_recv(sock, b"RCPT TO: <bruce@example.com>")
+            assert rslt.startswith(b"250")
+            rslt = send_recv(sock, b"DATA")
+            assert rslt.startswith(b"354")
+            rslt = send_recv(sock, b"a" * (20 + 3))
+            # Must NOT receive status code here even if data is too much
+            assert rslt == b""
+            rslt = send_recv(sock, b"\r\n.")
+            # *NOW* we must receive status code
+            assert rslt == b"552 Error: Too much mail data\r\n"
+
+    @pytest.mark.controller_data(size=700)
+    def test_too_long_body_then_too_long_lines(self, sized_controller, client):
+        # If "too much mail" state was reached before "too long line" gets received,
+        # SMTP should respond with '552' instead of '500'
+        client.helo("example.com")
+        mail = "\r\n".join(["z" * 76] * 10 + ["a" * 1100] * 2)
+        with pytest.raises(SMTPResponseException) as exc:
+            client.sendmail("anne@example.com", ["bart@example.com"], mail)
+        assert exc.value.args == S.S552_DATA_TOO_MUCH
+
+    def test_too_long_line_delay_error(self, plain_controller):
+        with socket.socket() as sock:
+            sock.connect((plain_controller.hostname, plain_controller.port))
+            rslt = send_recv(sock, b"EHLO example.com")
+            assert rslt.startswith(b"220")
+            rslt = send_recv(sock, b"MAIL FROM: <anne@example.com>")
+            assert rslt.startswith(b"250")
+            rslt = send_recv(sock, b"RCPT TO: <bruce@example.com>")
+            assert rslt.startswith(b"250")
+            rslt = send_recv(sock, b"DATA")
+            assert rslt.startswith(b"354")
+            rslt = send_recv(sock, b"a" * (Server.line_length_limit + 3))
+            # Must NOT receive status code here even if data is too much
+            assert rslt == b""
+            rslt = send_recv(sock, b"\r\n.")
+            # *NOW* we must receive status code
+            assert rslt == b"500 Line too long (see RFC5321 4.5.3.1.6)\r\n"
+
+    @pytest.mark.controller_data(size=2000)
+    def test_too_long_lines_then_too_long_body(self, sized_controller, client):
+        # If "too long line" state was reached before "too much data" happens,
+        # SMTP should respond with '500' instead of '552'
+        client.helo("example.com")
+        mail = "\r\n".join(["z" * (2000 - 1)] * 2)
+        with pytest.raises(SMTPResponseException) as exc:
+            client.sendmail("anne@example.com", ["bart@example.com"], mail)
+        assert exc.value.args == S.S500_DATALINE_TOO_LONG
 
 
 class TestCustomization(_CommonMethods):
@@ -1340,6 +1527,11 @@ class TestCustomization(_CommonMethods):
         assert code == 220
         # The hostname prefix is unpredictable.
         assert mesg.endswith(CustomIdentController.ident)
+
+    def test_mail_invalid_body_param(self, nodecode_controller, client):
+        client.ehlo("example.com")
+        resp = client.docmd("MAIL FROM: <anne@example.com> BODY=FOOBAR")
+        assert resp == S.S501_MAIL_BODY
 
 
 class TestClientCrash(_CommonMethods):
@@ -1388,6 +1580,18 @@ class TestClientCrash(_CommonMethods):
         # Should be called at least once. (In practice, almost certainly just once.)
         assert spy.call_count > 0
 
+    def test_connection_reset_in_long_command(self, plain_controller, client):
+        client.send("F" + 5555 * "O")  # without CRLF
+        reset_connection(client)
+        catchup_delay()
+        # At this point, smtpd's StreamWriter hasn't been initialized. Prolly since
+        # the call is self._reader.readline() and we abort before CRLF is sent.
+        # That is why we don't need to 'spy' on writer.close()
+        writer = plain_controller.smtpd._writer
+        # transport.is_closing() == True if transport is in the process of closing,
+        # and still == True if transport is closed.
+        assert writer.transport.is_closing()
+
     def test_close_in_command(self, plain_controller, client):
         # Don't include the CRLF.
         client.send("FOO")
@@ -1417,7 +1621,19 @@ class TestClientCrash(_CommonMethods):
         # and still == True if transport is closed.
         assert writer.transport.is_closing()
 
-    def test_close_in_data(self, mocker, plain_controller, client):
+    def test_close_in_long_command(self, plain_controller, client):
+        client.send("F" + 5555 * "O")  # without CRLF
+        client.close()
+        catchup_delay()
+        # At this point, smtpd's StreamWriter hasn't been initialized. Prolly since
+        # the call is self._reader.readline() and we abort before CRLF is sent.
+        # That is why we don't need to 'spy' on writer.close()
+        writer = plain_controller.smtpd._writer
+        # transport.is_closing() == True if transport is in the process of closing,
+        # and still == True if transport is closed.
+        assert writer.transport.is_closing()
+
+    def test_close_in_data(self, mocker: MockFixture, plain_controller, client):
         self._helo(client)
         smtpd: Server = plain_controller.smtpd
         writer = smtpd._writer
@@ -1555,3 +1771,89 @@ class TestAuthArgs:
     def test_authmechname_decorator_badname(self, name):
         with pytest.raises(ValueError):
             auth_mechanism(name)
+
+
+class TestLimits(_CommonMethods):
+    def _consume_budget(
+        self, client: SMTPClient, nums: int, cmd: str, *args, ok_expected=None
+    ):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        func = getattr(client, cmd)
+        expected = ok_expected or S.S250_OK
+        for _ in range(0, nums):
+            assert func(*args) == expected
+        assert func(*args) == S.S421_TOO_MANY(cmd.upper().encode())
+        with pytest.raises(SMTPServerDisconnected):
+            client.noop()
+
+    def test_limit_wrong_type(self, limited_controller):
+        with pytest.raises(TypeError) as exc:
+            # noinspection PyTypeChecker
+            _ = Server(Sink(), command_call_limit="invalid")
+        assert exc.value.args[0] == "command_call_limit must be int or Dict[str, int]"
+
+    def test_limit_wrong_value_type(self):
+        with pytest.raises(TypeError) as exc:
+            # noinspection PyTypeChecker
+            _ = Server(Sink(), command_call_limit={"NOOP": "invalid"})
+        assert exc.value.args[0] == "All command_call_limit values must be int"
+
+    @pytest.mark.controller_data(command_call_limit=15)
+    def test_all_limit_15(self, limited_controller, client):
+        self._consume_budget(client, 15, "noop")
+
+    @pytest.mark.controller_data(command_call_limit={"NOOP": 15, "EXPN": 5})
+    def test_different_limits(self, limited_controller, client):
+        srv_ip_port = limited_controller.hostname, limited_controller.port
+
+        self._consume_budget(client, 15, "noop")
+
+        client.connect(*srv_ip_port)
+        self._consume_budget(
+            client, 5, "expn", "alice@example.com", ok_expected=S.S502_EXPN_NOTIMPL
+        )
+
+        client.connect(*srv_ip_port)
+        self._consume_budget(
+            client,
+            CALL_LIMIT_DEFAULT,
+            "vrfy",
+            "alice@example.com",
+            ok_expected=S.S252_CANNOT_VRFY,
+        )
+
+    @pytest.mark.controller_data(command_call_limit={"NOOP": 7, "EXPN": 5, "*": 25})
+    def test_different_limits_custom_default(self, limited_controller, client):
+        # Important: make sure default_max > CALL_LIMIT_DEFAULT
+        # Others can be set small to cut down on testing time, but must be different
+        assert limited_controller.smtpd._call_limit_default > CALL_LIMIT_DEFAULT
+        srv_ip_port = limited_controller.hostname, limited_controller.port
+
+        self._consume_budget(client, 7, "noop")
+
+        client.connect(*srv_ip_port)
+        self._consume_budget(
+            client, 5, "expn", "alice@example.com", ok_expected=S.S502_EXPN_NOTIMPL
+        )
+
+        client.connect(*srv_ip_port)
+        self._consume_budget(
+            client,
+            25,
+            "vrfy",
+            "alice@example.com",
+            ok_expected=S.S252_CANNOT_VRFY,
+        )
+
+    @pytest.mark.controller_data(command_call_limit=7)
+    def test_limit_bogus(self, limited_controller, client):
+        assert limited_controller.smtpd._call_limit_default > BOGUS_LIMIT
+        code, mesg = client.ehlo('example.com')
+        assert code == 250
+        for i in range(0, BOGUS_LIMIT - 1):
+            cmd = f"BOGUS{i}"
+            assert client.docmd(cmd) == S.S500_CMD_UNRECOG(cmd.encode())
+        assert client.docmd("LASTBOGUS") == S.S502_TOO_MANY_UNRECOG
+        with pytest.raises(SMTPServerDisconnected):
+            client.noop()
