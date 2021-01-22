@@ -34,3 +34,4 @@ diffcov-*.html
 .python-version
 prof/
 .pytype/
+~temp*
