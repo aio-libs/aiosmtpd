@@ -128,7 +128,7 @@ def get_controller(request):
             hostname=hostname,
             port=port,
             ssl_context=ssl_context,
-            server_kwargs=server_kwargs,
+            **server_kwargs,
         )
 
     return getter
