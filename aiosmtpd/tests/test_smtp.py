@@ -970,6 +970,26 @@ class TestSMTP(unittest.TestCase):
             )
             assert_auth_success(self, code, response)
 
+    def test_authplain_goodcreds_sanitized_log(self):
+        oldlevel = mail_logger.getEffectiveLevel()
+        mail_logger.setLevel(logging.DEBUG)
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            with self.assertLogs(mail_logger, level="DEBUG") as cm:
+                code, response = client.docmd(
+                    'AUTH PLAIN ' +
+                    b64encode(b'\0goodlogin\0goodpasswd').decode()
+                )
+        mail_logger.setLevel(oldlevel)
+        interestings = [
+            msg for msg in cm.output if "AUTH PLAIN" in msg
+        ]
+        assert len(interestings) == 2
+        assert interestings[0].startswith("DEBUG:")
+        assert interestings[0].endswith("b'AUTH PLAIN ********\\r\\n'")
+        assert interestings[1].startswith("INFO:")
+        assert interestings[1].endswith("b'AUTH PLAIN ********'")
+
     def test_auth_plain_null(self):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
