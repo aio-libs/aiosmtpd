@@ -3,7 +3,7 @@ import pytest
 
 from .conftest import ExposingController, Global
 from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import Session as Sess_, SMTP as Server
+from aiosmtpd.smtp import Session as Sess_, SMTP as Server, TLSSetupException
 from aiosmtpd.testing.helpers import (
     catchup_delay,
     ReceivingHandler,
@@ -191,6 +191,14 @@ class TestStartTLS:
             tls_controller.stop()
 
 
+class ExceptionCaptureHandler:
+    error = None
+
+    async def handle_exception(self, error):
+        self.error = error
+        return '500 ExceptionCaptureHandler handling error'
+
+
 class TestTLSEnding:
 
     @pytest.mark.handler_data(class_=EOFingHandler)
@@ -219,6 +227,20 @@ class TestTLSEnding:
             handler: EOFingHandler = tls_controller.handler
             assert handler.ssl_existed is True
             assert handler.result is False
+        finally:
+            tls_controller.stop()
+
+    @pytest.mark.handler_data(class_=ExceptionCaptureHandler)
+    def test_tls_handshake_failing(self, tls_controller, client):
+        handler = tls_controller.handler
+        assert isinstance(handler, ExceptionCaptureHandler)
+        try:
+            client.ehlo('example.com')
+            code, response = client.docmd('STARTTLS')
+            with pytest.raises(SMTPServerDisconnected):
+                client.docmd("SOMEFAILINGHANDSHAKE")
+            catchup_delay()
+            assert isinstance(handler.error, TLSSetupException)
         finally:
             tls_controller.stop()
 
