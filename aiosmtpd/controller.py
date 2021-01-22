@@ -64,9 +64,6 @@ class Controller:
         self.port = port
         self.ssl_context = ssl_context
         self.loop = asyncio.new_event_loop() if loop is None else loop
-        self.server = None
-        self._thread = None
-        self._thread_exception = None
         self.ready_timeout = os.getenv(
             'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
         if server_kwargs:
@@ -157,6 +154,7 @@ class Controller:
         ready_event.wait(self.ready_timeout)
         if self._thread_exception is not None:  # pragma: nowsl
             # See comment about WSL1.0 in the _run() method
+            assert self._thread is not None  # Stupid LGTM.com; see github/codeql#4918
             raise self._thread_exception
         # Apparently create_server invokes factory() "lazily", so exceptions in
         # factory() go undetected. To trigger factory() invocation we need to open
