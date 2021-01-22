@@ -1,6 +1,9 @@
+import ssl
 import pytest
+import logging
 
 from .conftest import ExposingController, Global
+from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import Session as Sess_, SMTP as Server
 from aiosmtpd.testing.helpers import (
     catchup_delay,
@@ -9,6 +12,7 @@ from aiosmtpd.testing.helpers import (
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from contextlib import suppress
 from email.mime.text import MIMEText
+from smtplib import SMTPServerDisconnected
 
 
 # region #### Harness Classes & Functions #############################################
@@ -159,6 +163,13 @@ class TestStartTLS:
         resp = client.rcpt("rcpt@example.com")
         assert resp == S.S554_LACK_SECURITY
 
+    def test_tls_handshake_stopcontroller(self, tls_controller, client):
+        client.ehlo('example.com')
+        code, response = client.docmd('STARTTLS')
+        tls_controller.stop()
+        with pytest.raises(SMTPServerDisconnected):
+            client.quit()
+
     def test_tls_bad_syntax(self, client):
         code, _ = client.ehlo("example.com")
         assert code == 250
@@ -289,6 +300,14 @@ class TestRequireTLS:
         resp = client.docmd("DATA")
         assert resp == S.S530_STARTTLS_FIRST
 
+    def test_noop_okay(self, client):
+        client.ehlo('example.com')
+        assert client.docmd('NOOP') == S.S250_OK
+
+    def test_quit_okay(self, client):
+        client.ehlo('example.com')
+        assert client.docmd('QUIT') == S.S221_BYE
+
 
 @pytest.mark.usefixtures("auth_req_tls_controller")
 class TestRequireTLSAUTH:
@@ -305,3 +324,31 @@ class TestRequireTLSAUTH:
         assert code == 250
         resp = client.docmd("AUTH PLAIN AHRlc3QAdGVzdA==")
         assert resp == S.S535_AUTH_INVALID
+
+
+class TestTLSContext:
+    def test_verify_mode_nochange(self, ssl_context_server):
+        context = ssl_context_server
+        for mode in (ssl.CERT_NONE, ssl.CERT_OPTIONAL):
+            context.verify_mode = mode
+            _ = Server(Sink(), tls_context=context)
+            assert context.verify_mode == mode
+
+    def test_certreq_warn(self, caplog, ssl_context_server):
+        context = ssl_context_server
+        context.verify_mode = ssl.CERT_REQUIRED
+        _ = Server(Sink(), tls_context=context)
+        assert context.verify_mode == ssl.CERT_REQUIRED
+        logmsg = caplog.record_tuples[0][-1]
+        assert "tls_context.verify_mode not in" in logmsg
+        assert "might cause client connection problems" in logmsg
+
+    def test_nocertreq_chkhost_warn(self, caplog, ssl_context_server):
+        context = ssl_context_server
+        context.verify_mode = ssl.CERT_OPTIONAL
+        context.check_hostname = True
+        _ = Server(Sink(), tls_context=context)
+        assert context.verify_mode == ssl.CERT_OPTIONAL
+        logmsg = caplog.record_tuples[0][-1]
+        assert "tls_context.check_hostname == True" in logmsg
+        assert "might cause client connection problems" in logmsg
