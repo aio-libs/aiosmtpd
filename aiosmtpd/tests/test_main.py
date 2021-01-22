@@ -31,13 +31,6 @@ class NullHandler:
 # region ##### Fixtures #######################################################
 
 
-@pytest.fixture(autouse=True)
-def save_log_level():
-    old_log_level = MAIL_LOG.getEffectiveLevel()
-    yield old_log_level
-    MAIL_LOG.setLevel(old_log_level)
-
-
 @pytest.fixture
 def autostop_loop(temp_event_loop) -> asyncio.AbstractEventLoop:
     # Create a new event loop, and arrange for that loop to end almost
