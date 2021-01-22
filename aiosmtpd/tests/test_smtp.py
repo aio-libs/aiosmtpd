@@ -32,7 +32,8 @@ from smtplib import (
 )
 from textwrap import dedent
 from typing import AnyStr, Callable, List, Tuple
-from unittest.mock import MagicMock
+
+from pytest_mock import MockFixture
 
 
 CRLF = "\r\n"
@@ -184,7 +185,7 @@ class CustomIdentController(ExposingController):
 
 
 @pytest.fixture
-def transport_resp(mocker) -> Tuple[MagicMock, List]:
+def transport_resp(mocker: MockFixture):
     responses = []
     mocked = mocker.Mock()
     mocked.write = responses.append
@@ -1342,11 +1343,13 @@ class TestCustomization(_CommonMethods):
 
 
 class TestClientCrash(_CommonMethods):
-    def test_connection_reset_during_DATA(self, mocker, plain_controller, client):
+    def test_connection_reset_during_DATA(
+        self, mocker: MockFixture, plain_controller, client
+    ):
         # Trigger factory() to produce the smtpd server
         self._helo(client)
         smtpd: Server = plain_controller.smtpd
-        spy: MagicMock = mocker.spy(smtpd._writer, "close")
+        spy = mocker.spy(smtpd._writer, "close")
         # Do some stuff
         client.docmd("MAIL FROM: <anne@example.com>")
         client.docmd("RCPT TO: <bart@example.com>")
@@ -1368,11 +1371,13 @@ class TestClientCrash(_CommonMethods):
         finally:
             plain_controller.stop()
 
-    def test_connection_reset_during_command(self, mocker, plain_controller, client):
+    def test_connection_reset_during_command(
+        self, mocker: MockFixture, plain_controller, client
+    ):
         # Trigger factory() to produce the smtpd server
         self._helo(client)
         smtpd: Server = plain_controller.smtpd
-        spy: MagicMock = mocker.spy(smtpd._writer, "close")
+        spy = mocker.spy(smtpd._writer, "close")
         # Start sending a command but reset the connection before that
         # completes, i.e. before the \r\n
         client.send("MAIL FROM: <anne")
@@ -1396,12 +1401,12 @@ class TestClientCrash(_CommonMethods):
         # and still == True if transport is closed.
         assert writer.transport.is_closing()
 
-    def test_close_in_command_2(self, mocker, plain_controller, client):
+    def test_close_in_command_2(self, mocker: MockFixture, plain_controller, client):
         self._helo(client)
         catchup_delay()
         smtpd: Server = plain_controller.smtpd
         writer = smtpd._writer
-        spy: MagicMock = mocker.spy(writer, "close")
+        spy = mocker.spy(writer, "close")
         # Don't include the CRLF.
         client.send("FOO")
         client.close()
@@ -1416,7 +1421,7 @@ class TestClientCrash(_CommonMethods):
         self._helo(client)
         smtpd: Server = plain_controller.smtpd
         writer = smtpd._writer
-        spy: MagicMock = mocker.spy(writer, "close")
+        spy = mocker.spy(writer, "close")
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == S.S250_OK
         resp = client.docmd("RCPT TO: <bart@example.com>")
@@ -1438,12 +1443,12 @@ class TestClientCrash(_CommonMethods):
         finally:
             plain_controller.stop()
 
-    def test_sockclose_after_helo(self, mocker, plain_controller, client):
+    def test_sockclose_after_helo(self, mocker: MockFixture, plain_controller, client):
         client.send("HELO example.com\r\n")
         catchup_delay()
         smtpd: Server = plain_controller.smtpd
         writer = smtpd._writer
-        spy: MagicMock = mocker.spy(writer, "close")
+        spy = mocker.spy(writer, "close")
 
         client.sock.shutdown(socket.SHUT_WR)
         catchup_delay()
