@@ -1419,7 +1419,6 @@ class TestSMTPWithController(_CommonMethods):
 
     @pytest.mark.controller_data(size=10000)
     def test_long_line_double_count(self, sized_controller, client):
-        controller = sized_controller
         # With a read limit of 1001 bytes in aiosmtp.SMTP, asyncio.StreamReader
         # returns too-long lines of length up to 2002 bytes.
         # This test ensures that bytes in partial lines are only counted once.

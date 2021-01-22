@@ -1,6 +1,5 @@
 import ssl
 import pytest
-import logging
 
 from .conftest import ExposingController, Global
 from aiosmtpd.handlers import Sink
