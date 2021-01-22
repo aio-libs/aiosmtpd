@@ -1238,8 +1238,7 @@ class TestSMTPWithController(_CommonMethods):
                 """
                 ),
             )
-        assert excinfo.value.smtp_code == 499
-        assert excinfo.value.smtp_error == b"Could not accept the message"
+        assert excinfo.value.args == (499, b"Could not accept the message")
 
     @pytest.mark.controller_data(size=100)
     def test_too_long_message_body(self, sized_controller, client):
@@ -1247,8 +1246,7 @@ class TestSMTPWithController(_CommonMethods):
         mail = "\r\n".join(["z" * 20] * 10)
         with pytest.raises(SMTPResponseException) as excinfo:
             client.sendmail("anne@example.com", ["bart@example.com"], mail)
-        assert excinfo.value.smtp_code == 552
-        assert excinfo.value.smtp_error == S.S552_TOO_MUCH.mesg
+        assert excinfo.value.args == S.S552_DATA_TOO_MUCH
 
     @pytest.mark.handler_data(class_=ReceivingHandler)
     def test_dots_escaped(self, decoding_authnotls_controller, client):
@@ -1484,8 +1482,7 @@ class TestStrictASCII(_CommonMethods):
                 b"\n"
                 b"Testing\xFF\n",
             )
-        assert excinfo.value.smtp_code == 500
-        assert excinfo.value.smtp_error == S.S500_STRICT_ASCII.mesg
+        assert excinfo.value.args == S.S500_STRICT_ASCII
 
 
 class TestSleepingHandler(_CommonMethods):
