@@ -94,6 +94,16 @@ class PeekerHandler:
     async def auth_DONT(self, server, args):
         return MISSING
 
+    async def auth_WITH_UNDERSCORE(self, server, args):
+        return "250 OK"
+
+    @auth_mechanism("with-dash")
+    async def auth_WITH_DASH(self, server, args):
+        return "250 OK"
+
+    async def auth_WITH__MULTI__DASH(self, server, args):
+        return "250 OK"
+
 
 class StoreEnvelopeOnVRFYHandler:
     """Saves envelope for later inspection when handling VRFY."""
@@ -970,7 +980,7 @@ class TestAuthMechanisms(_CommonMethods):
             bytes(socket.getfqdn(), "utf-8"),
             b"SIZE 33554432",
             b"SMTPUTF8",
-            b"AUTH LOGIN NULL PLAIN",
+            b"AUTH LOGIN NULL PLAIN WITH-DASH WITH-MULTI-DASH WITH_UNDERSCORE",
             b"HELP",
         ]
 
@@ -1848,7 +1858,7 @@ class TestLimits(_CommonMethods):
     @pytest.mark.controller_data(command_call_limit=7)
     def test_limit_bogus(self, limited_controller, client):
         assert limited_controller.smtpd._call_limit_default > BOGUS_LIMIT
-        code, mesg = client.ehlo('example.com')
+        code, mesg = client.ehlo("example.com")
         assert code == 250
         for i in range(0, BOGUS_LIMIT - 1):
             cmd = f"BOGUS{i}"
