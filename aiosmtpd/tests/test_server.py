@@ -5,9 +5,11 @@ import pytest
 import socket
 
 from .conftest import Global
-from aiosmtpd.controller import Controller
+from aiosmtpd.controller import Controller, _FakeServer
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
+
+from pytest_mock import MockFixture
 
 
 def in_wsl():
@@ -100,3 +102,65 @@ class TestController:
         kwargs = dict(enable_SMTPUTF8=False)
         controller = Controller(Sink(), server_kwargs=kwargs)
         assert not controller.SMTP_kwargs["enable_SMTPUTF8"]
+
+
+class TestFactory:
+    def test_normal_situation(self):
+        cont = Controller(Sink())
+        try:
+            cont.start()
+            assert cont.smtpd is not None
+            assert cont._thread_exception is None
+        finally:
+            cont.stop()
+
+    def test_unknown_args(self):
+        unknown = "this_is_an_unknown_kwarg"
+        cont = Controller(Sink(), **{unknown: True})
+        try:
+            with pytest.raises(TypeError) as exc:
+                cont.start()
+            assert cont.smtpd is None
+            excm = str(exc.value)
+            assert "unexpected keyword" in excm
+            assert unknown in excm
+        finally:
+            cont.stop()
+
+    def test_factory_none(self, mocker: MockFixture):
+        # Hypothetical situation where factory() did not raise an Exception
+        # but returned None instead
+        mocker.patch("aiosmtpd.controller.SMTP", return_value=None)
+        cont = Controller(Sink())
+        try:
+            with pytest.raises(RuntimeError) as exc:
+                cont.start()
+            assert cont.smtpd is None
+            assert str(exc.value) == "factory() returned None"
+        finally:
+            cont.stop()
+
+    def test_noexc_smtpd_missing(self, mocker):
+        # Hypothetical situation where factory() failed but no
+        # Exception was generated.
+        cont = Controller(Sink())
+
+        def hijacker(*args, **kwargs):
+            cont._thread_exception = None
+            # Must still return an (unmocked) _FakeServer to prevent a whole bunch
+            # of messy exceptions, although they doesn't affect the test at all.
+            return _FakeServer(cont.loop)
+
+        mocker.patch("aiosmtpd.controller._FakeServer", side_effect=hijacker)
+        mocker.patch(
+            "aiosmtpd.controller.SMTP", side_effect=RuntimeError("Simulated Failure")
+        )
+
+        try:
+            with pytest.raises(RuntimeError) as exc:
+                cont.start()
+            assert cont.smtpd is None
+            assert cont._thread_exception is None
+            assert str(exc.value) == "Unknown Error, failed to init SMTP server"
+        finally:
+            cont.stop()
