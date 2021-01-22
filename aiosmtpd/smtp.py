@@ -186,6 +186,15 @@ def sanitize(text: bytes) -> bytes:
 
 
 @public
+def sanitized_log(func: Callable, msg: AnyStr, *args, **kwargs):
+    sanitized_args = [
+        sanitize(a) if isinstance(a, bytes) else a
+        for a in args
+    ]
+    func(msg, *sanitized_args, **kwargs)
+
+
+@public
 class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
     command_size_limits = collections.defaultdict(
@@ -458,10 +467,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                     # send error response and read the next command line.
                     await self.push('500 Command line too long')
                     continue
-                log.debug('_handle_client readline: %r', sanitize(line))
+                sanitized_log(log.debug, '_handle_client readline: %r', line)
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.rstrip(b'\r\n')
-                log.info('%r >> %r', self.session.peer, sanitize(line))
+                sanitized_log(log.info, '%r >> %r', self.session.peer, line)
                 if not line:
                     await self.push('500 Error: bad syntax')
                     continue
