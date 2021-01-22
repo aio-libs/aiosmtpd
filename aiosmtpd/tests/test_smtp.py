@@ -5,6 +5,7 @@ import pytest
 import socket
 import asyncio
 import logging
+import warnings
 import itertools
 
 from aiosmtpd.handlers import Sink
@@ -94,7 +95,14 @@ class PeekerHandler:
     async def auth_DONT(self, server, args):
         return MISSING
 
-    async def auth_WITH_UNDERSCORE(self, server, args):
+    async def auth_WITH_UNDERSCORE(self, server: Server, args):
+        """
+        Be careful when using this AUTH mechanism; log_client_response is set to
+        True, and this will raise some severe warnings.
+        """
+        await server.challenge_auth(
+            "challenge", encode_to_b64=False, log_client_response=True
+        )
         return "250 OK"
 
     @auth_mechanism("with-dash")
@@ -947,6 +955,17 @@ class TestSMTPAuth(_CommonMethods):
         resp = client.docmd("AUTH PLAIN")
         assert resp == S.S503_ALREADY_AUTH
 
+    @pytest.mark.handler_data(class_=PeekerHandler)
+    def test_auth_loginteract_warning(self, client):
+        client.ehlo("example.com")
+        resp = client.docmd("AUTH WITH_UNDERSCORE")
+        assert resp == (334, b"challenge")
+        with warnings.catch_warnings(record=True) as w:
+            assert client.docmd('=') == S.S235_AUTH_SUCCESS
+        assert len(w) > 0
+        assert str(w[0].message) == "AUTH interaction logging is enabled!"
+        assert str(w[1].message) == "Sensitive information might be leaked!"
+
 
 @pytest.mark.usefixtures("auth_peeker_controller")
 class TestAuthMechanisms(_CommonMethods):
@@ -1034,6 +1053,22 @@ class TestAuthMechanisms(_CommonMethods):
         # noinspection PyUnresolvedReferences
         resp = do_auth_plain1.client.mail("alice@example.com")
         assert resp == S.S250_OK
+
+    def test_authplain_goodcreds_sanitized_log(self, caplog, client):
+        caplog.set_level("DEBUG")
+        client.ehlo('example.com')
+        code, response = client.docmd(
+            'AUTH PLAIN ' +
+            b64encode(b'\0goodlogin\0goodpasswd').decode()
+        )
+        interestings = [
+            tup for tup in caplog.record_tuples if "AUTH PLAIN" in tup[-1]
+        ]
+        assert len(interestings) == 2
+        assert interestings[0][1] == logging.DEBUG
+        assert interestings[0][2].endswith("b'AUTH PLAIN ********\\r\\n'")
+        assert interestings[1][1] == logging.INFO
+        assert interestings[1][2].endswith("b'AUTH PLAIN ********'")
 
     @pytest.fixture
     def client_auth_plain2(self, client) -> SMTPClient:
