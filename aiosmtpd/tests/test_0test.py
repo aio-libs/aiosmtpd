@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 ENFORCE_ENHANCED_STATUS_CODES = False
 """Whether to do strict compliance checking against RFC 2034 § 4"""
 
-RE_ESC = re.compile(rb"\d+\.\d+\.\d+")
+RE_ESC = re.compile(rb"(?P<digit1>\d)\.\d+\.\d+\s")
 
 
 # noinspection PyUnresolvedReferences
@@ -45,19 +45,26 @@ class TestStatusCodes:
 
     def test_enhanced(self):
         """Compliance with RFC 2034 § 4"""
+        total_correct = 0
         for key, value in STATUS_CODES.items():
+            if key == "S250_FQDN":
+                # FQDNs are sometimes funky and can be misconstrued as ESC
+                # Better to skip em
+                continue
             assert isinstance(value, statuscodes.StatusCode)
             m = RE_ESC.match(value.mesg)
             if ENFORCE_ENHANCED_STATUS_CODES:
                 assert m is not None, f"{key} does not have Enhanced Status Code"
             elif m is None:
                 continue
-            esc1, dot, rest = m.group().partition(b".")
+            esc1 = m.group("digit1")
             # noinspection PyTypeChecker
             assert str(value.code // 100) == esc1.decode(), (
                 f"{key}: First digit of Enhanced Status Code different from "
                 f"first digit of Standard Status Code"
             )
+            total_correct += 1
+        assert total_correct > 0
 
     def test_commands(self):
         """
