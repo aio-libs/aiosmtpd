@@ -2,7 +2,7 @@
  NEWS for aiosmtpd
 ===================
 
-1.2.9 (aiosmtpd-next)
+1.3.0 (aiosmtpd-next)
 =====================
 
 Fixed/Improved
