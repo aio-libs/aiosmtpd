@@ -66,24 +66,15 @@ def start(plugin):
 
 
 def assert_auth_success(testcase: TestCase, *response):
-    testcase.assertEqual(
-        (235, b"2.7.0 Authentication successful"),
-        response
-    )
+    assert response == (235, b"2.7.0 Authentication successful")
 
 
 def assert_auth_invalid(testcase: TestCase, *response):
-    testcase.assertEqual(
-        (535, b"5.7.8 Authentication credentials invalid"),
-        response
-    )
+    assert response == (535, b"5.7.8 Authentication credentials invalid")
 
 
 def assert_auth_required(testcase: TestCase, *response):
-    testcase.assertEqual(
-        (530, b"5.7.0 Authentication required"),
-        response
-    )
+    assert response == (530, b"5.7.0 Authentication required")
 
 
 SUPPORTED_COMMANDS_TLS: bytes = (

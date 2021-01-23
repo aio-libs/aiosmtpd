@@ -31,7 +31,8 @@ from warnings import warn
 # region #### Custom Data Types #######################################################
 
 class _Missing:
-    pass
+    def __repr__(self):
+        return "MISSING"
 
 
 class _AuthMechAttr(NamedTuple):
@@ -60,7 +61,7 @@ __all__ = [
     "AuthMechanismType",
     "MISSING",
 ]  # Will be added to by @public
-__version__ = '1.2.4a1'
+__version__ = '1.2.4a2'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
@@ -76,6 +77,19 @@ VALID_AUTHMECH = re.compile(r"[A-Z0-9_-]+\Z")
 
 # https://tools.ietf.org/html/rfc3207.html#page-3
 ALLOWED_BEFORE_STARTTLS = {"NOOP", "EHLO", "STARTTLS", "QUIT"}
+
+# Auth hiding regexes
+CLIENT_AUTH_B = re.compile(
+    # Matches "AUTH" <mechanism> <whitespace_but_not_\r_nor_\n>
+    br"(?P<authm>\s*AUTH\s+\S+[^\S\r\n]+)"
+    # Param to AUTH <mechanism>. We only need to sanitize if param is given, which
+    # for some mechanisms contain sensitive info. If no param is given, then we
+    # can skip (match fails)
+    br"(\S+)"
+    # Optional bCRLF at end. Why optional? Because we also want to sanitize the
+    # stripped line. If no bCRLF, then this group will be b""
+    br"(?P<crlf>(?:\r\n)?)", re.IGNORECASE
+)
 
 # endregion
 
@@ -161,6 +175,23 @@ def is_int(o):
 @public
 class TLSSetupException(Exception):
     pass
+
+
+@public
+def sanitize(text: bytes) -> bytes:
+    m = CLIENT_AUTH_B.match(text)
+    if m:
+        return m.group("authm") + b"********" + m.group("crlf")
+    return text
+
+
+@public
+def sanitized_log(func: Callable, msg: AnyStr, *args, **kwargs):
+    sanitized_args = [
+        sanitize(a) if isinstance(a, bytes) else a
+        for a in args
+    ]
+    func(msg, *sanitized_args, **kwargs)
 
 
 @public
@@ -436,10 +467,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                     # send error response and read the next command line.
                     await self.push('500 Command line too long')
                     continue
-                log.debug('_handle_client readline: %r', line)
+                sanitized_log(log.debug, '_handle_client readline: %r', line)
                 # XXX this rstrip may not completely preserve old behavior.
                 line = line.rstrip(b'\r\n')
-                log.info('%r >> %r', self.session.peer, line)
+                sanitized_log(log.info, '%r >> %r', self.session.peer, line)
                 if not line:
                     await self.push('500 Error: bad syntax')
                     continue
@@ -732,6 +763,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self,
             challenge: AnyStr,
             encode_to_b64: bool = True,
+            log_client_response: bool = False,
     ) -> Union[_Missing, bytes]:
         """
         Send challenge during authentication. "334 " will be prefixed, so do NOT
@@ -739,6 +771,9 @@ class SMTP(asyncio.StreamReaderProtocol):
 
         :param challenge: Challenge to send to client. If str, will be utf8-encoded.
         :param encode_to_b64: If true, then perform Base64 encoding on challenge
+        :param log_client_response: Perform logging of client's response.
+            WARNING: Might cause leak of sensitive information! Do not turn on
+            unless _absolutely_ necessary!
         :return: Response from client, or MISSING
         """
         challenge = (
@@ -750,9 +785,13 @@ class SMTP(asyncio.StreamReaderProtocol):
         #   - https://tools.ietf.org/html/rfc4954#page-4 ¶ 5
         #   - https://tools.ietf.org/html/rfc4954#page-13 "continue-req"
         challenge = b"334 " + (b64encode(challenge) if encode_to_b64 else challenge)
-        log.debug("Send challenge to %r: %r", self.session.peer, challenge)
+        log.debug("%r << challenge: %r", self.session.peer, challenge)
         await self.push(challenge)
         line = await self._reader.readline()
+        if log_client_response:
+            warn("AUTH interaction logging is enabled!")
+            warn("Sensitive information might be leaked!")
+            log.debug("%r >> %r", self.session.peer, line)
         blob: bytes = line.strip()
         # '*' handling in accordance with RFC4954
         if blob == b"*":
