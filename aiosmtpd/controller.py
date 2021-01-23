@@ -51,6 +51,7 @@ class Controller:
         ready_timeout=1.0,
         ssl_context: ssl.SSLContext = None,
         # SMTP parameters
+        server_hostname: str = None,
         server_kwargs: Dict[str, Any] = None,
         **SMTP_parameters,
     ):
@@ -75,6 +76,8 @@ class Controller:
             )
         self.SMTP_kwargs: Dict[str, Any] = server_kwargs or {}
         self.SMTP_kwargs.update(SMTP_parameters)
+        if server_hostname:
+            self.SMTP_kwargs["hostname"] = server_hostname
         # Emulate previous behavior of defaulting enable_SMTPUTF8 to True
         # It actually conflicts with SMTP class's default, but the reasoning is
         # discussed in the docs.

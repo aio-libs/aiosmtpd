@@ -165,9 +165,11 @@ Controller API
 ==============
 
 .. class:: Controller(\
-   handler, loop=None, hostname=None, port=8025, *, ready_timeout=1.0, \
+   handler, loop=None, hostname=None, port=8025, \
+   *, \
+   ready_timeout=1.0, \
    ssl_context=None, \
-   **SMTP_parameters)
+   server_hostname=None, server_kwargs=None, **SMTP_parameters)
 
    **Parameters**
 
@@ -184,7 +186,7 @@ Controller API
    on all interfaces, use ''. Please note that this parameter does NOT get passed
    through to the SMTP instance; if you want to give the SMTP instance a custom
    hostname (e.g., for use in HELO/EHLO greeting), you must pass it through the
-   `server_kwargs` parameter.
+   `server_hostname` parameter.
 
    :boldital:`port` is passed directly to your loop's
    :meth:`asyncio.loop.create_server` method.
@@ -197,10 +199,16 @@ Controller API
 
    :boldital:`ssl_context` is an ``SSLContext`` that will be used by the loop's
    server. It is passed directly to the :meth:`asyncio.loop.create_server`
-   method. Note that this implies unconditional encryption of the connection,
-   and prevents use of the ``STARTTLS`` mechanism.
+   method.
+   Note that this switches the protocol to ``SMTPS`` mode,
+   implying unconditional encryption of the connection,
+   and preventing the use of the ``STARTTLS`` mechanism.
 
-   :boldital:`SMTP_parameters` are *optional* keyword arguments
+   :boldital:`server_hostname` will be passed through as the ``hostname`` argument
+   to the server's class during server creation in the :meth:`Controller.factory` method.
+   This argument will override ``"hostname"`` key in ``server_kwargs``.
+
+   :boldital:`**SMTP_parameters` are *optional* keyword arguments
    that will be passed as-is to the ``SMTP`` constructor.
    Please see the documentation for the :class:`SMTP` class for a list of accepted keyword arguments.
 
