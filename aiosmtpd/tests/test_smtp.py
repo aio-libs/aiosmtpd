@@ -1,8 +1,10 @@
 """Test the SMTP protocol."""
 
+import os
 import time
 import socket
 import asyncio
+import logging
 import unittest
 import warnings
 
@@ -36,12 +38,31 @@ BCRLF = b'\r\n'
 
 
 ModuleResources = ExitStack()
+mail_logger = logging.getLogger('mail.log')
 
 
 def setUpModule():
     # Needed especially on FreeBSD because socket.getfqdn() is slow on that OS,
     # and oftentimes (not always, though) leads to Error
     ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
+
+    loglevel = int(os.environ.get("AIOSMTPD_TESTLOGLEVEL", logging.INFO))
+    mail_logger.setLevel(loglevel)
+
+    if "AIOSMTPD_TESTLOGFILE" in os.environ:
+        fhandler = logging.FileHandler(
+            os.environ["AIOSMTPD_TESTLOGFILE"],
+            mode="a",
+            encoding="latin1",
+        )
+        fhandler.setLevel(1)
+        fhandler.setFormatter(
+            logging.Formatter(
+                u"{asctime} - {name} - {levelname} - {message}",
+                style="{",
+            )
+        )
+        mail_logger.addHandler(fhandler)
 
 
 def tearDownModule():
@@ -80,7 +101,14 @@ class PeekerHandler:
     ):
         return MISSING
 
-    async def auth_WITH_UNDERSCORE(self, server, args):
+    async def auth_WITH_UNDERSCORE(self, server: Server, args):
+        """
+        Be careful when using this AUTH mechanism; log_client_response is set to
+        True, and this will raise some severe warnings.
+        """
+        await server.challenge_auth(
+            "challenge", encode_to_b64=False, log_client_response=True
+        )
         return "250 OK"
 
     @auth_mechanism("with-dash")
@@ -241,6 +269,7 @@ class TestProtocol(unittest.TestCase):
     def setUp(self):
         self.transport = Mock()
         self.transport.write = self._write
+        self.transport.get_extra_info.return_value = "MockedPeer"
         self.responses = []
         self._old_loop = asyncio.get_event_loop()
         self.loop = asyncio.new_event_loop()
@@ -922,7 +951,7 @@ class TestSMTP(unittest.TestCase):
             with patch("logging.Logger.warning"):
                 code, response = client.docmd('*')
             self.assertEqual(code, 501)
-            self.assertEqual(response, b'Auth aborted')
+            self.assertEqual(response, b"5.7.0 Auth aborted")
 
     def test_auth_two_steps_bad_base64_encoding(self):
         with SMTP(*self.address) as client:
@@ -942,11 +971,34 @@ class TestSMTP(unittest.TestCase):
             )
             assert_auth_success(self, code, response)
 
-    def test_auth_no_credentials(self):
+    def test_authplain_goodcreds_sanitized_log(self):
+        oldlevel = mail_logger.getEffectiveLevel()
+        mail_logger.setLevel(logging.DEBUG)
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
-            code, response = client.docmd('AUTH PLAIN =')
-            assert_auth_invalid(self, code, response)
+            with self.assertLogs(mail_logger, level="DEBUG") as cm:
+                code, response = client.docmd(
+                    'AUTH PLAIN ' +
+                    b64encode(b'\0goodlogin\0goodpasswd').decode()
+                )
+        mail_logger.setLevel(oldlevel)
+        interestings = [
+            msg for msg in cm.output if "AUTH PLAIN" in msg
+        ]
+        assert len(interestings) == 2
+        assert interestings[0].startswith("DEBUG:")
+        assert interestings[0].endswith("b'AUTH PLAIN ********\\r\\n'")
+        assert interestings[1].startswith("INFO:")
+        assert interestings[1].endswith("b'AUTH PLAIN ********'")
+
+    def test_auth_plain_null(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            response = client.docmd('AUTH PLAIN =')
+            self.assertEqual(
+                (501, b"5.5.2 Can't split auth value"),
+                response
+            )
 
     def test_auth_two_steps_no_credentials(self):
         with SMTP(*self.address) as client:
@@ -954,7 +1006,9 @@ class TestSMTP(unittest.TestCase):
             code, response = client.docmd('AUTH PLAIN')
             self.assertEqual(code, 334)
             self.assertEqual(response, b'')
-            code, response = client.docmd('=')
+            # "AAA=" is Base64 encoded "\x00\x00", representing null username and null
+            # password. See https://tools.ietf.org/html/rfc4616#page-3
+            code, response = client.docmd("AAA=")
             assert_auth_invalid(self, code, response)
 
     def test_auth_login_multisteps_no_credentials(self):
@@ -1001,10 +1055,12 @@ class TestSMTPAuth(unittest.TestCase):
             code, response = client.docmd("AUTH PLAIN")
             self.assertEqual(code, 334)
             self.assertEqual(response, b"")
-            code, response = client.docmd('=')
+            # "AAA=" is Base64 encoded "\x00\x00", representing null username and
+            # null password. See https://tools.ietf.org/html/rfc4616#page-3
+            code, response = client.docmd("AAA=")
             assert_auth_success(self, code, response)
-            self.assertEqual(auth_peeker.login, None)
-            self.assertEqual(auth_peeker.password, None)
+            self.assertEqual(auth_peeker.login, b"")
+            self.assertEqual(auth_peeker.password, b"")
             code, response = client.mail("alice@example.com")
             sess: SMTPSess = self.handler.session
             self.assertEqual(sess.login_data, b"")
@@ -1020,8 +1076,8 @@ class TestSMTPAuth(unittest.TestCase):
             self.assertEqual(response, b"UGFzc3dvcmQA")
             code, response = client.docmd('=')
             assert_auth_success(self, code, response)
-            self.assertEqual(auth_peeker.login, None)
-            self.assertEqual(auth_peeker.password, None)
+            self.assertEqual(auth_peeker.login, b"")
+            self.assertEqual(auth_peeker.password, b"")
             code, response = client.mail("alice@example.com")
             sess: SMTPSess = self.handler.session
             self.assertEqual(sess.login_data, b"")
@@ -1036,7 +1092,7 @@ class TestSMTPAuth(unittest.TestCase):
             with patch("logging.Logger.warning"):
                 code, response = client.docmd('*')
             self.assertEqual(code, 501)
-            self.assertEqual(response, b"Auth aborted")
+            self.assertEqual(response, b"5.7.0 Auth aborted")
 
     def test_auth_login_abort_password(self):
         auth_peeker.return_val = False
@@ -1052,7 +1108,7 @@ class TestSMTPAuth(unittest.TestCase):
             with patch("logging.Logger.warning"):
                 code, response = client.docmd('*')
             self.assertEqual(code, 501)
-            self.assertEqual(response, b"Auth aborted")
+            self.assertEqual(response, b"5.7.0 Auth aborted")
 
     def test_auth_custom_mechanism(self):
         auth_peeker.return_val = False
@@ -1076,10 +1132,12 @@ class TestSMTPAuth(unittest.TestCase):
             code, mesg = client.docmd("AUTH PLAIN")
             self.assertEqual(code, 334)
             self.assertEqual(mesg, b"")
-            code, mesg = client.docmd('=')
+            # "AAA=" is Base64 encoded "\x00\x00", representing null username and
+            # null password. See https://tools.ietf.org/html/rfc4616#page-3
+            code, mesg = client.docmd("AAA=")
             assert_auth_success(self, code, mesg)
-            self.assertEqual(auth_peeker.login, None)
-            self.assertEqual(auth_peeker.password, None)
+            self.assertEqual(auth_peeker.login, b"")
+            self.assertEqual(auth_peeker.password, b"")
             code, mesg = client.mail("alice@example.com")
             sess: SMTPSess = self.handler.session
             self.assertEqual(sess.login_data, b"")
@@ -1097,8 +1155,23 @@ class TestSMTPAuth(unittest.TestCase):
                 code, mesg = client.docmd("AUTH PLAIN")
                 self.assertEqual(code, 334)
                 self.assertEqual(mesg, b"")
-                code, mesg = client.docmd('=')
+                # "AAA=" is Base64 encoded "\x00\x00", representing null username and
+                # null password. See https://tools.ietf.org/html/rfc4616#page-3
+                code, mesg = client.docmd("AAA=")
                 assert_auth_success(self, code, mesg)
+
+    def test_auth_loginteract_warning(self):
+        """AUTH state of different clients must be independent"""
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            resp = client.docmd("AUTH WITH_UNDERSCORE")
+            assert resp == (334, b"challenge")
+            with warnings.catch_warnings(record=True) as w:
+                code, mesg = client.docmd('=')
+            assert_auth_success(self, code, mesg)
+            assert len(w) > 0
+            assert str(w[0].message) == "AUTH interaction logging is enabled!"
+            assert str(w[1].message) == "Sensitive information might be leaked!"
 
 
 class TestRequiredAuthentication(unittest.TestCase):
