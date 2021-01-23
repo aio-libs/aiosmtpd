@@ -63,4 +63,7 @@ class TestDocs:
         newsvers = ln1.split()[0]
         newsver = version.parse(newsvers)
         if newsver.base_version < aiosmtpd_version.base_version:
-            pytest.fail("NEWS.rst is not updated")
+            pytest.fail(
+                f"NEWS.rst is not updated: "
+                f"{newsver.base_version} < {aiosmtpd_version.base_version}"
+            )

@@ -6,7 +6,6 @@ import socket
 
 from aiosmtpd.testing import statuscodes
 from itertools import combinations
-from unittest.mock import MagicMock
 
 
 ENFORCE_ENHANCED_STATUS_CODES = False
@@ -84,9 +83,8 @@ class TestStatusCodes:
 class TestHarness:
     def test_fqdn_cached(self):
         """
-        Ensure that socket.getfqdn has been mocked
+        Ensure that socket.getfqdn does not change between calls
         """
-        assert isinstance(socket.getfqdn, MagicMock)
         fqdn = socket.getfqdn()
         assert isinstance(fqdn, str)
         assert socket.getfqdn() == fqdn, "socket.getfqdn() changed between calls!"
