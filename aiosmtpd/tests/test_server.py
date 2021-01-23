@@ -8,7 +8,7 @@ from .conftest import Global
 from aiosmtpd.controller import Controller, _FakeServer
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
-
+from functools import partial
 from pytest_mock import MockFixture
 
 
@@ -102,6 +102,18 @@ class TestController:
         kwargs = dict(enable_SMTPUTF8=False)
         controller = Controller(Sink(), server_kwargs=kwargs)
         assert not controller.SMTP_kwargs["enable_SMTPUTF8"]
+
+    def test_serverhostname_arg(self, suppress_allwarnings):
+        contsink = partial(Controller, Sink())
+        controller = contsink()
+        assert "hostname" not in controller.SMTP_kwargs
+        controller = contsink(server_hostname="testhost1")
+        assert controller.SMTP_kwargs["hostname"] == "testhost1"
+        kwargs = dict(hostname="testhost2")
+        controller = contsink(server_kwargs=kwargs)
+        assert controller.SMTP_kwargs["hostname"] == "testhost2"
+        controller = contsink(server_hostname="testhost3", server_kwargs=kwargs)
+        assert controller.SMTP_kwargs["hostname"] == "testhost3"
 
 
 class TestFactory:
