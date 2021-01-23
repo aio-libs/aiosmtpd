@@ -4,9 +4,15 @@ on:
   # This is for direct commit to master
   push:
     branches: [ "master" ]
+    paths:
+      - "aiosmtpd/*"
+      - "setup.cfg"  # To monitor changes in dependencies
   # This is for PRs
   pull_request:
     branches: [ "master" ]
+    paths:
+      - "aiosmtpd/*"
+      - "setup.cfg"  # To monitor changes in dependencies
   # Manual/on-demand
   workflow_dispatch:
   # When doing "releases"
@@ -25,9 +31,9 @@ jobs:
         include:
           - os: "windows-latest"
             platform: "mswin"
-            # Only the latest stable branch as indicated on
+            # Only the latest frozen branch as indicated on
             # https://devguide.python.org/#branchstatus
-            # ('stable' means Status == "security")
+            # ('frozen' means Status == "security")
             # Reason being that Windows users can change their Python anytime,
             # so there is no benefit in testing all released Python versions.
             # Plus pypy3 implementation in Windows is ... complicated. We
