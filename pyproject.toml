@@ -13,7 +13,8 @@ markers = [
 branch = true
 parallel = true
 omit = [
-    "setup*",
+    "aiosmtpd/docs/*",
+    "aiosmtpd/qa/*",
     "aiosmtpd/testing/*",
     "aiosmtpd/tests/*",
     ".tox/*",
