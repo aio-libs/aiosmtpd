@@ -2,6 +2,20 @@
  NEWS for aiosmtpd
 ===================
 
+1.2.4 (2021-01-24)
+==================
+
+Added
+-----
+* Optional (default-disabled) logging of ``AUTH`` interaction -- with severe warnings
+
+Fixed/Improved
+--------------
+* ``AUTH`` command line now sanitized before logging (Closes #233)
+* Remove special handling for lone ``=`` during AUTH;
+  it is now treated as simple Base64-encoded ``b""``.
+  This is the correct, strict interpretation of :rfc:`4954` mentions about ``=``
+
 
 1.3.0 (aiosmtpd-next)
 ==========================

@@ -33,3 +33,4 @@ diffcov.html
 diffcov-*.html
 .python-version
 .pytype/
+~temp*
