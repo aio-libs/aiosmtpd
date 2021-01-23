@@ -713,7 +713,7 @@ class TestSMTP(_CommonMethods):
     #         'MAIL FROM: <""@example.com>',
     #         (501, b'Syntax: MAIL FROM: <address>')
     #     )
-    def test_27931fix_smtp(self, client):
+    def test_bpo27931fix_smtp(self, client):
         self._helo(client)
         resp = client.docmd('MAIL FROM: <""@example.com>')
         assert resp == S.S250_OK
@@ -815,7 +815,7 @@ class TestSMTP(_CommonMethods):
     #         'RCPT TO: <""@example.com>',
     #         (501, b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
     #     )
-    def test_27931fix_esmtp(self, client):
+    def test_bpo27931fix_esmtp(self, client):
         self._ehlo(client)
         resp = client.docmd('MAIL FROM: <""@example.com> SIZE=28113')
         assert resp == S.S250_OK
