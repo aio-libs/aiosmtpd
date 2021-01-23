@@ -126,9 +126,22 @@ class TestFactory:
         finally:
             cont.stop()
 
-    def test_unknown_args(self):
+    def test_unknown_args_direct(self):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), **{unknown: True})
+        try:
+            with pytest.raises(TypeError) as exc:
+                cont.start()
+            assert cont.smtpd is None
+            excm = str(exc.value)
+            assert "unexpected keyword" in excm
+            assert unknown in excm
+        finally:
+            cont.stop()
+
+    def test_unknown_args_inkwargs(self, suppress_allwarnings):
+        unknown = "this_is_an_unknown_kwarg"
+        cont = Controller(Sink(), server_kwargs={unknown: True})
         try:
             with pytest.raises(TypeError) as exc:
                 cont.start()
