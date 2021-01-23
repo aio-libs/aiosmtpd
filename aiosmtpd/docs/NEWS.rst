@@ -2,6 +2,14 @@
  NEWS for aiosmtpd
 ===================
 
+1.2.9 (aiosmtpd-next)
+=====================
+
+Fixed/Improved
+--------------
+* Uses pure ``pytest`` for all test cases
+
+
 1.2.4 (2021-01-24)
 ==================
 
