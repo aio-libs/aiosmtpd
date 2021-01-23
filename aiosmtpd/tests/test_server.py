@@ -82,7 +82,7 @@ class TestController:
             controller.stop()
         assert controller.server is None
 
-    def test_enablesmtputf8_flag(self):
+    def test_enablesmtputf8_flag(self, suppress_allwarnings):
         # Default is True
         controller = Controller(Sink())
         assert controller.SMTP_kwargs["enable_SMTPUTF8"]
