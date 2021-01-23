@@ -2,6 +2,15 @@
  NEWS for aiosmtpd
 ===================
 
+
+1.3.0 (aiosmtpd-next)
+=====================
+
+Fixed/Improved
+--------------
+* No longer have to workaround ``bpo-27931`` which has been fixed in Python 3.6 anyways.
+
+
 1.2.4 (2021-01-24)
 ==================
 
@@ -15,14 +24,6 @@ Fixed/Improved
 * Remove special handling for lone ``=`` during AUTH;
   it is now treated as simple Base64-encoded ``b""``.
   This is the correct, strict interpretation of :rfc:`4954` mentions about ``=``
-
-
-1.3.0 (aiosmtpd-next)
-==========================
-
-Fixed/Improved
---------------
-* No longer have to workaround ``bpo-27931`` which has been fixed in Python 3.6 anyways.
 
 
 1.2.3 (2021-01-14)
