@@ -28,47 +28,47 @@ NORM = "\x1b[0m"
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath("."))
 sys.path.append(str(Path("aiosmtpd/docs/_exts").expanduser().absolute()))
 
 # -- General configuration ------------------------------------------------
 
 # autoprogramm needs Sphinx>=1.2.2
 # :classmethod: needs Sphinx>=2.1
-needs_sphinx = '2.1'
+needs_sphinx = "2.1"
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.intersphinx',
-    'autoprogramm',
+    "sphinx.ext.intersphinx",
+    "autoprogramm",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # The suffix of source filenames.
-source_suffix = '.rst'
+source_suffix = ".rst"
 
 # The encoding of source files.
-#source_encoding = 'utf-8-sig'
+# source_encoding = 'utf-8-sig'
 
 # The master toctree document.
-master_doc = 'README'
+master_doc = "README"
 
 # General information about the project.
 author = "The aiosmtpd Developers"
-project = u'aiosmtpd'
+project = "aiosmtpd"
 # noinspection PyShadowingBuiltins
-copyright = f'2015-{datetime.datetime.now().year}, {author}'
+copyright = f"2015-{datetime.datetime.now().year}, {author}"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
 __version__ = None
-with open('aiosmtpd/smtp.py') as fp:
+with open("aiosmtpd/smtp.py") as fp:
     for line in fp:
         m = RE__VERSION.match(line.strip())
         if m:
@@ -85,37 +85,37 @@ language = "en"
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:
-#today = ''
+# today = ''
 # Else, today_fmt is used as the format for a strftime call.
-#today_fmt = '%B %d, %Y'
+# today_fmt = '%B %d, %Y'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ['_build', '.tox/*', '.git*']
+exclude_patterns = ["_build", ".tox/*", ".git*"]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
-#default_role = None
+# default_role = None
 
 # If true, '()' will be appended to :func: etc. cross-reference text.
-#add_function_parentheses = True
+# add_function_parentheses = True
 
 # If true, the current module name will be prepended to all description
 # unit titles (such as .. function::).
-#add_module_names = True
+# add_module_names = True
 
 # If true, sectionauthor and moduleauthor directives will be shown in the
 # output. They are ignored by default.
-#show_authors = False
+# show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = "sphinx"
 
 # A list of ignored prefixes for module index sorting.
-#modindex_common_prefix = []
+# modindex_common_prefix = []
 
 # If true, keep warnings as "system message" paragraphs in the built documents.
-#keep_warnings = False
+# keep_warnings = False
 
 rst_prolog = f"""
 .. role:: boldital
@@ -129,145 +129,139 @@ rst_prolog = f"""
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'default'
+html_theme = "default"
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-#html_theme_options = {}
+# html_theme_options = {}
 
 # Add any paths that contain custom themes here, relative to this directory.
-#html_theme_path = []
+# html_theme_path = []
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
-#html_title = None
+# html_title = None
 
 # A shorter title for the navigation bar.  Default is the same as html_title.
-#html_short_title = None
+# html_short_title = None
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-#html_logo = None
+# html_logo = None
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-#html_favicon = None
+# html_favicon = None
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ["_static"]
 
 # Add any extra paths that contain custom files (such as robots.txt or
 # .htaccess) here, relative to this directory. These files are copied
 # directly to the root of the documentation.
-#html_extra_path = []
+# html_extra_path = []
 
 # If not '', a 'Last updated on:' timestamp is inserted at every page bottom,
 # using the given strftime format.
-#html_last_updated_fmt = '%b %d, %Y'
+# html_last_updated_fmt = '%b %d, %Y'
 
 # If true, SmartyPants will be used to convert quotes and dashes to
 # typographically correct entities.
-#html_use_smartypants = True
+# html_use_smartypants = True
 
 # Custom sidebar templates, maps document names to template names.
-#html_sidebars = {}
+# html_sidebars = {}
 
 # Additional templates that should be rendered to pages, maps page names to
 # template names.
-#html_additional_pages = {}
+# html_additional_pages = {}
 
 # If false, no module index is generated.
-#html_domain_indices = True
+# html_domain_indices = True
 
 # If false, no index is generated.
-#html_use_index = True
+# html_use_index = True
 
 # If true, the index is split into individual pages for each letter.
-#html_split_index = False
+# html_split_index = False
 
 # If true, links to the reST sources are added to the pages.
-#html_show_sourcelink = True
+# html_show_sourcelink = True
 
 # If true, "Created using Sphinx" is shown in the HTML footer. Default is True.
-#html_show_sphinx = True
+# html_show_sphinx = True
 
 # If true, "(C) Copyright ..." is shown in the HTML footer. Default is True.
-#html_show_copyright = True
+# html_show_copyright = True
 
 # If true, an OpenSearch description file will be output, and all pages will
 # contain a <link> tag referring to it.  The value of this option must be the
 # base URL from which the finished HTML is served.
-#html_use_opensearch = ''
+# html_use_opensearch = ''
 
 # This is the file name suffix for HTML files (e.g. ".xhtml").
-#html_file_suffix = None
+# html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'aiosmtpddoc'
+htmlhelp_basename = "aiosmtpddoc"
 
 
 # -- Options for LaTeX output ---------------------------------------------
 
 latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
-    #'papersize': 'letterpaper',
-
+    # 'papersize': 'letterpaper',
     # The font size ('10pt', '11pt' or '12pt').
-    #'pointsize': '10pt',
-
+    # 'pointsize': '10pt',
     # Additional stuff for the LaTeX preamble.
-    #'preamble': '',
+    # 'preamble': '',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  ('index', 'aiosmtpd.tex', u'aiosmtpd Documentation',
-   u'aiosmtpd hackers', 'manual'),
+    ("index", "aiosmtpd.tex", "aiosmtpd Documentation", "aiosmtpd hackers", "manual"),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
 # the title page.
-#latex_logo = None
+# latex_logo = None
 
 # For "manual" documents, if this is true, then toplevel headings are parts,
 # not chapters.
-#latex_use_parts = False
+# latex_use_parts = False
 
 # If true, show page references after internal links.
-#latex_show_pagerefs = False
+# latex_show_pagerefs = False
 
 # If true, show URL addresses after external links.
-#latex_show_urls = False
+# latex_show_urls = False
 
 # Documents to append as an appendix to all manuals.
-#latex_appendices = []
+# latex_appendices = []
 
 # If false, no module index is generated.
-#latex_domain_indices = True
+# latex_domain_indices = True
 
 
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/3', None),
-    }
+    "python": ("https://docs.python.org/3", None),
+}
 
 
 # -- Options for manual page output ---------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    ('index', 'aiosmtpd', u'aiosmtpd Documentation',
-     [u'aiosmtpd hackers'], 1)
-]
+man_pages = [("index", "aiosmtpd", "aiosmtpd Documentation", ["aiosmtpd hackers"], 1)]
 
 # If true, show URL addresses after external links.
-#man_show_urls = False
+# man_show_urls = False
 
 
 # -- Options for Texinfo output -------------------------------------------
@@ -276,22 +270,28 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'aiosmtpd', u'aiosmtpd Documentation',
-   u'aiosmtpd hackers', 'aiosmtpd', 'One line description of project.',
-   'Miscellaneous'),
+    (
+        "index",
+        "aiosmtpd",
+        "aiosmtpd Documentation",
+        "aiosmtpd hackers",
+        "aiosmtpd",
+        "One line description of project.",
+        "Miscellaneous",
+    ),
 ]
 
 # Documents to append as an appendix to all manuals.
-#texinfo_appendices = []
+# texinfo_appendices = []
 
 # If false, no module index is generated.
-#texinfo_domain_indices = True
+# texinfo_domain_indices = True
 
 # How to display URL addresses: 'footnote', 'no', or 'inline'.
-#texinfo_show_urls = 'footnote'
+# texinfo_show_urls = 'footnote'
 
 # If true, do not generate a @detailmenu in the "Top" node's menu.
-#texinfo_no_detailmenu = False
+# texinfo_no_detailmenu = False
 
 
 def setup(app):
@@ -300,26 +300,31 @@ def setup(app):
 
 def index_html():
     import errno
+
     cwd = os.getcwd()
     try:
         try:
-            os.makedirs('build/sphinx/html')
+            os.makedirs("build/sphinx/html")
         except OSError as error:
             if error.errno != errno.EEXIST:
                 raise
-        os.chdir('build/sphinx/html')
+        os.chdir("build/sphinx/html")
         try:
-            os.symlink('README.html', 'index.html')
-            print('index.html -> README.html')
+            os.symlink("README.html", "index.html")
+            print("index.html -> README.html")
         except OSError as error:
             # On Windows>= 7, only users with 'SeCreateSymbolicLinkPrivilege' token
             # can create symlinks.
-            if (getattr(error, "winerror", None) == 1314
-                    or str(error) == "symbolic link privilege not held"):
+            if (
+                getattr(error, "winerror", None) == 1314
+                or str(error) == "symbolic link privilege not held"
+            ):
                 # I don't like matching against string, but sometimes this particular
                 # OSError does not have any errno nor winerror.
-                print(f"{YELLOW}WARNING: No privilege to create symlinks. "
-                      f"You have to make one manually{NORM}")
+                print(
+                    f"{YELLOW}WARNING: No privilege to create symlinks. "
+                    f"You have to make one manually{NORM}"
+                )
             elif error.errno == errno.EEXIST:
                 pass
             else:
@@ -328,5 +333,6 @@ def index_html():
         os.chdir(cwd)
 
 
-import atexit
+import atexit  # noqa: E402
+
 atexit.register(index_html)
