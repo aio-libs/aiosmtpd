@@ -48,8 +48,26 @@ protocols.
 Requirements
 ============
 
-You need **at least Python 3.6** to use this library.  Both Windows and \*nix are
-supported.
+You need **at least Python 3.6** to use this library.
+
+
+Supported Platforms
+-----------------------
+
+``aiosmtpd`` has been tested on the following platforms (in alphabetical order):
+
+* Cygwin (on Windows 10) [1]
+* FreeBSD 12 [2]
+* OpenSUSE Leap 15 [2]
+* Ubuntu 18.04
+* Ubuntu 20.04
+* Windows 10
+
+  | [1] Supported only with Cygwin-provided Python version
+  | [2] Supported only on the latest minor release
+
+``aiosmtpd`` *probably* can run on platforms not listed above,
+but we cannot provide support for unlisted platforms.
 
 
 License
