@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# Copyright 2014-2021 The aiosmtpd Developers
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 import subprocess
 import sys
