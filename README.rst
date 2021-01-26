@@ -44,6 +44,8 @@ Python developers collaborating on this reimplementation.
 This package provides such an implementation of both the SMTP and LMTP
 protocols.
 
+Full documentation is available on |aiosmtpd rtd|_.
+
 
 Requirements
 ============
@@ -246,34 +248,9 @@ or if you want to really ensure that artifacts from previous testing sessions
 won't interfere with your next testing sessions.
 
 
-Contents
-========
-
-.. toctree::
-   :maxdepth: 2
-
-   aiosmtpd/docs/intro
-   aiosmtpd/docs/concepts
-   aiosmtpd/docs/cli
-   aiosmtpd/docs/controller
-   aiosmtpd/docs/smtp
-   aiosmtpd/docs/lmtp
-   aiosmtpd/docs/handlers
-   aiosmtpd/docs/migrating
-   aiosmtpd/docs/manpage
-   aiosmtpd/docs/NEWS
-
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-
-
 .. _`GitHub Actions`: https://docs.github.com/en/free-pro-team@latest/actions/guides/building-and-testing-python#running-tests-with-tox
 .. |GitHub Actions| replace:: **GitHub Actions**
 .. _`pytest doctest`: https://docs.pytest.org/en/stable/doctest.html
 .. _`the pytest documentation`: https://docs.pytest.org/en/stable/usage.html#specifying-tests-selecting-tests
+.. _`aiosmtpd rtd`: https://aiosmtpd.readthedocs.io
+.. |aiosmtpd rtd| replace:: **aiosmtpd.readthedocs.io**
