@@ -49,7 +49,7 @@ _curdir = Path(".").expanduser().absolute()
 sys.path.insert(0, str(_curdir))
 sys.path.append(str(_curdir / "aiosmtpd" / "docs" / "_exts"))
 
-# -- General configuration ------------------------------------------------
+# region -- General configuration ------------------------------------------------
 
 # autoprogramm needs Sphinx>=1.2.2
 # :classmethod: needs Sphinx>=2.1
@@ -142,8 +142,18 @@ rst_prolog = f"""
 .. |copyright| replace:: {copyright}
 """
 
+# endregion
 
-# -- Options for HTML output ----------------------------------------------
+# region -- Extensions configuration ---------------------------------------------
+
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3', None),
+    }
+
+# endregion
+
+
+# region -- Options for HTML output ----------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
@@ -227,8 +237,9 @@ html_static_path = ['_static']
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'aiosmtpddoc'
 
+# endregion
 
-# -- Options for LaTeX output ---------------------------------------------
+# region -- Options for LaTeX output ---------------------------------------------
 
 latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
@@ -269,13 +280,9 @@ latex_documents = [
 # If false, no module index is generated.
 #latex_domain_indices = True
 
+# endregion
 
-intersphinx_mapping = {
-    'python': ('https://docs.python.org/3', None),
-    }
-
-
-# -- Options for manual page output ---------------------------------------
+# region -- Options for manual page output ---------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
@@ -287,8 +294,9 @@ man_pages = [
 # If true, show URL addresses after external links.
 #man_show_urls = False
 
+# endregion
 
-# -- Options for Texinfo output -------------------------------------------
+# region -- Options for Texinfo output -------------------------------------------
 
 # Grouping the document tree into Texinfo files. List of tuples
 # (source start file, target name, title, author,
@@ -310,6 +318,8 @@ texinfo_documents = [
 
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 #texinfo_no_detailmenu = False
+
+# endregion
 
 
 def setup(app):
