@@ -4,9 +4,15 @@ on:
   # This is for direct commit to master
   push:
     branches: [ "master" ]
+    paths:
+      - "aiosmtpd/*"
+      - "setup.cfg"  # To monitor changes in dependencies
   # This is for PRs
   pull_request:
     branches: [ "master" ]
+    paths:
+      - "aiosmtpd/*"
+      - "setup.cfg"  # To monitor changes in dependencies
   # Manual/on-demand
   workflow_dispatch:
   # When doing "releases"
@@ -14,20 +20,37 @@ on:
     types: [ "created", "edited", "published", "prereleased", "released" ]
 
 jobs:
-  test:
+  qa_docs:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: "Checkout latest commit"
+        uses: actions/checkout@v2
+      - name: "Set up Python 3.8"
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: "Install dependencies"
+        run: |
+          python -m pip install --upgrade pip
+          pip install tox
+      - name: "Execute tox -e qa,docs"
+        run: |
+          tox -e qa,docs
+  testing:
+    needs: qa_docs
     strategy:
       # If a matrix fail, do NOT stop other matrix, let them run to completion
       fail-fast: false
       matrix:
-        os: [ "ubuntu-latest" ]
-        platform: [ "linux" ]
+        os: [ "ubuntu-18.04", "ubuntu-20.04", "macos-10.15" ]
+        platform: [ "posix" ]
         python-version: [ "3.6", "3.7", "3.8", "3.9", "pypy3" ]
         include:
           - os: "windows-latest"
             platform: "mswin"
-            # Only the latest stable branch as indicated on
+            # Only the latest frozen branch as indicated on
             # https://devguide.python.org/#branchstatus
-            # ('stable' means Status == "security")
+            # ('frozen' means Status == "security")
             # Reason being that Windows users can change their Python anytime,
             # so there is no benefit in testing all released Python versions.
             # Plus pypy3 implementation in Windows is ... complicated. We
@@ -53,7 +76,7 @@ jobs:
       # "py" testenv means we'll use whatever Python provided by GA,
       # as specified in 'matrix' above. No need to specify exact version.
       run: |
-        tox -e "qa,docs,py-cov"
+        tox -e py-cov
     - name: "Report to codecov"
       # Ubuntu 18.04 came out of the box with 3.6, and LOTS of system are still running
       # 18.04 happily, so we choose this as the 'canonical' code coverage testing.
