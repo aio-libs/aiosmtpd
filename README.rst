@@ -238,6 +238,9 @@ versions on your system by using ``pyenv``. General steps:
    Python interpreter versions you want to make available to tox (see pyenv's
    documentation about this file)
 
+   **Tip:** The 1st line of ``.python-version`` indicates your *preferred* Python version
+   which will be used to run tox.
+
 5. Invoke tox with the option ``--tox-pyenv-no-fallback`` (see tox-pyenv's
    documentation about this option)
 
@@ -260,8 +263,8 @@ or if you want to really ensure that artifacts from previous testing sessions
 won't interfere with your next testing sessions.
 
 For example, you want to force Sphinx to rebuild all documentation.
-Or, you're sharing a repo between environments and the cached Python bytecode
-messes up file access
+Or, you're sharing a repo between environments (say, PSCore and Cygwin)
+and the cached Python bytecode messes up execution
 (e.g., sharing the exact same directory between Windows PowerShell and Cygwin
 will cause problems as Python becomes confused about the locations of the source code).
 
