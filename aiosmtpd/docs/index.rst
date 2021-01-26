@@ -16,6 +16,8 @@ Contents
    handlers
    migrating
    manpage
+   ref-controller
+   ref-smtp
    NEWS
 
 

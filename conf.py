@@ -47,7 +47,8 @@ RE__VERSION = re.compile(r"""__version__ = (['"])(?P<ver>[^'"]+)(\1)""")
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 _curdir = Path(".").expanduser().absolute()
 sys.path.insert(0, str(_curdir))
-sys.path.append(str(_curdir / "aiosmtpd" / "docs" / "_exts"))
+sys.path.insert(0, str(_curdir / "aiosmtpd" / "docs" / "_exts"))
+sys.path.insert(0, str(_curdir / "aiosmtpd"))
 
 # region -- General configuration ------------------------------------------------
 
@@ -60,6 +61,7 @@ needs_sphinx = '2.1'
 # ones.
 extensions = [
     'sphinx.ext.intersphinx',
+    'sphinx.ext.autodoc',
     'autoprogramm',
 ]
 
