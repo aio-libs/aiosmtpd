@@ -2,11 +2,13 @@
  NEWS for aiosmtpd
 ===================
 
+
 1.3.0 (aiosmtpd-next)
 =====================
 
 Fixed/Improved
 --------------
+* No longer have to workaround ``bpo-27931`` which has been fixed in Python 3.6 anyways.
 * Uses pure ``pytest`` for all test cases
 
 

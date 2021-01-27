@@ -1,3 +1,6 @@
+# Copyright 2014-2021 The aiosmtpd Developers
+# SPDX-License-Identifier: Apache-2.0
+
 import re
 import ssl
 import enum
@@ -1049,36 +1052,33 @@ class SMTP(asyncio.StreamReaderProtocol):
         if await self.check_auth_needed("RCPT"):
             return
         if not self.envelope.mail_from:
-            await self.push('503 Error: need MAIL command')
-            return
+            return await self.push('503 Error: need MAIL command')
+
         syntaxerr = '501 Syntax: RCPT TO: <address>'
         if self.session.extended_smtp:
             syntaxerr += ' [SP <mail-parameters>]'
         if arg is None:
-            await self.push(syntaxerr)
-            return
+            return await self.push(syntaxerr)
         arg = self._strip_command_keyword('TO:', arg)
         if arg is None:
-            await self.push(syntaxerr)
-            return
+            return await self.push(syntaxerr)
         address, params = self._getaddr(arg)
         if address is None:
             return await self.push("553 5.1.3 Error: malformed address")
         if not address:
             return await self.push(syntaxerr)
         if not self.session.extended_smtp and params:
-            await self.push(syntaxerr)
-            return
+            return await self.push(syntaxerr)
         rcpt_options = params.upper().split()
         params = self._getparams(rcpt_options)
         if params is None:
-            await self.push(syntaxerr)
-            return
+            return await self.push(syntaxerr)
         # XXX currently there are no options we recognize.
         if len(params) > 0:
-            await self.push(
-                '555 RCPT TO parameters not recognized or not implemented')
-            return
+            return await self.push(
+                '555 RCPT TO parameters not recognized or not implemented'
+            )
+
         status = await self._call_handler_hook('RCPT', address, rcpt_options)
         if status is MISSING:
             self.envelope.rcpt_tos.append(address)
