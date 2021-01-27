@@ -19,6 +19,7 @@ omit = [
     "aiosmtpd/tests/*",
     ".tox/*",
     "*/helpers/pycharm/*",
+    "/opt/hostedtoolcache/*",  # GitHub Actions site-packages location
 ]
 
 [tool.coverage.paths]
