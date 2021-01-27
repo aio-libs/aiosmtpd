@@ -11,7 +11,7 @@ from aiosmtpd.smtp import SMTP as Server
 from contextlib import suppress
 from pkg_resources import resource_filename
 from smtplib import SMTP as SMTPClient
-from typing import NamedTuple, Optional, Type
+from typing import Generator, NamedTuple, Optional, Type
 
 
 # region #### Custom datatypes ########################################################
@@ -115,7 +115,7 @@ def get_controller(request):
             STARTTLS
         """
         assert not inspect.isclass(handler)
-        class_: Type[Controller] = markerdata.get("class_", default_class)
+        class_: Optional[Type[Controller]] = markerdata.get("class_", default_class)
         if class_ is None:
             raise RuntimeError(
                 f"Fixture '{request.fixturename}' needs controller_data to specify "
@@ -156,7 +156,7 @@ def get_handler(request):
 
 
 @pytest.fixture
-def temp_event_loop() -> asyncio.AbstractEventLoop:
+def temp_event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
     default_loop = asyncio.get_event_loop()
     new_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(new_loop)
@@ -168,7 +168,9 @@ def temp_event_loop() -> asyncio.AbstractEventLoop:
 
 
 @pytest.fixture
-def plain_controller(get_handler, get_controller) -> ExposingController:
+def plain_controller(
+        get_handler, get_controller
+) -> Generator[ExposingController, None, None]:
     """
     Returns a Controller that was invoked with no optional args. Hence the
     moniker "plain". Uses whatever class get_controller() uses as default, with
@@ -189,7 +191,9 @@ def plain_controller(get_handler, get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def nodecode_controller(get_handler, get_controller) -> ExposingController:
+def nodecode_controller(
+        get_handler, get_controller
+) -> Generator[ExposingController, None, None]:
     handler = get_handler()
     controller = get_controller(handler, decode_data=False)
     controller.start()
@@ -205,7 +209,9 @@ def nodecode_controller(get_handler, get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def decoding_controller(get_handler, get_controller) -> ExposingController:
+def decoding_controller(
+        get_handler, get_controller
+) -> Generator[ExposingController, None, None]:
     handler = get_handler()
     controller = get_controller(handler, decode_data=True)
     controller.start()
@@ -221,7 +227,7 @@ def decoding_controller(get_handler, get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def client(request) -> SMTPClient:
+def client(request) -> Generator[SMTPClient, None, None]:
     """
     Generic SMTP Client, will connect to the host:port defined in Global.SrvAddr
     unless overriden using @pytest.mark.client_data(connect_to: HostPort = ...)
@@ -237,7 +243,7 @@ def client(request) -> SMTPClient:
 
 
 @pytest.fixture
-def ssl_context_server() -> ssl.SSLContext:
+def ssl_context_server() -> Generator[ssl.SSLContext, None, None]:
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     context.check_hostname = False
     context.load_cert_chain(
@@ -249,7 +255,7 @@ def ssl_context_server() -> ssl.SSLContext:
 
 
 @pytest.fixture
-def ssl_context_client() -> ssl.SSLContext:
+def ssl_context_client() -> Generator[ssl.SSLContext, None, None]:
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
     context.check_hostname = False
     context.load_verify_locations(
