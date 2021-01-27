@@ -9,6 +9,8 @@ import logging
 from aiosmtpd.main import main, parseargs
 from aiosmtpd.smtp import __version__
 
+from typing import Generator
+
 try:
     import pwd
 except ImportError:
@@ -35,7 +37,7 @@ class NullHandler:
 
 
 @pytest.fixture
-def autostop_loop(temp_event_loop) -> asyncio.AbstractEventLoop:
+def autostop_loop(temp_event_loop) -> Generator[asyncio.AbstractEventLoop, None, None]:
     # Create a new event loop, and arrange for that loop to end almost
     # immediately.  This will allow the calls to main() in these tests to
     # also exit almost immediately.  Otherwise, the foreground test
@@ -49,7 +51,7 @@ def autostop_loop(temp_event_loop) -> asyncio.AbstractEventLoop:
 
 
 @pytest.fixture
-def nobody_uid() -> int:
+def nobody_uid() -> Generator[int, None, None]:
     if pwd is None:
         pytest.skip("No pwd module available")
     try:
