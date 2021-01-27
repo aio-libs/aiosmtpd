@@ -16,6 +16,8 @@ from contextlib import suppress
 from email.mime.text import MIMEText
 from smtplib import SMTPServerDisconnected
 
+from typing import Generator
+
 
 # region #### Harness Classes & Functions #############################################
 
@@ -48,7 +50,7 @@ class HandshakeFailingHandler:
 @pytest.fixture
 def tls_controller(
     get_handler, get_controller, ssl_context_server
-) -> ExposingController:
+) -> Generator[ExposingController, None, None]:
     handler = get_handler()
     # controller = TLSController(handler)
     controller = get_controller(
@@ -72,7 +74,7 @@ def tls_controller(
 @pytest.fixture
 def tls_req_controller(
     get_handler, get_controller, ssl_context_server
-) -> ExposingController:
+) -> Generator[ExposingController, None, None]:
     handler = get_handler()
     # controller = TLSRequiredController(handler)
     controller = get_controller(
@@ -92,7 +94,7 @@ def tls_req_controller(
 @pytest.fixture
 def auth_req_tls_controller(
     get_handler, get_controller, ssl_context_server
-) -> ExposingController:
+) -> Generator[ExposingController, None, None]:
     handler = get_handler()
     # controller = RequireTLSAuthDecodingController(handler)
     controller = get_controller(
