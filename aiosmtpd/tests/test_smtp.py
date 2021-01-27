@@ -1,5 +1,7 @@
 """Test the SMTP protocol."""
 
+# pytype disable=not-supported-yet
+
 import time
 import pytest
 import socket
@@ -35,7 +37,7 @@ from smtplib import (
     SMTPServerDisconnected,
 )
 from textwrap import dedent
-from typing import AnyStr, Callable, List, Tuple
+from typing import AnyStr, Callable, Generator, List, Tuple
 
 from pytest_mock import MockFixture
 
@@ -225,7 +227,7 @@ def transport_resp(mocker: MockFixture):
 
 
 @pytest.fixture
-def get_protocol(temp_event_loop, transport_resp) -> Callable[..., Server]:
+def get_protocol(temp_event_loop, transport_resp) -> Generator[Callable[..., Server]]:
     transport, _ = transport_resp
 
     def getter(*args, **kwargs) -> Server:
@@ -240,7 +242,9 @@ def get_protocol(temp_event_loop, transport_resp) -> Callable[..., Server]:
 
 
 @pytest.fixture
-def auth_peeker_controller(get_controller) -> ExposingController:
+def auth_peeker_controller(
+        get_controller
+) -> Generator[ExposingController, None, None]:
     handler = PeekerHandler()
     controller = get_controller(
         handler,
@@ -259,7 +263,9 @@ def auth_peeker_controller(get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def decoding_authnotls_controller(get_handler, get_controller) -> ExposingController:
+def decoding_authnotls_controller(
+        get_handler, get_controller
+) -> Generator[ExposingController, None, None]:
     handler = get_handler()
     controller = get_controller(
         handler,
@@ -281,7 +287,7 @@ def decoding_authnotls_controller(get_handler, get_controller) -> ExposingContro
 
 
 @pytest.fixture
-def error_controller(get_handler) -> ErrorController:
+def error_controller(get_handler) -> Generator[ErrorController, None, None]:
     handler = get_handler()
     controller = ErrorController(handler)
     controller.start()
@@ -293,7 +299,9 @@ def error_controller(get_handler) -> ErrorController:
 
 
 @pytest.fixture
-def limited_controller(request, get_controller) -> ExposingController:
+def limited_controller(
+        request, get_controller
+) -> Generator[ExposingController, None, None]:
     marker = request.node.get_closest_marker("controller_data")
     if marker:
         markerdata = marker.kwargs or {}
@@ -311,7 +319,9 @@ def limited_controller(request, get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def nodecode_controller(get_handler, get_controller) -> ExposingController:
+def nodecode_controller(
+        get_handler, get_controller
+) -> Generator[ExposingController, None, None]:
     handler = get_handler()
     controller = get_controller(handler, decode_data=False)
     controller.start()
@@ -323,7 +333,9 @@ def nodecode_controller(get_handler, get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def require_auth_controller(get_controller) -> ExposingController:
+def require_auth_controller(
+        get_controller
+) -> Generator[ExposingController, None, None]:
     handler = Sink()
     controller = get_controller(
         handler,
@@ -342,7 +354,9 @@ def require_auth_controller(get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def sized_controller(request, get_controller) -> ExposingController:
+def sized_controller(
+        request, get_controller
+) -> Generator[ExposingController, None, None]:
     marker = request.node.get_closest_marker("controller_data")
     if marker:
         markerdata = marker.kwargs or {}
@@ -360,7 +374,9 @@ def sized_controller(request, get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def strictascii_controller(get_handler, get_controller) -> ExposingController:
+def strictascii_controller(
+        get_handler, get_controller
+) -> Generator[ExposingController, None, None]:
     handler = get_handler()
     controller = get_controller(
         handler,
@@ -964,7 +980,7 @@ class TestSMTPAuth(_CommonMethods):
 @pytest.mark.usefixtures("auth_peeker_controller")
 class TestAuthMechanisms(_CommonMethods):
     @pytest.fixture
-    def do_auth_plain1(self, client) -> Callable[[str], Tuple[int, bytes]]:
+    def do_auth_plain1(self, client) -> Generator[Callable[[str], Tuple[int, bytes]]]:
         self._ehlo(client)
 
         def do(param: str) -> Tuple[int, bytes]:
@@ -974,7 +990,7 @@ class TestAuthMechanisms(_CommonMethods):
         yield do
 
     @pytest.fixture
-    def do_auth_login3(self, client) -> Callable[[str], Tuple[int, bytes]]:
+    def do_auth_login3(self, client) -> Generator[Callable[[str], Tuple[int, bytes]]]:
         self._ehlo(client)
         resp = client.docmd("AUTH LOGIN")
         assert resp == S.S334_AUTH_USERNAME
@@ -1065,7 +1081,7 @@ class TestAuthMechanisms(_CommonMethods):
         assert interestings[1][2].endswith("b'AUTH PLAIN ********'")
 
     @pytest.fixture
-    def client_auth_plain2(self, client) -> SMTPClient:
+    def client_auth_plain2(self, client) -> Generator[SMTPClient, None, None]:
         self._ehlo(client)
         resp = client.docmd("AUTH PLAIN")
         assert resp == S.S334_AUTH_EMPTYPROMPT
