@@ -1,7 +1,5 @@
 """Test the SMTP protocol."""
 
-# pytype: disable=not-supported-yet
-
 import time
 import pytest
 import socket
