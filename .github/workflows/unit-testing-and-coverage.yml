@@ -49,7 +49,7 @@ jobs:
       - name: "Other QA stuff"
         # language=bash
         run: |
-          pytest --tb=short aiosmtpd/qa
+          pytest aiosmtpd/qa
       # - name: "Static Type Checking"
       #   run: |
       #           pytype --keep-going --jobs auto .
