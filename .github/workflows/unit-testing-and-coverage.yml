@@ -25,17 +25,29 @@ jobs:
     steps:
       - name: "Checkout latest commit"
         uses: actions/checkout@v2
-      - name: "Set up Python 3.8"
+      - name: "Set up Python"
         uses: actions/setup-python@v2
         with:
+          # 3.8 is chosen because it seems to be the fastest for <3.9
           python-version: 3.8
       - name: "Install dependencies"
         run: |
-          python -m pip install --upgrade pip
-          pip install tox
-      - name: "Execute tox -e qa,docs"
+          python -m pip install --upgrade pip setuptools wheel
+          pip install colorama pytype flake8 pytest sphinx pickle5
+          python setup.py develop
+      - name: "flake8 Style Checking"
         run: |
-          tox -e qa,docs
+          python -m flake8 aiosmtpd conf.py setup.py housekeep.py release.py
+      - name: "Generate Docs"
+        run: |
+          pytest aiosmtpd/docs
+          python setup.py build_sphinx
+      - name: "Other QA stuff"
+        run: |
+          pytest --tb=short aiosmtpd/qa
+      # - name: "Static Type Checking"
+      #   run: |
+      #           pytype --keep-going --jobs auto .
   testing:
     needs: qa_docs
     strategy:
@@ -48,16 +60,10 @@ jobs:
         include:
           - os: "windows-latest"
             platform: "mswin"
-            # Only the latest frozen branch as indicated on
+            # 3.7 is the latest frozen branch as indicated on
             # https://devguide.python.org/#branchstatus
             # ('frozen' means Status == "security")
-            # Reason being that Windows users can change their Python anytime,
-            # so there is no benefit in testing all released Python versions.
-            # Plus pypy3 implementation in Windows is ... complicated. We
-            # should stay away from all those complications; users choosing to
-            # run aiosmtpd on pypy3 on Windows should be considered advanced
-            # and know what they're doing.
-            python-version: "3.7"
+            python-version: [ "3.7", "3.8", "3.9", "pypy3" ]
     runs-on: ${{ matrix.os }}
     steps:
     - name: "Checkout latest commit"
@@ -68,18 +74,19 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: "Install dependencies"
       run: |
-        python -m pip install --upgrade pip
-        pip install tox
-    - name: "Execute tox"
+        python -m pip install --upgrade pip setuptools wheel
+        # Test deps
+        pip install colorama coverage[toml] packaging pytest pytest-cov pytest-mock
+        # Package deps
+        python setup.py develop
+    - name: "Execute testing"
       env:
         PLATFORM: ${{ matrix.platform }}
-      # "py" testenv means we'll use whatever Python provided by GA,
-      # as specified in 'matrix' above. No need to specify exact version.
       run: |
-        tox -e py-cov
+        pytest --cov --cov-report=xml --cov-report=term
     - name: "Report to codecov"
       # Ubuntu 18.04 came out of the box with 3.6, and LOTS of system are still running
       # 18.04 happily, so we choose this as the 'canonical' code coverage testing.
       # One day we'll have to revisit this and bump the version ...
-      if: always() && matrix.python-version == '3.6' && matrix.os == 'ubuntu-latest'
+      if: matrix.python-version == '3.6' && matrix.os == 'ubuntu-18.04'
       uses: codecov/codecov-action@v1
