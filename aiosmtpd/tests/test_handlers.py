@@ -13,7 +13,7 @@ from pathlib import Path
 from smtplib import SMTPDataError, SMTPRecipientsRefused
 from textwrap import dedent
 from types import SimpleNamespace
-from typing import AnyStr, Type, TypeVar, Union
+from typing import AnyStr, Generator, Type, TypeVar, Union
 
 try:
     from typing_extensions import Protocol
@@ -156,7 +156,7 @@ class AsyncDeprecatedHandler:
 
 
 @pytest.fixture
-def debugging_controller(get_controller) -> ExposingController:
+def debugging_controller(get_controller) -> Generator[ExposingController, None, None]:
     # Cannot use plain_controller fixture because we need to first create the
     # Debugging handler before creating the controller.
     stream = StringIO()
@@ -172,7 +172,9 @@ def debugging_controller(get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def debugging_decoding_controller(get_controller) -> ExposingController:
+def debugging_decoding_controller(
+        get_controller
+) -> Generator[ExposingController, None, None]:
     # Cannot use decoding_controller fixture because we need to first create the
     # Debugging handler before creating the controller.
     stream = StringIO()
@@ -188,13 +190,15 @@ def debugging_decoding_controller(get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def temp_maildir(tmp_path: Path) -> Path:
+def temp_maildir(tmp_path: Path) -> Generator[Path, None, None]:
     maildir_path = tmp_path / "maildir"
     yield maildir_path
 
 
 @pytest.fixture
-def mailbox_controller(temp_maildir, get_controller) -> ExposingController:
+def mailbox_controller(
+        temp_maildir, get_controller
+) -> Generator[ExposingController, None, None]:
     handler = Mailbox(temp_maildir)
     controller = get_controller(handler)
     controller.start()
@@ -231,7 +235,7 @@ def with_fake_parser():
 
 
 @pytest.fixture
-def upstream_controller(get_controller) -> ExposingController:
+def upstream_controller(get_controller) -> Generator[ExposingController, None, None]:
     upstream_handler = DataHandler()
     upstream_controller = get_controller(upstream_handler, port=9025)
     upstream_controller.start()
@@ -245,7 +249,7 @@ def upstream_controller(get_controller) -> ExposingController:
 @pytest.fixture
 def proxy_nodecode_controller(
     upstream_controller, get_controller
-) -> Union[ExposingController, KnowsUpstream]:
+) -> Generator[Union[ExposingController, KnowsUpstream], None, None]:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
     proxy_controller = get_controller(proxy_handler)
     proxy_controller.upstream = upstream_controller
@@ -260,7 +264,7 @@ def proxy_nodecode_controller(
 @pytest.fixture
 def proxy_decoding_controller(
     upstream_controller, get_controller
-) -> Union[ExposingController, KnowsUpstream]:
+) -> Generator[Union[ExposingController, KnowsUpstream], None, None]:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
     proxy_controller = get_controller(proxy_handler, decode_data=True)
     proxy_controller.upstream = upstream_controller
@@ -273,7 +277,9 @@ def proxy_decoding_controller(
 
 
 @pytest.fixture
-def auth_decoding_controller(get_controller) -> ExposingController:
+def auth_decoding_controller(
+        get_controller
+) -> Generator[ExposingController, None, None]:
     handler = AUTHHandler()
     controller = get_controller(handler, decode_data=True, auth_require_tls=False)
     controller.start()
@@ -285,7 +291,7 @@ def auth_decoding_controller(get_controller) -> ExposingController:
 
 
 @pytest.fixture
-def deprecated_hook_controller() -> DeprecatedHookController:
+def deprecated_hook_controller() -> Generator[DeprecatedHookController, None, None]:
     controller = DeprecatedHookController(Sink())
     controller.start()
     Global.set_addr_from(controller)
