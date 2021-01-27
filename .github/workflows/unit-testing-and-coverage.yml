@@ -78,6 +78,7 @@ jobs:
         # Package deps
         python setup.py develop
     - name: "Execute testing"
+      shell: bash
       # language=bash
       run: |
         if [[ ${{ matrix.python-version }} == 3.6 ]]; then
