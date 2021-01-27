@@ -227,7 +227,9 @@ def transport_resp(mocker: MockFixture):
 
 
 @pytest.fixture
-def get_protocol(temp_event_loop, transport_resp) -> Generator[Callable[..., Server]]:
+def get_protocol(
+        temp_event_loop, transport_resp
+) -> Generator[Callable[..., Server], None, None]:
     transport, _ = transport_resp
 
     def getter(*args, **kwargs) -> Server:
@@ -980,7 +982,9 @@ class TestSMTPAuth(_CommonMethods):
 @pytest.mark.usefixtures("auth_peeker_controller")
 class TestAuthMechanisms(_CommonMethods):
     @pytest.fixture
-    def do_auth_plain1(self, client) -> Generator[Callable[[str], Tuple[int, bytes]]]:
+    def do_auth_plain1(
+            self, client
+    ) -> Generator[Callable[[str], Tuple[int, bytes]], None, None]:
         self._ehlo(client)
 
         def do(param: str) -> Tuple[int, bytes]:
@@ -990,7 +994,9 @@ class TestAuthMechanisms(_CommonMethods):
         yield do
 
     @pytest.fixture
-    def do_auth_login3(self, client) -> Generator[Callable[[str], Tuple[int, bytes]]]:
+    def do_auth_login3(
+            self, client
+    ) -> Generator[Callable[[str], Tuple[int, bytes]], None, None]:
         self._ehlo(client)
         resp = client.docmd("AUTH LOGIN")
         assert resp == S.S334_AUTH_USERNAME
