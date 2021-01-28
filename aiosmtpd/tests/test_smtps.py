@@ -11,9 +11,9 @@ from aiosmtpd.testing.helpers import (
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from email.mime.text import MIMEText
-from smtplib import SMTP_SSL
+from smtplib import SMTP_SSL, SMTP
 
-from typing import Generator
+from typing import Generator, Union
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ def ssl_controller(
 
 
 @pytest.fixture
-def smtps_client(ssl_context_client) -> Generator[SMTP_SSL, None, None]:
+def smtps_client(ssl_context_client) -> Generator[Union[SMTP_SSL, SMTP], None, None]:
     context = ssl_context_client
     with SMTP_SSL(*Global.SrvAddr, context=context) as client:
         yield client
