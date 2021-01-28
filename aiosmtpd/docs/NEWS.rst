@@ -2,6 +2,20 @@
  NEWS for aiosmtpd
 ===================
 
+
+1.3.0 (aiosmtpd-next)
+=====================
+
+Fixed/Improved
+--------------
+* No longer have to workaround ``bpo-27931`` which has been fixed in Python 3.6 anyways.
+* New :meth:`handle_EHLO` interaction where said method can now modify list of responses
+  to the EHLO command (Closes #155)
+* ``authenticator`` system improves on ``auth_callback`` by enabling the called function
+  to see the SMTP Session and other info.
+  (``auth_callback`` will be deprecated in 2.0)
+
+
 1.2.4 (2021-01-24)
 ==================
 
@@ -12,25 +26,6 @@ Added
 Fixed/Improved
 --------------
 * ``AUTH`` command line now sanitized before logging (Closes #233)
-* Remove special handling for lone ``=`` during AUTH;
-  it is now treated as simple Base64-encoded ``b""``.
-  This is the correct, strict interpretation of :rfc:`4954` mentions about ``=``
-
-
-1.3.0 (aiosmtpd-next-next)
-==========================
-
-Added
------
-* authenticator system improves on auth_callback by enabling the called function to see the
-  SMTP Session and other info. (We can deprecate auth_callback in a future version)
-
-
-1.2.4 (aiosmtpd-next)
-=====================
-
-Fixed/Improved
---------------
 * Remove special handling for lone ``=`` during AUTH;
   it is now treated as simple Base64-encoded ``b""``.
   This is the correct, strict interpretation of :rfc:`4954` mentions about ``=``

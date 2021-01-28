@@ -1,3 +1,6 @@
+# Copyright 2014-2021 The aiosmtpd Developers
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 import sys
 import unittest
@@ -11,7 +14,7 @@ from mailbox import Maildir
 from operator import itemgetter
 from smtplib import SMTP, SMTPDataError, SMTPRecipientsRefused
 from tempfile import TemporaryDirectory
-from unittest.mock import call, patch
+from unittest.mock import call, patch, Mock
 
 
 CRLF = '\r\n'
@@ -531,9 +534,38 @@ class HELOHandler:
         return '250 geddy.example.com'
 
 
-class EHLOHandler:
+class EHLOHandlerDeprecated:
+    hostname = None
+
     async def handle_EHLO(self, server, session, envelope, hostname):
+        self.hostname = hostname
         return '250 alex.example.com'
+
+
+class EHLOHandlerNew:
+    hostname = None
+    orig_responses = []
+
+    def __init__(self, *features):
+        self.features = features
+
+    async def handle_EHLO(self, server, session, envelope, hostname, responses):
+        self.hostname = hostname
+        self.orig_responses.extend(responses)
+        my_resp = [responses[0]]
+        my_resp.extend(f"250-{f}" for f in self.features)
+        my_resp.append("250 HELP")
+        return my_resp
+
+
+class EHLOHandlerIncompatibleShort:
+    async def handle_EHLO(self, server, session, envelope):
+        return
+
+
+class EHLOHandlerIncompatibleLong:
+    async def handle_EHLO(self, server, session, envelope, hostname, responses, xtra):
+        return
 
 
 class MAILHandler:
@@ -592,15 +624,55 @@ Subject: Test
         self.assertEqual(code, 250)
         self.assertEqual(response, b'geddy.example.com')
 
-    def test_ehlo_hook(self):
-        controller = Controller(EHLOHandler())
+    def test_ehlo_hook_oldsystem(self):
+        declare_myself = "me"
+        handler = EHLOHandlerDeprecated()
+        controller = Controller(handler)
         controller.start()
         self.addCleanup(controller.stop)
         with SMTP(controller.hostname, controller.port) as client:
-            code, response = client.ehlo('me')
+            code, response = client.ehlo(declare_myself)
         self.assertEqual(code, 250)
+        self.assertEqual(declare_myself, handler.hostname)
         lines = response.decode('utf-8').splitlines()
         self.assertEqual(lines[-1], 'alex.example.com')
+
+    def test_ehlo_hook_newsystem(self):
+        declare_myself = "me"
+        handler = EHLOHandlerNew("FEATURE1", "FEATURE2 OPTION", "FEAT3 OPTA OPTB")
+        controller = Controller(handler)
+        controller.start()
+        self.addCleanup(controller.stop)
+        with SMTP(controller.hostname, controller.port) as client:
+            code, response = client.ehlo(declare_myself)
+        self.assertEqual(code, 250)
+        self.assertEqual(declare_myself, handler.hostname)
+
+        self.assertIn("250-8BITMIME", handler.orig_responses)
+        self.assertIn("250-SMTPUTF8", handler.orig_responses)
+        self.assertNotIn("8bitmime", client.esmtp_features)
+        self.assertNotIn("smtputf8", client.esmtp_features)
+
+        self.assertIn("feature1", client.esmtp_features)
+        self.assertIn("feature2", client.esmtp_features)
+        self.assertEqual("OPTION", client.esmtp_features["feature2"])
+        self.assertIn("feat3", client.esmtp_features)
+        self.assertEqual("OPTA OPTB", client.esmtp_features["feat3"])
+        self.assertIn("help", client.esmtp_features)
+
+    def test_ehlo_hook_incompat_short(self):
+        handler = EHLOHandlerIncompatibleShort()
+        controller = Controller(handler)
+        self.addCleanup(controller.stop)
+        with self.assertRaises(RuntimeError):
+            controller.start()
+
+    def test_ehlo_hook_incompat_long(self):
+        handler = EHLOHandlerIncompatibleLong()
+        controller = Controller(handler)
+        self.addCleanup(controller.stop)
+        with self.assertRaises(RuntimeError):
+            controller.start()
 
     def test_mail_hook(self):
         controller = Controller(MAILHandler())
@@ -779,3 +851,15 @@ Testing
             controller.smtpd.warnings[0],
             call('Use handler.handle_RSET() instead of .rset_hook()',
                  DeprecationWarning))
+
+    @patch("aiosmtpd.smtp.warn")
+    def test_handle_ehlo_4arg_deprecation(self, mock_warn: Mock):
+        handler = EHLOHandlerDeprecated()
+        _ = Server(handler)
+        mock_warn.assert_called_with(
+            "Use the 5-argument handle_EHLO() hook instead of "
+            "the 4-argument handle_EHLO() hook; "
+            "support for the 4-argument handle_EHLO() hook will be "
+            "removed in version 2.0",
+            DeprecationWarning
+        )

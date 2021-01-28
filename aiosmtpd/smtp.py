@@ -1,3 +1,6 @@
+# Copyright 2014-2021 The aiosmtpd Developers
+# SPDX-License-Identifier: Apache-2.0
+
 import re
 import ssl
 import attr
@@ -24,6 +27,7 @@ from typing import (
     List,
     NamedTuple,
     Optional,
+    Tuple,
     Union,
 )
 from warnings import warn
@@ -321,6 +325,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._authenticator = None
 
         self._auth_required = auth_required
+
         # Get hooks & methods to significantly speedup getattr's
         self._auth_methods: Dict[str, _AuthMechAttr] = {
             getattr(
@@ -345,6 +350,26 @@ class SMTP(asyncio.StreamReaderProtocol):
             for m in dir(handler)
             if m.startswith("handle_")
         }
+
+        # When we've deprecated the 4-arg form of handle_EHLO,
+        # we can -- and should -- remove this whole code block
+        ehlo_hook = self._handle_hooks.get("EHLO", None)
+        if ehlo_hook is None:
+            self._ehlo_hook_ver = None
+        else:
+            ehlo_hook_params = inspect.signature(ehlo_hook).parameters
+            if len(ehlo_hook_params) == 4:
+                self._ehlo_hook_ver = "old"
+                warn("Use the 5-argument handle_EHLO() hook instead of "
+                     "the 4-argument handle_EHLO() hook; "
+                     "support for the 4-argument handle_EHLO() hook will be "
+                     "removed in version 2.0",
+                     DeprecationWarning)
+            elif len(ehlo_hook_params) == 5:
+                self._ehlo_hook_ver = "new"
+            else:
+                raise RuntimeError("Unsupported EHLO Hook")
+
         self._smtp_methods: Dict[str, Any] = {
             m.replace("smtp_", ""): getattr(self, m)
             for m in dir(self)
@@ -687,32 +712,50 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not hostname:
             await self.push('501 Syntax: EHLO hostname')
             return
+
+        response = []
         self._set_rset_state()
         self.session.extended_smtp = True
-        await self.push('250-%s' % self.hostname)
+        response.append('250-%s' % self.hostname)
         if self.data_size_limit:
-            await self.push('250-SIZE %s' % self.data_size_limit)
+            response.append('250-SIZE %s' % self.data_size_limit)
             self.command_size_limits['MAIL'] += 26
         if not self._decode_data:
-            await self.push('250-8BITMIME')
+            response.append('250-8BITMIME')
         if self.enable_SMTPUTF8:
-            await self.push('250-SMTPUTF8')
+            response.append('250-SMTPUTF8')
             self.command_size_limits['MAIL'] += 10
         if self.tls_context and not self._tls_protocol:
-            await self.push('250-STARTTLS')
+            response.append('250-STARTTLS')
+        if not self._auth_require_tls or self._tls_protocol:
+            response.append(
+                "250-AUTH " + " ".join(sorted(self._auth_methods.keys()))
+            )
+
         if hasattr(self, 'ehlo_hook'):
             warn('Use handler.handle_EHLO() instead of .ehlo_hook()',
                  DeprecationWarning)
             await self.ehlo_hook()
-        if not self._auth_require_tls or self._tls_protocol:
-            await self.push(
-                "250-AUTH " + " ".join(sorted(self._auth_methods.keys()))
-            )
-        status = await self._call_handler_hook('EHLO', hostname)
-        if status is MISSING:
+
+        if self._ehlo_hook_ver is None:
             self.session.host_name = hostname
-            status = '250 HELP'
-        await self.push(status)
+            response.append('250 HELP')
+        elif self._ehlo_hook_ver == "old":
+            # Old behavior: Send all responses first...
+            for r in response:
+                await self.push(r)
+            # ... then send the response from the hook.
+            response = [await self._call_handler_hook("EHLO", hostname)]
+            # (The hook might internally send its own responses.)
+        elif self._ehlo_hook_ver == "new":  # pragma: nobranch
+            # New behavior: hand over list of responses so far to the hook, and
+            # REPLACE existing list of responses with what the hook returns.
+            # We will handle the push()ing
+            response.append('250 HELP')
+            response = await self._call_handler_hook("EHLO", hostname, response)
+
+        for r in response:
+            await self.push(r)
 
     @syntax('NOOP [ignored]')
     async def smtp_NOOP(self, arg):
@@ -990,19 +1033,28 @@ class SMTP(asyncio.StreamReaderProtocol):
             return arg[keylen:].strip()
         return None
 
-    def _getaddr(self, arg):
+    def _getaddr(self, arg) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Try to parse address given in SMTP command.
+
+        Returns address=None if arg can't be parsed properly (get_angle_addr /
+        get_addr_spec raised HeaderParseError)
+        """
         if not arg:
             return '', ''
-        if arg.lstrip().startswith('<'):
-            address, rest = get_angle_addr(arg)
-        else:
-            address, rest = get_addr_spec(arg)
         try:
-            address = address.addr_spec
-        except IndexError:
-            # Workaround http://bugs.python.org/issue27931
-            address = None
-        return address, rest
+            if arg.lstrip().startswith('<'):
+                address, rest = get_angle_addr(arg)
+            else:
+                address, rest = get_addr_spec(arg)
+        except HeaderParseError:
+            return None, None
+        address = address.addr_spec
+        localpart, atsign, domainpart = address.rpartition("@")
+        if len(localpart) > 64:  # RFC 5321 § 4.5.3.1.1
+            return None, None
+        else:
+            return address, rest
 
     def _getparams(self, params):
         # Return params as dictionary. Return None if not all parameters
@@ -1050,10 +1102,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if await self.check_auth_needed("VRFY"):
             return
         if arg:
-            try:
-                address, params = self._getaddr(arg)
-            except HeaderParseError:
-                address = None
+            address, params = self._getaddr(arg)
             if address is None:
                 await self.push('502 Could not VRFY %s' % arg)
             else:
@@ -1083,8 +1132,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         address, params = self._getaddr(arg)
         if address is None:
-            await self.push(syntaxerr)
-            return
+            return await self.push("553 5.1.3 Error: malformed address")
+        if not address:
+            return await self.push(syntaxerr)
         if not self.session.extended_smtp and params:
             await self.push(syntaxerr)
             return
@@ -1139,35 +1189,33 @@ class SMTP(asyncio.StreamReaderProtocol):
         if await self.check_auth_needed("RCPT"):
             return
         if not self.envelope.mail_from:
-            await self.push('503 Error: need MAIL command')
-            return
+            return await self.push('503 Error: need MAIL command')
+
         syntaxerr = '501 Syntax: RCPT TO: <address>'
         if self.session.extended_smtp:
             syntaxerr += ' [SP <mail-parameters>]'
         if arg is None:
-            await self.push(syntaxerr)
-            return
+            return await self.push(syntaxerr)
         arg = self._strip_command_keyword('TO:', arg)
         if arg is None:
-            await self.push(syntaxerr)
-            return
+            return await self.push(syntaxerr)
         address, params = self._getaddr(arg)
+        if address is None:
+            return await self.push("553 5.1.3 Error: malformed address")
         if not address:
-            await self.push(syntaxerr)
-            return
+            return await self.push(syntaxerr)
         if not self.session.extended_smtp and params:
-            await self.push(syntaxerr)
-            return
+            return await self.push(syntaxerr)
         rcpt_options = params.upper().split()
         params = self._getparams(rcpt_options)
         if params is None:
-            await self.push(syntaxerr)
-            return
+            return await self.push(syntaxerr)
         # XXX currently there are no options we recognize.
         if len(params) > 0:
-            await self.push(
-                '555 RCPT TO parameters not recognized or not implemented')
-            return
+            return await self.push(
+                '555 RCPT TO parameters not recognized or not implemented'
+            )
+
         status = await self._call_handler_hook('RCPT', address, rcpt_options)
         if status is MISSING:
             self.envelope.rcpt_tos.append(address)
