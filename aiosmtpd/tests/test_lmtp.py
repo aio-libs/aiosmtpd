@@ -12,6 +12,8 @@ from aiosmtpd.handlers import Sink
 from aiosmtpd.lmtp import LMTP
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 
+from typing import Generator
+
 
 class LMTPController(Controller):
     def factory(self):
@@ -20,7 +22,7 @@ class LMTPController(Controller):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def lmtp_controller() -> LMTPController:
+def lmtp_controller() -> Generator[LMTPController, None, None]:
     controller = LMTPController(Sink)
     controller.start()
     Global.set_addr_from(controller)
