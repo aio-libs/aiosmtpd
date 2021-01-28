@@ -50,9 +50,9 @@ jobs:
         # language=bash
         run: |
           pytest aiosmtpd/qa
-      # - name: "Static Type Checking"
-      #   run: |
-      #           pytype --keep-going --jobs auto .
+      - name: "Static Type Checking"
+        run: |
+          pytype --keep-going --jobs auto .
   testing:
     needs: qa_docs
     strategy:
