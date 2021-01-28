@@ -35,7 +35,7 @@ jobs:
         # language=bash
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          pip install colorama pytype flake8 pytest sphinx pickle5
+          pip install colorama pytype flake8 pytest pytest-mock sphinx pickle5
           python setup.py develop
       - name: "flake8 Style Checking"
         # language=bash
