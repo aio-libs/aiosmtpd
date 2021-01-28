@@ -65,7 +65,7 @@ __all__ = [
     "AuthMechanismType",
     "MISSING",
 ]  # Will be added to by @public
-__version__ = '1.3.0.a1'
+__version__ = '1.3.0a2'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
@@ -270,6 +270,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._auth_require_tls = auth_require_tls
         self._auth_callback = auth_callback or login_always_fail
         self._auth_required = auth_required
+
         # Get hooks & methods to significantly speedup getattr's
         self._auth_methods: Dict[str, _AuthMechAttr] = {
             getattr(
@@ -294,6 +295,26 @@ class SMTP(asyncio.StreamReaderProtocol):
             for m in dir(handler)
             if m.startswith("handle_")
         }
+
+        # When we've deprecated the 4-arg form of handle_EHLO,
+        # we can -- and should -- remove this whole code block
+        ehlo_hook = self._handle_hooks.get("EHLO", None)
+        if ehlo_hook is None:
+            self._ehlo_hook_ver = None
+        else:
+            ehlo_hook_params = inspect.signature(ehlo_hook).parameters
+            if len(ehlo_hook_params) == 4:
+                self._ehlo_hook_ver = "old"
+                warn("Use the 5-argument handle_EHLO() hook instead of "
+                     "the 4-argument handle_EHLO() hook; "
+                     "support for the 4-argument handle_EHLO() hook will be "
+                     "removed in version 2.0",
+                     DeprecationWarning)
+            elif len(ehlo_hook_params) == 5:
+                self._ehlo_hook_ver = "new"
+            else:
+                raise RuntimeError("Unsupported EHLO Hook")
+
         self._smtp_methods: Dict[str, Any] = {
             m.replace("smtp_", ""): getattr(self, m)
             for m in dir(self)
@@ -636,32 +657,50 @@ class SMTP(asyncio.StreamReaderProtocol):
         if not hostname:
             await self.push('501 Syntax: EHLO hostname')
             return
+
+        response = []
         self._set_rset_state()
         self.session.extended_smtp = True
-        await self.push('250-%s' % self.hostname)
+        response.append('250-%s' % self.hostname)
         if self.data_size_limit:
-            await self.push('250-SIZE %s' % self.data_size_limit)
+            response.append('250-SIZE %s' % self.data_size_limit)
             self.command_size_limits['MAIL'] += 26
         if not self._decode_data:
-            await self.push('250-8BITMIME')
+            response.append('250-8BITMIME')
         if self.enable_SMTPUTF8:
-            await self.push('250-SMTPUTF8')
+            response.append('250-SMTPUTF8')
             self.command_size_limits['MAIL'] += 10
         if self.tls_context and not self._tls_protocol:
-            await self.push('250-STARTTLS')
+            response.append('250-STARTTLS')
+        if not self._auth_require_tls or self._tls_protocol:
+            response.append(
+                "250-AUTH " + " ".join(sorted(self._auth_methods.keys()))
+            )
+
         if hasattr(self, 'ehlo_hook'):
             warn('Use handler.handle_EHLO() instead of .ehlo_hook()',
                  DeprecationWarning)
             await self.ehlo_hook()
-        if not self._auth_require_tls or self._tls_protocol:
-            await self.push(
-                "250-AUTH " + " ".join(sorted(self._auth_methods.keys()))
-            )
-        status = await self._call_handler_hook('EHLO', hostname)
-        if status is MISSING:
+
+        if self._ehlo_hook_ver is None:
             self.session.host_name = hostname
-            status = '250 HELP'
-        await self.push(status)
+            response.append('250 HELP')
+        elif self._ehlo_hook_ver == "old":
+            # Old behavior: Send all responses first...
+            for r in response:
+                await self.push(r)
+            # ... then send the response from the hook.
+            response = [await self._call_handler_hook("EHLO", hostname)]
+            # (The hook might internally send its own responses.)
+        elif self._ehlo_hook_ver == "new":  # pragma: nobranch
+            # New behavior: hand over list of responses so far to the hook, and
+            # REPLACE existing list of responses with what the hook returns.
+            # We will handle the push()ing
+            response.append('250 HELP')
+            response = await self._call_handler_hook("EHLO", hostname, response)
+
+        for r in response:
+            await self.push(r)
 
     @syntax('NOOP [ignored]')
     async def smtp_NOOP(self, arg):
