@@ -148,12 +148,17 @@ def get_handler(request):
     marker = request.node.get_closest_marker("handler_data")
     default_class = Sink
 
-    def getter() -> object:
+    def getter():
         if marker:
             class_ = marker.kwargs.get("class_", default_class)
+            args = marker.kwargs.get("args", [])
+            kwargs = marker.kwargs.get("kwargs", {})
         else:
             class_ = default_class
-        return class_()
+            args = tuple()
+            kwargs = {}
+        # noinspection PyArgumentList
+        return class_(*args, **kwargs)
 
     return getter
 
