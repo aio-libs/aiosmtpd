@@ -78,12 +78,41 @@ class HELOHandler:
         return self.ReturnCode.to_str()
 
 
-class EHLOHandler:
+class EHLOHandlerDeprecated:
     Domain = "alex.example.code"
     ReturnCode = StatusCode(250, Domain.encode("ascii"))
 
     async def handle_EHLO(self, server, session, envelope, hostname):
         return self.ReturnCode.to_str()
+
+
+# The suffix "New" is kept so we can catch all refs to the old "EHLOHandler" class
+class EHLOHandlerNew:
+    Domain = "bruce.example.code"
+    hostname = None
+    orig_responses = []
+
+    def __init__(self, *features):
+        self.features = features or tuple()
+
+    async def handle_EHLO(self, server, session, envelope, hostname, responses):
+        self.hostname = hostname
+        self.orig_responses.clear()
+        self.orig_responses.extend(responses)
+        my_resp = [responses[0]]
+        my_resp.extend(f"250-{f}" for f in self.features)
+        my_resp.append("250 HELP")
+        return my_resp
+
+
+class EHLOHandlerIncompatibleShort:
+    async def handle_EHLO(self, server, session, envelope):
+        return
+
+
+class EHLOHandlerIncompatibleLong:
+    async def handle_EHLO(self, server, session, envelope, hostname, responses, xtra):
+        return
 
 
 class MAILHandler:
@@ -801,13 +830,56 @@ class TestHooks:
         resp = client.helo("me")
         assert resp == HELOHandler.ReturnCode
 
-    @pytest.mark.handler_data(class_=EHLOHandler)
-    def test_hook_EHLO(self, plain_controller, client):
-        assert isinstance(plain_controller.handler, EHLOHandler)
+    @pytest.mark.handler_data(class_=EHLOHandlerDeprecated)
+    def test_hook_EHLO_deprecated(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, EHLOHandlerDeprecated)
         code, mesg = client.ehlo("me")
         lines = mesg.decode("utf-8").splitlines()
         assert code == 250
-        assert lines[-1] == EHLOHandler.Domain
+        assert lines[-1] == EHLOHandlerDeprecated.Domain
+
+    def test_hook_EHLO_deprecated_warning(self):
+        with pytest.warns(
+                DeprecationWarning,
+                match=(
+                    r"Use the 5-argument handle_EHLO\(\) hook instead of the "
+                    r"4-argument handle_EHLO\(\) hook; support for the 4-argument "
+                    r"handle_EHLO\(\) hook will be removed in version 2.0"
+                )
+        ):
+            _ = Server(EHLOHandlerDeprecated())
+
+    @pytest.mark.handler_data(
+        class_=EHLOHandlerNew,
+        args=("FEATURE1", "FEATURE2 OPTION", "FEAT3 OPTA OPTB"),
+    )
+    def test_hook_EHLO_new(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, EHLOHandlerNew)
+        code, mesg = client.ehlo("me")
+        lines = mesg.decode("utf-8").splitlines()
+        assert code == 250
+        assert len(lines) == 5  # server name + 3 features + HELP
+        handler = plain_controller.handler
+        assert "250-8BITMIME" in handler.orig_responses
+        assert "8bitmime" not in client.esmtp_features
+        assert "250-SMTPUTF8" in handler.orig_responses
+        assert "smtputf8" not in client.esmtp_features
+
+        assert "feature1" in client.esmtp_features
+        assert "feature2" in client.esmtp_features
+        assert client.esmtp_features["feature2"] == "OPTION"
+        assert "feat3" in client.esmtp_features
+        assert client.esmtp_features["feat3"] == "OPTA OPTB"
+        assert "help" in client.esmtp_features
+
+    @pytest.mark.parametrize(
+        "handler_class",
+        [EHLOHandlerIncompatibleShort, EHLOHandlerIncompatibleLong],
+        ids=["TooShort", "TooLong"],
+    )
+    def test_hook_EHLO_incompat(self, handler_class):
+        with pytest.raises(RuntimeError, match="Unsupported EHLO Hook"):
+            _ = Server(handler_class())
 
     @pytest.mark.handler_data(class_=MAILHandler)
     def test_hook_MAIL(self, plain_controller, client):
