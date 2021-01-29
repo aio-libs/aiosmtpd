@@ -842,6 +842,7 @@ class TestHooks:
         with pytest.warns(
                 DeprecationWarning,
                 match=(
+                    # Is a regex; escape regex special chars if necessary
                     r"Use the 5-argument handle_EHLO\(\) hook instead of the "
                     r"4-argument handle_EHLO\(\) hook; support for the 4-argument "
                     r"handle_EHLO\(\) hook will be removed in version 2.0"
@@ -962,7 +963,8 @@ class TestHooks:
 class TestDeprecation:
     def _process_message_testing(self, controller, client):
         assert isinstance(controller, ExposingController)
-        with pytest.warns(DeprecationWarning) as record:
+        expectedre = r"Use handler.handle_DATA\(\) instead of .process_message\(\)"
+        with pytest.warns(DeprecationWarning, match=expectedre) as record:
             client.sendmail(
                 "anne@example.com",
                 ["bart@example.com"],
@@ -976,11 +978,6 @@ class TestDeprecation:
                     """
                 ),
             )
-        assert len(record) == 1
-        assert (
-            record[0].message.args[0]
-            == "Use handler.handle_DATA() instead of .process_message()"
-        )
 
     @pytest.mark.handler_data(class_=DeprecatedHandler)
     def test_process_message(self, plain_controller, client):
@@ -1000,20 +997,12 @@ class TestDeprecation:
 
     def test_ehlo_hook(self, deprecated_hook_controller, client):
         """SMTP.ehlo_hook is Deprecated"""
-        with pytest.warns(DeprecationWarning) as record:
+        expectedre = r"Use handler.handle_EHLO\(\) instead of .ehlo_hook\(\)"
+        with pytest.warns(DeprecationWarning, match=expectedre) as record:
             client.ehlo("example.com")
-        assert len(record) == 1
-        assert (
-            record[0].message.args[0]
-            == "Use handler.handle_EHLO() instead of .ehlo_hook()"
-        )
 
     def test_rset_hook(self, deprecated_hook_controller, client):
         """SMTP.rset_hook is Deprecated"""
-        with pytest.warns(DeprecationWarning) as record:
+        expectedre = r"Use handler.handle_RSET\(\) instead of .rset_hook\(\)"
+        with pytest.warns(DeprecationWarning, match=expectedre) as record:
             client.rset()
-        assert len(record) == 1
-        assert (
-            record[0].message.args[0]
-            == "Use handler.handle_RSET() instead of .rset_hook()"
-        )
