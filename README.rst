@@ -191,9 +191,10 @@ have been configured and tested:
 Environment Variables
 -------------------------
 
-.. envvar:: PLATFORM
+``PLATFORM``
+~~~~~~~~~~~~~~~~
 
-    Used on non-native-Linux operating systems to specify tests to skip.
+    Used on non-POSIX operating systems to specify tests to skip.
     Valid values:
 
     +-----------+-------------------------------------------------------+
