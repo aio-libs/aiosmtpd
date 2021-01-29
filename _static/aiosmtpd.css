@@ -39,3 +39,7 @@ div#news-for-aiosmtpd h3 {
     background-color: transparent !important;
     border-bottom-style: none !important;
 }
+
+em.sig-param > span.default_value, em.sig-param > span.o {
+    color: rgb(128, 128, 128);
+}
