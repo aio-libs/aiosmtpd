@@ -20,7 +20,7 @@ from pathlib import Path
 
 try:
     # noinspection PyPackageRequirements
-    from colorama import (
+    from colorama import (  # pytype: disable=import-error
         Fore,
         Style,
         init as colorama_init,
