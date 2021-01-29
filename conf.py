@@ -326,36 +326,3 @@ texinfo_documents = [
 
 def setup(app):
     app.add_css_file("css/aiosmtpd.css")
-
-
-def index_html():
-    import errno
-    cwd = Path(".").expanduser().absolute()
-    htmldir = cwd / "build" / "sphinx" / "html"
-    try:
-        try:
-            htmldir.mkdir()
-        except FileExistsError:
-            pass
-        try:
-            (htmldir / "index.html").symlink_to("README.html")
-            print(f'{Fore.CYAN}index.html -> README.html')
-        except OSError as error:
-            # On Windows>= 7, only users with 'SeCreateSymbolicLinkPrivilege' token
-            # can create symlinks.
-            if (getattr(error, "winerror", None) == 1314
-                    or str(error) == "symbolic link privilege not held"):
-                # I don't like matching against string, but sometimes this particular
-                # OSError does not have any errno nor winerror.
-                print(f"{Fore.YELLOW}WARNING: No privilege to create symlinks. "
-                      f"You have to make one manually")
-            elif error.errno == errno.EEXIST:
-                pass
-            else:
-                raise
-    finally:
-        print(Style.RESET_ALL)
-
-
-import atexit
-atexit.register(index_html)
