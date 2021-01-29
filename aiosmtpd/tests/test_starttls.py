@@ -258,6 +258,7 @@ class TestTLSForgetsSessionData:
         resp = client.mail("sender@example.com")
         assert resp == S.S503_HELO_FIRST
 
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_forget_mail(self, client):
         code, _ = client.ehlo("example.com")
         assert code == 250
