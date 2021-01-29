@@ -318,7 +318,8 @@ For example, if you wanted to use a self-signed certification for localhost,
 which is easy to create but doesn't provide much security, you could use the
 :manpage:`openssl(1)` command like so::
 
-    $ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=localhost'
+    $ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem \
+      -days 365 -nodes -subj '/CN=localhost'
 
 and then in Python::
 
