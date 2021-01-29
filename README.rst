@@ -28,21 +28,19 @@
    :target: https://aio-libs.discourse.group/
    :alt: Discourse status
 
-The Python standard library includes a basic
-:rfc:`SMTP <5321>` server in the
-:mod:`smtpd` module, based on the
-old asynchronous libraries :mod:`asyncore` and :mod:`asynchat`.  These modules
-are quite old and are definitely showing their age.  ``asyncore`` and ``asynchat`` are
-difficult APIs to work with, understand, extend, and fix.
+The Python standard library includes a basic |SMTP|_ server in the |smtpd|_ module,
+based on the old asynchronous libraries |asyncore|_ and |asynchat|_.
+These modules are quite old and are definitely showing their age;
+``asyncore`` and ``asynchat`` are difficult APIs to work with, understand, extend, and fix.
 
-With the introduction of the :mod:`asyncio` module in Python
-3.4, a much better way of doing asynchronous I/O is now available.  It seems
-obvious that an asyncio-based version of the SMTP and related protocols are
-needed for Python 3.  This project brings together several highly experienced
-Python developers collaborating on this reimplementation.
+With the introduction of the |asyncio|_ module in Python 3.4,
+a much better way of doing asynchronous I/O is now available.
+It seems obvious that an asyncio-based version of the SMTP and related protocols are needed for Python 3.
+This project brings together several highly experienced Python developers collaborating on this reimplementation.
 
-This package provides such an implementation of both the SMTP and LMTP
-protocols.
+This package provides such an implementation of both the SMTP and LMTP protocols.
+
+Full documentation is available on |aiosmtpd rtd|_
 
 
 Requirements
@@ -79,10 +77,11 @@ License
 Project details
 ===============
 
-As of 2016-07-14, aiosmtpd has been put under the `aio-libs
-<https://github.com/aio-libs>`__ umbrella project and moved to GitHub.
+As of 2016-07-14, aiosmtpd has been put under the |aiolibs|_ umbrella project
+and moved to GitHub.
 
 * Project home: https://github.com/aio-libs/aiosmtpd
+* PyPI project page: https://pypi.org/project/aiosmtpd/
 * Report bugs at: https://github.com/aio-libs/aiosmtpd/issues
 * Git clone: https://github.com/aio-libs/aiosmtpd.git
 * Documentation: http://aiosmtpd.readthedocs.io/
@@ -102,7 +101,7 @@ You can install this package in a virtual environment like so::
     $ python setup.py install
 
 This will give you a command line script called ``aiosmtpd`` which implements the
-SMTP server.  Use ``aiosmtpd --help`` for details.
+SMTP server.  Use ``aiosmtpd --help`` for a quick reference.
 
 You will also have access to the ``aiosmtpd`` library, which you can use as a
 testing environment for your SMTP clients.  See the documentation links above
@@ -197,7 +196,8 @@ have been configured and tested:
 Environment Variables
 -------------------------
 
-.. envvar:: ASYNCIO_CATCHUP_DELAY
+``ASYNCIO_CATCHUP_DELAY``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     Due to how asyncio event loop works, some actions do not instantly get
     responded to. This is especially so on slower / overworked systems.
@@ -206,9 +206,10 @@ Environment Variables
 
     Defaults to `0.1` and can be set to any float value you want.
 
-.. envvar:: PLATFORM
+``PLATFORM``
+~~~~~~~~~~~~~~~~
 
-    Used on non-native-Linux operating systems to specify tests to skip.
+    Used on non-POSIX operating systems to specify tests to skip.
     Valid values:
 
     +-----------+-------------------------------------------------------+
@@ -269,34 +270,21 @@ and the cached Python bytecode messes up execution
 will cause problems as Python becomes confused about the locations of the source code).
 
 
-Contents
-========
-
-.. toctree::
-   :maxdepth: 2
-
-   aiosmtpd/docs/intro
-   aiosmtpd/docs/concepts
-   aiosmtpd/docs/cli
-   aiosmtpd/docs/controller
-   aiosmtpd/docs/smtp
-   aiosmtpd/docs/lmtp
-   aiosmtpd/docs/handlers
-   aiosmtpd/docs/migrating
-   aiosmtpd/docs/manpage
-   aiosmtpd/docs/NEWS
-
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-
-
 .. _`GitHub Actions`: https://docs.github.com/en/free-pro-team@latest/actions/guides/building-and-testing-python#running-tests-with-tox
 .. |GitHub Actions| replace:: **GitHub Actions**
 .. _`pytest doctest`: https://docs.pytest.org/en/stable/doctest.html
 .. _`the pytest documentation`: https://docs.pytest.org/en/stable/usage.html#specifying-tests-selecting-tests
+.. _`aiosmtpd rtd`: https://aiosmtpd.readthedocs.io
+.. |aiosmtpd rtd| replace:: **aiosmtpd.readthedocs.io**
+.. _`SMTP`: https://tools.ietf.org/html/rfc5321
+.. |SMTP| replace:: **SMTP**
+.. _`smtpd`: https://docs.python.org/3/library/smtpd.html
+.. |smtpd| replace:: **smtpd**
+.. _`asyncore`: https://docs.python.org/3/library/asyncore.html
+.. |asyncore| replace:: ``asyncore``
+.. _`asynchat`: https://docs.python.org/3/library/asynchat.html
+.. |asynchat| replace:: ``asynchat``
+.. _`asyncio`: https://docs.python.org/3/library/asyncio.html
+.. |asyncio| replace:: ``asyncio``
+.. _`aiolibs`: https://github.com/aio-libs
+.. |aiolibs| replace:: **aio-libs**

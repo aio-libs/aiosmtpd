@@ -20,29 +20,15 @@ from pathlib import Path
 
 try:
     # noinspection PyPackageRequirements
-    from colorama import (  # pytype: disable=import-error
-        Fore,
-        Style,
+    from colorama import (
         init as colorama_init,
     )
     colorama_init()
 except ImportError:
-    class Fore:
-        CYAN = "\x1b[1;96m"
-        GREEN = "\x1b[1;92m"
-        YELLOW = "\x1b[1;93m"
-
-    class Style:
-        BRIGHT = "\x1b[1m"
-        RESET_ALL = "\x1b[0m"
-
     colorama_init = None
 
 
 RE__VERSION = re.compile(r"""__version__ = (['"])(?P<ver>[^'"]+)(\1)""")
-
-YELLOW = "\x1b[1;93m"
-NORM = "\x1b[0m"
 
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -50,9 +36,10 @@ NORM = "\x1b[0m"
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 _curdir = Path(".").expanduser().absolute()
 sys.path.insert(0, str(_curdir))
-sys.path.append(str(_curdir / "aiosmtpd" / "docs" / "_exts"))
+sys.path.insert(0, str(_curdir / "aiosmtpd" / "docs" / "_exts"))
+sys.path.insert(0, str(_curdir / "aiosmtpd"))
 
-# -- General configuration ------------------------------------------------
+# region -- General configuration ------------------------------------------------
 
 # autoprogramm needs Sphinx>=1.2.2
 # :classmethod: needs Sphinx>=2.1
@@ -63,6 +50,7 @@ needs_sphinx = "2.1"
 # ones.
 extensions = [
     "sphinx.ext.intersphinx",
+    "sphinx.ext.autodoc",
     "autoprogramm",
 ]
 
@@ -76,7 +64,7 @@ source_suffix = ".rst"
 # source_encoding = 'utf-8-sig'
 
 # The master toctree document.
-master_doc = "README"
+master_doc = 'aiosmtpd/docs/index'
 
 # General information about the project.
 author = "The aiosmtpd Developers"
@@ -112,7 +100,7 @@ language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ["_build", ".tox/*", ".git*"]
+exclude_patterns = ['_build', '.tox/*', '.git*', 'README.rst']
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -141,12 +129,24 @@ pygments_style = "sphinx"
 rst_prolog = f"""
 .. role:: boldital
   :class: boldital
+.. role:: part
+  :class: parthead
 .. |author| replace:: {author}
 .. |copyright| replace:: {copyright}
 """
 
+# endregion
 
-# -- Options for HTML output ----------------------------------------------
+# region -- Extensions configuration ---------------------------------------------
+
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3', None),
+    }
+
+# endregion
+
+
+# region -- Options for HTML output ----------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
@@ -230,8 +230,9 @@ html_static_path = ["_static"]
 # Output file base name for HTML help builder.
 htmlhelp_basename = "aiosmtpddoc"
 
+# endregion
 
-# -- Options for LaTeX output ---------------------------------------------
+# region -- Options for LaTeX output ---------------------------------------------
 
 latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
@@ -269,13 +270,9 @@ latex_documents = [
 # If false, no module index is generated.
 # latex_domain_indices = True
 
+# endregion
 
-intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
-}
-
-
-# -- Options for manual page output ---------------------------------------
+# region -- Options for manual page output ---------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
@@ -284,8 +281,9 @@ man_pages = [("index", "aiosmtpd", "aiosmtpd Documentation", ["aiosmtpd hackers"
 # If true, show URL addresses after external links.
 # man_show_urls = False
 
+# endregion
 
-# -- Options for Texinfo output -------------------------------------------
+# region -- Options for Texinfo output -------------------------------------------
 
 # Grouping the document tree into Texinfo files. List of tuples
 # (source start file, target name, title, author,
@@ -314,42 +312,8 @@ texinfo_documents = [
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 # texinfo_no_detailmenu = False
 
+# endregion
+
 
 def setup(app):
-    app.add_css_file("css/aiosmtpd.css")
-
-
-def index_html():
-    import errno
-    cwd = Path(".").expanduser().absolute()
-    htmldir = cwd / "build" / "sphinx" / "html"
-    try:
-        try:
-            htmldir.mkdir()
-        except FileExistsError:
-            pass
-        try:
-            (htmldir / "index.html").symlink_to("README.html")
-            print(f'{Fore.CYAN}index.html -> README.html')
-        except OSError as error:
-            # On Windows>= 7, only users with 'SeCreateSymbolicLinkPrivilege' token
-            # can create symlinks.
-            if (
-                getattr(error, "winerror", None) == 1314
-                or str(error) == "symbolic link privilege not held"
-            ):
-                # I don't like matching against string, but sometimes this particular
-                # OSError does not have any errno nor winerror.
-                print(f"{Fore.YELLOW}WARNING: No privilege to create symlinks. "
-                      f"You have to make one manually")
-            elif error.errno == errno.EEXIST:
-                pass
-            else:
-                raise
-    finally:
-        print(Style.RESET_ALL)
-
-
-import atexit  # noqa: E402
-
-atexit.register(index_html)
+    app.add_css_file("aiosmtpd.css")

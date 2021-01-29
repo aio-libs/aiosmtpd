@@ -171,7 +171,8 @@ Controller API
    ssl_context=None, \
    server_hostname=None, server_kwargs=None, **SMTP_parameters)
 
-   **Parameters**
+   |
+   | :part:`Parameters`
 
    :boldital:`handler` is an instance of a :ref:`handler <handlers>` class.
 
@@ -235,7 +236,8 @@ Controller API
       The ``server_kwargs`` parameter will be removed in version 2.0
 
 
-   **Attributes**
+   |
+   | :part:`Attributes`
 
    .. attribute:: handler
 
