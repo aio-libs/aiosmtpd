@@ -3,6 +3,14 @@
     font-style: italic;
 }
 
+.parthead {
+    font-weight: bold;
+    border-bottom-width: 1px;
+    border-bottom-style: solid;
+    padding-right: 10em;
+    margin-top: 1em;
+}
+
 div.body h3 {
     margin-left: -5px;
     font-size: 125%;

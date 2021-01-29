@@ -169,7 +169,8 @@ Controller API
 
 .. class:: Controller(handler, loop=None, hostname=None, port=8025, *, ready_timeout=1.0, enable_SMTPUTF8=None, ssl_context=None, server_kwargs=None)
 
-   **Parameters**
+   |
+   | :part:`Parameters`
 
    :boldital:`handler` is an instance of a :ref:`handler <handlers>` class.
 
@@ -237,7 +238,8 @@ Controller API
    method. Please see the documentation for the :class:`SMTP` class for a list of
    accepted keyword arguments.
 
-   **Attributes**
+   |
+   | :part:`Attributes`
 
    .. attribute:: handler
 

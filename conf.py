@@ -129,6 +129,8 @@ pygments_style = 'sphinx'
 rst_prolog = f"""
 .. role:: boldital
   :class: boldital
+.. role:: part
+  :class: parthead
 .. |author| replace:: {author}
 .. |copyright| replace:: {copyright}
 """

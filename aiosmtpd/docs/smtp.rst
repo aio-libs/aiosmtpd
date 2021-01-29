@@ -109,7 +109,8 @@ SMTP API
    auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, \
    command_call_limit=None, loop=None)
 
-   **Parameters**
+   |
+   | :part:`Parameters`
 
    :boldital:`handler` is an instance of a :ref:`handler <handlers>` class.
 
@@ -203,7 +204,8 @@ SMTP API
    :boldital:`loop` is the asyncio event loop to use.  If not given,
    :meth:`asyncio.new_event_loop()` is called to create the event loop.
 
-   **Attributes**
+   |
+   | :part:`Attributes`
 
    .. py:attribute:: line_length_limit
 
