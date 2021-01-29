@@ -1,0 +1,37 @@
+.boldital {
+    font-weight: bold;
+    font-style: italic;
+}
+
+div.body h3 {
+    margin-left: -5px;
+    font-size: 125%;
+}
+
+div.body h4 {
+    margin-left: 0;
+    font-weight: bold;
+    background-color: transparent !important;
+    border-bottom-style: none !important;
+}
+
+.pre, pre, code {
+    font-family: Menlo,Consolas,"Ubuntu Mono",Inconsolata,"Bitstream Vera Sans Mono","lucida console","Courier New",monospace;
+}
+
+div.highlight pre {
+    font-size: 90%;
+}
+
+code.descname {
+    font-size: 100% !important;
+}
+
+.sig-paren {
+    font-size: 100% !important;
+}
+
+div#news-for-aiosmtpd h3 {
+    background-color: transparent !important;
+    border-bottom-style: none !important;
+}
