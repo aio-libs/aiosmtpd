@@ -201,7 +201,7 @@ Controller API
    option is returned to the client in response to ``EHLO``, and UTF-8 content
    is accepted. If not set, this will be treated as True.
 
-      **Deprecation Notice:**
+   .. note:: **Deprecation**
 
       The ``enable_SMTPUTF8`` parameter will be removed in a future version.
       Please pass the flag through the ``server_kwargs`` parameter instead.
@@ -224,7 +224,8 @@ Controller API
       >>> controller.server_kwargs["enable_SMTPUTF8"]
       False
 
-      >>> controller = Controller(Sink(), enable_SMTPUTF8=True, server_kwargs=dict(enable_SMTPUTF8=False))
+      >>> controller = Controller(Sink(), enable_SMTPUTF8=True,
+      ...     server_kwargs=dict(enable_SMTPUTF8=False))
       >>> controller.server_kwargs["enable_SMTPUTF8"]
       True
 
