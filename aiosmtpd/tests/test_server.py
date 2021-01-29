@@ -132,7 +132,8 @@ class TestFactory:
         finally:
             cont.stop()
 
-    def test_unknown_args_direct(self):
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
+    def test_unknown_args_direct(self, silence_event_loop_closed):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), **{unknown: True})
         expectedre = (
@@ -163,7 +164,8 @@ class TestFactory:
         finally:
             cont.stop()
 
-    def test_factory_none(self, mocker: MockFixture):
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
+    def test_factory_none(self, mocker: MockFixture, silence_event_loop_closed):
         # Hypothetical situation where factory() did not raise an Exception
         # but returned None instead
         mocker.patch("aiosmtpd.controller.SMTP", return_value=None)
@@ -176,7 +178,8 @@ class TestFactory:
         finally:
             cont.stop()
 
-    def test_noexc_smtpd_missing(self, mocker):
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
+    def test_noexc_smtpd_missing(self, mocker, silence_event_loop_closed):
         # Hypothetical situation where factory() failed but no
         # Exception was generated.
         cont = Controller(Sink())
