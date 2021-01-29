@@ -11,8 +11,15 @@ from .conftest import Global
 from aiosmtpd.controller import Controller, _FakeServer
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
-from functools import partial
+from functools import partial, wraps
 from pytest_mock import MockFixture
+
+try:
+    from asyncio.proactor_events import _ProactorBasePipeTransport
+    HAS_PROACTOR = True
+except ImportError:
+    _ProactorBasePipeTransport = None
+    HAS_PROACTOR = False
 
 
 def in_wsl():
@@ -20,6 +27,32 @@ def in_wsl():
     # So when testing on WSL, we must set PLATFORM=wsl and skip the
     # "test_socket_error" test.
     return os.environ.get("PLATFORM") == "wsl"
+
+
+# From: https://github.com/aio-libs/aiohttp/issues/4324#issuecomment-733884349
+def _silencer(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except RuntimeError as e:
+            if str(e) != "Event loop is closed":
+                raise
+    return wrapper
+
+
+@pytest.fixture(scope="module")
+def silence_event_loop_closed():
+    if not HAS_PROACTOR:
+        return False
+    assert _ProactorBasePipeTransport is not None
+    if hasattr(_ProactorBasePipeTransport, "old_del"):
+        return True
+    # noinspection PyUnresolvedReferences
+    old_del = _ProactorBasePipeTransport.__del__
+    _ProactorBasePipeTransport._old_del = old_del
+    _ProactorBasePipeTransport.__del__ = _silencer(old_del)
+    return True
 
 
 class TestServer:
@@ -149,7 +182,9 @@ class TestFactory:
         finally:
             cont.stop()
 
-    def test_unknown_args_inkwargs(self, suppress_allwarnings):
+    def test_unknown_args_inkwargs(
+            self, suppress_allwarnings, silence_event_loop_closed
+    ):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), server_kwargs={unknown: True})
         expectedre = (
