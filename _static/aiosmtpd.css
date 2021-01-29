@@ -27,6 +27,10 @@ code.descname {
     font-size: 100% !important;
 }
 
+dl.class > dt > code.descname {
+    font-size: 110% !important;
+}
+
 .sig-paren {
     font-size: 100% !important;
 }
