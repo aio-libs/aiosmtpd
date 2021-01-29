@@ -231,9 +231,9 @@ Controller API
    method. Please see the documentation for the :class:`SMTP` class for a list of
    accepted keyword arguments.
 
-      **Deprecation Notice**
+      .. warning::
 
-      The ``server_kwargs`` parameter will be removed in version 2.0
+         The ``server_kwargs`` parameter is **deprecated** and will be removed in version 2.0
 
 
    |
