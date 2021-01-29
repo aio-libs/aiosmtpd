@@ -830,6 +830,7 @@ class TestHooks:
         resp = client.helo("me")
         assert resp == HELOHandler.ReturnCode
 
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
     @pytest.mark.handler_data(class_=EHLOHandlerDeprecated)
     def test_hook_EHLO_deprecated(self, plain_controller, client):
         assert isinstance(plain_controller.handler, EHLOHandlerDeprecated)
