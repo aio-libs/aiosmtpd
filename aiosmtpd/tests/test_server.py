@@ -24,6 +24,7 @@ def in_wsl():
 
 class TestServer:
     """Tests for the aiosmtpd.smtp.SMTP class"""
+
     def test_smtp_utf8(self, plain_controller, client):
         code, mesg = client.ehlo("example.com")
         assert code == 250
@@ -39,14 +40,12 @@ class TestServer:
         assert server.max_command_size_limit == 1024
 
     def test_warn_authreq_notls(self):
-        with pytest.warns(UserWarning) as record:
-            Server(Sink(), auth_require_tls=False, auth_required=True)
-        assert len(record) == 1
-        assert (
-            record[0].message.args[0]
-            == "Requiring AUTH while not requiring TLS can lead to "
-            "security vulnerabilities!"
+        expectedre = (
+            r"Requiring AUTH while not requiring TLS can lead to "
+            r"security vulnerabilities!"
         )
+        with pytest.warns(UserWarning, match=expectedre) as record:
+            Server(Sink(), auth_require_tls=False, auth_required=True)
 
 
 class TestController:
@@ -67,8 +66,12 @@ class TestController:
     def test_socket_error_default(self):
         contr1 = Controller(Sink())
         contr2 = Controller(Sink())
+        expectedre = (
+            r"error while attempting to bind on address.*?"
+            r"only one usage of each socket address"
+        )
         try:
-            with pytest.raises(socket.error):
+            with pytest.raises(socket.error, match=expectedre):
                 contr1.start()
                 contr2.start()
         finally:
@@ -132,26 +135,31 @@ class TestFactory:
     def test_unknown_args_direct(self):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), **{unknown: True})
+        expectedre = (
+            r"__init__.. got an unexpected keyword argument '"
+            + unknown
+            + r"'"
+        )
         try:
-            with pytest.raises(TypeError) as exc:
+            with pytest.raises(TypeError, match=expectedre):
                 cont.start()
             assert cont.smtpd is None
-            excm = str(exc.value)
-            assert "unexpected keyword" in excm
-            assert unknown in excm
+            assert isinstance(cont._thread_exception, TypeError)
         finally:
             cont.stop()
 
     def test_unknown_args_inkwargs(self, suppress_allwarnings):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), server_kwargs={unknown: True})
+        expectedre = (
+            r"__init__.. got an unexpected keyword argument '"
+            + unknown
+            + r"'"
+        )
         try:
-            with pytest.raises(TypeError) as exc:
+            with pytest.raises(TypeError, match=expectedre):
                 cont.start()
             assert cont.smtpd is None
-            excm = str(exc.value)
-            assert "unexpected keyword" in excm
-            assert unknown in excm
         finally:
             cont.stop()
 
@@ -160,11 +168,11 @@ class TestFactory:
         # but returned None instead
         mocker.patch("aiosmtpd.controller.SMTP", return_value=None)
         cont = Controller(Sink())
+        expectedre = r"factory\(\) returned None"
         try:
-            with pytest.raises(RuntimeError) as exc:
+            with pytest.raises(RuntimeError, match=expectedre) as exc:
                 cont.start()
             assert cont.smtpd is None
-            assert str(exc.value) == "factory() returned None"
         finally:
             cont.stop()
 
@@ -184,11 +192,11 @@ class TestFactory:
             "aiosmtpd.controller.SMTP", side_effect=RuntimeError("Simulated Failure")
         )
 
+        expectedre = r"Unknown Error, failed to init SMTP server"
         try:
-            with pytest.raises(RuntimeError) as exc:
+            with pytest.raises(RuntimeError, match=expectedre) as exc:
                 cont.start()
             assert cont.smtpd is None
             assert cont._thread_exception is None
-            assert str(exc.value) == "Unknown Error, failed to init SMTP server"
         finally:
             cont.stop()
