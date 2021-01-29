@@ -6,6 +6,11 @@
 1.3.0 (aiosmtpd-next)
 =====================
 
+Added
+-----
+* New :meth:`handle_EHLO` interaction where said method can now modify list of responses
+  to the EHLO command (Closes #155)
+
 Fixed/Improved
 --------------
 * No longer have to workaround ``bpo-27931`` which has been fixed in Python 3.6 anyways.

@@ -96,6 +96,7 @@ CLIENT_AUTH_B = re.compile(
     # stripped line. If no bCRLF, then this group will be b""
     br"(?P<crlf>(?:\r\n)?)", re.IGNORECASE
 )
+"""Regex that matches 'AUTH <mech> <param>' commend"""
 
 # endregion
 
@@ -179,7 +180,8 @@ def make_loop():
 @public
 def syntax(text, extended=None, when: Optional[str] = None):
     """
-    Provides helptext for (E)SMTP HELP. Applies for smtp_* methods only!
+    A @decorator that provides helptext for (E)SMTP HELP.
+    Applies for smtp_* methods only!
 
     :param text: Help text for (E)SMTP HELP
     :param extended: Additional text for ESMTP HELP (appended to text)
@@ -197,7 +199,7 @@ def syntax(text, extended=None, when: Optional[str] = None):
 @public
 def auth_mechanism(actual_name: str):
     """
-    Explicitly specifies the name of the AUTH mechanism implemented by
+    A @decorator to explicitly specifies the name of the AUTH mechanism implemented by
     the function/method this decorates
 
     :param actual_name: Name of AUTH mechanism. Must consists of [A-Z0-9_-] only.
@@ -237,6 +239,9 @@ def sanitize(text: bytes) -> bytes:
 
 @public
 def sanitized_log(func: Callable, msg: AnyStr, *args, **kwargs):
+    """
+    Sanitize args before passing to a logging function.
+    """
     sanitized_args = [
         sanitize(a) if isinstance(a, bytes) else a
         for a in args

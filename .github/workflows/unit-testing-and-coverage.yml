@@ -5,13 +5,13 @@ on:
   push:
     branches: [ "master" ]
     paths:
-      - "aiosmtpd/*"
+      - "aiosmtpd/**"
       - "setup.cfg"  # To monitor changes in dependencies
   # This is for PRs
   pull_request:
     branches: [ "master" ]
     paths:
-      - "aiosmtpd/*"
+      - "aiosmtpd/**"
       - "setup.cfg"  # To monitor changes in dependencies
   # Manual/on-demand
   workflow_dispatch:
