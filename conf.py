@@ -21,21 +21,10 @@ from pathlib import Path
 try:
     # noinspection PyPackageRequirements
     from colorama import (
-        Fore,
-        Style,
         init as colorama_init,
     )
     colorama_init()
 except ImportError:
-    class Fore:
-        CYAN = "\x1b[1;96m"
-        GREEN = "\x1b[1;92m"
-        YELLOW = "\x1b[1;93m"
-
-    class Style:
-        BRIGHT = "\x1b[1m"
-        RESET_ALL = "\x1b[0m"
-
     colorama_init = None
 
 
