@@ -66,10 +66,7 @@ class TestController:
     def test_socket_error_default(self):
         contr1 = Controller(Sink())
         contr2 = Controller(Sink())
-        expectedre = (
-            r"error while attempting to bind on address.*?"
-            r"only one usage of each socket address"
-        )
+        expectedre = r"error while attempting to bind on address"
         try:
             with pytest.raises(socket.error, match=expectedre):
                 contr1.start()
