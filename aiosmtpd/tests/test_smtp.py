@@ -1166,7 +1166,10 @@ class TestAuthMechanisms(_CommonMethods):
         assert resp == S.S501_AUTH_ABORTED
 
 
-@pytest.mark.usefixtures("suppress_userwarning", "require_auth_controller")
+@pytest.mark.filterwarnings(
+    "ignore:Requiring AUTH while not requiring TLS:UserWarning"
+)
+@pytest.mark.usefixtures("require_auth_controller")
 class TestRequiredAuthentication(_CommonMethods):
     def _login(self, client: SMTPClient):
         self._ehlo(client)
