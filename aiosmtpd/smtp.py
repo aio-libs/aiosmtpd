@@ -205,14 +205,6 @@ def sanitized_log(func: Callable, msg: AnyStr, *args, **kwargs):
 
 @public
 class SMTP(asyncio.StreamReaderProtocol):
-    """
-    :param handler: Handler object containing hooks
-    :param data_size_limit: Maximum size of email message
-    :param hostname: Hostname to use in SMTP greeting; if not provided, will use
-        socket.getfqdn()
-    :param ident: Server software identification to use in SMTP greeting.
-    """
-
     command_size_limit = 512
     command_size_limits = collections.defaultdict(
         lambda x=command_size_limit: x)
