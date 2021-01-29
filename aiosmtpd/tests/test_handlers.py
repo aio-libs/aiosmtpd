@@ -965,7 +965,7 @@ class TestDeprecation:
     def _process_message_testing(self, controller, client):
         assert isinstance(controller, ExposingController)
         expectedre = r"Use handler.handle_DATA\(\) instead of .process_message\(\)"
-        with pytest.warns(DeprecationWarning, match=expectedre) as record:
+        with pytest.warns(DeprecationWarning, match=expectedre):
             client.sendmail(
                 "anne@example.com",
                 ["bart@example.com"],
@@ -999,11 +999,11 @@ class TestDeprecation:
     def test_ehlo_hook(self, deprecated_hook_controller, client):
         """SMTP.ehlo_hook is Deprecated"""
         expectedre = r"Use handler.handle_EHLO\(\) instead of .ehlo_hook\(\)"
-        with pytest.warns(DeprecationWarning, match=expectedre) as record:
+        with pytest.warns(DeprecationWarning, match=expectedre):
             client.ehlo("example.com")
 
     def test_rset_hook(self, deprecated_hook_controller, client):
         """SMTP.rset_hook is Deprecated"""
         expectedre = r"Use handler.handle_RSET\(\) instead of .rset_hook\(\)"
-        with pytest.warns(DeprecationWarning, match=expectedre) as record:
+        with pytest.warns(DeprecationWarning, match=expectedre):
             client.rset()

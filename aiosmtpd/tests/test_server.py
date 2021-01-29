@@ -44,7 +44,7 @@ class TestServer:
             r"Requiring AUTH while not requiring TLS can lead to "
             r"security vulnerabilities!"
         )
-        with pytest.warns(UserWarning, match=expectedre) as record:
+        with pytest.warns(UserWarning, match=expectedre):
             Server(Sink(), auth_require_tls=False, auth_required=True)
 
 
@@ -184,7 +184,7 @@ class TestFactory:
         cont = Controller(Sink())
         expectedre = r"factory\(\) returned None"
         try:
-            with pytest.raises(RuntimeError, match=expectedre) as exc:
+            with pytest.raises(RuntimeError, match=expectedre):
                 cont.start()
             assert cont.smtpd is None
         finally:
@@ -209,7 +209,7 @@ class TestFactory:
 
         expectedre = r"Unknown Error, failed to init SMTP server"
         try:
-            with pytest.raises(RuntimeError, match=expectedre) as exc:
+            with pytest.raises(RuntimeError, match=expectedre):
                 cont.start()
             assert cont.smtpd is None
             assert cont._thread_exception is None
