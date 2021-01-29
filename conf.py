@@ -23,6 +23,7 @@ try:
     from colorama import (
         init as colorama_init,
     )
+
     colorama_init()
 except ImportError:
     colorama_init = None
@@ -64,7 +65,7 @@ source_suffix = ".rst"
 # source_encoding = 'utf-8-sig'
 
 # The master toctree document.
-master_doc = 'aiosmtpd/docs/index'
+master_doc = "aiosmtpd/docs/index"
 
 # General information about the project.
 author = "The aiosmtpd Developers"
@@ -100,7 +101,7 @@ language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ['_build', '.tox/*', '.git*', 'README.rst']
+exclude_patterns = ["_build", ".tox/*", ".git*", "README.rst"]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -140,8 +141,8 @@ rst_prolog = f"""
 # region -- Extensions configuration ---------------------------------------------
 
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/3', None),
-    }
+    "python": ("https://docs.python.org/3", None),
+}
 
 # endregion
 
