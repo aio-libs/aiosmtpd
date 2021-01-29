@@ -6,7 +6,6 @@ import pytest
 import socket
 import inspect
 import asyncio
-import warnings
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
@@ -271,20 +270,5 @@ def ssl_context_client() -> Generator[ssl.SSLContext, None, None]:
     )
     #
     yield context
-
-
-@pytest.fixture
-def suppress_userwarning():
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-    # with pytest.warns(UserWarning):
-    #     yield
-
-
-@pytest.fixture
-def suppress_allwarnings():
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        yield
 
 # endregion

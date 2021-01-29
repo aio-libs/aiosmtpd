@@ -121,7 +121,10 @@ class TestController:
             controller.stop()
         assert controller.server is None
 
-    def test_enablesmtputf8_flag(self, suppress_allwarnings):
+    @pytest.mark.filterwarnings(
+        "ignore:server_kwargs will be removed:DeprecationWarning"
+    )
+    def test_enablesmtputf8_flag(self):
         # Default is True
         controller = Controller(Sink())
         assert controller.SMTP_kwargs["enable_SMTPUTF8"]
@@ -142,7 +145,10 @@ class TestController:
         controller = Controller(Sink(), server_kwargs=kwargs)
         assert not controller.SMTP_kwargs["enable_SMTPUTF8"]
 
-    def test_serverhostname_arg(self, suppress_allwarnings):
+    @pytest.mark.filterwarnings(
+        "ignore:server_kwargs will be removed:DeprecationWarning"
+    )
+    def test_serverhostname_arg(self):
         contsink = partial(Controller, Sink())
         controller = contsink()
         assert "hostname" not in controller.SMTP_kwargs
@@ -182,8 +188,12 @@ class TestFactory:
         finally:
             cont.stop()
 
+    @pytest.mark.filterwarnings(
+        "ignore:server_kwargs will be removed:DeprecationWarning"
+    )
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_unknown_args_inkwargs(
-            self, suppress_allwarnings, silence_event_loop_closed
+            self, silence_event_loop_closed
     ):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), server_kwargs={unknown: True})
