@@ -24,7 +24,7 @@ div.body h4 {
 }
 
 .pre, pre, code {
-    font-family: Menlo,Consolas,"Ubuntu Mono",Inconsolata,"Bitstream Vera Sans Mono","lucida console","Courier New",monospace;
+    font-family: "Fira Code",Menlo,Consolas,"Ubuntu Mono",Inconsolata,"Bitstream Vera Sans Mono","lucida console","Courier New",monospace;
 }
 
 div.highlight pre {
