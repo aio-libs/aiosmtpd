@@ -148,9 +148,9 @@ def get_controller(request):
 @pytest.fixture
 def get_handler(request):
     """
-    Provides a getter that will return an instance of a handler. Default class of
-    the handler is Sink, but can be changed via the "class_" parameter of
-    @pytest.mark.handler_data
+    Provides a getter that, when invoked, will return an instance of a handler.
+    Default class of the handler is Sink, but can be changed via the "class_"
+    parameter of @pytest.mark.handler_data
     """
     marker = request.node.get_closest_marker("handler_data")
     default_class = Sink
