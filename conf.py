@@ -21,10 +21,21 @@ from pathlib import Path
 try:
     # noinspection PyPackageRequirements
     from colorama import (
+        Fore,
+        Style,
         init as colorama_init,
     )
     colorama_init()
 except ImportError:
+    class Fore:
+        CYAN = "\x1b[1;96m"
+        GREEN = "\x1b[1;92m"
+        YELLOW = "\x1b[1;93m"
+
+    class Style:
+        BRIGHT = "\x1b[1m"
+        RESET_ALL = "\x1b[0m"
+
     colorama_init = None
 
 
@@ -316,4 +327,38 @@ texinfo_documents = [
 
 
 def setup(app):
-    app.add_css_file("aiosmtpd.css")
+    app.add_css_file("css/aiosmtpd.css")
+
+
+def index_html():
+    import errno
+    cwd = Path(".").expanduser().absolute()
+    htmldir = cwd / "build" / "sphinx" / "html"
+    try:
+        try:
+            htmldir.mkdir()
+        except FileExistsError:
+            pass
+        try:
+            index = htmldir / "aiosmtpd" / "docs" / "index.html"
+            (htmldir / "index.html").symlink_to(index)
+            print(f'{Fore.CYAN}index.html -> aiosmtpd/docs/index.html')
+        except OSError as error:
+            # On Windows>= 7, only users with 'SeCreateSymbolicLinkPrivilege' token
+            # can create symlinks.
+            if (getattr(error, "winerror", None) == 1314
+                    or str(error) == "symbolic link privilege not held"):
+                # I don't like matching against string, but sometimes this particular
+                # OSError does not have any errno nor winerror.
+                print(f"{Fore.YELLOW}WARNING: No privilege to create symlinks. "
+                      f"You have to make one manually")
+            elif error.errno == errno.EEXIST:
+                pass
+            else:
+                raise
+    finally:
+        print(Style.RESET_ALL)
+
+
+import atexit
+atexit.register(index_html)
