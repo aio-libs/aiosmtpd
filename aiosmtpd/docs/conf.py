@@ -33,7 +33,7 @@ RE__VERSION = re.compile(r"""__version__ = (['"])(?P<ver>[^'"]+)(\1)""")
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-_curdir = Path(".").expanduser().absolute()
+_curdir = Path("../..").expanduser().absolute()
 sys.path.insert(0, str(_curdir))
 sys.path.insert(0, str(_curdir / "aiosmtpd" / "docs" / "_exts"))
 sys.path.insert(0, str(_curdir / "aiosmtpd"))
@@ -63,7 +63,7 @@ source_suffix = ".rst"
 # source_encoding = 'utf-8-sig'
 
 # The master toctree document.
-master_doc = "aiosmtpd/docs/index"
+master_doc = "index"
 
 # General information about the project.
 author = "The aiosmtpd Developers"
@@ -76,7 +76,7 @@ copyright = f"2015-{datetime.datetime.now().year}, {author}"
 # built documents.
 #
 __version__ = None
-with open("aiosmtpd/smtp.py") as fp:
+with open("../smtp.py") as fp:
     for line in fp:
         m = RE__VERSION.match(line.strip())
         if m:
@@ -99,7 +99,7 @@ language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ["_build", ".tox/*", ".git*", "README.rst"]
+exclude_patterns = ["_exts/*", ".git*", "*.py", "*.txt", "Makefile"]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -178,7 +178,7 @@ html_theme = "default"
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ["_static"]
+html_static_path = ["../../_static"]
 
 # Add any extra paths that contain custom files (such as robots.txt or
 # .htaccess) here, relative to this directory. These files are copied
@@ -275,7 +275,9 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [("index", "aiosmtpd", "aiosmtpd Documentation", ["aiosmtpd hackers"], 1)]
+man_pages = [
+    ("manpage", "aiosmtpd", "aiosmtpd Documentation", ["aiosmtpd hackers"], 1),
+]
 
 # If true, show URL addresses after external links.
 # man_show_urls = False
