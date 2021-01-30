@@ -333,15 +333,15 @@ def setup(app):
 def index_html():
     import errno
     cwd = Path(".").expanduser().absolute()
-    htmldir = cwd / "build" / "sphinx" / "html"
+    if (cwd / "_build").exists():
+        # We're probably in RTD which uses _build/html for output
+        htmldir = cwd / "_build" / "html"
+    else:
+        htmldir = cwd / "build" / "sphinx" / "html"
     try:
         try:
-            htmldir.mkdir()
-        except FileExistsError:
-            pass
-        try:
-            index = htmldir / "aiosmtpd" / "docs" / "index.html"
-            (htmldir / "index.html").symlink_to(index)
+            actual_index = htmldir / "aiosmtpd" / "docs" / "index.html"
+            (htmldir / "index.html").symlink_to(actual_index)
             print(f'{Fore.CYAN}index.html -> aiosmtpd/docs/index.html')
         except OSError as error:
             # On Windows>= 7, only users with 'SeCreateSymbolicLinkPrivilege' token
