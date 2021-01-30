@@ -17,7 +17,6 @@ import re
 import datetime
 
 from pathlib import Path
-from textwrap import dedent
 
 try:
     # noinspection PyPackageRequirements
