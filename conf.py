@@ -17,6 +17,7 @@ import re
 import datetime
 
 from pathlib import Path
+from textwrap import dedent
 
 try:
     # noinspection PyPackageRequirements
@@ -330,35 +331,34 @@ def setup(app):
     app.add_css_file("css/aiosmtpd.css")
 
 
-def index_html():
-    import errno
+actual_index = "https://aiosmtpd.readthedocs.io/en/latest/aiosmtpd/docs/"
+# language=html
+index_html = dedent(f"""
+<!DOCTYPE html>
+<html>
+   <head>
+      <title>aiosmtpd</title>
+      <meta http-equiv="refresh" content="0; url={actual_index}" />
+   </head>
+   <body>
+      <p>Redirecting to <a href="{actual_index}">{actual_index}</a></p>
+   </body>
+</html>
+""")
+
+
+def make_index():
     cwd = Path(".").expanduser().absolute()
     if (cwd / "_build").exists():
         # We're probably in RTD which uses _build/html for output
         htmldir = cwd / "_build" / "html"
     else:
         htmldir = cwd / "build" / "sphinx" / "html"
-    try:
-        try:
-            actual_index = htmldir / "aiosmtpd" / "docs" / "index.html"
-            (htmldir / "index.html").symlink_to(actual_index)
-            print(f'{Fore.CYAN}index.html -> aiosmtpd/docs/index.html')
-        except OSError as error:
-            # On Windows>= 7, only users with 'SeCreateSymbolicLinkPrivilege' token
-            # can create symlinks.
-            if (getattr(error, "winerror", None) == 1314
-                    or str(error) == "symbolic link privilege not held"):
-                # I don't like matching against string, but sometimes this particular
-                # OSError does not have any errno nor winerror.
-                print(f"{Fore.YELLOW}WARNING: No privilege to create symlinks. "
-                      f"You have to make one manually")
-            elif error.errno == errno.EEXIST:
-                pass
-            else:
-                raise
-    finally:
-        print(Style.RESET_ALL)
+    with (htmldir / "index.html").open("wt") as index:
+        index.write(index_html)
+    print("index.html created")
+    print(Style.RESET_ALL)
 
 
 import atexit
-atexit.register(index_html)
+atexit.register(make_index)
