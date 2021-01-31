@@ -12,9 +12,17 @@ class StatusCode(NamedTuple):
         return StatusCode(self.code, nmsg)
 
     def to_bytes(self) -> bytes:
+        """
+        Returns code + mesg as bytes.
+        WARNING: This is NOT identical to __str()__.encode()!
+        """
         return str(self.code).encode() + b" " + self.mesg
 
     def to_str(self) -> str:
+        """
+        Returns code + mesg as a string.
+        WARNING: This is NOT identical to __str__()!
+        """
         return str(self.code) + " " + self.mesg.decode()
 
 
