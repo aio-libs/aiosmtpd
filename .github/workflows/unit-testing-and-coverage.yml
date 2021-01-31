@@ -47,6 +47,7 @@ jobs:
           pytest aiosmtpd/docs
           python setup.py build_sphinx
       - name: "Static Type Checking"
+        # language=bash
         run: |
           pytype --keep-going --jobs auto .
       - name: "Other QA Checks"
