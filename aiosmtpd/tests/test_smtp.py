@@ -49,6 +49,12 @@ from pytest_mock import MockFixture
 CRLF = "\r\n"
 BCRLF = b"\r\n"
 MAIL_LOG = logging.getLogger("mail.log")
+MAIL_LOG.setLevel(logging.DEBUG)
+
+# fh = logging.FileHandler("~smtp.log")
+# fh.setFormatter(logging.Formatter("{asctime} - {levelname} - {message}", style="{"))
+# fh.setLevel(logging.DEBUG)
+# MAIL_LOG.addHandler(fh)
 
 
 # region #### Test Helpers ############################################################
