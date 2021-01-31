@@ -13,10 +13,12 @@ import itertools
 
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import (
+    AuthResult,
     BOGUS_LIMIT,
     CALL_LIMIT_DEFAULT,
     MISSING,
     Session as SMTPSession,
+    Envelope as SMTPEnvelope,
     SMTP as Server,
     __ident__ as GREETING,
     auth_mechanism,
@@ -33,12 +35,13 @@ from base64 import b64encode
 from contextlib import suppress
 from smtplib import (
     SMTP as SMTPClient,
+    SMTPAuthenticationError,
     SMTPDataError,
     SMTPResponseException,
     SMTPServerDisconnected,
 )
 from textwrap import dedent
-from typing import AnyStr, Callable, Generator, List, Tuple
+from typing import Any, AnyStr, Callable, Generator, List, Tuple
 
 from pytest_mock import MockFixture
 
@@ -77,20 +80,55 @@ class ErrorSMTP(Server):
 
 
 class PeekerHandler:
-    _sess: SMTPSession = None
+    sess: SMTPSession = None
     login: AnyStr = None
+    login_data: Any = None
+    mechanism: AnyStr = None
     password: AnyStr = None
 
-    def authenticate(self, mechanism: str, login: bytes, password: bytes) -> bool:
+    def authcallback(self, mechanism: str, login: bytes, password: bytes) -> bool:
         self.login = login
         self.password = password
         return login == b"goodlogin" and password == b"goodpasswd"
 
+    def authenticator(
+            self,
+            server: Server,
+            session: SMTPSession,
+            envelope: SMTPEnvelope,
+            mechanism: str,
+            login_data: Tuple[bytes, bytes],
+    ) -> AuthResult:
+        self.sess = session
+        self.mechanism = mechanism
+        self.login_data = login_data
+        userb, passb = login_data
+        if userb == b"failme_with454":
+            return AuthResult(
+                success=False,
+                handled=False,
+                message="454 4.7.0 Temporary authentication failure",
+            )
+        else:
+            self.login = userb
+            self.password = passb
+            return AuthResult(success=True, auth_data=login_data)
+
     async def handle_MAIL(
         self, server, session: SMTPSession, envelope, address, mail_options
     ):
-        self._sess = session
+        self.sess = session
         return S.S250_OK.to_str()
+
+    async def auth_DENYMISSING(self, server, args):
+        return MISSING
+
+    async def auth_DENYFALSE(self, server, args):
+        return False
+
+    async def auth_NONE(self, server: Server, args):
+        await server.push(S.S235_AUTH_SUCCESS.to_str())
+        return None
 
     async def auth_NULL(self, server, args):
         return "NULL_login"
@@ -254,7 +292,28 @@ def auth_peeker_controller(
         decode_data=True,
         enable_SMTPUTF8=True,
         auth_require_tls=False,
-        auth_callback=handler.authenticate,
+        auth_callback=handler.authcallback,
+        auth_exclude_mechanism=["DONT"],
+    )
+    controller.start()
+    Global.set_addr_from(controller)
+    #
+    yield controller
+    #
+    controller.stop()
+
+
+@pytest.fixture
+def authenticator_peeker_controller(
+        get_controller
+) -> Generator[ExposingController, None, None]:
+    handler = PeekerHandler()
+    controller = get_controller(
+        handler,
+        decode_data=True,
+        enable_SMTPUTF8=True,
+        auth_require_tls=False,
+        authenticator=handler.authenticator,
         auth_exclude_mechanism=["DONT"],
     )
     controller.start()
@@ -1016,7 +1075,10 @@ class TestAuthMechanisms(_CommonMethods):
             bytes(socket.getfqdn(), "utf-8"),
             b"SIZE 33554432",
             b"SMTPUTF8",
-            b"AUTH LOGIN NULL PLAIN WITH-DASH WITH-MULTI-DASH WITH_UNDERSCORE",
+            (
+                b"AUTH DENYFALSE DENYMISSING LOGIN NONE NULL PLAIN "
+                b"WITH-DASH WITH-MULTI-DASH WITH_UNDERSCORE"
+            ),
             b"HELP",
         ]
 
@@ -1035,6 +1097,24 @@ class TestAuthMechanisms(_CommonMethods):
         self._ehlo(client)
         resp = client.docmd("AUTH DONT")
         assert resp == S.S504_AUTH_UNRECOG
+
+    @pytest.mark.parametrize("init_resp", [True, False])
+    @pytest.mark.parametrize("mechanism", ["login", "plain"])
+    def test_byclient(self, auth_peeker_controller, client, mechanism, init_resp):
+        self._ehlo(client)
+        client.user = "goodlogin"
+        client.password = "goodpasswd"
+        auth_meth = getattr(client, "auth_" + mechanism)
+        if (mechanism, init_resp) == ("login", False):
+            with pytest.raises(SMTPAuthenticationError):
+                client.auth(mechanism, auth_meth, initial_response_ok=init_resp)
+            client.docmd("*")
+            pytest.xfail(reason="smtplib.SMTP.auth_login is buggy (bpo-27820)")
+        client.auth(mechanism, auth_meth, initial_response_ok=init_resp)
+        peeker = auth_peeker_controller.handler
+        assert isinstance(peeker, PeekerHandler)
+        assert peeker.login == b"goodlogin"
+        assert peeker.password == b"goodpasswd"
 
     def test_plain1_bad_base64_encoding(self, do_auth_plain1):
         resp = do_auth_plain1("not-b64")
@@ -1071,7 +1151,7 @@ class TestAuthMechanisms(_CommonMethods):
         resp = do_auth_plain1.client.mail("alice@example.com")
         assert resp == S.S250_OK
 
-    def test_authplain_goodcreds_sanitized_log(self, caplog, client):
+    def test_plain1_goodcreds_sanitized_log(self, caplog, client):
         caplog.set_level("DEBUG")
         client.ehlo('example.com')
         code, response = client.docmd(
@@ -1120,6 +1200,26 @@ class TestAuthMechanisms(_CommonMethods):
         resp = client_auth_plain2.docmd("ab@%")
         assert resp == S.S501_AUTH_NOTB64
 
+    def test_login2_bad_base64(self, auth_peeker_controller, client):
+        self._ehlo(client)
+        resp = client.docmd("AUTH LOGIN ab@%")
+        assert resp == S.S501_AUTH_NOTB64
+
+    def test_login2_good_credentials(self, auth_peeker_controller, client):
+        self._ehlo(client)
+        line = "AUTH LOGIN " + b64encode(b"goodlogin").decode()
+        resp = client.docmd(line)
+        assert resp == S.S334_AUTH_PASSWORD
+        assert resp == S.S334_AUTH_PASSWORD
+        resp = client.docmd(b64encode(b"goodpasswd").decode())
+        assert resp == S.S235_AUTH_SUCCESS
+        peeker = auth_peeker_controller.handler
+        assert isinstance(peeker, PeekerHandler)
+        assert peeker.login == b"goodlogin"
+        assert peeker.password == b"goodpasswd"
+        resp = client.mail("alice@example.com")
+        assert resp == S.S250_OK
+
     def test_login3_good_credentials(self, auth_peeker_controller, do_auth_login3):
         resp = do_auth_login3(b64encode(b"goodlogin").decode())
         assert resp == S.S334_AUTH_PASSWORD
@@ -1164,6 +1264,50 @@ class TestAuthMechanisms(_CommonMethods):
         assert resp == S.S334_AUTH_PASSWORD
         resp = do_auth_login3("*")
         assert resp == S.S501_AUTH_ABORTED
+
+    def test_DENYFALSE(self, client):
+        self._ehlo(client)
+        resp = client.docmd("AUTH DENYFALSE")
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_DENYMISSING(self, client):
+        self._ehlo(client)
+        resp = client.docmd("AUTH DENYMISSING")
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_NONE(self, client):
+        self._ehlo(client)
+        resp = client.docmd("AUTH NONE")
+        assert resp == S.S235_AUTH_SUCCESS
+
+
+class TestAuthenticator(_CommonMethods):
+    def test_success(self, authenticator_peeker_controller, client):
+        client.user = "gooduser"
+        client.password = "goodpasswd"
+        self._ehlo(client)
+        client.auth("plain", client.auth_plain)
+        auth_peeker = authenticator_peeker_controller.handler
+        assert isinstance(auth_peeker, PeekerHandler)
+        assert auth_peeker.sess.peer[0] in {"::1", "127.0.0.1", "localhost"}
+        assert auth_peeker.sess.peer[1] > 0
+        assert auth_peeker.sess.authenticated
+        assert auth_peeker.sess.auth_data == (b"gooduser", b"goodpasswd")
+        assert auth_peeker.login_data == (b"gooduser", b"goodpasswd")
+
+    def test_fail_withmesg(self, authenticator_peeker_controller, client):
+        client.user = "failme_with454"
+        client.password = "anypass"
+        self._ehlo(client)
+        with pytest.raises(SMTPAuthenticationError) as cm:
+            client.auth("plain", client.auth_plain)
+        assert cm.value.args == (454, b"4.7.0 Temporary authentication failure")
+        auth_peeker = authenticator_peeker_controller.handler
+        assert isinstance(auth_peeker, PeekerHandler)
+        assert auth_peeker.sess.peer[0] in {"::1", "127.0.0.1", "localhost"}
+        assert auth_peeker.sess.peer[1] > 0
+        assert auth_peeker.sess.login_data is None
+        assert auth_peeker.login_data == (b"failme_with454", b"anypass")
 
 
 @pytest.mark.filterwarnings(
