@@ -76,7 +76,10 @@ class TestMain(unittest.TestCase):
         # needed would be 0.1 +/- 20%; so raising this value by 900%
         # *should* be enough. We can revisit this in the future if it needs
         # to be longer.
-        loop.call_later(1.0, loop.stop)
+        #
+        # Edited 2020-12-21: Started seeing same intermittent error. Increasing by
+        # 50% to 1.5
+        loop.call_later(1.5, loop.stop)
         self.resources.callback(asyncio.set_event_loop, default_loop)
         asyncio.set_event_loop(loop)
         self.addCleanup(self.resources.close)

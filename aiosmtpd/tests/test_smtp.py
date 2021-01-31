@@ -14,11 +14,14 @@ import warnings
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import (
+    AuthResult,
     CALL_LIMIT_DEFAULT,
+    Envelope as SMTPEnvelope,
     MISSING,
-    Session as SMTPSess,
     SMTP as Server,
-    __ident__ as GREETING, auth_mechanism
+    Session as SMTPSession,
+    __ident__ as GREETING,
+    auth_mechanism,
 )
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
@@ -32,9 +35,15 @@ from aiosmtpd.testing.helpers import (
 from base64 import b64encode
 from contextlib import ExitStack
 from smtplib import (
-    SMTP, SMTPDataError, SMTPResponseException, SMTPServerDisconnected)
-from typing import ContextManager, cast
+    SMTP,
+    SMTPAuthenticationError,
+    SMTPDataError,
+    SMTPResponseException,
+    SMTPServerDisconnected
+)
 from unittest.mock import Mock, patch
+
+from typing import ContextManager, Tuple, cast
 
 CRLF = '\r\n'
 BCRLF = b'\r\n'
@@ -72,7 +81,7 @@ def tearDownModule():
     ModuleResources.close()
 
 
-def authenticator(mechanism, login, password):
+def auth_callback(mechanism, login, password):
     if login and login.decode() == 'goodlogin':
         return True
     else:
@@ -82,22 +91,32 @@ def authenticator(mechanism, login, password):
 class DecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
-                      auth_require_tls=False, auth_callback=authenticator)
+                      auth_require_tls=False, auth_callback=auth_callback)
 
 
 class PeekerHandler:
-    session: SMTPSess = None
+    sess: SMTPSession = None
 
     async def handle_MAIL(
             self, server, session, envelope, address, mail_options
     ):
-        self.session = session
+        self.sess = session
         return "250 OK"
+
+    async def auth_DENYMISSING(self, server, args):
+        return MISSING
+
+    async def auth_DENYFALSE(self, server, args):
+        return False
 
     async def auth_NULL(
             self, server, args
     ):
         return "NULL_login"
+
+    async def auth_NONE(self, server: Server, args):
+        await server.push("235 2.7.0  Authentication Succeeded")
+        return None
 
     async def auth_DONT(
             self, server, args
@@ -123,16 +142,45 @@ class PeekerHandler:
 
 
 class PeekerAuth:
-    def __init__(self):
-        self.login = None
-        self.password = None
+    login: bytes = None
+    password: bytes = None
+    mechanism: str = None
 
-    def authenticate(
+    sess: SMTPSession = None
+    login_data = None
+
+    def auth_callback(
             self, mechanism: str, login: bytes, password: bytes
     ) -> bool:
+        assert login is not None
+        assert password is not None
+        self.mechanism = mechanism
         self.login = login
         self.password = password
         return True
+
+    def authenticator(
+            self,
+            server: Server,
+            session: SMTPSession,
+            envelope: SMTPEnvelope,
+            mechanism: str,
+            login_data: Tuple[bytes, bytes],
+    ) -> AuthResult:
+        self.sess = session
+        self.mechanism = mechanism
+        self.login_data = login_data
+        userb, passb = login_data
+        if userb == b"failme_with454":
+            return AuthResult(
+                success=False,
+                handled=False,
+                message="454 4.7.0 Temporary authentication failure",
+            )
+        else:
+            self.login = userb
+            self.password = passb
+            return AuthResult(success=True, auth_data=login_data)
 
 
 auth_peeker = PeekerAuth()
@@ -143,7 +191,16 @@ class DecodingControllerPeekAuth(Controller):
         self.server_kwargs["enable_SMTPUTF8"] = True
         return Server(self.handler, decode_data=True,
                       auth_require_tls=False,
-                      auth_callback=auth_peeker.authenticate,
+                      auth_callback=auth_peeker.auth_callback,
+                      **self.server_kwargs)
+
+
+class DecodingControllerPeekAuthNewSystem(Controller):
+    def factory(self):
+        self.server_kwargs["enable_SMTPUTF8"] = True
+        return Server(self.handler, decode_data=True,
+                      auth_require_tls=False,
+                      authenticator=auth_peeker.authenticator,
                       **self.server_kwargs)
 
 
@@ -162,7 +219,7 @@ class TimeoutController(Controller):
 class RequiredAuthDecodingController(Controller):
     def factory(self):
         return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
-                      auth_require_tls=False, auth_callback=authenticator,
+                      auth_require_tls=False, auth_callback=auth_callback,
                       auth_required=True)
 
 
@@ -976,14 +1033,20 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 503)
             self.assertEqual(response, b'Already authenticated')
 
-    def test_auth_bad_base64_encoding(self):
+    def test_auth_plain_bad_base64_encoding(self):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd('AUTH PLAIN not-b64')
             self.assertEqual(code, 501)
             self.assertEqual(response, b"5.5.2 Can't decode base64")
 
-    def test_auth_bad_base64_length(self):
+    def test_auth_login_bad_base64_encoding(self):
+        with SMTP(*self.address) as client:
+            client.ehlo('example.com')
+            response = client.docmd('AUTH LOGIN not-b64')
+            assert response == (501, b"5.5.2 Can't decode base64")
+
+    def test_auth_plain_bad_base64_length(self):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd(
@@ -1043,13 +1106,25 @@ class TestSMTP(unittest.TestCase):
             self.assertEqual(code, 501)
             self.assertEqual(response, b"5.5.2 Can't decode base64")
 
-    def test_auth_good_credentials(self):
+    def test_auth_plain_good_credentials(self):
         with SMTP(*self.address) as client:
             client.ehlo('example.com')
             code, response = client.docmd(
                 'AUTH PLAIN ' +
                 b64encode(b'\0goodlogin\0goodpasswd').decode()
             )
+            assert_auth_success(self, code, response)
+
+    def test_auth_login_good_credentials(self):
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, response = client.docmd("AUTH LOGIN")
+            self.assertEqual(code, 334)
+            self.assertEqual(response, b"VXNlciBOYW1lAA==")
+            code, response = client.docmd('Z29vZGxvZ2lu')  # "goodlogin"
+            self.assertEqual(code, 334)
+            self.assertEqual(response, b"UGFzc3dvcmQA")
+            code, response = client.docmd('Z29vZHBhc3N3ZA==')  # "goodpassword"
             assert_auth_success(self, code, response)
 
     def test_authplain_goodcreds_sanitized_log(self):
@@ -1120,15 +1195,60 @@ class TestSMTPAuth(unittest.TestCase):
             code, response = client.ehlo('example.com')
             self.assertEqual(code, 250)
             lines = response.splitlines()
-            expecteds = (
+            expecteds = [
                 bytes(socket.getfqdn(), 'utf-8'),
                 b'SIZE 33554432',
                 b'SMTPUTF8',
-                b'AUTH LOGIN NULL PLAIN WITH-DASH WITH-MULTI-DASH WITH_UNDERSCORE',
+                (
+                    b'AUTH DENYFALSE DENYMISSING LOGIN NONE NULL PLAIN '
+                    b'WITH-DASH WITH-MULTI-DASH WITH_UNDERSCORE'
+                ),
                 b'HELP',
-            )
-            for actual, expected in zip(lines, expecteds):
-                self.assertEqual(actual, expected)
+            ]
+            assert lines == expecteds
+
+    def test_auth_byclient_plain(self):
+        with SMTP(*self.address) as client:
+            client.user = "gooduser"
+            client.password = "goodpass"
+            client.ehlo("example.com")
+            client.auth("plain", client.auth_plain)
+        self.assertEqual(b"gooduser", auth_peeker.login)
+        self.assertEqual(b"goodpass", auth_peeker.password)
+        self.assertEqual("PLAIN", auth_peeker.mechanism)
+
+    def test_auth_byclient_plain_notinitialok(self):
+        with SMTP(*self.address) as client:
+            client.user = "gooduser"
+            client.password = "goodpass"
+            client.ehlo("example.com")
+            client.auth("plain", client.auth_plain, initial_response_ok=False)
+        self.assertEqual(b"gooduser", auth_peeker.login)
+        self.assertEqual(b"goodpass", auth_peeker.password)
+        self.assertEqual("PLAIN", auth_peeker.mechanism)
+
+    def test_auth_byclient_login(self):
+        with SMTP(*self.address) as client:
+            client.user = "gooduser"
+            client.password = "goodpass"
+            client.ehlo("example.com")
+            client.auth("login", client.auth_login)
+        self.assertEqual(b"gooduser", auth_peeker.login)
+        self.assertEqual(b"goodpass", auth_peeker.password)
+        self.assertEqual("LOGIN", auth_peeker.mechanism)
+
+    # Mark this as expectedFailure because smtplib.SMTP implementation in Python>=3.5
+    # is buggy. See bpo-27820
+    @unittest.expectedFailure
+    def test_auth_byclient_login_notinitialok(self):
+        with SMTP(*self.address) as client:
+            client.user = "gooduser"
+            client.password = "goodpass"
+            client.ehlo("example.com")
+            client.auth("login", client.auth_login, initial_response_ok=False)
+        self.assertEqual(b"gooduser", auth_peeker.login)
+        self.assertEqual(b"goodpass", auth_peeker.password)
+        self.assertEqual("LOGIN", auth_peeker.mechanism)
 
     def test_auth_plain_null_credential(self):
         with SMTP(*self.address) as client:
@@ -1142,9 +1262,8 @@ class TestSMTPAuth(unittest.TestCase):
             assert_auth_success(self, code, response)
             self.assertEqual(auth_peeker.login, b"")
             self.assertEqual(auth_peeker.password, b"")
-            code, response = client.mail("alice@example.com")
-            sess: SMTPSess = self.handler.session
-            self.assertEqual(sess.login_data, b"")
+            response = client.mail("alice@example.com")
+            assert response == (250, b"OK")
 
     def test_auth_login_null_credential(self):
         with SMTP(*self.address) as client:
@@ -1157,11 +1276,11 @@ class TestSMTPAuth(unittest.TestCase):
             self.assertEqual(response, b"UGFzc3dvcmQA")
             code, response = client.docmd('=')
             assert_auth_success(self, code, response)
-            self.assertEqual(auth_peeker.login, b"")
-            self.assertEqual(auth_peeker.password, b"")
-            code, response = client.mail("alice@example.com")
-            sess: SMTPSess = self.handler.session
-            self.assertEqual(sess.login_data, b"")
+            assert auth_peeker.mechanism == "LOGIN"
+            assert auth_peeker.login == b""
+            assert auth_peeker.password == b""
+            response = client.mail("alice@example.com")
+            assert response == (250, b"OK")
 
     def test_auth_login_abort_login(self):
         with SMTP(*self.address) as client:
@@ -1220,7 +1339,7 @@ class TestSMTPAuth(unittest.TestCase):
             self.assertEqual(auth_peeker.login, b"")
             self.assertEqual(auth_peeker.password, b"")
             code, mesg = client.mail("alice@example.com")
-            sess: SMTPSess = self.handler.session
+            sess: SMTPSession = self.handler.sess
             self.assertEqual(sess.login_data, b"")
             code, mesg = client.rset()
             self.assertEqual(code, 250)
@@ -1253,6 +1372,66 @@ class TestSMTPAuth(unittest.TestCase):
             assert len(w) > 0
             assert str(w[0].message) == "AUTH interaction logging is enabled!"
             assert str(w[1].message) == "Sensitive information might be leaked!"
+
+    def test_auth_NONE(self):
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, mesg = client.docmd("AUTH NONE")
+            self.assertEqual(code, 235)
+            self.assertEqual(mesg, b"2.7.0  Authentication Succeeded")
+
+    def test_auth_DENYFALSE(self):
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, mesg = client.docmd("AUTH DENYFALSE")
+            self.assertEqual(code, 535)
+
+    def test_auth_DENYMISSING(self):
+        with SMTP(*self.address) as client:
+            client.ehlo("example.com")
+            code, mesg = client.docmd("AUTH DENYMISSING")
+            self.assertEqual(code, 535)
+
+
+class TestSMTPAuthNew(unittest.TestCase):
+    def setUp(self):
+        self.handler = PeekerHandler()
+        controller = DecodingControllerPeekAuthNewSystem(
+            self.handler, server_kwargs={"auth_exclude_mechanism": ["DONT"]}
+        )
+        self.addCleanup(controller.stop)
+        controller.start()
+        self.address = (controller.hostname, controller.port)
+
+    def test_newauth_success(self):
+        with SMTP(*self.address) as client:
+            client.user = "gooduser"
+            client.password = "goodpass"
+            client.ehlo("example.com")
+            client.auth("plain", client.auth_plain)
+        peer = auth_peeker.sess.peer
+        self.assertIn(peer[0], {"::1", "127.0.0.1", "localhost"})
+        self.assertGreater(peer[1], 0)
+        assert auth_peeker.sess.authenticated
+        assert auth_peeker.sess.login_data
+        assert auth_peeker.sess.auth_data == (b"gooduser", b"goodpass")
+        assert auth_peeker.login_data == (b"gooduser", b"goodpass")
+
+    def test_newauth_fail_withmessage(self):
+        with SMTP(*self.address) as client:
+            client.user = "failme_with454"
+            client.password = "anypass"
+            client.ehlo("example.com")
+            with self.assertRaises(SMTPAuthenticationError) as cm:
+                client.auth("plain", client.auth_plain)
+        self.assertEqual(cm.exception.smtp_code, 454)
+        self.assertEqual(cm.exception.smtp_error,
+                         b"4.7.0 Temporary authentication failure")
+        peer = auth_peeker.sess.peer
+        self.assertIn(peer[0], {"::1", "127.0.0.1", "localhost"})
+        self.assertGreater(peer[1], 0)
+        self.assertIsNone(auth_peeker.sess.login_data)
+        self.assertEqual((b"failme_with454", b"anypass"), auth_peeker.login_data)
 
 
 class TestRequiredAuthentication(unittest.TestCase):
@@ -1309,9 +1488,8 @@ class TestRequiredAuthentication(unittest.TestCase):
                 b64encode(b'\0goodlogin\0goodpasswd').decode()
             )
             assert_auth_success(self, code, response)
-            code, response = client.docmd('HELP')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, SUPPORTED_COMMANDS_NOTLS)
+            response = client.docmd('HELP')
+            assert response == (250, SUPPORTED_COMMANDS_NOTLS)
 
     def test_vrfy_authenticated(self):
         with SMTP(*self.address) as client:
@@ -1481,6 +1659,9 @@ class TestSMTPWithController(unittest.TestCase):
             self.assertEqual(response, b'OK')
         self.assertEqual(handler.box[0].rcpt_tos[0], recipient)
         self.assertEqual(handler.box[0].mail_from, sender)
+        peer = handler.boxed_sess[0].peer
+        self.assertIn(peer[0], {"::1", "127.0.0.1", "localhost"})
+        self.assertNotEqual(peer[1], 0)
 
     def test_mail_with_unrequited_smtputf8(self):
         controller = Controller(Sink())

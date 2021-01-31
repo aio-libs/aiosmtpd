@@ -14,6 +14,11 @@ Added
 Fixed/Improved
 --------------
 * No longer have to workaround ``bpo-27931`` which has been fixed in Python 3.6 anyways.
+* New :meth:`handle_EHLO` interaction where said method can now modify list of responses
+  to the EHLO command (Closes #155)
+* ``authenticator`` system improves on ``auth_callback`` by enabling the called function
+  to see the SMTP Session and other info.
+  (``auth_callback`` will be deprecated in 2.0)
 
 
 1.2.4 (2021-01-24)

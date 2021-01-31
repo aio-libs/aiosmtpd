@@ -111,11 +111,11 @@ def get_server_context():
 
 
 class ReceivingHandler:
-    box = None
-
     def __init__(self):
         self.box = []
+        self.boxed_sess = []
 
     async def handle_DATA(self, server, session, envelope):
         self.box.append(envelope)
+        self.boxed_sess.append(session)
         return '250 OK'

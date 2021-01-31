@@ -4,10 +4,10 @@
  The SMTP class
 ================
 
-At the heart of this module is the ``SMTP`` class.  This class implements the
-:rfc:`5321` Simple Mail Transport
-Protocol.  Often you won't run an ``SMTP`` instance directly, but instead will
-use a :ref:`controller <controller>` instance to run the server in a subthread.
+At the heart of this module is the ``SMTP`` class.
+This class implements the :rfc:`5321` Simple Mail Transport Protocol.
+Often you won't run an ``SMTP`` instance directly,
+but instead will use a :ref:`Controller <controller>` instance to run the server in a subthread.
 
     >>> from aiosmtpd.controller import Controller
 
@@ -107,7 +107,7 @@ SMTP API
    decode_data=False, hostname=None, ident=None, tls_context=None, \
    require_starttls=False, timeout=300, auth_required=False, \
    auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, \
-   command_call_limit=None, loop=None)
+   authenticator=None, command_call_limit=None, loop=None)
 
    |
    | :part:`Parameters`
@@ -160,6 +160,31 @@ SMTP API
    ``login: bytes``, and ``password: bytes``. Based on these args, the function
    must return a ``bool`` that indicates whether the client's authentication
    attempt is accepted/successful or not.
+   The** ``authenticator`` parameter below, if set, **overrides** this parameter.
+
+   :boldital:`authenticator` is a function whose signature is identical to ``aiosmtpd.smtp.AuthenticatorType``.
+   This parameter, if set, **overrides** the ``auth_callback`` parameter above.
+   The function must accept five arguments:
+
+      * ``server`` -- reference to the calling SMTP instance
+      * ``session`` -- the Session object of the current SMTP session
+      * ``envelope`` -- the Envelope object of the current SMTP session so far
+      * ``mechanism`` -- the SMTP Auth Mechanism chosen by the SMTP Client
+      * ``auth_data`` -- a data structure containing information necessary for authentication.
+        For built-in mechanisms this invariably contains a tuple of ``(username, password)``
+
+   The function must return an instance of ``AuthResult``,
+   a namedtuple with the following fields/attributes:
+
+      * ``success`` -- True if authentication successful
+      * ``handled`` -- (ignored if ``success`` is True)
+        Indicates all necessary processing (e.g., sending of SMTP Status Codes) has been handled and
+        the calling SMTP instance does not need to perform further processing
+      * ``message`` -- (Optional) Message explaining the ``success`` value.
+        If ``handled`` is false, then contains the SMTP Status Code to be sent by the calling SMTP instance
+      * ``auth_data`` -- (only if ``success`` is True)
+        A free-form data structure containing the authentication information.
+        For the built-in AUTH mechanisms, invariably contains a tuple of ``(username, password)``
 
    :boldital:`command_call_limit` if not ``None`` sets the maximum time a certain SMTP
    command can be invoked.
@@ -205,7 +230,7 @@ SMTP API
    :meth:`asyncio.new_event_loop()` is called to create the event loop.
 
    |
-   | :part:`Attributes`
+   | :part:`Attributes & Methods`
 
    .. py:attribute:: line_length_limit
 
@@ -222,6 +247,16 @@ SMTP API
          To return to the behavior of the previous versions, set
          :attr:`line_length_limit` to ``2**16`` *before* instantiating the
          :class:`SMTP` class.
+
+   .. py:attribute:: AuthLoginUsernameChallenge
+
+      A ``str`` containing the base64-encoded challenge to be sent as the first challenge
+      in the ``AUTH LOGIN`` mechanism.
+
+   .. py:attribute:: AuthLoginPasswordChallenge
+
+      A ``str`` containing the base64-encoded challenge to be sent as the second challenge
+      in the ``AUTH LOGIN`` mechanism.
 
    .. attribute:: event_handler
 
@@ -303,9 +338,10 @@ SMTP API
 Enabling STARTTLS
 =================
 
-To enable :rfc:`3207` ``STARTTLS``, you must supply the *tls_context* argument
-to the :class:`SMTP` class.  *tls_context* is created with the
-:func:`ssl.create_default_context` call from the :mod:`ssl` module, as follows::
+To enable :rfc:`3207` ``STARTTLS``,
+you must supply the *tls_context* argument to the :class:`SMTP` class.
+*tls_context* is created with the :func:`ssl.create_default_context` call
+from the :mod:`ssl` module, as follows::
 
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
 
