@@ -125,15 +125,16 @@ def get_controller(request):
             STARTTLS
         """
         assert not inspect.isclass(handler)
-        class_: Optional[Type[Controller]] = markerdata.get("class_", default_class)
+        class_: Optional[Type[Controller]] = markerdata.pop("class_", default_class)
         if class_ is None:
             raise RuntimeError(
                 f"Fixture '{request.fixturename}' needs controller_data to specify "
                 f"what class to use"
             )
-        ip_port: HostPort = markerdata.get("host_port", HostPort())
+        ip_port: HostPort = markerdata.pop("host_port", HostPort())
         hostname = ip_port.host if hostname is None else hostname
         port = ip_port.port if port is None else port
+        server_kwargs.update(markerdata)
         return class_(
             handler,
             hostname=hostname,
