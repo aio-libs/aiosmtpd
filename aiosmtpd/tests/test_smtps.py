@@ -5,7 +5,8 @@
 
 import pytest
 
-from .conftest import ExposingController, Global
+from .conftest import Global
+from aiosmtpd.controller import Controller
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
 )
@@ -19,7 +20,7 @@ from typing import Generator, Union
 @pytest.fixture
 def ssl_controller(
         get_controller, ssl_context_server
-) -> Generator[ExposingController, None, None]:
+) -> Generator[Controller, None, None]:
     handler = ReceivingHandler()
     controller = get_controller(handler, ssl_context=ssl_context_server)
     controller.start()

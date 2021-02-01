@@ -5,7 +5,8 @@ import sys
 import pytest
 import logging
 
-from .conftest import ExposingController, Global
+from .conftest import Global, controller_data, handler_data
+from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
 from aiosmtpd.smtp import SMTP as Server, Session as ServerSession
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S, StatusCode
@@ -30,7 +31,7 @@ class HasFakeParser(Protocol):
 
 
 class KnowsUpstream(Protocol):
-    upstream: ExposingController
+    upstream: Controller
 
 
 T = TypeVar("T")
@@ -152,7 +153,7 @@ class NoHooksHandler:
     pass
 
 
-class DeprecatedHookController(ExposingController):
+class DeprecatedHookController(Controller):
     class DeprecatedHookServer(Server):
 
         warnings: list = None
@@ -188,7 +189,7 @@ class AsyncDeprecatedHandler:
 
 
 @pytest.fixture
-def debugging_controller(get_controller) -> Generator[ExposingController, None, None]:
+def debugging_controller(get_controller) -> Generator[Controller, None, None]:
     # Cannot use plain_controller fixture because we need to first create the
     # Debugging handler before creating the controller.
     stream = StringIO()
@@ -212,7 +213,7 @@ def temp_maildir(tmp_path: Path) -> Generator[Path, None, None]:
 @pytest.fixture
 def mailbox_controller(
         temp_maildir, get_controller
-) -> Generator[ExposingController, None, None]:
+) -> Generator[Controller, None, None]:
     handler = Mailbox(temp_maildir)
     controller = get_controller(handler)
     controller.start()
@@ -249,7 +250,7 @@ def with_fake_parser():
 
 
 @pytest.fixture
-def upstream_controller(get_controller) -> Generator[ExposingController, None, None]:
+def upstream_controller(get_controller) -> Generator[Controller, None, None]:
     upstream_handler = DataHandler()
     upstream_controller = get_controller(upstream_handler, port=9025)
     upstream_controller.start()
@@ -263,7 +264,7 @@ def upstream_controller(get_controller) -> Generator[ExposingController, None, N
 @pytest.fixture
 def proxy_nodecode_controller(
     upstream_controller, get_controller
-) -> Generator[Union[ExposingController, KnowsUpstream], None, None]:
+) -> Generator[Union[Controller, KnowsUpstream], None, None]:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
     proxy_controller = get_controller(proxy_handler)
     proxy_controller.upstream = upstream_controller
@@ -278,7 +279,7 @@ def proxy_nodecode_controller(
 @pytest.fixture
 def proxy_decoding_controller(
     upstream_controller, get_controller
-) -> Generator[Union[ExposingController, KnowsUpstream], None, None]:
+) -> Generator[Union[Controller, KnowsUpstream], None, None]:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
     proxy_controller = get_controller(proxy_handler, decode_data=True)
     proxy_controller.upstream = upstream_controller
@@ -294,7 +295,7 @@ def proxy_decoding_controller(
 
 
 class TestDebugging:
-    @pytest.mark.controller_data(decode_data=True)
+    @controller_data(decode_data=True)
     def test_debugging(self, debugging_controller, client):
         peer = client.sock.getsockname()
         client.sendmail(
@@ -430,7 +431,7 @@ class TestDebugging:
 
 
 class TestMessage:
-    @pytest.mark.handler_data(class_=DataHandler)
+    @handler_data(class_=DataHandler)
     def test_message(self, plain_controller, client):
         handler = plain_controller.handler
         assert isinstance(handler, DataHandler)
@@ -454,7 +455,7 @@ class TestMessage:
         assert isinstance(handler.content, bytes)
         assert isinstance(handler.original_content, bytes)
 
-    @pytest.mark.handler_data(class_=DataHandler)
+    @handler_data(class_=DataHandler)
     def test_message_decoded(self, decoding_controller, client):
         handler = decoding_controller.handler
         assert isinstance(handler, DataHandler)
@@ -477,7 +478,7 @@ class TestMessage:
         assert isinstance(handler.content, str)
         assert isinstance(handler.original_content, bytes)
 
-    @pytest.mark.handler_data(class_=AsyncMessageHandler)
+    @handler_data(class_=AsyncMessageHandler)
     def test_message_async(self, plain_controller, client):
         handler = plain_controller.handler
         assert isinstance(handler, AsyncMessageHandler)
@@ -503,7 +504,7 @@ class TestMessage:
         assert handled_message["X-MailFrom"] == "anne@example.com"
         assert handled_message["X-RcptTo"] == "bart@example.com"
 
-    @pytest.mark.handler_data(class_=AsyncMessageHandler)
+    @handler_data(class_=AsyncMessageHandler)
     def test_message_decoded_async(self, decoding_controller, client):
         handler = decoding_controller.handler
         assert isinstance(handler, AsyncMessageHandler)
@@ -782,14 +783,14 @@ class TestProxyMocked:
 
 
 class TestHooks:
-    @pytest.mark.handler_data(class_=HELOHandler)
+    @handler_data(class_=HELOHandler)
     def test_hook_HELO(self, plain_controller, client):
         assert isinstance(plain_controller.handler, HELOHandler)
         resp = client.helo("me")
         assert resp == HELOHandler.ReturnCode
 
     @pytest.mark.filterwarnings("ignore::DeprecationWarning")
-    @pytest.mark.handler_data(class_=EHLOHandlerDeprecated)
+    @handler_data(class_=EHLOHandlerDeprecated)
     def test_hook_EHLO_deprecated(self, plain_controller, client):
         assert isinstance(plain_controller.handler, EHLOHandlerDeprecated)
         code, mesg = client.ehlo("me")
@@ -809,7 +810,7 @@ class TestHooks:
         ):
             _ = Server(EHLOHandlerDeprecated())
 
-    @pytest.mark.handler_data(
+    @handler_data(
         class_=EHLOHandlerNew,
         args_=("FEATURE1", "FEATURE2 OPTION", "FEAT3 OPTA OPTB"),
     )
@@ -841,9 +842,9 @@ class TestHooks:
         with pytest.raises(RuntimeError, match="Unsupported EHLO Hook"):
             _ = Server(handler_class())
 
-    @pytest.mark.handler_data(class_=MAILHandler)
+    @handler_data(class_=MAILHandler)
     def test_hook_MAIL(self, plain_controller, client):
-        assert isinstance(plain_controller, ExposingController)
+        assert isinstance(plain_controller, Controller)
         handler = plain_controller.handler
         assert isinstance(handler, MAILHandler)
         client.ehlo("me")
@@ -852,7 +853,7 @@ class TestHooks:
         smtpd = plain_controller.smtpd
         assert smtpd.envelope.mail_options == MAILHandler.ReplacementOptions
 
-    @pytest.mark.handler_data(class_=RCPTHandler)
+    @handler_data(class_=RCPTHandler)
     def test_hook_RCPT(self, plain_controller, client):
         assert isinstance(plain_controller.handler, RCPTHandler)
         client.helo("me")
@@ -873,7 +874,7 @@ class TestHooks:
             "bart@example.com": RCPTHandler.RejectCode,
         }
 
-    @pytest.mark.handler_data(class_=ErroringDataHandler)
+    @handler_data(class_=ErroringDataHandler)
     def test_hook_DATA(self, plain_controller, client):
         assert isinstance(plain_controller.handler, ErroringDataHandler)
         with pytest.raises(SMTPDataError) as excinfo:
@@ -894,15 +895,15 @@ class TestHooks:
         assert excinfo.value.smtp_code == expected.code
         assert excinfo.value.smtp_error == expected.mesg
 
-    @pytest.mark.controller_data(decode_data=True, auth_require_tls=False)
-    @pytest.mark.handler_data(class_=AUTHHandler)
+    @controller_data(decode_data=True, auth_require_tls=False)
+    @handler_data(class_=AUTHHandler)
     def test_hook_AUTH(self, plain_controller, client):
         assert isinstance(plain_controller.handler, AUTHHandler)
         client.ehlo("me")
         resp = client.login("test", "test")
         assert resp == S.S235_AUTH_SUCCESS
 
-    @pytest.mark.handler_data(class_=NoHooksHandler)
+    @handler_data(class_=NoHooksHandler)
     def test_hook_NoHooks(self, plain_controller, client):
         assert isinstance(plain_controller.handler, NoHooksHandler)
         client.helo("me")
@@ -923,7 +924,7 @@ class TestHooks:
 
 class TestDeprecation:
     def _process_message_testing(self, controller, client):
-        assert isinstance(controller, ExposingController)
+        assert isinstance(controller, Controller)
         expectedre = r"Use handler.handle_DATA\(\) instead of .process_message\(\)"
         with pytest.warns(DeprecationWarning, match=expectedre):
             client.sendmail(
@@ -940,7 +941,7 @@ class TestDeprecation:
                 ),
             )
 
-    @pytest.mark.handler_data(class_=DeprecatedHandler)
+    @handler_data(class_=DeprecatedHandler)
     def test_process_message(self, plain_controller, client):
         """handler.process_message is Deprecated"""
         handler = plain_controller.handler
@@ -948,7 +949,7 @@ class TestDeprecation:
         controller = plain_controller
         self._process_message_testing(controller, client)
 
-    @pytest.mark.handler_data(class_=AsyncDeprecatedHandler)
+    @handler_data(class_=AsyncDeprecatedHandler)
     def test_process_message_async(self, plain_controller, client):
         """handler.process_message is Deprecated"""
         handler = plain_controller.handler
@@ -956,14 +957,14 @@ class TestDeprecation:
         controller = plain_controller
         self._process_message_testing(controller, client)
 
-    @pytest.mark.controller_data(class_=DeprecatedHookController)
+    @controller_data(class_=DeprecatedHookController)
     def test_ehlo_hook(self, plain_controller, client):
         """SMTP.ehlo_hook is Deprecated"""
         expectedre = r"Use handler.handle_EHLO\(\) instead of .ehlo_hook\(\)"
         with pytest.warns(DeprecationWarning, match=expectedre):
             client.ehlo("example.com")
 
-    @pytest.mark.controller_data(class_=DeprecatedHookController)
+    @controller_data(class_=DeprecatedHookController)
     def test_rset_hook(self, plain_controller, client):
         """SMTP.rset_hook is Deprecated"""
         expectedre = r"Use handler.handle_RSET\(\) instead of .rset_hook\(\)"

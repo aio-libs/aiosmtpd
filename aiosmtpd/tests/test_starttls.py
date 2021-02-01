@@ -4,7 +4,8 @@
 import ssl
 import pytest
 
-from .conftest import ExposingController, Global
+from .conftest import Global, handler_data
+from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import Session as Sess_, SMTP as Server, TLSSetupException
 from aiosmtpd.testing.helpers import (
@@ -50,7 +51,7 @@ class HandshakeFailingHandler:
 @pytest.fixture
 def tls_controller(
     get_handler, get_controller, ssl_context_server
-) -> Generator[ExposingController, None, None]:
+) -> Generator[Controller, None, None]:
     handler = get_handler()
     # controller = TLSController(handler)
     controller = get_controller(
@@ -74,7 +75,7 @@ def tls_controller(
 @pytest.fixture
 def tls_req_controller(
     get_handler, get_controller, ssl_context_server
-) -> Generator[ExposingController, None, None]:
+) -> Generator[Controller, None, None]:
     handler = get_handler()
     controller = get_controller(
         handler,
@@ -93,7 +94,7 @@ def tls_req_controller(
 @pytest.fixture
 def auth_req_tls_controller(
     get_handler, get_controller, ssl_context_server
-) -> Generator[ExposingController, None, None]:
+) -> Generator[Controller, None, None]:
     handler = get_handler()
     controller = get_controller(
         handler,
@@ -130,7 +131,7 @@ class TestStartTLS:
         resp = client.docmd("STARTTLS arg")
         assert resp == S.S501_SYNTAX_STARTTLS
 
-    @pytest.mark.handler_data(class_=ReceivingHandler)
+    @handler_data(class_=ReceivingHandler)
     def test_starttls(self, tls_controller, client):
         sender = "sender@example.com"
         recipients = ["rcpt1@example.com"]
@@ -154,7 +155,7 @@ class TestStartTLS:
         assert resp == S.S221_BYE
         client.close()
 
-    @pytest.mark.handler_data(class_=HandshakeFailingHandler)
+    @handler_data(class_=HandshakeFailingHandler)
     def test_failed_handshake(self, client):
         code, _ = client.ehlo("example.com")
         assert code == 250
@@ -204,7 +205,7 @@ class ExceptionCaptureHandler:
 
 class TestTLSEnding:
 
-    @pytest.mark.handler_data(class_=EOFingHandler)
+    @handler_data(class_=EOFingHandler)
     def test_eof_received(self, tls_controller, client):
         # I don't like this. It's too intimately involved with the innards of the SMTP
         # class. But for the life of me, I can't figure out why coverage there fail
@@ -233,7 +234,7 @@ class TestTLSEnding:
         finally:
             tls_controller.stop()
 
-    @pytest.mark.handler_data(class_=ExceptionCaptureHandler)
+    @handler_data(class_=ExceptionCaptureHandler)
     def test_tls_handshake_failing(self, tls_controller, client):
         handler = tls_controller.handler
         assert isinstance(handler, ExceptionCaptureHandler)

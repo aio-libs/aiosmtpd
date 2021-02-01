@@ -11,6 +11,7 @@ import logging
 import warnings
 import itertools
 
+from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import (
     AuthResult,
@@ -30,7 +31,7 @@ from aiosmtpd.testing.helpers import (
     send_recv,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-from .conftest import ExposingController, Global
+from .conftest import Global, controller_data, handler_data
 from base64 import b64encode
 from contextlib import suppress
 from smtplib import (
@@ -228,29 +229,29 @@ class SleepingHeloHandler:
 # region #### Special-Purpose Controllers #############################################
 
 
-# These are either impractical or impossible to implement using ExposingController
+# These are either impractical or impossible to implement using Controller
 
 
-class TimeoutController(ExposingController):
+class TimeoutController(Controller):
     Delay: float = 1.0
 
     def factory(self):
         return Server(self.handler, timeout=self.Delay)
 
 
-class ErrorController(ExposingController):
+class ErrorController(Controller):
     def factory(self):
         return ErrorSMTP(self.handler)
 
 
-class CustomHostnameController(ExposingController):
+class CustomHostnameController(Controller):
     custom_name = "custom.localhost"
 
     def factory(self):
         return Server(self.handler, hostname=self.custom_name)
 
 
-class CustomIdentController(ExposingController):
+class CustomIdentController(Controller):
     ident: bytes = b"Identifying SMTP v2112"
 
     def factory(self):
@@ -293,7 +294,7 @@ def get_protocol(
 @pytest.fixture
 def auth_peeker_controller(
         get_controller
-) -> Generator[ExposingController, None, None]:
+) -> Generator[Controller, None, None]:
     handler = PeekerHandler()
     controller = get_controller(
         handler,
@@ -314,7 +315,7 @@ def auth_peeker_controller(
 @pytest.fixture
 def authenticator_peeker_controller(
         get_controller
-) -> Generator[ExposingController, None, None]:
+) -> Generator[Controller, None, None]:
     handler = PeekerHandler()
     controller = get_controller(
         handler,
@@ -335,7 +336,7 @@ def authenticator_peeker_controller(
 @pytest.fixture
 def decoding_authnotls_controller(
         get_handler, get_controller
-) -> Generator[ExposingController, None, None]:
+) -> Generator[Controller, None, None]:
     handler = get_handler()
     controller = get_controller(
         handler,
@@ -441,7 +442,7 @@ class TestProtocol:
 
 
 @pytest.mark.usefixtures("plain_controller")
-@pytest.mark.controller_data(
+@controller_data(
     decode_data=True,
     enable_SMTPUTF8=True,
 )
@@ -891,7 +892,7 @@ class TestSMTP(_CommonMethods):
 
 
 class TestSMTPNonDecoding(_CommonMethods):
-    @pytest.mark.controller_data(decode_data=False)
+    @controller_data(decode_data=False)
     def test_mail_invalid_body_param(self, plain_controller, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com> BODY=FOOBAR")
@@ -946,7 +947,7 @@ class TestSMTPAuth(_CommonMethods):
         resp = client.docmd("AUTH PLAIN")
         assert resp == S.S503_ALREADY_AUTH
 
-    @pytest.mark.handler_data(class_=PeekerHandler)
+    @handler_data(class_=PeekerHandler)
     def test_auth_loginteract_warning(self, client):
         client.ehlo("example.com")
         resp = client.docmd("AUTH WITH_UNDERSCORE")
@@ -1233,7 +1234,7 @@ class TestAuthenticator(_CommonMethods):
     "ignore:Requiring AUTH while not requiring TLS:UserWarning"
 )
 @pytest.mark.usefixtures("plain_controller")
-@pytest.mark.controller_data(
+@controller_data(
     decode_data=True,
     enable_SMTPUTF8=True,
     auth_require_tls=False,
@@ -1330,7 +1331,7 @@ class TestResetCommands:
         for rcpt in rcpt_tos:
             client.rcpt(rcpt)
 
-    @pytest.mark.handler_data(class_=StoreEnvelopeOnVRFYHandler)
+    @handler_data(class_=StoreEnvelopeOnVRFYHandler)
     def test_helo(self, decoding_authnotls_controller, client):
         handler = decoding_authnotls_controller.handler
         assert isinstance(handler, StoreEnvelopeOnVRFYHandler)
@@ -1346,7 +1347,7 @@ class TestResetCommands:
             assert handler.envelope.mail_from == data["mail_from"]
             assert handler.envelope.rcpt_tos == data["rcpt_tos"]
 
-    @pytest.mark.handler_data(class_=StoreEnvelopeOnVRFYHandler)
+    @handler_data(class_=StoreEnvelopeOnVRFYHandler)
     def test_ehlo(self, decoding_authnotls_controller, client):
         handler = decoding_authnotls_controller.handler
         assert isinstance(handler, StoreEnvelopeOnVRFYHandler)
@@ -1362,7 +1363,7 @@ class TestResetCommands:
             assert handler.envelope.mail_from == data["mail_from"]
             assert handler.envelope.rcpt_tos == data["rcpt_tos"]
 
-    @pytest.mark.handler_data(class_=StoreEnvelopeOnVRFYHandler)
+    @handler_data(class_=StoreEnvelopeOnVRFYHandler)
     def test_rset(self, decoding_authnotls_controller, client):
         handler = decoding_authnotls_controller.handler
         assert isinstance(handler, StoreEnvelopeOnVRFYHandler)
@@ -1382,13 +1383,13 @@ class TestResetCommands:
 
 
 class TestSMTPWithController(_CommonMethods):
-    @pytest.mark.controller_data(data_size_limit=9999)
+    @controller_data(data_size_limit=9999)
     def test_mail_with_size_too_large(self, plain_controller, client):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com> SIZE=10000")
         assert resp == S.S552_EXCEED_SIZE
 
-    @pytest.mark.handler_data(class_=ReceivingHandler)
+    @handler_data(class_=ReceivingHandler)
     def test_mail_with_compatible_smtputf8(self, plain_controller, client):
         receiving_handler = plain_controller.handler
         assert isinstance(receiving_handler, ReceivingHandler)
@@ -1419,13 +1420,13 @@ class TestSMTPWithController(_CommonMethods):
         resp = client.docmd("MAIL FROM: <anne@example.com> BODY 9BIT")
         assert resp == S.S501_MAIL_BODY
 
-    @pytest.mark.controller_data(data_size_limit=None)
+    @controller_data(data_size_limit=None)
     def test_esmtp_no_size_limit(self, plain_controller, client):
         code, mesg = client.ehlo("example.com")
         for ln in mesg.splitlines():
             assert not ln.startswith(b"SIZE")
 
-    @pytest.mark.handler_data(class_=ErroringHandler)
+    @handler_data(class_=ErroringHandler)
     def test_process_message_error(self, error_controller, client):
         self._ehlo(client)
         with pytest.raises(SMTPDataError) as excinfo:
@@ -1444,7 +1445,7 @@ class TestSMTPWithController(_CommonMethods):
             )
         assert excinfo.value.args == (499, b"Could not accept the message")
 
-    @pytest.mark.controller_data(data_size_limit=100)
+    @controller_data(data_size_limit=100)
     def test_too_long_message_body(self, plain_controller, client):
         self._helo(client)
         mail = "\r\n".join(["z" * 20] * 10)
@@ -1452,7 +1453,7 @@ class TestSMTPWithController(_CommonMethods):
             client.sendmail("anne@example.com", ["bart@example.com"], mail)
         assert excinfo.value.args == S.S552_DATA_TOO_MUCH
 
-    @pytest.mark.handler_data(class_=ReceivingHandler)
+    @handler_data(class_=ReceivingHandler)
     def test_dots_escaped(self, decoding_authnotls_controller, client):
         receiving_handler = decoding_authnotls_controller.handler
         assert isinstance(receiving_handler, ReceivingHandler)
@@ -1462,7 +1463,7 @@ class TestSMTPWithController(_CommonMethods):
         assert len(receiving_handler.box) == 1
         assert receiving_handler.box[0].content == mail + CRLF
 
-    @pytest.mark.handler_data(class_=ErroringHandler)
+    @handler_data(class_=ErroringHandler)
     def test_unexpected_errors(self, error_controller, client):
         handler = error_controller.handler
         resp = client.helo("example.com")
@@ -1476,7 +1477,7 @@ class TestSMTPWithController(_CommonMethods):
         exception_nameb = exception_type.__name__.encode("ascii")
         assert resp == (500, b"Error: (" + exception_nameb + b") test")
 
-    @pytest.mark.handler_data(class_=ErroringHandler)
+    @handler_data(class_=ErroringHandler)
     def test_unexpected_errors_custom_response(self, error_controller, client):
         erroring_handler = error_controller.handler
         erroring_handler.custom_response = True
@@ -1486,7 +1487,7 @@ class TestSMTPWithController(_CommonMethods):
         exception_nameb = exception_type.__name__.encode("ascii")
         assert resp == (451, b"Temporary error: (" + exception_nameb + b") test")
 
-    @pytest.mark.handler_data(class_=ErroringErrorHandler)
+    @handler_data(class_=ErroringErrorHandler)
     def test_exception_handler_exception(self, error_controller, client):
         handler = error_controller.handler
         resp = client.helo("example.com")
@@ -1494,7 +1495,7 @@ class TestSMTPWithController(_CommonMethods):
         exception_type = ErrorSMTP.exception_type
         assert isinstance(handler.error, exception_type)
 
-    @pytest.mark.handler_data(class_=UndescribableErrorHandler)
+    @handler_data(class_=UndescribableErrorHandler)
     def test_exception_handler_undescribable(self, error_controller, client):
         handler = error_controller.handler
         resp = client.helo("example.com")
@@ -1502,7 +1503,7 @@ class TestSMTPWithController(_CommonMethods):
         exception_type = ErrorSMTP.exception_type
         assert isinstance(handler.error, exception_type)
 
-    @pytest.mark.handler_data(class_=ErroringHandlerConnectionLost)
+    @handler_data(class_=ErroringHandlerConnectionLost)
     def test_exception_handler_multiple_connections_lost(
         self, error_controller, client
     ):
@@ -1525,7 +1526,7 @@ class TestSMTPWithController(_CommonMethods):
         resp = client1.mail("alice@example.com")
         assert resp == S.S250_OK
 
-    @pytest.mark.handler_data(class_=ReceivingHandler)
+    @handler_data(class_=ReceivingHandler)
     def test_bad_encodings(self, decoding_authnotls_controller, client):
         handler: ReceivingHandler = decoding_authnotls_controller.handler
         self._helo(client)
@@ -1544,7 +1545,7 @@ class TestSMTPWithController(_CommonMethods):
         mail_to2 = envelope.rcpt_tos[0].encode("utf-8", errors="surrogateescape")
         assert mail_to2 == mail_to
 
-    @pytest.mark.controller_data(decode_data=False)
+    @controller_data(decode_data=False)
     def test_data_line_too_long(self, plain_controller, client):
         self._helo(client)
         client.helo("example.com")
@@ -1553,7 +1554,7 @@ class TestSMTPWithController(_CommonMethods):
             client.sendmail("anne@example.com", ["bart@example.com"], mail)
         assert exc.value.args == S.S500_DATALINE_TOO_LONG
 
-    @pytest.mark.controller_data(data_size_limit=10000)
+    @controller_data(data_size_limit=10000)
     def test_long_line_double_count(self, plain_controller, client):
         # With a read limit of 1001 bytes in aiosmtp.SMTP, asyncio.StreamReader
         # returns too-long lines of length up to 2002 bytes.
@@ -1583,7 +1584,7 @@ class TestSMTPWithController(_CommonMethods):
         # self.assertEqual(cm.exception.smtp_error,
         #                  b'Line too long (see RFC5321 4.5.3.1.6)')
 
-    @pytest.mark.controller_data(data_size_limit=20)
+    @controller_data(data_size_limit=20)
     def test_too_long_body_delay_error(self, plain_controller):
         with socket.socket() as sock:
             sock.connect((plain_controller.hostname, plain_controller.port))
@@ -1602,7 +1603,7 @@ class TestSMTPWithController(_CommonMethods):
             # *NOW* we must receive status code
             assert rslt == b"552 Error: Too much mail data\r\n"
 
-    @pytest.mark.controller_data(data_size_limit=700)
+    @controller_data(data_size_limit=700)
     def test_too_long_body_then_too_long_lines(self, plain_controller, client):
         # If "too much mail" state was reached before "too long line" gets received,
         # SMTP should respond with '552' instead of '500'
@@ -1630,7 +1631,7 @@ class TestSMTPWithController(_CommonMethods):
             # *NOW* we must receive status code
             assert rslt == b"500 Line too long (see RFC5321 4.5.3.1.6)\r\n"
 
-    @pytest.mark.controller_data(data_size_limit=2000)
+    @controller_data(data_size_limit=2000)
     def test_too_long_lines_then_too_long_body(self, plain_controller, client):
         # If "too long line" state was reached before "too much data" happens,
         # SMTP should respond with '500' instead of '552'
@@ -1642,7 +1643,7 @@ class TestSMTPWithController(_CommonMethods):
 
 
 class TestCustomization(_CommonMethods):
-    @pytest.mark.controller_data(class_=CustomHostnameController)
+    @controller_data(class_=CustomHostnameController)
     def test_custom_hostname(self, plain_controller, client):
         code, mesg = client.helo("example.com")
         assert code == 250
@@ -1655,7 +1656,7 @@ class TestCustomization(_CommonMethods):
         # The hostname prefix is unpredictable
         assert mesg.endswith(bytes(GREETING, "utf-8"))
 
-    @pytest.mark.controller_data(class_=CustomIdentController)
+    @controller_data(class_=CustomIdentController)
     def test_custom_greeting(self, plain_controller, client):
         controller = plain_controller
         code, mesg = client.connect(controller.hostname, controller.port)
@@ -1663,7 +1664,7 @@ class TestCustomization(_CommonMethods):
         # The hostname prefix is unpredictable.
         assert mesg.endswith(CustomIdentController.ident)
 
-    @pytest.mark.controller_data(decode_data=False)
+    @controller_data(decode_data=False)
     def test_mail_invalid_body_param(self, plain_controller, client):
         client.ehlo("example.com")
         resp = client.docmd("MAIL FROM: <anne@example.com> BODY=FOOBAR")
@@ -1812,7 +1813,7 @@ class TestClientCrash(_CommonMethods):
 
 
 @pytest.mark.usefixtures("plain_controller")
-@pytest.mark.controller_data(enable_SMTPUTF8=False, decode_data=True)
+@controller_data(enable_SMTPUTF8=False, decode_data=True)
 class TestStrictASCII(_CommonMethods):
     def test_ehlo(self, client):
         blines = self._ehlo(client)
@@ -1846,8 +1847,8 @@ class TestStrictASCII(_CommonMethods):
 class TestSleepingHandler(_CommonMethods):
     # What is the point here?
 
-    @pytest.mark.controller_data(decode_data=False)
-    @pytest.mark.handler_data(class_=SleepingHeloHandler)
+    @controller_data(decode_data=False)
+    @handler_data(class_=SleepingHeloHandler)
     def test_close_after_helo(self, plain_controller, client):
         #
         # What are we actually testing?
@@ -1859,7 +1860,7 @@ class TestSleepingHandler(_CommonMethods):
 
 
 class TestTimeout(_CommonMethods):
-    @pytest.mark.controller_data(class_=TimeoutController)
+    @controller_data(class_=TimeoutController)
     def test_timeout(self, plain_controller, client):
         # This one is rapid, it must succeed
         self._ehlo(client)
@@ -1937,11 +1938,11 @@ class TestLimits(_CommonMethods):
             _ = Server(Sink(), command_call_limit={"NOOP": "invalid"})
         assert exc.value.args[0] == "All command_call_limit values must be int"
 
-    @pytest.mark.controller_data(command_call_limit=15)
+    @controller_data(command_call_limit=15)
     def test_all_limit_15(self, plain_controller, client):
         self._consume_budget(client, 15, "noop")
 
-    @pytest.mark.controller_data(command_call_limit={"NOOP": 15, "EXPN": 5})
+    @controller_data(command_call_limit={"NOOP": 15, "EXPN": 5})
     def test_different_limits(self, plain_controller, client):
         srv_ip_port = plain_controller.hostname, plain_controller.port
 
@@ -1961,7 +1962,7 @@ class TestLimits(_CommonMethods):
             ok_expected=S.S252_CANNOT_VRFY,
         )
 
-    @pytest.mark.controller_data(command_call_limit={"NOOP": 7, "EXPN": 5, "*": 25})
+    @controller_data(command_call_limit={"NOOP": 7, "EXPN": 5, "*": 25})
     def test_different_limits_custom_default(self, plain_controller, client):
         # Important: make sure default_max > CALL_LIMIT_DEFAULT
         # Others can be set small to cut down on testing time, but must be different
@@ -1984,7 +1985,7 @@ class TestLimits(_CommonMethods):
             ok_expected=S.S252_CANNOT_VRFY,
         )
 
-    @pytest.mark.controller_data(command_call_limit=7)
+    @controller_data(command_call_limit=7)
     def test_limit_bogus(self, plain_controller, client):
         assert plain_controller.smtpd._call_limit_default > BOGUS_LIMIT
         code, mesg = client.ehlo("example.com")

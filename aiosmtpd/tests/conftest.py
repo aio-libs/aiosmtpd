@@ -9,7 +9,6 @@ import asyncio
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import SMTP as Server
 from contextlib import suppress
 from functools import wraps
 from pkg_resources import resource_filename
@@ -18,11 +17,19 @@ from typing import Generator, NamedTuple, Optional, Type
 
 try:
     from asyncio.proactor_events import _ProactorBasePipeTransport
+
     HAS_PROACTOR = True
 except ImportError:
     _ProactorBasePipeTransport = None
     HAS_PROACTOR = False
 
+
+# region #### Aliases #################################################################
+
+controller_data = pytest.mark.controller_data
+handler_data = pytest.mark.handler_data
+
+# endregion
 
 # region #### Custom datatypes ########################################################
 
@@ -45,27 +52,6 @@ class Global:
     @classmethod
     def set_addr_from(cls, contr: Controller):
         cls.SrvAddr = HostPort(contr.hostname, contr.port)
-
-
-# endregion
-
-
-# region #### Custom Behavior Controllers #############################################
-
-
-class ExposingController(Controller):
-    """
-    A subclass of Controller that 'exposes' the inner SMTP object for inspection.
-    """
-
-    smtpd: Server
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def factory(self):
-        self.smtpd = super().factory()
-        return self.smtpd
 
 
 # endregion
@@ -179,9 +165,7 @@ def temp_event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
 
 
 @pytest.fixture
-def plain_controller(
-        get_handler, get_controller
-) -> Generator[ExposingController, None, None]:
+def plain_controller(get_handler, get_controller) -> Generator[Controller, None, None]:
     """
     Returns a Controller that, by default, gets invoked with no optional args. Hence
     the moniker "plain". Uses whatever class get_controller() uses as default, with
@@ -203,8 +187,8 @@ def plain_controller(
 
 @pytest.fixture
 def nodecode_controller(
-        get_handler, get_controller
-) -> Generator[ExposingController, None, None]:
+    get_handler, get_controller
+) -> Generator[Controller, None, None]:
     handler = get_handler()
     controller = get_controller(handler, decode_data=False)
     controller.start()
@@ -221,8 +205,8 @@ def nodecode_controller(
 
 @pytest.fixture
 def decoding_controller(
-        get_handler, get_controller
-) -> Generator[ExposingController, None, None]:
+    get_handler, get_controller
+) -> Generator[Controller, None, None]:
     handler = get_handler()
     controller = get_controller(handler, decode_data=True)
     controller.start()
@@ -308,5 +292,6 @@ def silence_event_loop_closed():
     _ProactorBasePipeTransport._old_del = old_del
     _ProactorBasePipeTransport.__del__ = silencer(old_del)
     return True
+
 
 # endregion
