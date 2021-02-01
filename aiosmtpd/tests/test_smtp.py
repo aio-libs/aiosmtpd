@@ -60,7 +60,7 @@ MAIL_LOG.setLevel(logging.DEBUG)
 # region #### Test Helpers ############################################################
 
 
-def authenticator(mechanism, login, password) -> bool:
+def auth_callback(mechanism, login, password) -> bool:
     if login and login.decode() == "goodlogin":
         return True
     else:
@@ -340,7 +340,7 @@ def decoding_authnotls_controller(
         decode_data=True,
         enable_SMTPUTF8=True,
         auth_require_tls=False,
-        auth_callback=authenticator,
+        auth_callback=auth_callback,
     )
     controller.start()
     Global.set_addr_from(controller)
@@ -376,7 +376,7 @@ def require_auth_controller(
         decode_data=True,
         enable_SMTPUTF8=True,
         auth_require_tls=False,
-        auth_callback=authenticator,
+        auth_callback=auth_callback,
         auth_required=True,
     )
     controller.start()
