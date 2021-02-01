@@ -387,24 +387,6 @@ def require_auth_controller(
     controller.stop()
 
 
-@pytest.fixture
-def strictascii_controller(
-        get_handler, get_controller
-) -> Generator[ExposingController, None, None]:
-    handler = get_handler()
-    controller = get_controller(
-        handler,
-        enable_SMTPUTF8=False,
-        decode_data=True,
-    )
-    controller.start()
-    Global.set_addr_from(controller)
-    #
-    yield controller
-    #
-    controller.stop()
-
-
 # endregion
 
 # endregion
@@ -1841,7 +1823,8 @@ class TestClientCrash(_CommonMethods):
         assert writer.transport.is_closing()
 
 
-@pytest.mark.usefixtures("strictascii_controller")
+@pytest.mark.usefixtures("plain_controller")
+@pytest.mark.controller_data(enable_SMTPUTF8=False, decode_data=True)
 class TestStrictASCII(_CommonMethods):
     def test_ehlo(self, client):
         blines = self._ehlo(client)
