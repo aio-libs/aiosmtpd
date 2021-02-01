@@ -853,7 +853,7 @@ class TestHooks:
 
     @pytest.mark.handler_data(
         class_=EHLOHandlerNew,
-        args=("FEATURE1", "FEATURE2 OPTION", "FEAT3 OPTA OPTB"),
+        args_=("FEATURE1", "FEATURE2 OPTION", "FEAT3 OPTA OPTB"),
     )
     def test_hook_EHLO_new(self, plain_controller, client):
         assert isinstance(plain_controller.handler, EHLOHandlerNew)

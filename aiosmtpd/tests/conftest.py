@@ -156,15 +156,14 @@ def get_handler(request):
     marker = request.node.get_closest_marker("handler_data")
     default_class = Sink
 
-    def getter():
+    def getter(*args, **kwargs):
         if marker:
-            class_ = marker.kwargs.get("class_", default_class)
-            args = marker.kwargs.get("args", [])
-            kwargs = marker.kwargs.get("kwargs", {})
+            class_ = marker.kwargs.pop("class_", default_class)
+            # *args overrides args_ in handler_data()
+            args = args or marker.kwargs.pop("args_", tuple())
+            kwargs.update(marker.kwargs)
         else:
             class_ = default_class
-            args = tuple()
-            kwargs = {}
         # noinspection PyArgumentList
         return class_(*args, **kwargs)
 
