@@ -97,9 +97,10 @@ def cache_fqdn(session_mocker):
 def get_controller(request):
     """
     Provides a function that will return an instance of a controller. Default class of
-    the controller is ExposingController, but can be changed via the "class_" parameter
+    the controller is Controller, but can be changed via the "class_" parameter
     of @pytest.mark.controller_data
     """
+    default_class = Controller
     marker = request.node.get_closest_marker("controller_data")
     if marker:
         markerdata = marker.kwargs or {}
@@ -108,38 +109,30 @@ def get_controller(request):
 
     def getter(
         handler,
-        default_class: Optional[Type[Controller]] = ExposingController,
-        hostname: str = None,
-        port: int = None,
-        ssl_context: ssl.SSLContext = None,
+        class_: Optional[Type[Controller]] = None,
         **server_kwargs,
     ) -> Controller:
         """
         :param handler: The handler object
-        :param default_class: If set to None, then the actual class used to instantiate
-            the controller *must* be provided via pytest.mark.controller_data
-        :param hostname: The hostname (actually, address) for the controller. Defaults
-            to HostPort().host
-        :param port: The port for the controller. Defaults to HostPort().port
-        :param ssl_context: The SSLContext for SMTPS. If provided, will disable
-            STARTTLS
+        :param class_: If set to None, check controller_data(class_).
+            If both are none, defaults to Controller.
         """
         assert not inspect.isclass(handler)
-        class_: Optional[Type[Controller]] = markerdata.pop("class_", default_class)
+        marker_class: Optional[Type[Controller]]
+        marker_class = markerdata.pop("class_", default_class)
+        class_ = class_ or marker_class
         if class_ is None:
             raise RuntimeError(
                 f"Fixture '{request.fixturename}' needs controller_data to specify "
                 f"what class to use"
             )
         ip_port: HostPort = markerdata.pop("host_port", HostPort())
-        hostname = ip_port.host if hostname is None else hostname
-        port = ip_port.port if port is None else port
-        server_kwargs.update(markerdata)
+        # server_kwargs takes precedence, so it's rightmost (PEP448)
+        server_kwargs = {**markerdata, **server_kwargs}
+        server_kwargs.setdefault("hostname", ip_port.host)
+        server_kwargs.setdefault("port", ip_port.port)
         return class_(
             handler,
-            hostname=hostname,
-            port=port,
-            ssl_context=ssl_context,
             **server_kwargs,
         )
 
@@ -160,8 +153,11 @@ def get_handler(request):
         if marker:
             class_ = marker.kwargs.pop("class_", default_class)
             # *args overrides args_ in handler_data()
-            args = args or marker.kwargs.pop("args_", tuple())
-            kwargs.update(marker.kwargs)
+            args_ = marker.kwargs.pop("args_", tuple())
+            # Do NOT inline the above into the line below! We *need* to pop "args_"!
+            args = args or args_
+            # **kwargs override marker.kwargs, so it's rightmost (PEP448)
+            kwargs = {**marker.kwargs, **kwargs}
         else:
             class_ = default_class
         # noinspection PyArgumentList
