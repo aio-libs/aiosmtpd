@@ -204,24 +204,6 @@ def debugging_controller(get_controller) -> Generator[ExposingController, None, 
 
 
 @pytest.fixture
-def debugging_decoding_controller(
-        get_controller
-) -> Generator[ExposingController, None, None]:
-    # Cannot use decoding_controller fixture because we need to first create the
-    # Debugging handler before creating the controller.
-    stream = StringIO()
-    handler = Debugging(stream)
-    controller = get_controller(handler, decode_data=True)
-    controller.start()
-    Global.set_addr_from(controller)
-    #
-    yield controller
-    #
-    controller.stop()
-    stream.close()
-
-
-@pytest.fixture
 def temp_maildir(tmp_path: Path) -> Generator[Path, None, None]:
     maildir_path = tmp_path / "maildir"
     yield maildir_path
@@ -308,36 +290,12 @@ def proxy_decoding_controller(
     proxy_controller.stop()
 
 
-@pytest.fixture
-def auth_decoding_controller(
-        get_controller
-) -> Generator[ExposingController, None, None]:
-    handler = AUTHHandler()
-    controller = get_controller(handler, decode_data=True, auth_require_tls=False)
-    controller.start()
-    Global.set_addr_from(controller)
-    #
-    yield controller
-    #
-    controller.stop()
-
-
-@pytest.fixture
-def deprecated_hook_controller() -> Generator[DeprecatedHookController, None, None]:
-    controller = DeprecatedHookController(Sink())
-    controller.start()
-    Global.set_addr_from(controller)
-    #
-    yield controller
-    #
-    controller.stop()
-
-
 # endregion
 
 
 class TestDebugging:
-    def test_debugging(self, debugging_decoding_controller, client):
+    @pytest.mark.controller_data(decode_data=True)
+    def test_debugging(self, debugging_controller, client):
         peer = client.sock.getsockname()
         client.sendmail(
             "anne@example.com",
@@ -352,7 +310,7 @@ class TestDebugging:
                 """
             ),
         )
-        handler = debugging_decoding_controller.handler
+        handler = debugging_controller.handler
         assert isinstance(handler, Debugging)
         text = handler.stream.getvalue()
         assert text == dedent(
@@ -936,8 +894,10 @@ class TestHooks:
         assert excinfo.value.smtp_code == expected.code
         assert excinfo.value.smtp_error == expected.mesg
 
-    def test_hook_AUTH(self, auth_decoding_controller, client):
-        assert isinstance(auth_decoding_controller.handler, AUTHHandler)
+    @pytest.mark.controller_data(decode_data=True, auth_require_tls=False)
+    @pytest.mark.handler_data(class_=AUTHHandler)
+    def test_hook_AUTH(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, AUTHHandler)
         client.ehlo("me")
         resp = client.login("test", "test")
         assert resp == S.S235_AUTH_SUCCESS
@@ -996,13 +956,15 @@ class TestDeprecation:
         controller = plain_controller
         self._process_message_testing(controller, client)
 
-    def test_ehlo_hook(self, deprecated_hook_controller, client):
+    @pytest.mark.controller_data(class_=DeprecatedHookController)
+    def test_ehlo_hook(self, plain_controller, client):
         """SMTP.ehlo_hook is Deprecated"""
         expectedre = r"Use handler.handle_EHLO\(\) instead of .ehlo_hook\(\)"
         with pytest.warns(DeprecationWarning, match=expectedre):
             client.ehlo("example.com")
 
-    def test_rset_hook(self, deprecated_hook_controller, client):
+    @pytest.mark.controller_data(class_=DeprecatedHookController)
+    def test_rset_hook(self, plain_controller, client):
         """SMTP.rset_hook is Deprecated"""
         expectedre = r"Use handler.handle_RSET\(\) instead of .rset_hook\(\)"
         with pytest.warns(DeprecationWarning, match=expectedre):
