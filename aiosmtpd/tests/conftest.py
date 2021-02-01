@@ -187,8 +187,8 @@ def plain_controller(
         get_handler, get_controller
 ) -> Generator[ExposingController, None, None]:
     """
-    Returns a Controller that was invoked with no optional args. Hence the
-    moniker "plain". Uses whatever class get_controller() uses as default, with
+    Returns a Controller that, by default, gets invoked with no optional args. Hence
+    the moniker "plain". Uses whatever class get_controller() uses as default, with
     Sink as the handler class (changeable using pytest.mark.handler_data).
     """
     handler = get_handler()
@@ -280,8 +280,15 @@ def ssl_context_client() -> Generator[ssl.SSLContext, None, None]:
     yield context
 
 
+# Please keep the scope as "module"; setting it as "function" (the default) somehow
+# causes the 'hidden' exception to be detected when the loop starts over in the next
+# test case, defeating the silencing.
 @pytest.fixture(scope="module")
 def silence_event_loop_closed():
+    """
+    Mostly used to suppress "unhandled exception" error due to
+    _ProactorBasePipeTransport raising an exception when doing __del__.
+    """
     if not HAS_PROACTOR:
         return False
     assert _ProactorBasePipeTransport is not None
