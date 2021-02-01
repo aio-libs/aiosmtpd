@@ -32,7 +32,7 @@ def lmtp_controller() -> Generator[LMTPController, None, None]:
     controller.stop()
 
 
-def test_lhlo(lmtp_controller, client):
+def test_lhlo(client):
     code, mesg = client.docmd("LHLO example.com")
     lines = mesg.splitlines()
     assert lines == [
@@ -44,19 +44,19 @@ def test_lhlo(lmtp_controller, client):
     assert code == 250
 
 
-def test_helo(lmtp_controller, client):
+def test_helo(client):
     # HELO and EHLO are not valid LMTP commands.
     resp = client.helo("example.com")
     assert resp == S.S500_CMD_UNRECOG(b"HELO")
 
 
-def test_ehlo(lmtp_controller, client):
+def test_ehlo(client):
     # HELO and EHLO are not valid LMTP commands.
     resp = client.ehlo("example.com")
     assert resp == S.S500_CMD_UNRECOG(b"EHLO")
 
 
-def test_help(lmtp_controller, client):
+def test_help(client):
     # https://github.com/aio-libs/aiosmtpd/issues/113
     resp = client.docmd("HELP")
     assert resp == S.S250_SUPPCMD_LMTP
