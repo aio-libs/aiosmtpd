@@ -366,27 +366,6 @@ def error_controller(get_handler) -> Generator[ErrorController, None, None]:
     controller.stop()
 
 
-@pytest.fixture
-def require_auth_controller(
-        get_controller
-) -> Generator[ExposingController, None, None]:
-    handler = Sink()
-    controller = get_controller(
-        handler,
-        decode_data=True,
-        enable_SMTPUTF8=True,
-        auth_require_tls=False,
-        auth_callback=auth_callback,
-        auth_required=True,
-    )
-    controller.start()
-    Global.set_addr_from(controller)
-    #
-    yield controller
-    #
-    controller.stop()
-
-
 # endregion
 
 # endregion
@@ -1251,7 +1230,14 @@ class TestAuthenticator(_CommonMethods):
 @pytest.mark.filterwarnings(
     "ignore:Requiring AUTH while not requiring TLS:UserWarning"
 )
-@pytest.mark.usefixtures("require_auth_controller")
+@pytest.mark.usefixtures("plain_controller")
+@pytest.mark.controller_data(
+    decode_data=True,
+    enable_SMTPUTF8=True,
+    auth_require_tls=False,
+    auth_callback=auth_callback,
+    auth_required=True,
+)
 class TestRequiredAuthentication(_CommonMethods):
     def _login(self, client: SMTPClient):
         self._ehlo(client)
