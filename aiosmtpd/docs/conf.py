@@ -33,10 +33,9 @@ RE__VERSION = re.compile(r"""__version__ = (['"])(?P<ver>[^'"]+)(\1)""")
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-_curdir = Path("../..").expanduser().absolute()
-sys.path.insert(0, str(_curdir))
-sys.path.insert(0, str(_curdir / "aiosmtpd" / "docs" / "_exts"))
-sys.path.insert(0, str(_curdir / "aiosmtpd"))
+curdir = Path(".").expanduser().absolute()
+sys.path.insert(0, str(curdir / "_exts"))
+sys.path.insert(0, str(curdir.parent))
 
 # region -- General configuration ------------------------------------------------
 
@@ -76,7 +75,7 @@ copyright = f"2015-{datetime.datetime.now().year}, {author}"
 # built documents.
 #
 __version__ = None
-with open("../smtp.py") as fp:
+with (curdir.parent / "smtp.py").open("rt") as fp:
     for line in fp:
         m = RE__VERSION.match(line.strip())
         if m:
