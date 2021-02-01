@@ -76,7 +76,6 @@ def tls_req_controller(
     get_handler, get_controller, ssl_context_server
 ) -> Generator[ExposingController, None, None]:
     handler = get_handler()
-    # controller = TLSRequiredController(handler)
     controller = get_controller(
         handler,
         decode_data=True,
@@ -96,7 +95,6 @@ def auth_req_tls_controller(
     get_handler, get_controller, ssl_context_server
 ) -> Generator[ExposingController, None, None]:
     handler = get_handler()
-    # controller = RequireTLSAuthDecodingController(handler)
     controller = get_controller(
         handler,
         decode_data=True,
