@@ -92,6 +92,8 @@ class PeekerHandler:
     mechanism: AnyStr = None
     password: AnyStr = None
 
+    # Please do not insert "_" after auth; that will 'fool' SMTP into thinking this is
+    # an AUTH Mechanism, and we totally do NOT want that.
     def authcallback(self, mechanism: str, login: bytes, password: bytes) -> bool:
         self.login = login
         self.password = password
