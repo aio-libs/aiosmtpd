@@ -477,7 +477,11 @@ class TestProtocol:
         assert handler.box[0].content == b""
 
 
-@pytest.mark.usefixtures("decoding_authnotls_controller")
+@pytest.mark.usefixtures("plain_controller")
+@pytest.mark.controller_data(
+    decode_data=True,
+    enable_SMTPUTF8=True,
+)
 class TestSMTP(_CommonMethods):
     valid_mailfrom_addresses = [
         # no space between colon and address
@@ -571,7 +575,6 @@ class TestSMTP(_CommonMethods):
             bytes(socket.getfqdn(), "utf-8"),
             b"SIZE 33554432",
             b"SMTPUTF8",
-            b"AUTH LOGIN PLAIN",
             b"HELP",
         ]
 
@@ -596,7 +599,7 @@ class TestSMTP(_CommonMethods):
         resp = client.noop()
         assert resp == S.S250_OK
 
-    def test_noop_with_arg(self, decoding_authnotls_controller, client):
+    def test_noop_with_arg(self, plain_controller, client):
         # smtplib.SMTP.noop() doesn't accept args
         resp = client.docmd("NOOP ok")
         assert resp == S.S250_OK
@@ -877,7 +880,7 @@ class TestSMTP(_CommonMethods):
         resp = client.docmd("DATA")
         assert resp == S.S503_RCPT_NEEDED
 
-    def test_data_354(self, decoding_authnotls_controller, client):
+    def test_data_354(self, plain_controller, client):
         self._helo(client)
         resp = client.docmd("MAIL FROM: <alice@example.org>")
         assert resp == S.S250_OK
@@ -890,7 +893,7 @@ class TestSMTP(_CommonMethods):
             resp = client.docmd("DATA")
             assert resp == S.S354_DATA_ENDWITH
         finally:
-            decoding_authnotls_controller.stop()
+            plain_controller.stop()
 
     def test_data_invalid_params(self, client):
         self._helo(client)
