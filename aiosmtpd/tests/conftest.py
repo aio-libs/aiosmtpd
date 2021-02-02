@@ -82,9 +82,18 @@ def cache_fqdn(session_mocker):
 @pytest.fixture
 def get_controller(request):
     """
-    Provides a function that will return an instance of a controller. Default class of
-    the controller is Controller, but can be changed via the "class_" parameter
-    of @pytest.mark.controller_data
+    Provides a function that will return an instance of a controller.
+
+    Default class of the controller is Controller,
+    but can be changed via the ``class_`` parameter to the function,
+    or via the ``class_`` parameter of :func:`controller_data`
+
+    Example usage::
+
+        def test_case(get_controller):
+            handler = SomeHandler()
+            controller = get_controller(handler, class_=SomeController)
+            ...
     """
     default_class = Controller
     marker = request.node.get_closest_marker("controller_data")
@@ -128,9 +137,19 @@ def get_controller(request):
 @pytest.fixture
 def get_handler(request):
     """
-    Provides a getter that, when invoked, will return an instance of a handler.
-    Default class of the handler is Sink, but can be changed via the "class_"
-    parameter of @pytest.mark.handler_data
+    Provides a function that will return an instance of
+    a :ref:`handler class <handlers>`.
+
+    Default class of the handler is Sink,
+    but can be changed via the ``class_`` parameter to the function,
+    or via the ``class_`` parameter of :func:`handler_data`
+
+    Example usage::
+
+        def test_case(get_handler):
+            handler = get_handler(class_=SomeHandler)
+            controller = Controller(handler)
+            ...
     """
     marker = request.node.get_closest_marker("handler_data")
     default_class = Sink
@@ -167,9 +186,13 @@ def temp_event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
 @pytest.fixture
 def plain_controller(get_handler, get_controller) -> Generator[Controller, None, None]:
     """
-    Returns a Controller that, by default, gets invoked with no optional args. Hence
-    the moniker "plain". Uses whatever class get_controller() uses as default, with
-    Sink as the handler class (changeable using pytest.mark.handler_data).
+    Returns a Controller that, by default, gets invoked with no optional args.
+    Hence the moniker "plain".
+
+    Internally uses the :fixture:`get_controller` and :fixture:`get_handler` fixtures,
+    so optional args/kwargs can be specified for the Controller and the handler
+    via the :func:`controller_data` and :func:`handler_data` markers,
+    respectively.
     """
     handler = get_handler()
     controller = get_controller(handler)
@@ -189,6 +212,10 @@ def plain_controller(get_handler, get_controller) -> Generator[Controller, None,
 def nodecode_controller(
     get_handler, get_controller
 ) -> Generator[Controller, None, None]:
+    """
+    Same as :fixture:`plain_controller`,
+    except that ``decode_data=False`` is enforced.
+    """
     handler = get_handler()
     controller = get_controller(handler, decode_data=False)
     controller.start()
@@ -224,8 +251,9 @@ def decoding_controller(
 @pytest.fixture
 def client(request) -> Generator[SMTPClient, None, None]:
     """
-    Generic SMTP Client, will connect to the host:port defined in Global.SrvAddr
-    unless overriden using @pytest.mark.client_data(connect_to: HostPort = ...)
+    Generic SMTP Client,
+    will connect to the ``host:port`` defined in ``Global.SrvAddr``
+    unless overriden using :func:`client_data` marker.
     """
     marker = request.node.get_closest_marker("client_data")
     if marker:
@@ -239,6 +267,9 @@ def client(request) -> Generator[SMTPClient, None, None]:
 
 @pytest.fixture
 def ssl_context_server() -> Generator[ssl.SSLContext, None, None]:
+    """
+    Provides a server-side SSL Context
+    """
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     context.check_hostname = False
     context.load_cert_chain(
@@ -251,6 +282,9 @@ def ssl_context_server() -> Generator[ssl.SSLContext, None, None]:
 
 @pytest.fixture
 def ssl_context_client() -> Generator[ssl.SSLContext, None, None]:
+    """
+    Provides a client-side SSL Context
+    """
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
     context.check_hostname = False
     context.load_verify_locations(
@@ -267,7 +301,7 @@ def ssl_context_client() -> Generator[ssl.SSLContext, None, None]:
 def silence_event_loop_closed():
     """
     Mostly used to suppress "unhandled exception" error due to
-    _ProactorBasePipeTransport raising an exception when doing __del__.
+    ``_ProactorBasePipeTransport`` raising an exception when doing ``__del__``
     """
     if not HAS_PROACTOR:
         return False

@@ -1,3 +1,7 @@
+# Sphinx deps
 sphinx>=2.1
+sphinx-autofixture
+
+# aiosmtpd deps
 atpublic
 attrs

@@ -49,8 +49,12 @@ needs_sphinx = "2.1"
 extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.autodoc",
+    "sphinx_autofixture",
     "autoprogramm",
 ]
+# IMPORTANT: If you edit this, also edit the following:
+#   - aiosmtpd/docs/requirements.txt
+#   -
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
