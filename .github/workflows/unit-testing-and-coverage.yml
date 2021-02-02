@@ -44,7 +44,7 @@ jobs:
       - name: "Docs Checking"
         # language=bash
         run: |
-          pip install colorama pytest pytest-mock sphinx sphinx-autofixture
+          pip install colorama pytest pytest-mock sphinx sphinx-autofixture sphinx_rtd_theme
           pytest aiosmtpd/docs
           python setup.py build_sphinx
       - name: "Static Type Checking"
