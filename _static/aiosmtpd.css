@@ -52,3 +52,7 @@ div#news-for-aiosmtpd h3 {
 em.sig-param > span.default_value, em.sig-param > span.o {
     color: rgb(128, 128, 128);
 }
+
+a {
+    text-decoration: underline dotted !important;
+}

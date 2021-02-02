@@ -1,6 +1,7 @@
 # Sphinx deps
 sphinx>=2.1
 sphinx-autofixture
+sphinx_rtd_theme
 
 # aiosmtpd deps
 atpublic
