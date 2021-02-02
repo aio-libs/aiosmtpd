@@ -26,12 +26,13 @@ class TestVersion:
         ), "Version number must comply with PEP-440"
 
     # noinspection PyUnboundLocalVariable
-    def test_ge_master(self, aiosmtpd_version):
+    def test_ge_master(self, aiosmtpd_version, capsys):
         """Ensure version is monotonically increasing"""
         reference = "master:aiosmtpd/smtp.py"
         cmd = f"git show {reference}".split()
         try:
-            master_smtp = subprocess.check_output(cmd).decode()
+            with capsys.disabled():
+                master_smtp = subprocess.check_output(cmd).decode()
         except subprocess.CalledProcessError:
             pytest.skip("Skipping due to git error")
             return
