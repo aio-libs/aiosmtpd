@@ -85,6 +85,8 @@ jobs:
         pip install colorama coverage[toml] packaging pytest pytest-cov pytest-mock
         # Package deps
         python setup.py develop
+        # Fetch master because some test cases might need its existence
+        git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin master:master
     - name: "Execute testing"
       shell: bash
       # language=bash
