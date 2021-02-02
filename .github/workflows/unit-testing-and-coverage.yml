@@ -23,7 +23,11 @@ jobs:
   qa_docs:
     runs-on: ubuntu-20.04
     steps:
-      - name: "Checkout latest commit"
+      - name: "Checkout latest master"
+        uses: actions/checkout@v2
+        with:
+          ref: "master"
+      - name: "Checkout latest PR commit"
         uses: actions/checkout@v2
       - name: "Set up Python"
         uses: actions/setup-python@v2
