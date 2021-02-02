@@ -45,7 +45,7 @@ jobs:
         # language=bash
         run: |
           pip install colorama pytest pytest-mock sphinx sphinx-autofixture sphinx_rtd_theme
-          pytest aiosmtpd/docs
+          pytest -v aiosmtpd/docs
           python setup.py build_sphinx
       - name: "Static Type Checking"
         # language=bash
@@ -56,7 +56,7 @@ jobs:
         # language=bash
         run: |
           pip install pytest pytest-mock check-manifest
-          pytest aiosmtpd/qa
+          pytest -v aiosmtpd/qa
           check-manifest -v
   testing:
     needs: qa_docs
