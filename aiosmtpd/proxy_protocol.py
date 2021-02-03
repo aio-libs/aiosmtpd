@@ -57,6 +57,15 @@ class ProxyData:
         self.error = error_msg
         return self
 
+    def check(self, **kwargs) -> bool:
+        for k, v in kwargs.items():
+            if getattr(self, k) != v:
+                return False
+        return True
+
+    def __bool__(self):
+        return self.valid
+
 
 # endregion
 
