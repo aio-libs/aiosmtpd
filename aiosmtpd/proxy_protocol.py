@@ -51,7 +51,7 @@ class ProxyData:
 
     @property
     def valid(self) -> bool:
-        return not self.error
+        return not (self.error or not self.version or not self.protocol)
 
     def with_error(self, error_msg: str) -> "ProxyData":
         self.error = error_msg
