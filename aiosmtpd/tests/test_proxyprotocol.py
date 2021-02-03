@@ -118,7 +118,9 @@ class TestProxyProtocolV1:
         dstport = 65535
         prox_test = f"PROXY TCP6 {srcip} {dstip} {srcport} {dstport}\r\n"
         setup_proxy_protocol(self)
-        self._assert_valid(IPv6Address, b"TCP6", srcip, dstip, srcport, dstport, prox_test)
+        self._assert_valid(
+            IPv6Address, b"TCP6", srcip, dstip, srcport, dstport, prox_test
+        )
 
     def test_unknown(self, setup_proxy_protocol):
         prox_test = "PROXY UNKNOWN whatever\r\n"
