@@ -48,23 +48,33 @@ All handler hooks will be called with at least three arguments:
 
 Some handler hooks will receive additional arguments.
 
-The following hooks are currently defined:
+The following hooks are currently supported (in alphabetical order):
 
-.. py:method:: handle_HELO(server, session, envelope, hostname)
+.. py:method:: handle_AUTH(server, session, envelope, args)
 
-    Called during ``HELO``.  The ``hostname`` argument is the host name given
-    by the client in the ``HELO`` command.  If implemented, this hook must
-    also set the ``session.host_name`` attribute before returning
-    ``'250 {}'.format(server.hostname)`` as the status.
+    Called to handle ``AUTH`` command, if you need custom AUTH behavior.
+    You *must* comply with :rfc:`4954`.
+    Most of the time, you don't *need* to implement this hook;
+    :ref:`AUTH hooks <auth_hooks>` are provided to override/implement selctive
+    SMTP AUTH mechanisms (see below).
 
-    .. important::
+    ``args`` will contain the list of words following the ``AUTH`` command.
+    You will need to call some ``server`` methods and modify some ``session``
+    properties. ``envelope`` is usually ignored.
 
-        If the handler sets the ``session.host_name`` attribute to a false-y value
-        (or leave it as the default ``None`` value)
-        it will signal later steps that ``HELO`` failed
-        and need to be performed again.
+.. py:method:: handle_DATA(server, session, envelope)
 
-        This also applies to the :meth:`handle_EHLO` hook below.
+    Called during ``DATA`` after the entire message (`"SMTP content"
+    <https://tools.ietf.org/html/rfc5321#section-2.3.9>`_ as described in
+    RFC 5321) has been received.  The content is available on the ``envelope``
+    object, but the values are dependent on whether the ``SMTP`` class was
+    instantiated with ``decode_data=False`` (the default) or
+    ``decode_data=True``.  In the former case, both ``envelope.content`` and
+    ``envelope.original_content`` will be the content bytes (normalized
+    according to the transparency rules in :rfc:`RFC 5321, §4.5.2 <5321#section-4.5.2>`).  In the latter
+    case, ``envelope.original_content`` will be the normalized bytes, but
+    ``envelope.content`` will be the UTF-8 decoded string of the original
+    content.
 
 .. py:method:: handle_EHLO(server, session, envelope, hostname)
                handle_EHLO(server, session, envelope, hostname, responses)
@@ -92,18 +102,21 @@ The following hooks are currently defined:
         (containing the hostname of the SMTP server),
         and to end the list with ``"250 HELP"``
 
-.. py:method:: handle_NOOP(server, session, envelope, arg)
+.. py:method:: handle_HELO(server, session, envelope, hostname)
 
-    Called during ``NOOP``.
+    Called during ``HELO``.  The ``hostname`` argument is the host name given
+    by the client in the ``HELO`` command.  If implemented, this hook must
+    also set the ``session.host_name`` attribute before returning
+    ``'250 {}'.format(server.hostname)`` as the status.
 
-.. py:method:: handle_QUIT(server, session, envelope)
+    .. important::
 
-    Called during ``QUIT``.
+        If the handler sets the ``session.host_name`` attribute to a false-y value
+        (or leave it as the default ``None`` value)
+        it will signal later steps that ``HELO`` failed
+        and need to be performed again.
 
-.. py:method:: handle_VRFY(server, session, envelope, address)
-
-    Called during ``VRFY``.  The ``address`` argument is the parsed email
-    address given by the client in the ``VRFY`` command.
+        This also applies to the :meth:`handle_EHLO` hook below.
 
 .. py:method:: handle_MAIL(server, session, envelope, address, mail_options)
 
@@ -113,6 +126,25 @@ The following hooks are currently defined:
     client.  If implemented, this hook must also set the
     ``envelope.mail_from`` attribute and it may extend
     ``envelope.mail_options`` (which is always a Python list).
+
+.. py:method:: handle_NOOP(server, session, envelope, arg)
+
+    Called during ``NOOP``.
+
+.. py:method:: handle_PROXY(server, session, envelope, proxy_data)
+
+    Called during `PROXY Protocol`_ handling.
+
+    ``proxy_data`` is an instance of :class:`aiosmtpd.proxy_protocol.ProxyData`.
+
+    If the return value of ``handle_PROXY`` is "falsey",
+    then :class:`SMTP` will behave as if the PROXY handshake failed.
+
+.. _`PROXY Protocol`: https://www.haproxy.org/download/2.0/doc/proxy-protocol.txt
+
+.. py:method:: handle_QUIT(server, session, envelope)
+
+    Called during ``QUIT``.
 
 .. py:method:: handle_RCPT(server, session, envelope, address, rcpt_options)
 
@@ -127,31 +159,10 @@ The following hooks are currently defined:
 
     Called during ``RSET``.
 
-.. py:method:: handle_DATA(server, session, envelope)
+.. py:method:: handle_VRFY(server, session, envelope, address)
 
-    Called during ``DATA`` after the entire message (`"SMTP content"
-    <https://tools.ietf.org/html/rfc5321#section-2.3.9>`_ as described in
-    RFC 5321) has been received.  The content is available on the ``envelope``
-    object, but the values are dependent on whether the ``SMTP`` class was
-    instantiated with ``decode_data=False`` (the default) or
-    ``decode_data=True``.  In the former case, both ``envelope.content`` and
-    ``envelope.original_content`` will be the content bytes (normalized
-    according to the transparency rules in :rfc:`RFC 5321, §4.5.2 <5321#section-4.5.2>`).  In the latter
-    case, ``envelope.original_content`` will be the normalized bytes, but
-    ``envelope.content`` will be the UTF-8 decoded string of the original
-    content.
-
-.. py:method:: handle_AUTH(server, session, envelope, args)
-
-    Called to handle ``AUTH`` command, if you need custom AUTH behavior.
-    You *must* comply with :rfc:`4954`.
-    Most of the time, you don't *need* to implement this hook;
-    :ref:`AUTH hooks <auth_hooks>` are provided to override/implement selctive
-    SMTP AUTH mechanisms (see below).
-
-    ``args`` will contain the list of words following the ``AUTH`` command.
-    You will need to call some ``server`` methods and modify some ``session``
-    properties. ``envelope`` is usually ignored.
+    Called during ``VRFY``.  The ``address`` argument is the parsed email
+    address given by the client in the ``VRFY`` command.
 
 In addition to the SMTP command hooks, the following hooks can also be
 implemented by handlers.  These have different APIs, and are called
