@@ -535,7 +535,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         if self._proxy_timeout is not None:
             self._proxy_result = None
             self._reset_timeout(self._proxy_timeout)
-            self._proxy_result: ProxyData = await get_proxy(self._reader)
+            try:
+                self._proxy_result: ProxyData = await get_proxy(self._reader)
+            except Exception:
+                pass
             if not self._proxy_result.valid:
                 self.transport.close()
                 return self._handler_coroutine.cancel()
