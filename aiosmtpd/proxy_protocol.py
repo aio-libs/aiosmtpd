@@ -35,11 +35,6 @@ class AsyncReader(Protocol):  # pragma: nocover
         ...
 
 
-class _InvalidProxy:
-    def __repr__(self):
-        return "InvalidProxy"
-
-
 @public
 class ProxyData:
     version: int = None
@@ -78,8 +73,6 @@ class ProxyData:
 
 # endregion
 
-
-INVALID_PROXY = _InvalidProxy()
 
 RE_PROXYv1 = re.compile(br"PROXY (?P<proto>TCP4\b|TCP6\b|UNKNOWN)(?P<rest>.*)\r\n")
 RE_PROXYv1_ADDR = re.compile(
