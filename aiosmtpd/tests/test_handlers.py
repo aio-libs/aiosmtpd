@@ -745,13 +745,13 @@ class TestProxyMocked:
         # will emit a log entry right afterwards or inbetween causing test fail if we
         # just checked [-1] and [-2]. Therefore we need to scan backwards and simply
         # note the two log entries' relative position
-        l1 = l2 = -1
-        for l1, rt in enumerate(reversed(caplog.record_tuples)):
+        _l1 = _l2 = -1
+        for _l1, rt in enumerate(reversed(caplog.record_tuples)):
             if rt == (logger_name, logging.INFO, "got SMTPRecipientsRefused"):
                 break
         else:
             pytest.fail("Can't find first log entry")
-        for l2, rt in enumerate(reversed(caplog.record_tuples)):
+        for _l2, rt in enumerate(reversed(caplog.record_tuples)):
             if rt == (
                 logger_name,
                 logging.INFO,
@@ -760,7 +760,7 @@ class TestProxyMocked:
                 break
         else:
             pytest.fail("Can't find second log entry")
-        assert l2 < l1, "Log entries in wrong order"
+        assert _l2 < _l1, "Log entries in wrong order"
 
     @pytest.fixture
     def patch_smtp_oserror(self, mocker):
@@ -774,8 +774,8 @@ class TestProxyMocked:
         logger_name = "mail.debug"
         caplog.set_level(logging.INFO, logger=logger_name)
         client.sendmail("anne@example.com", ["bart@example.com"], self.SOURCE)
-        l1 = -1
-        for l1, rt in enumerate(reversed(caplog.record_tuples)):
+        _l1 = -1
+        for _l1, rt in enumerate(reversed(caplog.record_tuples)):
             if rt == (
                 logger_name,
                 logging.INFO,

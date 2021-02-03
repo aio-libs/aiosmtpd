@@ -34,7 +34,7 @@ STATUS_CODES = {
 class TestStatusCodes:
     def test_elemtype(self):
         """Ensure status codes are instances of StatusCode"""
-        for key, value in STATUS_CODES.items():
+        for value in STATUS_CODES.values():
             assert isinstance(value, statuscodes.StatusCode)
 
     def test_nameval(self):

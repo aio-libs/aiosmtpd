@@ -100,14 +100,14 @@ class Proxy:
             content = envelope.content
         lines = content.splitlines(keepends=True)
         # Look for the last header
-        i = 0
+        _i = 0
         ending = CRLF
-        for i, line in enumerate(lines):  # pragma: nobranch
+        for _i, line in enumerate(lines):  # pragma: nobranch
             if NLCRE.match(line):
                 ending = line
                 break
         peer = session.peer[0].encode('ascii')
-        lines.insert(i, b'X-Peer: %s%s' % (peer, ending))
+        lines.insert(_i, b'X-Peer: %s%s' % (peer, ending))
         data = EMPTYBYTES.join(lines)
         refused = self._deliver(envelope.mail_from, envelope.rcpt_tos, data)
         # TBD: what to do with refused addresses?
