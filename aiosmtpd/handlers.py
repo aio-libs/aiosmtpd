@@ -9,16 +9,15 @@ Pass in an instance of one of these classes, or derive your own, to provide
 your own handling of messages.  Implement only the methods you care about.
 """
 
-import re
-import sys
 import asyncio
 import logging
 import mailbox
+import re
 import smtplib
-
+import sys
 from email import message_from_bytes, message_from_string
-from public import public
 
+from public import public
 
 EMPTYBYTES = b''
 COMMASPACE = ', '

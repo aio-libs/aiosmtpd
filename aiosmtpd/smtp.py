@@ -1,22 +1,19 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
-import re
-import ssl
-import attr
-import enum
-import socket
 import asyncio
-import inspect
-import logging
+import asyncio.sslproto as sslproto
 import binascii
 import collections
-import asyncio.sslproto as sslproto
-
+import enum
+import inspect
+import logging
+import re
+import socket
+import ssl
 from base64 import b64decode, b64encode
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
-from public import public
 from typing import (
     Any,
     AnyStr,
@@ -31,6 +28,9 @@ from typing import (
     Union,
 )
 from warnings import warn
+
+import attr
+from public import public
 
 
 # region #### Custom Data Types #######################################################

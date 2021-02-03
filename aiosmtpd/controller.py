@@ -1,19 +1,18 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import os
 import ssl
-import asyncio
 import threading
-
-from aiosmtpd.smtp import SMTP
 from contextlib import ExitStack
-from public import public
 from socket import create_connection
+from typing import Any, Coroutine, Dict, Optional
 from warnings import warn
 
-from typing import Any, Coroutine, Dict, Optional
+from public import public
 
+from aiosmtpd.smtp import SMTP
 
 AsyncServer = asyncio.base_events.Server
 
