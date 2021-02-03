@@ -138,18 +138,26 @@ async def _get_v1(reader: AsyncReader, initial=b"") -> ProxyData:
 
 async def _get_v2(reader: AsyncReader, initial=b"") -> Optional[ProxyData]:
     proxy_data = ProxyData(version=2)
-    header = bytearray(initial)
-    hdr_left = 16 - len(initial)
-    if hdr_left > 0:
-        rest = bytearray()
-        header += await reader.read(hdr_left)
-    else:
-        rest = header[16:0]
-        header = header[0:16]
 
-    signature, ver_cmd, fam_proto, len_ = struct.unpack("!12sBBH", header)
-    if signature != "\r\n\r\n\x00\r\nQUIT\n":
+    signature = bytearray(initial)
+    sig_left = 12 - len(signature)
+    if sig_left > 0:  # pragma: no branch
+        signature += await reader.read(sig_left)
+    header = signature[12:]
+    signature = signature[0:12]
+    if signature != b"\r\n\r\n\x00\r\nQUIT\n":
         return proxy_data.with_error("PROXYv2 wrong signature")
+
+    hdr_left = 4 - len(header)
+    if hdr_left > 0:  # pragma: no branch
+        header += await reader.read(hdr_left)
+    rest = header[4:]
+    header = header[0:4]
+
+    try:
+        ver_cmd, fam_proto, len_ = struct.unpack("!BBH", header)
+    except struct.error:
+        return proxy_data.with_error("PROXYv2 malformed header")
 
     if (ver_cmd & 0xF0) != 0x20:
         return proxy_data.with_error("PROXYv2 illegal version")
