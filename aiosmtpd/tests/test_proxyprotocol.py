@@ -1,3 +1,10 @@
+# Copyright 2014-2021 The aiosmtpd Developers
+# SPDX-License-Identifier: Apache-2.0
+
+import asyncio
+import random
+import socket
+import struct
 import time
 import pytest
 import random
