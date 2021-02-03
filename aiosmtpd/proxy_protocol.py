@@ -43,6 +43,8 @@ class ProxyData:
     src_port: int = None
     dst_port: int = None
     rest: Union[bytes, bytearray] = None
+    family: int = None
+    protocol: Union[int, AnyStr] = None
 
     def __init__(self, *, version: Optional[int]):
         self.version = version
