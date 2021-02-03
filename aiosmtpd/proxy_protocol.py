@@ -136,7 +136,7 @@ async def _get_v1(reader: AsyncReader, initial=b"") -> ProxyData:
     return proxy_data
 
 
-async def _get_v2(reader: AsyncReader, initial=b"") -> Optional[ProxyData]:
+async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
     proxy_data = ProxyData(version=2)
 
     signature = bytearray(initial)
