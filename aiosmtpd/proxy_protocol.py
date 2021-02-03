@@ -48,7 +48,7 @@ class ProxyData:
     dst_addr: EndpointAddress = None
     src_port: int = None
     dst_port: int = None
-    rest: Union[bytes, bytearray] = None
+    rest: Union[bytes, bytearray] = b""
     family: int = None
     protocol: Union[int, AnyStr] = None
 
@@ -57,7 +57,7 @@ class ProxyData:
 
     @property
     def valid(self) -> bool:
-        return not (self.error or not self.version or not self.protocol)
+        return not (self.error or self.version is None or self.protocol is None)
 
     def with_error(self, error_msg: str) -> "ProxyData":
         self.error = error_msg
@@ -65,7 +65,10 @@ class ProxyData:
 
     def check(self, **kwargs) -> bool:
         for k, v in kwargs.items():
-            if getattr(self, k) != v:
+            try:
+                if getattr(self, k) != v:
+                    return False
+            except AttributeError:
                 return False
         return True
 
