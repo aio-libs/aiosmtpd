@@ -89,6 +89,9 @@ V2_FAM_IP4 = 1
 V2_FAM_IP6 = 2
 V2_FAM_UNIX = 3
 
+V2_PRO_UNSPEC = 0
+V2_PRO_STREAM = 1
+V2_PRO_DGRAM = 2
 
 # Reference: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt
 
@@ -162,7 +165,7 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> Optional[ProxyData]:
         return proxy_data.with_error("PROXYv2 unsupported family")
 
     proxy_data.protocol = fam_proto & 0x0F
-    if proxy_data.protocol not in (0, 1, 2):
+    if proxy_data.protocol not in (V2_PRO_UNSPEC, V2_PRO_STREAM, V2_PRO_DGRAM):
         return proxy_data.with_error("PROXYv2 unsupported protocol")
 
     rest_left = len_ - len(rest)
