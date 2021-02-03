@@ -542,10 +542,13 @@ class SMTP(asyncio.StreamReaderProtocol):
                 self._proxy_result: ProxyData = await get_proxy(self._reader)
             except Exception:
                 pass
-            if not self._proxy_result.valid:
+            if self._proxy_result.valid:
+                status = await self._call_handler_hook("PROXY", self._proxy_result)
+            else:
+                status = False
+            if status is MISSING or not status:
                 self.transport.close()
                 return self._handler_coroutine.cancel()
-            await self._call_handler_hook("PROXY", self._proxy_result)
             self._reset_timeout()
 
         await self.push('220 {} {}'.format(self.hostname, self.__ident__))
