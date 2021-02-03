@@ -110,7 +110,7 @@ async def _get_v1(reader: AsyncReader, initial=b"") -> ProxyData:
     rest = mp.group("rest")
     if proto == b"UNKNOWN":
         proxy_data.rest = rest
-    elif proto in (b"TCP4", b"TCP6"):
+    else:
         mr = RE_PROXYv1_ADDR.match(rest)
         if not mr:
             return proxy_data.with_error("PROXYv1 malformed")
@@ -133,8 +133,6 @@ async def _get_v1(reader: AsyncReader, initial=b"") -> ProxyData:
         proxy_data.dst_addr = dstip
         proxy_data.src_port = srcport
         proxy_data.dst_port = dstport
-    else:
-        proxy_data.error = "PROXYv1 unknown protocol"
     return proxy_data
 
 
