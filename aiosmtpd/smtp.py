@@ -528,8 +528,87 @@ class SMTP(asyncio.StreamReaderProtocol):
                 error.__class__.__name__, str(error))
             return status
 
+    async def _handle_proxy_v1(self):
+        proxline = await self._reader.readuntil()
+        if len(proxline) > 102:
+            return False
+        mp = RE_PROXYv1.match(proxline)
+        if not mp:
+            return False
+        proxy_data: Dict[str, Any] = {"version": 1}
+        proto = mp.group("proto")
+        proxy_data["proto"] = proto
+        rest = mp.group("rest")
+        if proto == b"UNKNOWN":
+            proxy_data["rest"] = rest
+        elif proto in (b"TCP4", b"TCP6"):
+            mr = RE_PROXYv1_ADDR.match(rest)
+            if not mr:
+                return False
+            try:
+                srcip = ip_address(mr.group("srcip").decode("latin-1"))
+                dstip = ip_address(mr.group("dstip").decode("latin-1"))
+                srcport = int(mr.group("srcport"))
+                dstport = int(mr.group("dstport"))
+            except ValueError:
+                return False
+            if proto == b"TCP4" and not srcip.version == dstip.version == 4:
+                return False
+            if proto == b"TCP6" and not srcip.version == dstip.version == 6:
+                return False
+            if not 0 <= srcport <= 65535:
+                return False
+            if not 0 <= dstport <= 65535:
+                return False
+            proxy_data["src_ip"] = srcip
+            proxy_data["dst_ip"] = dstip
+            proxy_data["src_port"] = srcport
+            proxy_data["dst_port"] = dstport
+        status = await self._call_handler_hook("PROXY", proxy_data)
+        if status is MISSING or not status:
+            return False
+        return True
+
+    async def _handle_proxy_v2(self):
+        raise NotImplementedError
+        # srread = self._reader.read
+        # if await srread(7) != b"\r\nQUIT\n":
+        #     raise InvalidProxySignature
+        # vercmd = await srread(1)[0]
+        # if (vercmd & 0xF0) != 2:
+        #     raise InvalidProxySignature
+        # proxy_data: Dict[str, Any] = {"version": 2}
+        # if (vercmd & 0x0F) not in (0, 1):
+        #     raise InvalidProxySignature
+        # proxy_data["cmd"] = vercmd & 0x0F
+        # fampro = await srread(1)[0]
+        # fam = fampro & 0xF0
+        # if fam not in (0, 1, 2, 3):
+        #     raise InvalidProxySignature
+        # proxy_data["family"] = fam
+        # proto = fampro & 0x0F
+        # if proto not in (0, 1, 2):
+        #     raise InvalidProxySignature
+        # proxy_data["proto"] = proto
+        # hlen = await srread(1)[0] << 8 + await srread(1)[0]
+        # if fam ==
+
     async def _handle_client(self):
         log.info('%r handling connection', self.session.peer)
+
+        if self._proxy_timeout is not None:
+            self._proxy_result = None
+            self._reset_timeout(self._proxy_timeout)
+            prox_data = await self._reader.read(5)
+            if prox_data == b"PROXY":
+                self._proxy_result = await self._handle_proxy_v1()
+            elif prox_data == b"\r\n\r\n\x00":
+                self._proxy_result = await self._handle_proxy_v2()
+            if not self._proxy_result:
+                self.transport.close()
+                return self._handler_coroutine.cancel()
+            self._reset_timeout()
+
         await self.push('220 {} {}'.format(self.hostname, self.__ident__))
         if self._enforce_call_limit:
             call_limit = collections.defaultdict(
@@ -540,6 +619,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Not used, but this silences code inspection tools
             call_limit = {}
         bogus_budget = BOGUS_LIMIT
+
         while self.transport is not None:   # pragma: nobranch
             try:
                 try:
