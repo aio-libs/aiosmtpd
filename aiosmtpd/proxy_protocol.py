@@ -24,8 +24,11 @@ EndpointAddress = Union[IPv4Address, IPv6Address, AnyStr]
 
 
 @public
-class AsyncReader(Protocol):
+class AsyncReader(Protocol):  # pragma: nocover
     def read(self, num_bytes: Optional[int] = None) -> Awaitable[bytes]:
+        ...
+
+    def readexactly(self, n: int) -> Awaitable[bytes]:
         ...
 
     def readuntil(self, until_chars: Optional[bytes] = None) -> Awaitable[bytes]:
