@@ -107,7 +107,9 @@ SMTP API
    decode_data=False, hostname=None, ident=None, tls_context=None, \
    require_starttls=False, timeout=300, auth_required=False, \
    auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, \
-   authenticator=None, command_call_limit=None, loop=None)
+   authenticator=None, command_call_limit=None, \
+   proxy_protocol_timeout=None, \
+   loop=None)
 
    |
    | :part:`Parameters`
@@ -225,6 +227,18 @@ SMTP API
 
           # Commands RCPT and NOOP have their own limits; others set to 3
           SMTP(..., command_call_limit={"RCPT": 20, "NOOP": 10, "*": 3})
+
+   :boldital:`proxy_protocol_timeout` if set to a ``float`` value,
+   activates support for `PROXY Protocol`_.
+   Defaults to ``None``, which disables support for PROXY protocol.
+
+   .. warning::
+
+      When PROXY protocol support is activated,
+      :class:`SMTP`'s behavior changes:
+      It no longer immediately sends ``220`` greeting,
+      but instead it will wait for client to first send the PROXY protocol header.
+      This is in accordance to the `PROXY Protocol`_ standard.
 
    :boldital:`loop` is the asyncio event loop to use.  If not given,
    :meth:`asyncio.new_event_loop()` is called to create the event loop.
@@ -386,3 +400,4 @@ advertised, and the ``STARTTLS`` command will not be accepted.
 .. _`asyncio transport`: https://docs.python.org/3/library/asyncio-protocol.html#asyncio-transport
 .. _StreamReaderProtocol: https://docs.python.org/3.6/library/asyncio-stream.html#streamreaderprotocol
 .. |StreamReaderProtocol| replace:: ``StreamReaderProtocol``
+.. _`PROXY protocol`: https://www.haproxy.org/download/2.0/doc/proxy-protocol.txt
