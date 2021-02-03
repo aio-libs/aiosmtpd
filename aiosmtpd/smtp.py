@@ -265,24 +265,27 @@ class SMTP(asyncio.StreamReaderProtocol):
     AuthLoginUsernameChallenge = "User Name\x00"
     AuthLoginPasswordChallenge = "Password\x00"
 
-    def __init__(self, handler,
-                 *,
-                 data_size_limit=DATA_SIZE_DEFAULT,
-                 enable_SMTPUTF8=False,
-                 decode_data=False,
-                 hostname=None,
-                 ident=None,
-                 tls_context: Optional[ssl.SSLContext] = None,
-                 require_starttls=False,
-                 timeout=300,
-                 auth_required=False,
-                 auth_require_tls=True,
-                 auth_exclude_mechanism: Optional[Iterable[str]] = None,
-                 auth_callback: AuthCallbackType = None,
-                 command_call_limit: Union[int, Dict[str, int], None] = None,
-                 authenticator: AuthenticatorType = None,
-                 proxy_protocol_timeout: Optional[float] = None,
-            loop=None):
+    def __init__(
+            self,
+            handler,
+            *,
+            data_size_limit=DATA_SIZE_DEFAULT,
+            enable_SMTPUTF8=False,
+            decode_data=False,
+            hostname=None,
+            ident=None,
+            tls_context: Optional[ssl.SSLContext] = None,
+            require_starttls=False,
+            timeout=300,
+            auth_required=False,
+            auth_require_tls=True,
+            auth_exclude_mechanism: Optional[Iterable[str]] = None,
+            auth_callback: AuthCallbackType = None,
+            command_call_limit: Union[int, Dict[str, int], None] = None,
+            authenticator: AuthenticatorType = None,
+            proxy_protocol_timeout: Optional[float] = None,
+            loop=None
+    ):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
         super().__init__(
