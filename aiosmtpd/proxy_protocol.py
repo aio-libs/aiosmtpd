@@ -213,8 +213,7 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> Optional[ProxyData]:
         proxy_data.dst_addr = d_addr
 
     # We'll not attempt to interpret the TLV
-    if rest:
-        proxy_data.rest = rest
+    proxy_data.rest = rest
 
     return proxy_data
 
