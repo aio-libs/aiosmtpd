@@ -113,22 +113,22 @@ async def _get_v1(reader: AsyncReader, initial=b"") -> ProxyData:
     else:
         mr = RE_PROXYv1_ADDR.match(rest)
         if not mr:
-            return proxy_data.with_error("PROXYv1 malformed")
+            return proxy_data.with_error("PROXYv1 address malformed")
         try:
             srcip = ip_address(mr.group("srcip").decode("latin-1"))
             dstip = ip_address(mr.group("dstip").decode("latin-1"))
             srcport = int(mr.group("srcport"))
             dstport = int(mr.group("dstport"))
         except ValueError:
-            return proxy_data.with_error("PROXYv1 malformed")
+            return proxy_data.with_error("PROXYv1 address parse error")
         if proto == b"TCP4" and not srcip.version == dstip.version == 4:
-            return proxy_data.with_error("PROXYv1 address type mismatch")
+            return proxy_data.with_error("PROXYv1 address not IPv4")
         if proto == b"TCP6" and not srcip.version == dstip.version == 6:
-            return proxy_data.with_error("PROXYv1 address type mismatch")
+            return proxy_data.with_error("PROXYv1 address not IPv6")
         if not 0 <= srcport <= 65535:
-            return proxy_data.with_error("PROXYv1 port out of bounds")
+            return proxy_data.with_error("PROXYv1 src port out of bounds")
         if not 0 <= dstport <= 65535:
-            return proxy_data.with_error("PROXYv1 port out of bounds")
+            return proxy_data.with_error("PROXYv1 dst port out of bounds")
         proxy_data.src_addr = srcip
         proxy_data.dst_addr = dstip
         proxy_data.src_port = srcport
