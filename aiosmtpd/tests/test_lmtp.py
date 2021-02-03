@@ -3,16 +3,17 @@
 
 """Test the LMTP protocol."""
 
-import pytest
 import socket
+from typing import Generator
 
-from .conftest import Global
+import pytest
+
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.lmtp import LMTP
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 
-from typing import Generator
+from .conftest import Global
 
 
 class LMTPController(Controller):

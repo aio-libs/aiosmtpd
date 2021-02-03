@@ -1,5 +1,4 @@
 import socket
-
 from typing import Iterable, NamedTuple
 
 

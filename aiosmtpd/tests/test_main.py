@@ -1,15 +1,15 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
-import os
-import pytest
 import asyncio
 import logging
+import os
+from typing import Generator
+
+import pytest
 
 from aiosmtpd.main import main, parseargs
 from aiosmtpd.smtp import __version__
-
-from typing import Generator
 
 try:
     import pwd

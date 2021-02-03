@@ -4,15 +4,17 @@
 """Test other aspects of the server implementation."""
 
 import os
-import pytest
 import socket
+from functools import partial
 
-from .conftest import Global
+import pytest
+from pytest_mock import MockFixture
+
 from aiosmtpd.controller import Controller, _FakeServer
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
-from functools import partial
-from pytest_mock import MockFixture
+
+from .conftest import Global
 
 
 def in_wsl():
@@ -139,11 +141,7 @@ class TestFactory:
     def test_unknown_args_direct(self, silence_event_loop_closed):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), **{unknown: True})
-        expectedre = (
-            r"__init__.. got an unexpected keyword argument '"
-            + unknown
-            + r"'"
-        )
+        expectedre = r"__init__.. got an unexpected keyword argument '" + unknown + r"'"
         try:
             with pytest.raises(TypeError, match=expectedre):
                 cont.start()
@@ -156,16 +154,10 @@ class TestFactory:
         "ignore:server_kwargs will be removed:DeprecationWarning"
     )
     @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
-    def test_unknown_args_inkwargs(
-            self, silence_event_loop_closed
-    ):
+    def test_unknown_args_inkwargs(self, silence_event_loop_closed):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), server_kwargs={unknown: True})
-        expectedre = (
-            r"__init__.. got an unexpected keyword argument '"
-            + unknown
-            + r"'"
-        )
+        expectedre = r"__init__.. got an unexpected keyword argument '" + unknown + r"'"
         try:
             with pytest.raises(TypeError, match=expectedre):
                 cont.start()

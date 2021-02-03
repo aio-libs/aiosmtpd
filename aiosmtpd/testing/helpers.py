@@ -1,16 +1,15 @@
 """Testing helpers."""
 
 import os
-import sys
-import time
 import select
 import socket
 import struct
-
-from aiosmtpd.smtp import Envelope
+import sys
+import time
 from smtplib import SMTP as SMTP_Client
 from typing import List
 
+from aiosmtpd.smtp import Envelope
 
 ASYNCIO_CATCHUP_DELAY = float(os.environ.get("ASYNCIO_CATCHUP_DELAY", 0.1))
 """
@@ -63,7 +62,7 @@ def catchup_delay(delay=ASYNCIO_CATCHUP_DELAY):
 
 
 def send_recv(
-        sock: socket.socket, data: bytes, end: bytes = b"\r\n", timeout=0.1
+    sock: socket.socket, data: bytes, end: bytes = b"\r\n", timeout=0.1
 ) -> bytes:
     sock.send(data + end)
     slist = [sock]

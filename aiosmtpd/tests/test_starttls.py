@@ -2,23 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import ssl
-import pytest
-
-from .conftest import Global, handler_data
-from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import Session as Sess_, SMTP as Server, TLSSetupException
-from aiosmtpd.testing.helpers import (
-    catchup_delay,
-    ReceivingHandler,
-)
-from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from contextlib import suppress
 from email.mime.text import MIMEText
 from smtplib import SMTPServerDisconnected
-
 from typing import Generator
 
+import pytest
+
+from aiosmtpd.controller import Controller
+from aiosmtpd.handlers import Sink
+from aiosmtpd.smtp import SMTP as Server
+from aiosmtpd.smtp import Session as Sess_
+from aiosmtpd.smtp import TLSSetupException
+from aiosmtpd.testing.helpers import ReceivingHandler, catchup_delay
+from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
+
+from .conftest import Global, handler_data
 
 # region #### Harness Classes & Functions #############################################
 
@@ -28,6 +27,7 @@ class EOFingHandler:
     Handler to specifically test SMTP.eof_received() method. To trigger, invoke the
     SMTP NOOP command *twice*
     """
+
     ssl_existed = None
     result = None
 
@@ -167,8 +167,8 @@ class TestStartTLS:
         assert resp == S.S554_LACK_SECURITY
 
     def test_tls_handshake_stopcontroller(self, tls_controller, client):
-        client.ehlo('example.com')
-        code, response = client.docmd('STARTTLS')
+        client.ehlo("example.com")
+        code, response = client.docmd("STARTTLS")
         tls_controller.stop()
         with pytest.raises(SMTPServerDisconnected):
             client.quit()
@@ -200,11 +200,10 @@ class ExceptionCaptureHandler:
 
     async def handle_exception(self, error):
         self.error = error
-        return '500 ExceptionCaptureHandler handling error'
+        return "500 ExceptionCaptureHandler handling error"
 
 
 class TestTLSEnding:
-
     @handler_data(class_=EOFingHandler)
     def test_eof_received(self, tls_controller, client):
         # I don't like this. It's too intimately involved with the innards of the SMTP
@@ -239,8 +238,8 @@ class TestTLSEnding:
         handler = tls_controller.handler
         assert isinstance(handler, ExceptionCaptureHandler)
         try:
-            client.ehlo('example.com')
-            code, response = client.docmd('STARTTLS')
+            client.ehlo("example.com")
+            code, response = client.docmd("STARTTLS")
             with pytest.raises(SMTPServerDisconnected):
                 client.docmd("SOMEFAILINGHANDSHAKE")
             catchup_delay()
@@ -327,12 +326,12 @@ class TestRequireTLS:
         assert resp == S.S530_STARTTLS_FIRST
 
     def test_noop_okay(self, client):
-        client.ehlo('example.com')
-        assert client.docmd('NOOP') == S.S250_OK
+        client.ehlo("example.com")
+        assert client.docmd("NOOP") == S.S250_OK
 
     def test_quit_okay(self, client):
-        client.ehlo('example.com')
-        assert client.docmd('QUIT') == S.S221_BYE
+        client.ehlo("example.com")
+        assert client.docmd("QUIT") == S.S221_BYE
 
 
 @pytest.mark.usefixtures("auth_req_tls_controller")

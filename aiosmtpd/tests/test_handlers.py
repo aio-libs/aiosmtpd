@@ -1,15 +1,8 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
-import sys
-import pytest
 import logging
-
-from .conftest import Global, controller_data, handler_data
-from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
-from aiosmtpd.smtp import SMTP as Server, Session as ServerSession
-from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S, StatusCode
+import sys
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
@@ -18,6 +11,17 @@ from smtplib import SMTPDataError, SMTPRecipientsRefused
 from textwrap import dedent
 from types import SimpleNamespace
 from typing import AnyStr, Generator, Type, TypeVar, Union
+
+import pytest
+
+from aiosmtpd.controller import Controller
+from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
+from aiosmtpd.smtp import SMTP as Server
+from aiosmtpd.smtp import Session as ServerSession
+from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
+from aiosmtpd.testing.statuscodes import StatusCode
+
+from .conftest import Global, controller_data, handler_data
 
 try:
     from typing_extensions import Protocol

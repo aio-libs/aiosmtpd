@@ -1,19 +1,20 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
-import ssl
-import pytest
-import socket
-import inspect
 import asyncio
+import inspect
+import socket
+import ssl
+from contextlib import suppress
+from functools import wraps
+from smtplib import SMTP as SMTPClient
+from typing import Generator, NamedTuple, Optional, Type
+
+import pytest
+from pkg_resources import resource_filename
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
-from contextlib import suppress
-from functools import wraps
-from pkg_resources import resource_filename
-from smtplib import SMTP as SMTPClient
-from typing import Generator, NamedTuple, Optional, Type
 
 try:
     from asyncio.proactor_events import _ProactorBasePipeTransport

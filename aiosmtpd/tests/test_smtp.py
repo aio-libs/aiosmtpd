@@ -3,39 +3,16 @@
 
 """Test the SMTP protocol."""
 
-import time
-import pytest
-import socket
 import asyncio
-import logging
-import warnings
 import itertools
-
-from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import (
-    AuthResult,
-    BOGUS_LIMIT,
-    CALL_LIMIT_DEFAULT,
-    MISSING,
-    Session as SMTPSession,
-    Envelope as SMTPEnvelope,
-    SMTP as Server,
-    __ident__ as GREETING,
-    auth_mechanism,
-)
-from aiosmtpd.testing.helpers import (
-    catchup_delay,
-    ReceivingHandler,
-    reset_connection,
-    send_recv,
-)
-from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-from .conftest import Global, controller_data, handler_data
+import logging
+import socket
+import time
+import warnings
 from base64 import b64encode
 from contextlib import suppress
+from smtplib import SMTP as SMTPClient
 from smtplib import (
-    SMTP as SMTPClient,
     SMTPAuthenticationError,
     SMTPDataError,
     SMTPResponseException,
@@ -44,8 +21,27 @@ from smtplib import (
 from textwrap import dedent
 from typing import Any, AnyStr, Callable, Generator, List, Tuple
 
+import pytest
 from pytest_mock import MockFixture
 
+from aiosmtpd.controller import Controller
+from aiosmtpd.handlers import Sink
+from aiosmtpd.smtp import BOGUS_LIMIT, CALL_LIMIT_DEFAULT, MISSING
+from aiosmtpd.smtp import SMTP as Server
+from aiosmtpd.smtp import AuthResult
+from aiosmtpd.smtp import Envelope as SMTPEnvelope
+from aiosmtpd.smtp import Session as SMTPSession
+from aiosmtpd.smtp import __ident__ as GREETING
+from aiosmtpd.smtp import auth_mechanism
+from aiosmtpd.testing.helpers import (
+    ReceivingHandler,
+    catchup_delay,
+    reset_connection,
+    send_recv,
+)
+from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
+
+from .conftest import Global, controller_data, handler_data
 
 CRLF = "\r\n"
 BCRLF = b"\r\n"
@@ -101,12 +97,12 @@ class PeekerHandler:
         return login == b"goodlogin" and password == b"goodpasswd"
 
     def authenticator(
-            self,
-            server: Server,
-            session: SMTPSession,
-            envelope: SMTPEnvelope,
-            mechanism: str,
-            login_data: Tuple[bytes, bytes],
+        self,
+        server: Server,
+        session: SMTPSession,
+        envelope: SMTPEnvelope,
+        mechanism: str,
+        login_data: Tuple[bytes, bytes],
     ) -> AuthResult:
         self.sess = session
         self.mechanism = mechanism
@@ -276,7 +272,7 @@ def transport_resp(mocker: MockFixture):
 
 @pytest.fixture
 def get_protocol(
-        temp_event_loop, transport_resp
+    temp_event_loop, transport_resp
 ) -> Generator[Callable[..., Server], None, None]:
     transport, _ = transport_resp
 
@@ -292,9 +288,7 @@ def get_protocol(
 
 
 @pytest.fixture
-def auth_peeker_controller(
-        get_controller
-) -> Generator[Controller, None, None]:
+def auth_peeker_controller(get_controller) -> Generator[Controller, None, None]:
     handler = PeekerHandler()
     controller = get_controller(
         handler,
@@ -314,7 +308,7 @@ def auth_peeker_controller(
 
 @pytest.fixture
 def authenticator_peeker_controller(
-        get_controller
+    get_controller,
 ) -> Generator[Controller, None, None]:
     handler = PeekerHandler()
     controller = get_controller(
@@ -335,7 +329,7 @@ def authenticator_peeker_controller(
 
 @pytest.fixture
 def decoding_authnotls_controller(
-        get_handler, get_controller
+    get_handler, get_controller
 ) -> Generator[Controller, None, None]:
     handler = get_handler()
     controller = get_controller(
@@ -953,7 +947,7 @@ class TestSMTPAuth(_CommonMethods):
         resp = client.docmd("AUTH WITH_UNDERSCORE")
         assert resp == (334, b"challenge")
         with warnings.catch_warnings(record=True) as w:
-            assert client.docmd('=') == S.S235_AUTH_SUCCESS
+            assert client.docmd("=") == S.S235_AUTH_SUCCESS
         assert len(w) > 0
         assert str(w[0].message) == "AUTH interaction logging is enabled!"
         assert str(w[1].message) == "Sensitive information might be leaked!"
@@ -963,7 +957,7 @@ class TestSMTPAuth(_CommonMethods):
 class TestAuthMechanisms(_CommonMethods):
     @pytest.fixture
     def do_auth_plain1(
-            self, client
+        self, client
     ) -> Generator[Callable[[str], Tuple[int, bytes]], None, None]:
         self._ehlo(client)
 
@@ -975,7 +969,7 @@ class TestAuthMechanisms(_CommonMethods):
 
     @pytest.fixture
     def do_auth_login3(
-            self, client
+        self, client
     ) -> Generator[Callable[[str], Tuple[int, bytes]], None, None]:
         self._ehlo(client)
         resp = client.docmd("AUTH LOGIN")
@@ -1073,14 +1067,11 @@ class TestAuthMechanisms(_CommonMethods):
 
     def test_plain1_goodcreds_sanitized_log(self, caplog, client):
         caplog.set_level("DEBUG")
-        client.ehlo('example.com')
+        client.ehlo("example.com")
         code, response = client.docmd(
-            'AUTH PLAIN ' +
-            b64encode(b'\0goodlogin\0goodpasswd').decode()
+            "AUTH PLAIN " + b64encode(b"\0goodlogin\0goodpasswd").decode()
         )
-        interestings = [
-            tup for tup in caplog.record_tuples if "AUTH PLAIN" in tup[-1]
-        ]
+        interestings = [tup for tup in caplog.record_tuples if "AUTH PLAIN" in tup[-1]]
         assert len(interestings) == 2
         assert interestings[0][1] == logging.DEBUG
         assert interestings[0][2].endswith("b'AUTH PLAIN ********\\r\\n'")
@@ -1230,9 +1221,7 @@ class TestAuthenticator(_CommonMethods):
         assert auth_peeker.login_data == (b"failme_with454", b"anypass")
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Requiring AUTH while not requiring TLS:UserWarning"
-)
+@pytest.mark.filterwarnings("ignore:Requiring AUTH while not requiring TLS:UserWarning")
 @pytest.mark.usefixtures("plain_controller")
 @controller_data(
     decode_data=True,
