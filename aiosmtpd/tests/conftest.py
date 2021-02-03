@@ -97,8 +97,10 @@ def get_controller(request):
     """
     default_class = Controller
     marker = request.node.get_closest_marker("controller_data")
-    if marker:
-        markerdata = marker.kwargs or {}
+    if marker and marker.kwargs:
+        # Must copy so marker data do not change between test cases if marker is
+        # applied to test class
+        markerdata = marker.kwargs.copy()
     else:
         markerdata = {}
 
@@ -151,18 +153,24 @@ def get_handler(request):
             controller = Controller(handler)
             ...
     """
-    marker = request.node.get_closest_marker("handler_data")
     default_class = Sink
+    marker = request.node.get_closest_marker("handler_data")
+    if marker and marker.kwargs:
+        # Must copy so marker data do not change between test cases if marker is
+        # applied to test class
+        markerdata = marker.kwargs.copy()
+    else:
+        markerdata = {}
 
     def getter(*args, **kwargs):
         if marker:
-            class_ = marker.kwargs.pop("class_", default_class)
+            class_ = markerdata.pop("class_", default_class)
             # *args overrides args_ in handler_data()
-            args_ = marker.kwargs.pop("args_", tuple())
+            args_ = markerdata.pop("args_", tuple())
             # Do NOT inline the above into the line below! We *need* to pop "args_"!
             args = args or args_
-            # **kwargs override marker.kwargs, so it's rightmost (PEP448)
-            kwargs = {**marker.kwargs, **kwargs}
+            # **kwargs override markerdata, so it's rightmost (PEP448)
+            kwargs = {**markerdata, **kwargs}
         else:
             class_ = default_class
         # noinspection PyArgumentList
