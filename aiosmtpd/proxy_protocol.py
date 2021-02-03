@@ -192,6 +192,8 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> Optional[ProxyData]:
 
     addr_len = struct.calcsize(unpacker)
     addr_struct = rest[0:addr_len]
+    if len(addr_struct) < addr_len:
+        return proxy_data.with_error("PROXYv2 truncated address")
     rest = addr_struct[addr_len:]
     s_addr, d_addr, s_port, d_port = struct.unpack(unpacker, addr_struct)
 
