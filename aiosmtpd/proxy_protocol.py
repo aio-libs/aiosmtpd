@@ -207,4 +207,4 @@ async def get_proxy(reader_func: AsyncReader) -> ProxyData:
     elif signature == b"\r\n\r\n\x00":
         return await _get_v2(reader_func, signature)
     else:
-        return ProxyData(version=None)
+        return ProxyData(version=None).with_error("PROXY unrecognized signature")
