@@ -51,3 +51,7 @@ ignore = [
     "_static/**",
     "examples/**",
 ]
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
