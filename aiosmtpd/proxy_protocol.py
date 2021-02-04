@@ -3,11 +3,11 @@
 
 import re
 import struct
-
-from ipaddress import ip_address, IPv4Address, IPv6Address
-from public import public
-
+from ipaddress import IPv4Address, IPv6Address, ip_address
 from typing import AnyStr, Awaitable, Optional, Union
+
+import attr
+from public import public
 
 try:
     from typing import Protocol
@@ -63,19 +63,18 @@ class AsyncReader(Protocol):  # pragma: nocover
 
 
 @public
+@attr.s(slots=True, auto_attribs=True)
 class ProxyData:
-    version: int = None
+    version: Optional[int] = attr.ib(kw_only=True)
     error: str = ""
-    src_addr: EndpointAddress = None
-    dst_addr: EndpointAddress = None
-    src_port: int = None
-    dst_port: int = None
+    src_addr: Optional[EndpointAddress] = None
+    dst_addr: Optional[EndpointAddress] = None
+    src_port: Optional[int] = None
+    dst_port: Optional[int] = None
     rest: Union[bytes, bytearray] = b""
-    family: int = None
-    protocol: Union[int, AnyStr] = None
-
-    def __init__(self, *, version: Optional[int]):
-        self.version = version
+    family: Optional[int] = None
+    protocol: Optional[Union[int, AnyStr]] = None
+    command: Optional[int] = None
 
     @property
     def valid(self) -> bool:
