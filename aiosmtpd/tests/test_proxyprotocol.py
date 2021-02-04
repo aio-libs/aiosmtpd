@@ -428,8 +428,6 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
         setup_proxy_protocol(self)
         src_addr = struct.pack("108s", b"/proc/source")
         dst_addr = struct.pack("108s", b"/proc/dest")
-        src_port = 65534
-        dst_port = 8080
         payload = src_addr + dst_addr + ttlv
         self._send_valid(0, 3, tproto, payload).check(
             valid=True,
@@ -439,6 +437,8 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             protocol=tproto,
             src_addr=src_addr,
             dst_addr=dst_addr,
+            src_port=None,
+            dst_port=None,
             rest=ttlv,
         )
 
