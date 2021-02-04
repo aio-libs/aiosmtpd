@@ -270,48 +270,28 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
         setup_proxy_protocol(self)
         self._assert_invalid(prox_test, "PROXYv1 address not IPv6")
 
-    def test_malformed_zeroleader(self, setup_proxy_protocol):
-        srcip = "2020:dead::0001"
-        dstip = "2021:cafe::0002"
-        srcport = 2501
-        dstport = 65535
-        prox_test = f"PROXY TCP6 {srcip} {dstip} 0{srcport} {dstport}\r\n"
-        setup_proxy_protocol(self)
-        self._assert_invalid(prox_test, "PROXYv1 address malformed")
+    IP6_dead = "2020:dead::0001"
+    IP6_cafe = "2021:cafe::0002"
 
-    def test_malformed_space1(self, setup_proxy_protocol):
-        srcip = "2020:dead::0001"
-        dstip = "2021:cafe::0002"
-        srcport = 65535
-        dstport = 65535
-        prox_test = f"PROXY TCP6  {srcip} {dstip} {srcport} {dstport}\r\n"
-        setup_proxy_protocol(self)
-        self._assert_invalid(prox_test, "PROXYv1 address malformed")
-
-    def test_malformed_space2(self, setup_proxy_protocol):
-        srcip = "2020:dead::0001"
-        dstip = "2021:cafe::0002"
-        srcport = 65535
-        dstport = 65535
-        prox_test = f"PROXY TCP6 {srcip} {dstip}  {srcport} {dstport}\r\n"
-        setup_proxy_protocol(self)
-        self._assert_invalid(prox_test, "PROXYv1 address malformed")
-
-    def test_malformed_space3(self, setup_proxy_protocol):
-        srcip = "2020:dead::0001"
-        dstip = "2021:cafe::0002"
-        srcport = 65535
-        dstport = 65535
-        prox_test = f"PROXY TCP6 {srcip} {dstip} {srcport}  {dstport}\r\n"
-        setup_proxy_protocol(self)
-        self._assert_invalid(prox_test, "PROXYv1 address malformed")
-
-    def test_malformed_space4(self, setup_proxy_protocol):
-        srcip = "2020:dead::0001"
-        dstip = "2021:cafe::0002"
-        srcport = 65535
-        dstport = 65535
-        prox_test = f"PROXY TCP6 {srcip} {dstip} {srcport} {dstport} \r\n"
+    @parametrize(
+        "srcip, dstip, srcport, dstport",
+        [
+            param(IP6_dead, IP6_cafe, "02501", None, id="zeroleader"),
+            param(" " + IP6_dead, IP6_cafe, None, None, id="space1"),
+            param(IP6_dead, " " + IP6_cafe, None, None, id="space2"),
+            param(IP6_dead, IP6_cafe, " 8080", None, id="space3"),
+            param(IP6_dead, IP6_cafe, None, " 0", id="space4"),
+            param(IP6_dead, IP6_cafe, None, "0 ", id="space5"),
+            param(IP6_dead[:-1] + "g", IP6_cafe, None, None, id="addr6s"),
+            param(IP6_dead, IP6_cafe[:-1] + "h", None, None, id="addr6d"),
+        ]
+    )
+    def test_malformed_addr(self, setup_proxy_protocol, srcip, dstip, srcport, dstport):
+        if srcport is None:
+            srcport = random_port()
+        if dstport is None:
+            dstport = random_port()
+        prox_test = f"PROXY TCP6 {srcip} {dstip} {srcport} {dstport}\r\n"
         setup_proxy_protocol(self)
         self._assert_invalid(prox_test, "PROXYv1 address malformed")
 
@@ -323,15 +303,6 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
         prox_test = f"PROXY TCP6 {srcip} {dstip} {srcport} {dstport}\r\n"
         setup_proxy_protocol(self)
         self._assert_invalid(prox_test, "PROXYv1 address parse error")
-
-    def test_malformed_addr6(self, setup_proxy_protocol):
-        srcip = "2020:dead::0001"
-        dstip = "2021:cafe::000g"
-        srcport = 65535
-        dstport = 65535
-        prox_test = f"PROXY TCP6 {srcip} {dstip} {srcport} {dstport} \r\n"
-        setup_proxy_protocol(self)
-        self._assert_invalid(prox_test, "PROXYv1 address malformed")
 
     def test_ports_oob(self, setup_proxy_protocol):
         srcip = "1.2.3.4"
