@@ -125,7 +125,7 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
         assert self.protocol._proxy_result.error == ""
         handler = self.protocol.event_handler
         assert handler.called
-        proxy_data = handler.proxy_datas[0]
+        proxy_data = handler.proxy_datas[-1]
         assert proxy_data.check(
             valid=True,
             version=1,
