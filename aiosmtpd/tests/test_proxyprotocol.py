@@ -6,6 +6,7 @@ import random
 import socket
 import struct
 import time
+from functools import partial
 from ipaddress import IPv4Address, IPv6Address
 from smtplib import SMTP as SMTPClient
 from typing import List
@@ -21,6 +22,8 @@ from aiosmtpd.tests.conftest import Global, controller_data, handler_data
 
 DEFAULT_AUTOCANCEL = 0.1
 V2_SIGNATURE = b"\r\n\r\n\x00\r\nQUIT\n"
+
+random_port = partial(random.getrandbits, 16)
 
 
 class ProxyPeekerHandler(Sink):
@@ -161,8 +164,8 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
     def test_tcp6_random(self, setup_proxy_protocol):
         srcip = ":".join(f"{random.getrandbits(16):04x}" for _ in range(0, 8))
         dstip = ":".join(f"{random.getrandbits(16):04x}" for _ in range(0, 8))
-        srcport = 65535
-        dstport = 65535
+        srcport = random_port()
+        dstport = random_port()
         prox_test = f"PROXY TCP6 {srcip} {dstip} {srcport} {dstport}\r\n"
         setup_proxy_protocol(self)
         self._assert_valid(
