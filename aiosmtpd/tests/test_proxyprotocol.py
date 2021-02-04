@@ -123,6 +123,7 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
     def _assert_valid(self, ipaddr, proto, srcip, dstip, srcport, dstport, testline):
         self.protocol.data_received(testline.encode("ascii"))
         self.runner()
+        assert self.protocol._proxy_result.error == ""
         handler = self.protocol.event_handler
         assert handler.called
         proxy_data = handler.proxy_datas[0]
