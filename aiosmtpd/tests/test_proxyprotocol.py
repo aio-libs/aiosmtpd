@@ -23,6 +23,8 @@ from aiosmtpd.tests.conftest import Global, controller_data, handler_data
 DEFAULT_AUTOCANCEL = 0.1
 V2_SIGNATURE = b"\r\n\r\n\x00\r\nQUIT\n"
 
+param = pytest.param
+parametrize = pytest.mark.parametrize
 random_port = partial(random.getrandbits, 16)
 
 
@@ -380,8 +382,8 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             valid=True, version=2, command=0, family=0, protocol=0, rest=payload
         )
 
-    @pytest.mark.parametrize("ttlv", [b"", b"fake_tlv"])
-    @pytest.mark.parametrize("tproto", [1, 2])
+    @parametrize("ttlv", [b"", b"fake_tlv"])
+    @parametrize("tproto", [1, 2])
     def test_INET4(self, setup_proxy_protocol, tproto, ttlv):
         setup_proxy_protocol(self)
         src_addr = IPv4Address("10.212.4.33")
@@ -408,8 +410,8 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             rest=ttlv,
         )
 
-    @pytest.mark.parametrize("ttlv", [b"", b"fake_tlv"])
-    @pytest.mark.parametrize("tproto", [1, 2])
+    @parametrize("ttlv", [b"", b"fake_tlv"])
+    @parametrize("tproto", [1, 2])
     def test_INET6(self, setup_proxy_protocol, tproto, ttlv):
         setup_proxy_protocol(self)
         src_addr = IPv6Address("2020:dead::0001")
@@ -436,8 +438,8 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             rest=ttlv,
         )
 
-    @pytest.mark.parametrize("ttlv", [b"", b"fake_tlv"])
-    @pytest.mark.parametrize("tproto", [1, 2])
+    @parametrize("ttlv", [b"", b"fake_tlv"])
+    @parametrize("tproto", [1, 2])
     def test_UNIX(self, setup_proxy_protocol, tproto, ttlv):
         setup_proxy_protocol(self)
         src_addr = struct.pack("108s", b"/proc/source")
@@ -456,7 +458,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             rest=ttlv,
         )
 
-    @pytest.mark.parametrize("tfam, tproto", [(0, 1), (0, 2), (1, 0), (2, 0), (3, 0)])
+    @parametrize("tfam, tproto", [(0, 1), (0, 2), (1, 0), (2, 0), (3, 0)])
     def test_fallback_UNSPEC(self, setup_proxy_protocol, tfam, tproto):
         setup_proxy_protocol(self)
         payload = b"whatever"
