@@ -18,6 +18,8 @@ from aiosmtpd.proxy_protocol import ProxyData
 from aiosmtpd.smtp import SMTP as SMTPServer
 from aiosmtpd.tests.conftest import Global, controller_data, handler_data
 
+
+DEFAULT_AUTOCANCEL = 0.1
 V2_SIGNATURE = b"\r\n\r\n\x00\r\nQUIT\n"
 
 
@@ -34,26 +36,26 @@ class ProxyPeekerHandler(Sink):
 
 
 @pytest.fixture
-def setup_proxy_protocol(mocker: MockFixture):
+def setup_proxy_protocol(mocker: MockFixture, temp_event_loop):
     proxy_timeout = 1.0
     responses = []
     transport = mocker.Mock()
     transport.write = responses.append
-    old_loop = asyncio.get_event_loop()
-    new_loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(new_loop)
     handler = ProxyPeekerHandler()
+    loop = temp_event_loop
 
-    def getter(test_obj: "_TestProxyProtocolCommon", *args, **kwargs):
-        kwargs["loop"] = new_loop
+    def getter(
+        test_obj: "_TestProxyProtocolCommon", *args, **kwargs
+    ):
+        kwargs["loop"] = loop
         kwargs["proxy_protocol_timeout"] = proxy_timeout
         protocol = SMTPServer(handler, *args, **kwargs)
         protocol.connection_made(transport)
 
-        def runner(limit=1.0):
-            new_loop.call_later(limit, protocol._handler_coroutine.cancel)
+        def runner(stop_after: float = DEFAULT_AUTOCANCEL):
+            loop.call_later(stop_after, protocol._handler_coroutine.cancel)
             try:
-                new_loop.run_until_complete(protocol._handler_coroutine)
+                loop.run_until_complete(protocol._handler_coroutine)
             except asyncio.CancelledError:
                 pass
 
@@ -62,9 +64,6 @@ def setup_proxy_protocol(mocker: MockFixture):
         test_obj.transport = transport
 
     yield getter
-
-    new_loop.close()
-    asyncio.set_event_loop(old_loop)
 
 
 class _TestProxyProtocolCommon:
