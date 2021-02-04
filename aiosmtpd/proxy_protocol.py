@@ -17,6 +17,33 @@ except ImportError:
 
 __ALL__ = ["INVALID_PROXY"]  # Will be added to by @public
 
+V1_VALID_PROS = {"TCP4", "TCP6", "UNKNOWN", b"TCP4", b"TCP6", b"UNKNOWN"}
+
+V2_SIGNATURE = b"\r\n\r\n\x00\r\nQUIT\n"
+
+V2_CMD_LOCAL = 0
+V2_CMD_PROXY = 0
+
+V2_FAM_UNSPEC = 0
+V2_FAM_IP4 = 1
+V2_FAM_IP6 = 2
+V2_FAM_UNIX = 3
+
+V2_PRO_UNSPEC = 0
+V2_PRO_STREAM = 1
+V2_PRO_DGRAM = 2
+
+V2_VALID_CMDS = {V2_CMD_LOCAL, V2_CMD_PROXY}
+V2_VALID_FAMS = {V2_FAM_UNSPEC, V2_FAM_IP4, V2_FAM_IP6, V2_FAM_UNIX}
+V2_VALID_PROS = {V2_PRO_UNSPEC, V2_PRO_STREAM, V2_PRO_DGRAM}
+V2_PARSE_ADDR_FAMPRO = {
+    (V2_FAM_IP4 << 4) | V2_PRO_STREAM,
+    (V2_FAM_IP4 << 4) | V2_PRO_DGRAM,
+    (V2_FAM_IP6 << 4) | V2_PRO_STREAM,
+    (V2_FAM_IP6 << 4) | V2_PRO_DGRAM,
+    (V2_FAM_UNIX << 4) | V2_PRO_STREAM,
+    (V2_FAM_UNIX << 4) | V2_PRO_DGRAM,
+}
 
 # region #### Custom Types ############################################################
 
@@ -84,15 +111,6 @@ RE_PROXYv1_ADDR = re.compile(
     br"$"
 )
 
-V2_FAM_UNSPEC = 0
-V2_FAM_IP4 = 1
-V2_FAM_IP6 = 2
-V2_FAM_UNIX = 3
-
-V2_PRO_UNSPEC = 0
-V2_PRO_STREAM = 1
-V2_PRO_DGRAM = 2
-
 # Reference: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt
 
 
@@ -145,7 +163,7 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
         signature += await reader.read(sig_left)
     header = signature[12:]
     signature = signature[0:12]
-    if signature != b"\r\n\r\n\x00\r\nQUIT\n":
+    if signature != V2_SIGNATURE:
         return proxy_data.with_error("PROXYv2 wrong signature")
 
     hdr_left = 4 - len(header)
@@ -163,22 +181,22 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
         return proxy_data.with_error("PROXYv2 illegal version")
 
     proxy_data.command = ver_cmd & 0x0F
-    if proxy_data.command not in (0, 1):
+    if proxy_data.command not in V2_VALID_CMDS:
         return proxy_data.with_error("PROXYv2 unsupported command")
 
     proxy_data.family = (fam_proto & 0xF0) >> 4
-    if proxy_data.family not in (V2_FAM_UNSPEC, V2_FAM_IP4, V2_FAM_IP6, V2_FAM_UNIX):
+    if proxy_data.family not in V2_VALID_FAMS:
         return proxy_data.with_error("PROXYv2 unsupported family")
 
     proxy_data.protocol = fam_proto & 0x0F
-    if proxy_data.protocol not in (V2_PRO_UNSPEC, V2_PRO_STREAM, V2_PRO_DGRAM):
+    if proxy_data.protocol not in V2_VALID_PROS:
         return proxy_data.with_error("PROXYv2 unsupported protocol")
 
     rest_left = len_ - len(rest)
     if rest_left > 0:
         rest += await reader.read(rest_left)
 
-    if fam_proto not in (0x11, 0x12, 0x21, 0x22, 0x31, 0x32):
+    if fam_proto not in V2_PARSE_ADDR_FAMPRO:
         proxy_data.rest = rest
         return proxy_data
 
