@@ -243,9 +243,12 @@ async def get_proxy(reader_func: AsyncReader) -> ProxyData:
     :return: Proxy Data if valid
     """
     signature = await reader_func.read(5)
-    if signature == b"PROXY":
-        return await _get_v1(reader_func, signature)
-    elif signature == b"\r\n\r\n\x00":
-        return await _get_v2(reader_func, signature)
-    else:
-        return ProxyData(version=None).with_error("PROXY unrecognized signature")
+    try:
+        if signature == b"PROXY":
+            return await _get_v1(reader_func, signature)
+        elif signature == b"\r\n\r\n\x00":
+            return await _get_v2(reader_func, signature)
+        else:
+            return ProxyData(version=None).with_error("PROXY unrecognized signature")
+    except Exception as e:
+        return ProxyData(version=None).with_error(f"PROXY exception: {str(e)}")
