@@ -536,7 +536,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
         )
 
 
-@controller_data(proxy_protocol_timeout=1.0)
+@controller_data(proxy_protocol_timeout=0.3)
 @handler_data(class_=ProxyPeekerHandler)
 class TestProxyProtocolV1Controller:
     def test_timeout(self, plain_controller):
