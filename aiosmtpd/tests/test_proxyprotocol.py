@@ -150,6 +150,17 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
             IPv4Address, b"TCP4", srcip, dstip, srcport, dstport, prox_test
         )
 
+    def test_tcp4_random(self, setup_proxy_protocol):
+        setup_proxy_protocol(self)
+        srcip = ".".join(f"{random.getrandbits(8)}" for _ in range(0, 4))
+        dstip = ".".join(f"{random.getrandbits(8)}" for _ in range(0, 4))
+        srcport = random_port()
+        dstport = random_port()
+        prox_test = f"PROXY TCP4 {srcip} {dstip} {srcport} {dstport}\r\n"
+        self._assert_valid(
+            IPv4Address, b"TCP4", srcip, dstip, srcport, dstport, prox_test
+        )
+
     def test_tcp6_shortened(self, setup_proxy_protocol):
         srcip = "2020:dead::0001"
         dstip = "2021:cafe::0002"
