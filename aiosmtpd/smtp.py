@@ -11,6 +11,7 @@ import logging
 import re
 import socket
 import ssl
+from aiosmtpd import __version__
 from base64 import b64decode, b64encode
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
@@ -66,8 +67,8 @@ __all__ = [
     "AuthCallbackType",
     "AuthMechanismType",
     "MISSING",
+    "__version__",
 ]  # Will be added to by @public
-__version__ = '1.3.0a9'
 __ident__ = 'Python SMTP {}'.format(__version__)
 log = logging.getLogger('mail.log')
 
