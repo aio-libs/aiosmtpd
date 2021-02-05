@@ -204,3 +204,11 @@ class TestFactory:
             assert cont._thread_exception is None
         finally:
             cont.stop()
+
+
+class TestCompat:
+    def test_version(self):
+        from aiosmtpd import __version__ as init_version
+        from aiosmtpd.smtp import __version__ as smtp_version
+
+        assert smtp_version is init_version
