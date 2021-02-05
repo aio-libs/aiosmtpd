@@ -12,19 +12,16 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
-import sys
-import re
 import datetime
-
+import re
+import sys
 from pathlib import Path
 
 from aiosmtpd import __version__
 
 try:
     # noinspection PyPackageRequirements
-    from colorama import (  # pytype: disable=import-error
-        init as colorama_init,
-    )
+    from colorama import init as colorama_init  # pytype: disable=import-error
 
     colorama_init()
 except ImportError:
