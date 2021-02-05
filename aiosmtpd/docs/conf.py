@@ -18,6 +18,8 @@ import datetime
 
 from pathlib import Path
 
+from aiosmtpd import __version__
+
 try:
     # noinspection PyPackageRequirements
     from colorama import (  # pytype: disable=import-error
@@ -77,15 +79,6 @@ copyright = f"2015-{datetime.datetime.now().year}, {author}"
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
-__version__ = None
-with open("../smtp.py") as fp:
-    for line in fp:
-        m = RE__VERSION.match(line.strip())
-        if m:
-            __version__ = m.group("ver")
-            break
-if __version__ is None:
-    raise RuntimeError("No __version__ found in aiosmtpd/smtp.py!")
 release = __version__
 version = __version__
 
