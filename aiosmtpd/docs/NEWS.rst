@@ -19,6 +19,11 @@ Fixed/Improved
 * ``authenticator`` system improves on ``auth_callback`` by enabling the called function
   to see the SMTP Session and other info.
   (``auth_callback`` will be deprecated in 2.0)
+* ``__version__`` is now an attribute in ``__init__.py``,
+  and can be imported from the 'plain' ``aiosmtpd`` module.
+  (It gets reimported to ``aiosmtpd.smtp``,
+  so programs relying on ``aiosmtpd.smtp.__version__`` should still work.)
+  (Closes #241)
 
 
 1.2.4 (2021-01-24)
