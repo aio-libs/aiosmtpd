@@ -124,10 +124,10 @@ class Controller:
             # Usually will enter this part only if create_server() cannot bind to the
             # specified host:port.
             #
-            # Somehow WSL1.0 (Windows Subsystem for Linux) allows multiple
+            # Somehow WSL 1.0 (Windows Subsystem for Linux) allows multiple
             # listeners on one port?!
-            # That is why we add "pragma: nowsl" there, so when testing on
-            # WSL we can specify "PLATFORM=wsl".
+            # That is why we add "pragma: on-wsl" there, so this block will not affect
+            # coverage on WSL 1.0.
             self._thread_exception = error
             return
         self.loop.call_soon(ready_event.set)

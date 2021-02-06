@@ -19,8 +19,7 @@ from .conftest import Global
 
 def in_wsl():
     # WSL 1.0 somehow allows more than one listener on one port.
-    # So when testing on WSL, we must set PLATFORM=wsl and skip the
-    # "test_socket_error" test.
+    # So we have to detect when we're running on WSL so we can skip some tests.
     return "microsoft" in platform.release().casefold()
 
 

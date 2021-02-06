@@ -217,18 +217,6 @@ Environment Variables
 
     Defaults to `0.1` and can be set to any float value you want.
 
-``PLATFORM``
-~~~~~~~~~~~~~~~~
-
-    Used on non-POSIX operating systems to specify tests to skip.
-    Valid values:
-
-    +-----------+-------------------------------------------------------+
-    | ``mswin`` | when running tox on Microsoft Windows (non-Cygwin)    |
-    +-----------+-------------------------------------------------------+
-    | ``wsl``   | when running tox on Windows Subsystem for Linux (WSL) |
-    +-----------+-------------------------------------------------------+
-
 
 Different Python Versions
 -----------------------------
