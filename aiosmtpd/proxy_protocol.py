@@ -176,10 +176,20 @@ class ProxyData:
     """
     error: str = _anoinit(default="")
     """If not an empty string, contains the error encountered when parsing"""
+    _tlv: Optional[ProxyTLV] = _anoinit(default=None)
 
     @property
     def valid(self) -> bool:
         return not (self.error or self.version is None or self.protocol is None)
+
+    @property
+    def tlv(self):
+        if self._tlv is None:
+            try:
+                self._tlv = ProxyTLV.from_raw(self.rest)
+            except MalformedTLV:
+                pass
+        return self._tlv
 
     def with_error(self, error_msg: str) -> "ProxyData":
         self.error = error_msg
@@ -196,7 +206,6 @@ class ProxyData:
 
     def __bool__(self):
         return self.valid
-
 
 # endregion
 
