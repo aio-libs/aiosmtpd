@@ -104,17 +104,11 @@ class ProxyTLV:
     def __init__(self, **kwargs):
         self._tlv: Dict[str, Any] = kwargs
 
-    @property
-    def tlv(self) -> Dict[str, Any]:
-        if self._tlv is None:
-            self._tlv = self._parse(self.raw)
-        return self._tlv
-
     def __getattr__(self, item):
-        return self.tlv.get(item)
+        return self._tlv.get(item)
 
-    def __contains__(self, item):
-        return item in self.tlv
+    def __contains__(self, item: str):
+        return item in self._tlv
 
     def same_attribs(self, **kwargs) -> bool:
         _tlv = self._tlv
