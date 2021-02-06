@@ -25,7 +25,7 @@ from aiosmtpd.proxy_protocol import (
     ProxyData,
     ProxyTLV,
 )
-from aiosmtpd.smtp import SMTP as SMTPServer
+from aiosmtpd.smtp import SMTP as SMTPServer, Session as SMTPSession
 from aiosmtpd.tests.conftest import Global, controller_data, handler_data
 
 DEFAULT_AUTOCANCEL = 0.1
@@ -38,12 +38,14 @@ random_port = partial(random.getrandbits, 16)
 class ProxyPeekerHandler(Sink):
     def __init__(self):
         self.called = False
+        self.sessions: List[SMTPSession] = []
         self.proxy_datas: List[ProxyData] = []
         self.retval = True
 
-    async def handle_PROXY(self, server, session, envelope, proxy_data: ProxyData):
+    async def handle_PROXY(self, server, session, envelope):
         self.called = True
-        self.proxy_datas.append(proxy_data)
+        self.sessions.append(session)
+        self.proxy_datas.append(session.proxy_data)
         return self.retval
 
 
@@ -77,7 +79,7 @@ def setup_proxy_protocol(mocker: MockFixture, temp_event_loop):
 
 
 class _TestProxyProtocolCommon:
-    protocol = None
+    protocol: SMTPServer = None
     runner = None
     transport = None
 
@@ -157,7 +159,7 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
     def _assert_valid(self, ipaddr, proto, srcip, dstip, srcport, dstport, testline):
         self.protocol.data_received(testline.encode("ascii"))
         self.runner()
-        assert self.protocol._proxy_result.error == ""
+        assert self.protocol.session.proxy_data.error == ""
         handler = self.protocol.event_handler
         assert handler.called
         proxy_data = handler.proxy_datas[-1]
@@ -248,11 +250,11 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
     def _assert_invalid(self, testline: str, expect_err: str = ""):
         self.protocol.data_received(testline.encode("ascii"))
         self.runner()
-        handler = self.protocol.event_handler
-        assert not self.protocol._proxy_result.valid
+        handler: ProxyPeekerHandler = self.protocol.event_handler
+        assert not self.protocol.session.proxy_data.valid
         assert not handler.called
         assert self.transport.close.called
-        assert self.protocol._proxy_result.error == expect_err
+        assert self.protocol.session.proxy_data.error == expect_err
 
     def test_too_long(self, setup_proxy_protocol):
         prox_test = "PROXY UNKNOWN " + "*" * 100 + "\r\n"
@@ -368,7 +370,8 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
         setup_proxy_protocol(self)
         self.protocol.data_received(self.TEST_DATA_1)
         self.runner()
-        assert self.protocol._proxy_result.error == ""
+        sess: SMTPSession = self.protocol.session
+        assert sess.proxy_data.error == ""
         handler: ProxyPeekerHandler = self.protocol.event_handler
         assert handler.called
         pd: ProxyData = handler.proxy_datas[-1]
@@ -409,7 +412,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             + payload
         )
         self.runner()
-        assert self.protocol._proxy_result.error == ""
+        assert self.protocol.session.proxy_data.error == ""
         handler = self.protocol.event_handler
         assert handler.called
         return handler.proxy_datas[-1]
@@ -559,10 +562,10 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
         self.runner()
         handler = self.protocol.event_handler
         assert not handler.called
-        assert not self.protocol._proxy_result
+        assert not self.protocol.session.proxy_data
         if expect is not None:
-            assert self.protocol._proxy_result.error == expect
-        return self.protocol._proxy_result
+            assert self.protocol.session.proxy_data.error == expect
+        return self.protocol.session.proxy_data
 
     def test_invalid_sig(self, setup_proxy_protocol):
         setup_proxy_protocol(self)
@@ -577,9 +580,9 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
         assert self.transport.close.called
         handler = self.protocol.event_handler
         assert not handler.called
-        assert not self.protocol._proxy_result.valid
-        assert not self.protocol._proxy_result
-        assert self.protocol._proxy_result.error == "PROXYv2 malformed header"
+        sess: SMTPSession = self.protocol.session
+        assert not sess.proxy_data.valid
+        assert sess.proxy_data.error == "PROXYv2 malformed header"
 
     def test_illegal_ver(self, setup_proxy_protocol):
         setup_proxy_protocol(self)
