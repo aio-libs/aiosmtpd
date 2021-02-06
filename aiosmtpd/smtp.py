@@ -146,6 +146,8 @@ class Session:
         self.extended_smtp = False
         self.loop = loop
 
+        self.proxy_data: Optional[ProxyData] = None
+
         self.login_data = None
         """Legacy login_data, usually containing the username"""
 
@@ -315,7 +317,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.require_starttls = tls_context and require_starttls
         self._timeout_duration = timeout
         self._proxy_timeout = proxy_protocol_timeout
-        self._proxy_result: Optional[ProxyData] = None
         self._timeout_handle = None
         self._tls_handshake_okay = True
         self._tls_protocol = None
@@ -536,14 +537,13 @@ class SMTP(asyncio.StreamReaderProtocol):
         log.info('%r handling connection', self.session.peer)
 
         if self._proxy_timeout is not None:
-            self._proxy_result = None
             self._reset_timeout(self._proxy_timeout)
             try:
-                self._proxy_result = await get_proxy(self._reader)
+                self.session.proxy_data = await get_proxy(self._reader)
             except Exception:
                 pass
-            if self._proxy_result:
-                status = await self._call_handler_hook("PROXY", self._proxy_result)
+            if self.session.proxy_data:
+                status = await self._call_handler_hook("PROXY")
             else:
                 status = False
             if status is MISSING or not status:
