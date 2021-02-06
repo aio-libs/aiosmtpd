@@ -113,9 +113,9 @@ class TestProxyData:
 
 class TestProxyTLV:
     TEST_DATA_1 = (
-        b'\x03\x00\x04Z\xfd\xc6\xff\x02\x00\tAUTHORITI\x05\x00\tUNIKUE_ID '
-        b'\x00D\x01\x00\x00\x00\x00!\x00\x07TLSv1.3%\x00\x07RSA4096$\x00\nRS'
-        b'A-SHA256#\x00\x1bECDHE-RSA-AES256-CBC-SHA384'
+        b"\x03\x00\x04Z\xfd\xc6\xff\x02\x00\tAUTHORITI\x05\x00\tUNIKUE_ID "
+        b"\x00D\x01\x00\x00\x00\x00!\x00\x07TLSv1.3%\x00\x07RSA4096$\x00\nRS"
+        b"A-SHA256#\x00\x1bECDHE-RSA-AES256-CBC-SHA384"
     )
 
     def test_1(self):
@@ -132,7 +132,7 @@ class TestProxyTLV:
             SSL_CIPHER=b"ECDHE-RSA-AES256-CBC-SHA384",
             SSL_SIG_ALG=b"RSA-SHA256",
             SSL_KEY_ALG=b"RSA4096",
-            NETNS=None
+            NETNS=None,
         )
 
 
@@ -384,7 +384,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             SSL_CIPHER=b"ECDHE-RSA-AES256-GCM-SHA384",
             SSL_SIG_ALG=b"RSA-SHA256",
             SSL_KEY_ALG=b"RSA4096",
-            NETNS=None
+            NETNS=None,
         )
 
     def _send_valid(
