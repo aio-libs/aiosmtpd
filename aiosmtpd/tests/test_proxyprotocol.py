@@ -132,20 +132,23 @@ class TestProxyTLV:
 
     def test_1(self):
         ptlv = ProxyTLV.from_raw(self.TEST_DATA_1)
+        assert "ALPN" not in ptlv
+        assert "NOOP" not in ptlv
+        assert "SSL_CN" not in ptlv
+        assert "NETNS" not in ptlv
+        assert ptlv.ALPN == None
+        assert ptlv.AUTHORITY == b"AUTHORITI"
         assert ptlv.same_attribs(
-            ALPN=None,
             AUTHORITY=b"AUTHORITI",
             CRC32C=b"Z\xfd\xc6\xff",
-            NOOP=None,
             UNIQUE_ID=b"UNIKUE_ID",
             SSL=True,
             SSL_VERSION=b"TLSv1.3",
-            SSL_CN=None,
             SSL_CIPHER=b"ECDHE-RSA-AES256-CBC-SHA384",
             SSL_SIG_ALG=b"RSA-SHA256",
             SSL_KEY_ALG=b"RSA4096",
-            NETNS=None,
         )
+        assert not ptlv.same_attribs(false_attrib=None)
 
 
 class TestProxyProtocolV1(_TestProxyProtocolCommon):
@@ -385,18 +388,14 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             dst_port=25253,
         )
         assert pd.tlv.same_attribs(
-            ALPN=None,
             AUTHORITY=b"AUTHORITY",
             CRC32C=b"T\xfd\xc6\xff",
-            NOOP=None,
             UNIQUE_ID=b"UNIQUE_ID",
             SSL=True,
             SSL_VERSION=b"TLSv1.2",
-            SSL_CN=None,
             SSL_CIPHER=b"ECDHE-RSA-AES256-GCM-SHA384",
             SSL_SIG_ALG=b"RSA-SHA256",
             SSL_KEY_ALG=b"RSA4096",
-            NETNS=None,
         )
 
     def _send_valid(

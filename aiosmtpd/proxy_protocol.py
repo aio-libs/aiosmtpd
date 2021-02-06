@@ -57,6 +57,9 @@ __all__ = [
 ] + ["struct", "partial", "IPv4Address", "IPv6Address"]
 
 
+_NOT_FOUND = object()
+
+
 # region #### Custom Types ############################################################
 
 EndpointAddress = Union[IPv4Address, IPv6Address, AnyStr]
@@ -114,7 +117,7 @@ class ProxyTLV:
         _tlv = self._tlv
         for k, v in kwargs.items():
             try:
-                if _tlv.get(k) != v:
+                if _tlv.get(k, _NOT_FOUND) != v:
                     return False
             except AttributeError:
                 return False
