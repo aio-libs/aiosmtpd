@@ -321,8 +321,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._tls_handshake_okay = True
         self._tls_protocol = None
         self._original_transport = None
-        self.session = None
-        self.envelope = None
+        self.session: Optional[Session] = None
+        self.envelope: Optional[Envelope] = None
         self.transport = None
         self._handler_coroutine = None
         if not auth_require_tls and auth_required:
