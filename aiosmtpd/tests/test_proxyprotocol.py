@@ -136,7 +136,7 @@ class TestProxyTLV:
         assert "NOOP" not in ptlv
         assert "SSL_CN" not in ptlv
         assert "NETNS" not in ptlv
-        assert ptlv.ALPN == None
+        assert ptlv.ALPN is None
         assert ptlv.AUTHORITY == b"AUTHORITI"
         assert ptlv.same_attribs(
             AUTHORITY=b"AUTHORITI",
