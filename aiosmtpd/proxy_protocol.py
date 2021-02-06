@@ -116,10 +116,7 @@ class ProxyTLV:
     def same_attribs(self, **kwargs) -> bool:
         _tlv = self._tlv
         for k, v in kwargs.items():
-            try:
-                if _tlv.get(k, _NOT_FOUND) != v:
-                    return False
-            except AttributeError:
+            if _tlv.get(k, _NOT_FOUND) != v:
                 return False
         return True
 
