@@ -397,6 +397,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             SSL_SIG_ALG=b"RSA-SHA256",
             SSL_KEY_ALG=b"RSA4096",
         )
+        assert "NOOP" not in pd.tlv
 
     def _send_valid(
         self, cmd: V2_CMD, fam: V2_FAM, proto: V2_PRO, payload: bytes
