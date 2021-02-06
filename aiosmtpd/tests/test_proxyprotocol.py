@@ -4,8 +4,11 @@
 import asyncio
 import random
 import socket
+import struct
 import time
 from base64 import b64decode
+from functools import partial
+from ipaddress import IPv4Address, IPv6Address
 from smtplib import SMTP as SMTPClient
 from textwrap import dedent
 from typing import List
@@ -14,7 +17,14 @@ import pytest
 from pytest_mock import MockFixture
 
 from aiosmtpd.handlers import Sink
-from aiosmtpd.proxy_protocol import *
+from aiosmtpd.proxy_protocol import (
+    V2_CMD,
+    V2_FAM,
+    V2_PRO,
+    V2_SIGNATURE,
+    ProxyData,
+    ProxyTLV,
+)
 from aiosmtpd.smtp import SMTP as SMTPServer
 from aiosmtpd.tests.conftest import Global, controller_data, handler_data
 
