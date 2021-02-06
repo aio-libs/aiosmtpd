@@ -54,6 +54,7 @@ Supported Platforms
 
 ``aiosmtpd`` has been tested on the following platforms (in alphabetical order):
 
+* AlmaLinux 8.3-beta1 [3]
 * Cygwin (on Windows 10) [1]
 * FreeBSD 12 [2]
 * OpenSUSE Leap 15 [2]
@@ -63,15 +64,25 @@ Supported Platforms
 
   | [1] Supported only with Cygwin-provided Python version
   | [2] Supported only on the latest minor release
+  | [3] Which versions to support in the future will depend on AlmaLinux's roadmap
 
 ``aiosmtpd`` *probably* can run on platforms not listed above,
 but we cannot provide support for unlisted platforms.
 
 
-License
-=======
+Installation
+============
 
-``aiosmtpd`` is released under the Apache License version 2.0.
+Install as usual with ``pip``::
+
+    pip install aiosmtpd
+
+If you receive an error message ``ModuleNotFoundError: No module named 'public'``,
+it likely means your ``setuptools`` is too old;
+try to upgrade ``setuptools`` to at least version ``46.4.0``
+which had `implemented a fix for this issue`_.
+
+.. _`implemented a fix for this issue`: https://setuptools.readthedocs.io/en/latest/history.html#v46-4-0
 
 
 Project details
@@ -268,6 +279,12 @@ Or, you're sharing a repo between environments (say, PSCore and Cygwin)
 and the cached Python bytecode messes up execution
 (e.g., sharing the exact same directory between Windows PowerShell and Cygwin
 will cause problems as Python becomes confused about the locations of the source code).
+
+
+License
+=======
+
+``aiosmtpd`` is released under the Apache License version 2.0.
 
 
 .. _`GitHub Actions`: https://docs.github.com/en/free-pro-team@latest/actions/guides/building-and-testing-python#running-tests-with-tox
