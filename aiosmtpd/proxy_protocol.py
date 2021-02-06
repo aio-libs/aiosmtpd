@@ -3,8 +3,10 @@
 
 import re
 import struct
+from enum import IntEnum
+from functools import partial
 from ipaddress import IPv4Address, IPv6Address, ip_address
-from typing import AnyStr, Awaitable, Optional, Union
+from typing import Any, AnyStr, Awaitable, Dict, Optional, Union
 
 import attr
 from public import public
@@ -14,40 +16,55 @@ try:
 except ImportError:
     from typing_extensions import Protocol
 
-
-__ALL__ = ["INVALID_PROXY"]  # Will be added to by @public
-
 V1_VALID_PROS = {"TCP4", "TCP6", "UNKNOWN", b"TCP4", b"TCP6", b"UNKNOWN"}
 
 V2_SIGNATURE = b"\r\n\r\n\x00\r\nQUIT\n"
 
-V2_CMD_LOCAL = 0
-V2_CMD_PROXY = 0
 
-V2_FAM_UNSPEC = 0
-V2_FAM_IP4 = 1
-V2_FAM_IP6 = 2
-V2_FAM_UNIX = 3
+class V2_CMD(IntEnum):
+    LOCAL = 0
+    PROXY = 1
 
-V2_PRO_UNSPEC = 0
-V2_PRO_STREAM = 1
-V2_PRO_DGRAM = 2
 
-V2_VALID_CMDS = {V2_CMD_LOCAL, V2_CMD_PROXY}
-V2_VALID_FAMS = {V2_FAM_UNSPEC, V2_FAM_IP4, V2_FAM_IP6, V2_FAM_UNIX}
-V2_VALID_PROS = {V2_PRO_UNSPEC, V2_PRO_STREAM, V2_PRO_DGRAM}
+class V2_FAM(IntEnum):
+    UNSPEC = 0
+    IP4 = 1
+    IP6 = 2
+    UNIX = 3
+
+
+class V2_PRO(IntEnum):
+    UNSPEC = 0
+    STREAM = 1
+    DGRAM = 2
+
+
+V2_VALID_CMDS = {item.value for item in V2_CMD}
+V2_VALID_FAMS = {item.value for item in V2_FAM}
+V2_VALID_PROS = {item.value for item in V2_PRO}
 V2_PARSE_ADDR_FAMPRO = {
-    (V2_FAM_IP4 << 4) | V2_PRO_STREAM,
-    (V2_FAM_IP4 << 4) | V2_PRO_DGRAM,
-    (V2_FAM_IP6 << 4) | V2_PRO_STREAM,
-    (V2_FAM_IP6 << 4) | V2_PRO_DGRAM,
-    (V2_FAM_UNIX << 4) | V2_PRO_STREAM,
-    (V2_FAM_UNIX << 4) | V2_PRO_DGRAM,
+    (V2_FAM.IP4 << 4) | V2_PRO.STREAM,
+    (V2_FAM.IP4 << 4) | V2_PRO.DGRAM,
+    (V2_FAM.IP6 << 4) | V2_PRO.STREAM,
+    (V2_FAM.IP6 << 4) | V2_PRO.DGRAM,
+    (V2_FAM.UNIX << 4) | V2_PRO.STREAM,
+    (V2_FAM.UNIX << 4) | V2_PRO.DGRAM,
 }
+
+
+__all__ = [
+    k for k in globals().keys() if k.startswith("V1_") or k.startswith("V2_")
+] + ["struct", "partial", "IPv4Address", "IPv6Address"]
+
 
 # region #### Custom Types ############################################################
 
 EndpointAddress = Union[IPv4Address, IPv6Address, AnyStr]
+
+
+@public
+class MalformedTLV(RuntimeError):
+    pass
 
 
 @public
@@ -62,19 +79,103 @@ class AsyncReader(Protocol):  # pragma: nocover
         ...
 
 
+_anoinit = partial(attr.ib, init=False)
+
+
 @public
-@attr.s(slots=True, auto_attribs=True)
+class ProxyTLV:
+    __slots__ = ("_tlv")
+
+    PP2_TYPENAME = {
+        0x01: "ALPN",
+        0x02: "AUTHORITY",
+        0x03: "CRC32C",
+        0x04: "NOOP",
+        0x05: "UNIQUE_ID",
+        0x20: "SSL",
+        0x21: "SSL_VERSION",
+        0x22: "SSL_CN",
+        0x23: "SSL_CIPHER",
+        0x24: "SSL_SIG_ALG",
+        0x25: "SSL_KEY_ALG",
+        0x30: "NETNS",
+    }
+
+    def __init__(self, **kwargs):
+        self._tlv: Dict[str, Any] = kwargs
+
+    @property
+    def tlv(self) -> Dict[str, Any]:
+        if self._tlv is None:
+            self._tlv = self._parse(self.raw)
+        return self._tlv
+
+    def __getattr__(self, item):
+        return self.tlv.get(item)
+
+    def __contains__(self, item):
+        return item in self.tlv
+
+    def same_attribs(self, **kwargs) -> bool:
+        _tlv = self._tlv
+        for k, v in kwargs.items():
+            try:
+                if _tlv.get(k) != v:
+                    return False
+            except AttributeError:
+                return False
+        return True
+
+    @classmethod
+    def from_raw(cls, raw: Union[bytes, bytearray]):
+        if len(raw) == 0:
+            return None
+
+        def parse(chunk: Union[bytes, bytearray]) -> dict:
+            rslt = {}
+            i = 0
+            while i < len(chunk):
+                typ = chunk[i]
+                len_ = int.from_bytes(chunk[i + 1: i + 3], "big")
+                val = chunk[i + 3: i + 3 + len_]
+                if len(val) < len_:
+                    raise MalformedTLV
+                typ_name = cls.PP2_TYPENAME.get(typ, f"x{typ:02x}")
+                if typ_name == "SSL":
+                    rslt["SSL"] = True
+                    rslt["SSL_CLIENT"] = val[0]
+                    rslt["SSL_VERIFY"] = int.from_bytes(val[1:5], "big")
+                    rslt.update(parse(val[5:]))
+                else:
+                    rslt[typ_name] = val
+                i += 3 + len_
+            return rslt
+
+        return cls(**parse(raw))
+
+
+@public
+@attr.s(slots=True)
 class ProxyData:
-    version: Optional[int] = attr.ib(kw_only=True)
-    error: str = ""
-    src_addr: Optional[EndpointAddress] = None
-    dst_addr: Optional[EndpointAddress] = None
-    src_port: Optional[int] = None
-    dst_port: Optional[int] = None
-    rest: Union[bytes, bytearray] = b""
-    family: Optional[int] = None
-    protocol: Optional[Union[int, AnyStr]] = None
-    command: Optional[int] = None
+    version: Optional[int] = attr.ib(kw_only=True, init=True)
+    """PROXY Protocol version; None if not recognized/malformed"""
+    command: Optional[int] = _anoinit(default=None)
+    """PROXYv2 command"""
+    family: Optional[int] = _anoinit(default=None)
+    """PROXYv2 protocol family"""
+    protocol: Optional[Union[int, AnyStr]] = _anoinit(default=None)
+    src_addr: Optional[EndpointAddress] = _anoinit(default=None)
+    dst_addr: Optional[EndpointAddress] = _anoinit(default=None)
+    src_port: Optional[int] = _anoinit(default=None)
+    dst_port: Optional[int] = _anoinit(default=None)
+    rest: Union[bytes, bytearray] = _anoinit(default=b"")
+    """
+    Rest of PROXY Protocol data following UNKNOWN (v1) or UNSPEC (v2), or containing
+    undecoded TLV (v2). If the latter, you can use the ProxyTLV class to parse the
+    binary data.
+    """
+    error: str = _anoinit(default="")
+    """If not an empty string, contains the error encountered when parsing"""
 
     @property
     def valid(self) -> bool:
@@ -84,7 +185,7 @@ class ProxyData:
         self.error = error_msg
         return self
 
-    def check(self, **kwargs) -> bool:
+    def same_attribs(self, **kwargs) -> bool:
         for k, v in kwargs.items():
             try:
                 if getattr(self, k) != v:
@@ -199,37 +300,36 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
         proxy_data.rest = rest
         return proxy_data
 
-    if proxy_data.family == V2_FAM_IP4:
+    if proxy_data.family == V2_FAM.IP4:
         unpacker = "!4s4sHH"
-    elif proxy_data.family == V2_FAM_IP6:
+    elif proxy_data.family == V2_FAM.IP6:
         unpacker = "!16s16sHH"
     else:
-        assert proxy_data.family == V2_FAM_UNIX
+        assert proxy_data.family == V2_FAM.UNIX
         unpacker = "108s108s0s0s"
 
     addr_len = struct.calcsize(unpacker)
     addr_struct = rest[0:addr_len]
     if len(addr_struct) < addr_len:
         return proxy_data.with_error("PROXYv2 truncated address")
-    rest = addr_struct[addr_len:]
+    rest = rest[addr_len:]
     s_addr, d_addr, s_port, d_port = struct.unpack(unpacker, addr_struct)
 
-    if proxy_data.family == V2_FAM_IP4:
+    if proxy_data.family == V2_FAM.IP4:
         proxy_data.src_addr = IPv4Address(s_addr)
         proxy_data.dst_addr = IPv4Address(d_addr)
         proxy_data.src_port = s_port
         proxy_data.dst_port = d_port
-    elif proxy_data.family == V2_FAM_IP6:
+    elif proxy_data.family == V2_FAM.IP6:
         proxy_data.src_addr = IPv6Address(s_addr)
         proxy_data.dst_addr = IPv6Address(d_addr)
         proxy_data.src_port = s_port
         proxy_data.dst_port = d_port
     else:
-        assert proxy_data.family == V2_FAM_UNIX
+        assert proxy_data.family == V2_FAM.UNIX
         proxy_data.src_addr = s_addr
         proxy_data.dst_addr = d_addr
 
-    # We'll not attempt to interpret the TLV
     proxy_data.rest = rest
 
     return proxy_data

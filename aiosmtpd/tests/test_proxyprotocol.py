@@ -4,24 +4,21 @@
 import asyncio
 import random
 import socket
-import struct
 import time
-from functools import partial
-from ipaddress import IPv4Address, IPv6Address
+from base64 import b64decode
 from smtplib import SMTP as SMTPClient
+from textwrap import dedent
 from typing import List
 
 import pytest
 from pytest_mock import MockFixture
 
 from aiosmtpd.handlers import Sink
-from aiosmtpd.proxy_protocol import ProxyData
+from aiosmtpd.proxy_protocol import *
 from aiosmtpd.smtp import SMTP as SMTPServer
 from aiosmtpd.tests.conftest import Global, controller_data, handler_data
 
-
 DEFAULT_AUTOCANCEL = 0.1
-V2_SIGNATURE = b"\r\n\r\n\x00\r\nQUIT\n"
 
 param = pytest.param
 parametrize = pytest.mark.parametrize
@@ -49,9 +46,7 @@ def setup_proxy_protocol(mocker: MockFixture, temp_event_loop):
     handler = ProxyPeekerHandler()
     loop = temp_event_loop
 
-    def getter(
-        test_obj: "_TestProxyProtocolCommon", *args, **kwargs
-    ):
+    def getter(test_obj: "_TestProxyProtocolCommon", *args, **kwargs):
         kwargs["loop"] = loop
         kwargs["proxy_protocol_timeout"] = proxy_timeout
         protocol = SMTPServer(handler, *args, **kwargs)
@@ -99,21 +94,46 @@ class TestProxyData:
         pd.protocol = "UNKNOWN"
         assert pd.valid
         assert pd
-        assert not pd.check(protocol="DIFFERENT")
+        assert not pd.same_attribs(protocol="DIFFERENT")
 
     def test_unsetkey(self):
         pd = ProxyData(version=1)
         pd.protocol = "UNKNOWN"
         assert pd.valid
         assert pd
-        assert not pd.check(src_addr="Missing")
+        assert not pd.same_attribs(src_addr="Missing")
 
     def test_unknownkey(self):
         pd = ProxyData(version=1)
         pd.protocol = "UNKNOWN"
         assert pd.valid
         assert pd
-        assert not pd.check(strange_key="Unrecognized")
+        assert not pd.same_attribs(strange_key="Unrecognized")
+
+
+class TestProxyTLV:
+    TEST_DATA_1 = (
+        b'\x03\x00\x04Z\xfd\xc6\xff\x02\x00\tAUTHORITI\x05\x00\tUNIKUE_ID '
+        b'\x00D\x01\x00\x00\x00\x00!\x00\x07TLSv1.3%\x00\x07RSA4096$\x00\nRS'
+        b'A-SHA256#\x00\x1bECDHE-RSA-AES256-CBC-SHA384'
+    )
+
+    def test_1(self):
+        ptlv = ProxyTLV.from_raw(self.TEST_DATA_1)
+        assert ptlv.same_attribs(
+            ALPN=None,
+            AUTHORITY=b"AUTHORITI",
+            CRC32C=b"Z\xfd\xc6\xff",
+            NOOP=None,
+            UNIQUE_ID=b"UNIKUE_ID",
+            SSL=True,
+            SSL_VERSION=b"TLSv1.3",
+            SSL_CN=None,
+            SSL_CIPHER=b"ECDHE-RSA-AES256-CBC-SHA384",
+            SSL_SIG_ALG=b"RSA-SHA256",
+            SSL_KEY_ALG=b"RSA4096",
+            NETNS=None
+        )
 
 
 class TestProxyProtocolV1(_TestProxyProtocolCommon):
@@ -131,7 +151,7 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
         handler = self.protocol.event_handler
         assert handler.called
         proxy_data = handler.proxy_datas[-1]
-        assert proxy_data.check(
+        assert proxy_data.same_attribs(
             valid=True,
             version=1,
             protocol=proto,
@@ -193,7 +213,7 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
         handler = self.protocol.event_handler
         assert handler.called
         proxy_data = handler.proxy_datas[0]
-        assert proxy_data.check(
+        assert proxy_data.same_attribs(
             valid=True,
             version=1,
             protocol=b"UNKNOWN",
@@ -208,7 +228,7 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
         handler = self.protocol.event_handler
         assert handler.called
         proxy_data = handler.proxy_datas[0]
-        assert proxy_data.check(
+        assert proxy_data.same_attribs(
             valid=True,
             version=1,
             protocol=b"UNKNOWN",
@@ -284,7 +304,7 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
             param(IP6_dead, IP6_cafe, None, "0 ", id="space5"),
             param(IP6_dead[:-1] + "g", IP6_cafe, None, None, id="addr6s"),
             param(IP6_dead, IP6_cafe[:-1] + "h", None, None, id="addr6d"),
-        ]
+        ],
     )
     def test_malformed_addr(self, setup_proxy_protocol, srcip, dstip, srcport, dstport):
         if srcport is None:
@@ -324,8 +344,53 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
 
 
 class TestProxyProtocolV2(_TestProxyProtocolCommon):
-    def _send_valid(self, cmd: int, fam: int, proto: int, payload: bytes) -> ProxyData:
-        ver_cmd = 0x20 + cmd
+    TEST_DATA_1 = b64decode(
+        dedent(
+            """\
+            DQoNCgANClFVSVQKIREAcn8AAAF/AAABsFJipQMABFT9xv8CAAlBVVRIT1JJVFkFAAlVTklRVUVf
+            SUQgAEQBAAAAACEAB1RMU3YxLjIlAAdSU0E0MDk2JAAKUlNBLVNIQTI1NiMAG0VDREhFLVJTQS1B
+            RVMyNTYtR0NNLVNIQTM4NFRlc3QgZGF0YSB0aGF0IGlzIG5vdCBwYXJ0IG9mIFBST1hZdjIuCg==
+            """
+        )
+    )
+
+    def test_1(self, setup_proxy_protocol):
+        setup_proxy_protocol(self)
+        self.protocol.data_received(self.TEST_DATA_1)
+        self.runner()
+        assert self.protocol._proxy_result.error == ""
+        handler: ProxyPeekerHandler = self.protocol.event_handler
+        assert handler.called
+        pd: ProxyData = handler.proxy_datas[-1]
+        assert pd.same_attribs(
+            version=2,
+            command=1,
+            family=1,
+            src_addr=IPv4Address("127.0.0.1"),
+            dst_addr=IPv4Address("127.0.0.1"),
+            src_port=45138,
+            dst_port=25253,
+        )
+        ptlv = ProxyTLV.from_raw(pd.rest)
+        assert ptlv.same_attribs(
+            ALPN=None,
+            AUTHORITY=b"AUTHORITY",
+            CRC32C=b"T\xfd\xc6\xff",
+            NOOP=None,
+            UNIQUE_ID=b"UNIQUE_ID",
+            SSL=True,
+            SSL_VERSION=b"TLSv1.2",
+            SSL_CN=None,
+            SSL_CIPHER=b"ECDHE-RSA-AES256-GCM-SHA384",
+            SSL_SIG_ALG=b"RSA-SHA256",
+            SSL_KEY_ALG=b"RSA4096",
+            NETNS=None
+        )
+
+    def _send_valid(
+        self, cmd: V2_CMD, fam: V2_FAM, proto: V2_PRO, payload: bytes
+    ) -> ProxyData:
+        ver_cmd = 0x20 + cmd.value
         fam_pro = (fam << 4) + proto
         self.protocol.data_received(
             V2_SIGNATURE
@@ -338,23 +403,25 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
         assert self.protocol._proxy_result.error == ""
         handler = self.protocol.event_handler
         assert handler.called
-        return handler.proxy_datas[0]
+        return handler.proxy_datas[-1]
 
     def test_UNSPEC_empty(self, setup_proxy_protocol):
         setup_proxy_protocol(self)
-        self._send_valid(0, 0, 0, b"").check(
-            valid=True, version=2, command=0, family=0, protocol=0, rest=b""
-        )
+        assert self._send_valid(
+            V2_CMD.LOCAL, V2_FAM.UNSPEC, V2_PRO.UNSPEC, b""
+        ).same_attribs(valid=True, version=2, command=0, family=0, protocol=0, rest=b"")
 
     def test_UNSPEC_notempty(self, setup_proxy_protocol):
         setup_proxy_protocol(self)
         payload = b"asdfghjkl"
-        self._send_valid(0, 0, 0, payload).check(
+        assert self._send_valid(
+            V2_CMD.LOCAL, V2_FAM.UNSPEC, V2_PRO.UNSPEC, payload
+        ).same_attribs(
             valid=True, version=2, command=0, family=0, protocol=0, rest=payload
         )
 
-    @parametrize("ttlv", [b"", b"fake_tlv"])
-    @parametrize("tproto", [1, 2])
+    @parametrize("ttlv", [b"", b"\x05\x00\x04abcd"])
+    @parametrize("tproto", [V2_PRO.STREAM, V2_PRO.DGRAM])
     def test_INET4(self, setup_proxy_protocol, tproto, ttlv):
         setup_proxy_protocol(self)
         src_addr = IPv4Address("10.212.4.33")
@@ -368,12 +435,12 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             + dst_port.to_bytes(2, "big")
             + ttlv
         )
-        self._send_valid(0, 1, tproto, payload).check(
+        assert self._send_valid(V2_CMD.LOCAL, V2_FAM.IP4, tproto, payload).same_attribs(
             valid=True,
             version=2,
             command=0,
-            family=1,
-            protocol=1,
+            family=V2_FAM.IP4,
+            protocol=tproto,
             src_addr=src_addr,
             dst_addr=dst_addr,
             src_port=src_port,
@@ -382,7 +449,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
         )
 
     @parametrize("ttlv", [b"", b"fake_tlv"])
-    @parametrize("tproto", [1, 2])
+    @parametrize("tproto", [V2_PRO.STREAM, V2_PRO.DGRAM])
     def test_INET6(self, setup_proxy_protocol, tproto, ttlv):
         setup_proxy_protocol(self)
         src_addr = IPv6Address("2020:dead::0001")
@@ -396,7 +463,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             + dst_port.to_bytes(2, "big")
             + ttlv
         )
-        self._send_valid(0, 2, tproto, payload).check(
+        assert self._send_valid(V2_CMD.LOCAL, V2_FAM.IP6, tproto, payload).same_attribs(
             valid=True,
             version=2,
             command=0,
@@ -410,13 +477,15 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
         )
 
     @parametrize("ttlv", [b"", b"fake_tlv"])
-    @parametrize("tproto", [1, 2])
+    @parametrize("tproto", [V2_PRO.STREAM, V2_PRO.DGRAM])
     def test_UNIX(self, setup_proxy_protocol, tproto, ttlv):
         setup_proxy_protocol(self)
         src_addr = struct.pack("108s", b"/proc/source")
         dst_addr = struct.pack("108s", b"/proc/dest")
         payload = src_addr + dst_addr + ttlv
-        self._send_valid(0, 3, tproto, payload).check(
+        assert self._send_valid(
+            V2_CMD.LOCAL, V2_FAM.UNIX, tproto, payload
+        ).same_attribs(
             valid=True,
             version=2,
             command=0,
@@ -429,18 +498,27 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             rest=ttlv,
         )
 
-    @parametrize("tfam, tproto", [(0, 1), (0, 2), (1, 0), (2, 0), (3, 0)])
+    @parametrize(
+        "tfam, tproto",
+        [
+            (V2_FAM.UNSPEC, V2_PRO.STREAM),
+            (V2_FAM.UNSPEC, V2_PRO.DGRAM),
+            (V2_FAM.IP4, V2_PRO.UNSPEC),
+            (V2_FAM.IP6, V2_PRO.UNSPEC),
+            (V2_FAM.UNIX, V2_PRO.UNSPEC),
+        ],
+    )
     def test_fallback_UNSPEC(self, setup_proxy_protocol, tfam, tproto):
         setup_proxy_protocol(self)
         payload = b"whatever"
-        self._send_valid(0, tfam, tproto, payload).check(
+        assert self._send_valid(V2_CMD.LOCAL, tfam, tproto, payload).same_attribs(
             valid=True,
             version=2,
             command=0,
             family=tfam,
             protocol=tproto,
-            src_address=None,
-            dst_address=None,
+            src_addr=None,
+            dst_addr=None,
             src_port=None,
             dst_port=None,
             rest=payload,
