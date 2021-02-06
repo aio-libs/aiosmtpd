@@ -13,7 +13,7 @@ from public import public
 
 try:
     from typing import Protocol
-except ImportError:
+except ImportError:  # pragma: py-ge-38
     from typing_extensions import Protocol
 
 V1_VALID_PROS = {"TCP4", "TCP6", "UNKNOWN", b"TCP4", b"TCP6", b"UNKNOWN"}
@@ -352,5 +352,5 @@ async def get_proxy(reader_func: AsyncReader) -> ProxyData:
             return await _get_v2(reader_func, signature)
         else:
             return ProxyData(version=None).with_error("PROXY unrecognized signature")
-    except Exception as e:
+    except Exception as e:  # pragma: nocover
         return ProxyData(version=None).with_error(f"PROXY exception: {str(e)}")
