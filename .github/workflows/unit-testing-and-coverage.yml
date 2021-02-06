@@ -82,7 +82,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip setuptools wheel
         # Test deps
-        pip install colorama coverage[toml] packaging pytest pytest-cov pytest-mock
+        pip install colorama coverage[toml] coverage-conditional-plugin packaging pytest pytest-cov pytest-mock
         # Package deps
         python setup.py develop
         # Fetch master because some test cases might need its existence
@@ -91,16 +91,6 @@ jobs:
       shell: bash
       # language=bash
       run: |
-        if [[ ${{ matrix.python-version }} == 3.6 ]]; then
-          export PY_36="eq"
-        else
-          export PY_36="gt"
-        fi
-        if [[ ${{ matrix.os }} == windows-latest ]]; then
-          export PLATFORM="mswin"
-        else
-          export PLATFORM="posix"
-        fi
         pytest --cov --cov-report=xml --cov-report=term
     - name: "Report to codecov"
       # Ubuntu 18.04 came out of the box with 3.6, and LOTS of system are still running
