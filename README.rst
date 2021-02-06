@@ -265,10 +265,10 @@ like so::
 
     $ python housekeep.py superclean
 
-It is `strongly` recommended to NOT do superclean too often, though.
+It is *strongly* recommended to NOT do superclean too often, though.
 Every time you invoke ``superclean``,
 tox will have to recreate all its testenvs,
-and this will make testing `much` longer to finish.
+and this will make testing *much* longer to finish.
 
 ``superclean`` is typically only needed when you switch branches,
 or if you want to really ensure that artifacts from previous testing sessions
