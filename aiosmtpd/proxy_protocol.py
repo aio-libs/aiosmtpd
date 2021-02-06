@@ -87,7 +87,7 @@ _anoinit = partial(attr.ib, init=False)
 
 @public
 class ProxyTLV:
-    __slots__ = ("_tlv")
+    __slots__ = ("_tlv", )
 
     PP2_TYPENAME = {
         0x01: "ALPN",
