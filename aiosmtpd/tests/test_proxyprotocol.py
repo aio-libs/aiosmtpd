@@ -371,8 +371,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             src_port=45138,
             dst_port=25253,
         )
-        ptlv = ProxyTLV.from_raw(pd.rest)
-        assert ptlv.same_attribs(
+        assert pd.tlv.same_attribs(
             ALPN=None,
             AUTHORITY=b"AUTHORITY",
             CRC32C=b"T\xfd\xc6\xff",
@@ -420,7 +419,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             valid=True, version=2, command=0, family=0, protocol=0, rest=payload
         )
 
-    @parametrize("ttlv", [b"", b"\x05\x00\x04abcd"])
+    @parametrize("ttlv", [b"", b"fake_tlv"])
     @parametrize("tproto", [V2_PRO.STREAM, V2_PRO.DGRAM])
     def test_INET4(self, setup_proxy_protocol, tproto, ttlv):
         setup_proxy_protocol(self)
@@ -435,7 +434,8 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             + dst_port.to_bytes(2, "big")
             + ttlv
         )
-        assert self._send_valid(V2_CMD.LOCAL, V2_FAM.IP4, tproto, payload).same_attribs(
+        pd = self._send_valid(V2_CMD.LOCAL, V2_FAM.IP4, tproto, payload)
+        assert pd.same_attribs(
             valid=True,
             version=2,
             command=0,
@@ -447,6 +447,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             dst_port=dst_port,
             rest=ttlv,
         )
+        assert pd.tlv is None
 
     @parametrize("ttlv", [b"", b"fake_tlv"])
     @parametrize("tproto", [V2_PRO.STREAM, V2_PRO.DGRAM])
@@ -463,7 +464,8 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             + dst_port.to_bytes(2, "big")
             + ttlv
         )
-        assert self._send_valid(V2_CMD.LOCAL, V2_FAM.IP6, tproto, payload).same_attribs(
+        pd = self._send_valid(V2_CMD.LOCAL, V2_FAM.IP6, tproto, payload)
+        assert pd.same_attribs(
             valid=True,
             version=2,
             command=0,
@@ -475,6 +477,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             dst_port=dst_port,
             rest=ttlv,
         )
+        assert pd.tlv is None
 
     @parametrize("ttlv", [b"", b"fake_tlv"])
     @parametrize("tproto", [V2_PRO.STREAM, V2_PRO.DGRAM])
@@ -483,9 +486,8 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
         src_addr = struct.pack("108s", b"/proc/source")
         dst_addr = struct.pack("108s", b"/proc/dest")
         payload = src_addr + dst_addr + ttlv
-        assert self._send_valid(
-            V2_CMD.LOCAL, V2_FAM.UNIX, tproto, payload
-        ).same_attribs(
+        pd = self._send_valid(V2_CMD.LOCAL, V2_FAM.UNIX, tproto, payload)
+        assert pd.same_attribs(
             valid=True,
             version=2,
             command=0,
@@ -497,6 +499,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             dst_port=None,
             rest=ttlv,
         )
+        assert pd.tlv is None
 
     @parametrize(
         "tfam, tproto",
