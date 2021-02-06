@@ -22,19 +22,27 @@ omit = [
     "*/helpers/pycharm/*",
     "*/hostedtoolcache/*",  # GitHub Actions site-packages location
 ]
+plugins = [
+    "coverage_conditional_plugin"
+]
 
 [tool.coverage.paths]
 source = [
     "aiosmtpd",
 ]
 
+[tool.coverage.coverage_conditional_plugin.rules]
+# Here we specify our pragma rules:
+py-gte-38 = "sys_version_info >= (3, 8)"
+py-gt-36 = "sys_version_info > (3, 6)"
+has-mypy = "is_installed('mypy')"
+has-pwd = "is_installed('pwd')"
+on-win32 = "sys_platform == 'win32'"
+on-wsl = "'Microsoft' in platform_release"
+
 [tool.coverage.report]
 exclude_lines = [
     "pragma: nocover",
-    "pragma: no${PLATFORM}",
-    "pragma: skipif_${PY_39}_py39",
-    "pragma: skipon_${INTERP}",
-    "pragma: skipif_${PY_36}_py36",
 ]
 fail_under = 100
 show_missing = true

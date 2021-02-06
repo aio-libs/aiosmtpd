@@ -3,7 +3,7 @@
 
 """Test other aspects of the server implementation."""
 
-import os
+import platform
 import socket
 from functools import partial
 
@@ -21,7 +21,7 @@ def in_wsl():
     # WSL 1.0 somehow allows more than one listener on one port.
     # So when testing on WSL, we must set PLATFORM=wsl and skip the
     # "test_socket_error" test.
-    return os.environ.get("PLATFORM") == "wsl"
+    return "microsoft" in platform.release().casefold()
 
 
 class TestServer:

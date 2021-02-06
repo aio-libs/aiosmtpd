@@ -17,7 +17,7 @@ from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP, __version__
 
 try:
     import pwd
-except ImportError:  # pragma: nocover
+except ImportError:  # pragma: has-pwd
     pwd = None
 
 
@@ -146,7 +146,7 @@ def parseargs(args=None):
 def main(args=None):
     parser, args = parseargs(args=args)
 
-    if args.setuid:  # pragma: nomswin
+    if args.setuid:  # pragma: on-win32
         if pwd is None:
             print(
                 'Cannot import module "pwd"; try running with -n option.',

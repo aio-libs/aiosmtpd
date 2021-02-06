@@ -120,7 +120,7 @@ class Controller:
                 srv_coro
             )
             self.server = srv
-        except Exception as error:  # pragma: nowsl
+        except Exception as error:  # pragma: on-wsl
             # Usually will enter this part only if create_server() cannot bind to the
             # specified host:port.
             #
@@ -157,7 +157,7 @@ class Controller:
         self._thread.start()
         # Wait a while until the server is responding.
         ready_event.wait(self.ready_timeout)
-        if self._thread_exception is not None:  # pragma: nowsl
+        if self._thread_exception is not None:  # pragma: on-wsl
             # See comment about WSL1.0 in the _run() method
             assert self._thread is not None  # Stupid LGTM.com; see github/codeql#4918
             raise self._thread_exception
@@ -180,7 +180,7 @@ class Controller:
         self.loop.stop()
         try:
             _all_tasks = asyncio.all_tasks
-        except AttributeError:  # pragma: skipif_gt_py36
+        except AttributeError:  # pragma: py-gt-36
             _all_tasks = asyncio.Task.all_tasks
         for task in _all_tasks(self.loop):
             task.cancel()

@@ -885,7 +885,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 self.session.login_data = auth_result
                 status = CODE_SUCCESS
 
-        if status is not None:  # pragma: no branch
+        if status is not None:  # pragma: nobranch
             await self.push(status)
 
     async def challenge_auth(
