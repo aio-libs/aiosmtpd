@@ -8,9 +8,10 @@ import os
 import socket
 import unittest
 
+from aiosmtpd import __version__ as init_version
 from aiosmtpd.controller import asyncio, Controller, _FakeServer
 from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import SMTP as Server
+from aiosmtpd.smtp import SMTP as Server, __version__ as smtp_version
 from contextlib import ExitStack
 from functools import wraps
 from smtplib import SMTP
@@ -203,3 +204,9 @@ class TestFactory(unittest.TestCase):
             self.assertIsNone(cont._thread_exception)
             excm = str(cm.exception)
             self.assertEqual("Unknown Error, failed to init SMTP server", excm)
+
+
+class TestCompat(unittest.TestCase):
+
+    def test_version(self):
+        assert smtp_version is init_version
