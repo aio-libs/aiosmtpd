@@ -1,3 +1,6 @@
+# Copyright 2014-2021 The aiosmtpd Developers
+# SPDX-License-Identifier: Apache-2.0
+
 """Test meta / packaging"""
 import re
 import subprocess
