@@ -54,7 +54,6 @@ Supported Platforms
 
 ``aiosmtpd`` has been tested on the following platforms (in alphabetical order):
 
-* AlmaLinux 8.3-beta1 [3]
 * Cygwin (on Windows 10) [1]
 * FreeBSD 12 [2]
 * OpenSUSE Leap 15 [2]
@@ -64,7 +63,6 @@ Supported Platforms
 
   | [1] Supported only with Cygwin-provided Python version
   | [2] Supported only on the latest minor release
-  | [3] Which versions to support in the future will depend on AlmaLinux's roadmap
 
 ``aiosmtpd`` *probably* can run on platforms not listed above,
 but we cannot provide support for unlisted platforms.
