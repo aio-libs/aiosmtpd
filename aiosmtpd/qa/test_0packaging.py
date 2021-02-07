@@ -1,21 +1,22 @@
 """Test meta / packaging"""
 import re
-import pytest
 import subprocess
-import aiosmtpd.smtp as a_smtp
-
 from itertools import tee
-# noinspection PyPackageRequirements
-from packaging import version
 from pathlib import Path
 
+import pytest
 
-RE_DUNDERVER = re.compile(r"\s*__version__\s?=\s?(['\"])(?P<ver>[^'\"]+)\1\s*$")
+# noinspection PyPackageRequirements
+from packaging import version
+
+from aiosmtpd import __version__
+
+RE_DUNDERVER = re.compile(r"__version__\s*?=\s*?(['\"])(?P<ver>[^'\"]+)\1\s*$")
 
 
 @pytest.fixture
 def aiosmtpd_version() -> version.Version:
-    return version.parse(a_smtp.__version__)
+    return version.parse(__version__)
 
 
 class TestVersion:
@@ -28,7 +29,7 @@ class TestVersion:
     # noinspection PyUnboundLocalVariable
     def test_ge_master(self, aiosmtpd_version, capsys):
         """Ensure version is monotonically increasing"""
-        reference = "master:aiosmtpd/smtp.py"
+        reference = "master:aiosmtpd/__init__.py"
         cmd = f"git show {reference}".split()
         try:
             with capsys.disabled():
