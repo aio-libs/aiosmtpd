@@ -645,6 +645,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
 @handler_data(class_=ProxyPeekerHandler)
 class TestProxyProtocolV1Controller:
     def test_timeout(self, plain_controller):
+        assert plain_controller.smtpd._proxy_timeout > 0.0
         prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
@@ -654,6 +655,7 @@ class TestProxyProtocolV1Controller:
                 _ = sock.recv(4096)
 
     def test_nonewline(self, plain_controller):
+        assert plain_controller.smtpd._proxy_timeout > 0.0
         prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r"
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
@@ -664,6 +666,7 @@ class TestProxyProtocolV1Controller:
                 _ = sock.recv(4096)
 
     def test_okay(self, plain_controller):
+        assert plain_controller.smtpd._proxy_timeout > 0.0
         prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
