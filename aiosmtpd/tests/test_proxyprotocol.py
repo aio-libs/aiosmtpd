@@ -34,6 +34,12 @@ param = pytest.param
 parametrize = pytest.mark.parametrize
 random_port = partial(random.getrandbits, 16)
 
+TEST_TLV_DATA_1 = (
+    b"\x03\x00\x04Z\xfd\xc6\xff\x02\x00\tAUTHORITI\x05\x00\tUNIKUE_ID "
+    b"\x00D\x01\x00\x00\x00\x00!\x00\x07TLSv1.3%\x00\x07RSA4096$\x00\nRS"
+    b"A-SHA256#\x00\x1bECDHE-RSA-AES256-CBC-SHA384"
+)
+
 
 class ProxyPeekerHandler(Sink):
     def __init__(self):
@@ -122,16 +128,34 @@ class TestProxyData:
         assert pd
         assert not pd.same_attribs(strange_key="Unrecognized")
 
+    def test_tlv_none(self):
+        pd = ProxyData(version=2)
+        assert pd.tlv is None
+
+    def test_tlv_fake(self):
+        pd = ProxyData(version=2)
+        pd.rest = b"fake_tlv"  # Must be something that fails parsing in ProxyTLV
+        assert pd.tlv is None
+
+    def test_tlv_1(self):
+        pd = ProxyData(version=2)
+        pd.rest = TEST_TLV_DATA_1
+        assert pd.tlv is not None
+        assert pd.tlv.same_attribs(
+            AUTHORITY=b"AUTHORITI",
+            CRC32C=b"Z\xfd\xc6\xff",
+            UNIQUE_ID=b"UNIKUE_ID",
+            SSL=True,
+            SSL_VERSION=b"TLSv1.3",
+            SSL_CIPHER=b"ECDHE-RSA-AES256-CBC-SHA384",
+            SSL_SIG_ALG=b"RSA-SHA256",
+            SSL_KEY_ALG=b"RSA4096",
+        )
+
 
 class TestProxyTLV:
-    TEST_DATA_1 = (
-        b"\x03\x00\x04Z\xfd\xc6\xff\x02\x00\tAUTHORITI\x05\x00\tUNIKUE_ID "
-        b"\x00D\x01\x00\x00\x00\x00!\x00\x07TLSv1.3%\x00\x07RSA4096$\x00\nRS"
-        b"A-SHA256#\x00\x1bECDHE-RSA-AES256-CBC-SHA384"
-    )
-
     def test_1(self):
-        ptlv = ProxyTLV.from_raw(self.TEST_DATA_1)
+        ptlv = ProxyTLV.from_raw(TEST_TLV_DATA_1)
         assert "ALPN" not in ptlv
         assert "NOOP" not in ptlv
         assert "SSL_CN" not in ptlv
@@ -387,6 +411,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             src_port=45138,
             dst_port=25253,
         )
+        assert pd.tlv
         assert pd.tlv.same_attribs(
             AUTHORITY=b"AUTHORITY",
             CRC32C=b"T\xfd\xc6\xff",
@@ -397,7 +422,6 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             SSL_SIG_ALG=b"RSA-SHA256",
             SSL_KEY_ALG=b"RSA4096",
         )
-        assert "NOOP" not in pd.tlv
 
     def _send_valid(
         self, cmd: V2_CMD, fam: V2_FAM, proto: V2_PRO, payload: bytes
