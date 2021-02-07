@@ -20,6 +20,10 @@ from .conftest import Global
 def in_wsl():
     # WSL 1.0 somehow allows more than one listener on one port.
     # So we have to detect when we're running on WSL so we can skip some tests.
+
+    # On Windows, platform.release() returns the Windows version (e.g., "7" or "10")
+    # On Linux (incl. WSL), platform.release() returns the kernel version.
+    # As of 2021-02-07, only WSL has a kernel with "Microsoft" in the version.
     return "microsoft" in platform.release().casefold()
 
 

@@ -39,6 +39,9 @@ has-mypy = "is_installed('mypy')"
 has-pwd = "is_installed('pwd')"
 on-win32 = "sys_platform == 'win32'"
 on-wsl = "'Microsoft' in platform_release"
+    # On Windows, platform.release() returns the Windows version (e.g., "7" or "10")
+    # On Linux (incl. WSL), platform.release() returns the kernel version.
+    # As of 2021-02-07, only WSL has a kernel with "Microsoft" in the version.
 
 [tool.coverage.report]
 exclude_lines = [
