@@ -57,7 +57,6 @@ TEST_V2_DATA_EXACT = b64decode(
 )
 
 
-
 class ProxyPeekerHandler(Sink):
     def __init__(self):
         self.called = False
@@ -605,17 +604,20 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
         ERRSIG = b"\r\n\r\n\x00\r\nQUIP\n"
         self._send_invalid(sig=ERRSIG, expect="PROXYv2 wrong signature")
 
-    def test_incomplete(self, setup_proxy_protocol):
-        setup_proxy_protocol(self)
-        ERRSIG = b"\r\n\r\n\x00\r\nQUIT\n"
-        self.protocol.data_received(ERRSIG + b"\x20" + b"\x00" + b"\x00")
-        self.runner()
-        assert self.transport.close.called
-        handler = self.protocol.event_handler
-        assert not handler.called
-        sess: SMTPSession = self.protocol.session
-        assert not sess.proxy_data.valid
-        assert sess.proxy_data.error == "PROXYv2 malformed header"
+    # Using readexactly() instead of just read() causes incomplete handshake to time-
+    # out as readexactly() waits until the number of bytes is complete.
+    # So, we can no longer look for this error.
+    #
+    # def test_incomplete(self, setup_proxy_protocol):
+    #     setup_proxy_protocol(self)
+    #     self.protocol.data_received(V2_SIGNATURE + b"\x20" + b"\x00" + b"\x00")
+    #     self.runner()
+    #     assert self.transport.close.called
+    #     handler = self.protocol.event_handler
+    #     assert not handler.called
+    #     sess: SMTPSession = self.protocol.session
+    #     assert not sess.proxy_data.valid
+    #     assert sess.proxy_data.error == "PROXYv2 malformed header"
 
     def test_illegal_ver(self, setup_proxy_protocol):
         setup_proxy_protocol(self)

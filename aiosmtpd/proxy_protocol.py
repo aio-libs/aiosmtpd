@@ -275,10 +275,7 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
     rest = header[4:]
     header = header[0:4]
 
-    try:
-        ver_cmd, fam_proto, len_ = struct.unpack("!BBH", header)
-    except struct.error:
-        return proxy_data.with_error("PROXYv2 malformed header")
+    ver_cmd, fam_proto, len_ = struct.unpack("!BBH", header)
 
     if (ver_cmd & 0xF0) != 0x20:
         return proxy_data.with_error("PROXYv2 illegal version")
