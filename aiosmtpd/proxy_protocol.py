@@ -271,7 +271,7 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
 
     hdr_left = 4 - len(header)
     if hdr_left > 0:  # pragma: no branch
-        header += await reader.read(hdr_left)
+        header += await reader.readexactly(hdr_left)
     rest = header[4:]
     header = header[0:4]
 
@@ -297,7 +297,7 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
 
     rest_left = len_ - len(rest)
     if rest_left > 0:
-        rest += await reader.read(rest_left)
+        rest += await reader.readexactly(rest_left)
 
     if fam_proto not in V2_PARSE_ADDR_FAMPRO:
         proxy_data.rest = rest
@@ -344,7 +344,7 @@ async def get_proxy(reader_func: AsyncReader) -> ProxyData:
     :param reader_func: Async function that implements the AsyncReader protocol.
     :return: Proxy Data if valid
     """
-    signature = await reader_func.read(5)
+    signature = await reader_func.readexactly(5)
     try:
         if signature == b"PROXY":
             return await _get_v1(reader_func, signature)
