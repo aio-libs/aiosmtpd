@@ -10,7 +10,6 @@ from base64 import b64decode
 from functools import partial
 from ipaddress import IPv4Address, IPv6Address
 from smtplib import SMTP as SMTPClient
-from textwrap import dedent
 from typing import List
 
 import pytest
@@ -39,6 +38,24 @@ TEST_TLV_DATA_1 = (
     b"\x00D\x01\x00\x00\x00\x00!\x00\x07TLSv1.3%\x00\x07RSA4096$\x00\nRS"
     b"A-SHA256#\x00\x1bECDHE-RSA-AES256-CBC-SHA384"
 )
+
+# This has a tail which is not part of PROXYv2
+TEST_V2_DATA_XTRA = b64decode(
+    "DQoNCgANClFVSVQKIREAcn8AAAF/AAABsFJipQMABFT9xv8CAAlBVVRIT1JJVFkFAAlVTklRVUVf\n"
+    "SUQgAEQBAAAAACEAB1RMU3YxLjIlAAdSU0E0MDk2JAAKUlNBLVNIQTI1NiMAG0VDREhFLVJTQS1B\n"
+    "RVMyNTYtR0NNLVNIQTM4NFRlc3QgZGF0YSB0aGF0IGlzIG5vdCBwYXJ0IG9mIFBST1hZdjIuCg==\n"
+)
+
+# The extra part is:
+# b"Test data that is not part of PROXYv2.\n"
+
+# This same as the above but no extraneous tail
+TEST_V2_DATA_EXACT = b64decode(
+    "DQoNCgANClFVSVQKIREAcn8AAAF/AAABsFJipQMABFT9xv8CAAlBVVRIT1JJVFkFAAlVTklRVUVf\n"
+    "SUQgAEQBAAAAACEAB1RMU3YxLjIlAAdSU0E0MDk2JAAKUlNBLVNIQTI1NiMAG0VDREhFLVJTQS1B\n"
+    "RVMyNTYtR0NNLVNIQTM4NA==\n"
+)
+
 
 
 class ProxyPeekerHandler(Sink):
@@ -383,19 +400,10 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
 
 
 class TestProxyProtocolV2(_TestProxyProtocolCommon):
-    TEST_DATA_1 = b64decode(
-        dedent(
-            """\
-            DQoNCgANClFVSVQKIREAcn8AAAF/AAABsFJipQMABFT9xv8CAAlBVVRIT1JJVFkFAAlVTklRVUVf
-            SUQgAEQBAAAAACEAB1RMU3YxLjIlAAdSU0E0MDk2JAAKUlNBLVNIQTI1NiMAG0VDREhFLVJTQS1B
-            RVMyNTYtR0NNLVNIQTM4NFRlc3QgZGF0YSB0aGF0IGlzIG5vdCBwYXJ0IG9mIFBST1hZdjIuCg==
-            """
-        )
-    )
 
     def test_1(self, setup_proxy_protocol):
         setup_proxy_protocol(self)
-        self.protocol.data_received(self.TEST_DATA_1)
+        self.protocol.data_received(TEST_V2_DATA_XTRA)
         self.runner()
         sess: SMTPSession = self.protocol.session
         assert sess.proxy_data.error == ""
