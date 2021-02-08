@@ -1,23 +1,20 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
-import re
-import ssl
-import attr
-import enum
-import socket
 import asyncio
-import inspect
-import logging
+import asyncio.sslproto as sslproto
 import binascii
 import collections
-import asyncio.sslproto as sslproto
-
+import enum
+import inspect
+import logging
+import re
+import socket
+import ssl
 from aiosmtpd import __version__
 from base64 import b64decode, b64encode
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
-from public import public
 from typing import (
     Any,
     AnyStr,
@@ -32,6 +29,9 @@ from typing import (
     Union,
 )
 from warnings import warn
+
+import attr
+from public import public
 
 
 # region #### Custom Data Types #######################################################
@@ -52,7 +52,7 @@ class _DataState(enum.Enum):
     TOO_MUCH = enum.auto()
 
 
-AuthCallbackType = Callable[[str, Optional[bytes], Optional[bytes]], bool]
+AuthCallbackType = Callable[[str, bytes, bytes], bool]
 AuthenticatorType = Callable[["SMTP", "Session", "Envelope", str, Any], "AuthResult"]
 AuthMechanismType = Callable[["SMTP", List[str]], Awaitable[Any]]
 _TriStateType = Union[None, _Missing, bytes]
@@ -216,7 +216,7 @@ def auth_mechanism(actual_name: str):
 
 
 def login_always_fail(
-        mechanism: str, session: Session, login_data: LoginPassword
+        mechanism: str, login: bytes, password: bytes
 ) -> bool:
     return False
 
@@ -253,7 +253,7 @@ def sanitized_log(func: Callable, msg: AnyStr, *args, **kwargs):
 @public
 class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
-    command_size_limits = collections.defaultdict(
+    command_size_limits: Dict[str, int] = collections.defaultdict(
         lambda x=command_size_limit: x)
     line_length_limit = 1001
     """Maximum line length according to RFC 5321 s 4.5.3.1.6"""
@@ -323,8 +323,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             log.warning("auth_required == True but auth_require_tls == False")
         self._auth_require_tls = auth_require_tls
 
+        self._authenticator: Optional[AuthenticatorType]
+        self._auth_callback: Optional[AuthCallbackType]
         if authenticator is not None:
-            self._authenticator: AuthenticatorType = authenticator
+            self._authenticator = authenticator
             self._auth_callback = None
         else:
             self._auth_callback = auth_callback or login_always_fail
@@ -382,18 +384,19 @@ class SMTP(asyncio.StreamReaderProtocol):
             if m.startswith("smtp_")
         }
 
+        self._call_limit_default: int
         if command_call_limit is None:
             self._enforce_call_limit = False
         else:
             self._enforce_call_limit = True
             if isinstance(command_call_limit, int):
                 self._call_limit_base = {}
-                self._call_limit_default: int = command_call_limit
+                self._call_limit_default = command_call_limit
             elif isinstance(command_call_limit, dict):
                 if not all(map(is_int, command_call_limit.values())):
                     raise TypeError("All command_call_limit values must be int")
                 self._call_limit_base = command_call_limit
-                self._call_limit_default: int = command_call_limit.get(
+                self._call_limit_default = command_call_limit.get(
                     "*", CALL_LIMIT_DEFAULT
                 )
             else:
@@ -1136,18 +1139,18 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg is None:
             await self.push(syntaxerr)
             return
-        address, params = self._getaddr(arg)
+        address, addrparams = self._getaddr(arg)
         if address is None:
             return await self.push("553 5.1.3 Error: malformed address")
         if not address:
             return await self.push(syntaxerr)
-        if not self.session.extended_smtp and params:
+        if not self.session.extended_smtp and addrparams:
             await self.push(syntaxerr)
             return
         if self.envelope.mail_from:
             await self.push('503 Error: nested MAIL command')
             return
-        mail_options = params.upper().split()
+        mail_options = addrparams.upper().split()
         params = self._getparams(mail_options)
         if params is None:
             await self.push(syntaxerr)

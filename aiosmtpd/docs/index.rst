@@ -15,6 +15,7 @@ Contents
    lmtp
    handlers
    migrating
+   testing
    manpage
    NEWS
 

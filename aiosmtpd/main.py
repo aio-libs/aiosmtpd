@@ -1,22 +1,23 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
-import os
-import sys
-import signal
 import asyncio
 import logging
-
-from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP, __version__
+import os
+import signal
+import sys
 from argparse import ArgumentParser
 from contextlib import suppress
 from functools import partial
 from importlib import import_module
+
 from public import public
+
+from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP, __version__
 
 try:
     import pwd
-except ImportError:  # pragma: nocover
+except ImportError:  # pragma: has-pwd
     pwd = None
 
 
@@ -145,7 +146,7 @@ def parseargs(args=None):
 def main(args=None):
     parser, args = parseargs(args=args)
 
-    if args.setuid:  # pragma: nomswin
+    if args.setuid:  # pragma: on-win32
         if pwd is None:
             print(
                 'Cannot import module "pwd"; try running with -n option.',

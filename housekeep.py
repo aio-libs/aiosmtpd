@@ -3,17 +3,16 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
-import os
-import sys
-import pprint
-import inspect
 import argparse
-
+import inspect
+import os
+import pprint
+import sys
 from pathlib import Path
 
 try:
     # noinspection PyPackageRequirements
-    from colorama import (
+    from colorama import (  # pytype: disable=import-error
         Fore,
         Style,
         init as colorama_init,

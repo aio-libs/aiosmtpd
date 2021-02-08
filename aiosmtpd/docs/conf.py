@@ -14,7 +14,9 @@
 
 import datetime
 import re
+import sphinx_rtd_theme  # noqa: F401
 import sys
+
 from pathlib import Path
 
 try:
@@ -44,6 +46,7 @@ syspath_insert(repo_root)
 syspath_insert(repo_root / "aiosmtpd" / "docs" / "_exts")
 syspath_insert(repo_root / "aiosmtpd")
 
+
 # region -- General configuration ------------------------------------------------
 
 # autoprogramm needs Sphinx>=1.2.2
@@ -56,8 +59,13 @@ needs_sphinx = "2.1"
 extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.autodoc",
+    "sphinx_autofixture",
     "autoprogramm",
+    "sphinx_rtd_theme"
 ]
+# IMPORTANT: If you edit this, also edit the following:
+#   - aiosmtpd/docs/requirements.txt
+#   -
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -150,7 +158,8 @@ intersphinx_mapping = {
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = "default"
+# html_theme = "default"
+html_theme = "sphinx_rtd_theme"
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the

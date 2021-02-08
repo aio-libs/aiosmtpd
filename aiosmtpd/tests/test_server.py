@@ -3,210 +3,215 @@
 
 """Test other aspects of the server implementation."""
 
-import gc
-import os
+import platform
 import socket
-import unittest
+from functools import partial
 
-from aiosmtpd import __version__ as init_version
-from aiosmtpd.controller import asyncio, Controller, _FakeServer
+import pytest
+from pytest_mock import MockFixture
+
+from aiosmtpd.controller import Controller, _FakeServer
 from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import SMTP as Server, __version__ as smtp_version
-from contextlib import ExitStack
-from functools import wraps
-from smtplib import SMTP
-from unittest.mock import patch
+from aiosmtpd.smtp import SMTP as Server
 
-
-ModuleResources = ExitStack()
-
-
-def setUpModule():
-    # Needed especially on FreeBSD because socket.getfqdn() is slow on that OS,
-    # and oftentimes (not always, though) leads to Error
-    ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
-
-
-def tearDownModule():
-    ModuleResources.close()
+from .conftest import Global
 
 
 def in_wsl():
     # WSL 1.0 somehow allows more than one listener on one port.
-    # So when testing on WSL, we must set PLATFORM=wsl and skip the
-    # "test_socket_error" test.
-    return os.environ.get("PLATFORM") == "wsl"
+    # So we have to detect when we're running on WSL so we can skip some tests.
+
+    # On Windows, platform.release() returns the Windows version (e.g., "7" or "10")
+    # On Linux (incl. WSL), platform.release() returns the kernel version.
+    # As of 2021-02-07, only WSL has a kernel with "Microsoft" in the version.
+    return "microsoft" in platform.release().casefold()
 
 
-class TestServer(unittest.TestCase):
-    def test_smtp_utf8(self):
-        controller = Controller(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, response = client.ehlo("example.com")
-        self.assertEqual(code, 250)
-        self.assertIn(b"SMTPUTF8", response.splitlines())
+class TestServer:
+    """Tests for the aiosmtpd.smtp.SMTP class"""
+
+    def test_smtp_utf8(self, plain_controller, client):
+        code, mesg = client.ehlo("example.com")
+        assert code == 250
+        assert b"SMTPUTF8" in mesg.splitlines()
 
     def test_default_max_command_size_limit(self):
         server = Server(Sink())
-        self.assertEqual(server.max_command_size_limit, 512)
+        assert server.max_command_size_limit == 512
 
     def test_special_max_command_size_limit(self):
         server = Server(Sink())
         server.command_size_limits["DATA"] = 1024
-        self.assertEqual(server.max_command_size_limit, 1024)
+        assert server.max_command_size_limit == 1024
 
-    @unittest.skipIf(in_wsl(), "WSL prevents socket collisions")
-    # See explanation in the in_wsl() function
-    def test_socket_error(self):
-        # Testing starting a server with a port already in use
-        s1 = Controller(Sink(), port=8025)
-        s2 = Controller(Sink(), port=8025)
-        self.addCleanup(s1.stop)
-        self.addCleanup(s2.stop)
-        s1.start()
-        self.assertRaises(socket.error, s2.start)
+    def test_warn_authreq_notls(self):
+        expectedre = (
+            r"Requiring AUTH while not requiring TLS can lead to "
+            r"security vulnerabilities!"
+        )
+        with pytest.warns(UserWarning, match=expectedre):
+            Server(Sink(), auth_require_tls=False, auth_required=True)
+
+
+class TestController:
+    """Tests for the aiosmtpd.controller.Controller class"""
+
+    @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
+    def test_socket_error_dupe(self, plain_controller, client):
+        contr2 = Controller(
+            Sink(), hostname=Global.SrvAddr.host, port=Global.SrvAddr.port
+        )
+        try:
+            with pytest.raises(socket.error):
+                contr2.start()
+        finally:
+            contr2.stop()
+
+    @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
+    def test_socket_error_default(self):
+        contr1 = Controller(Sink())
+        contr2 = Controller(Sink())
+        expectedre = r"error while attempting to bind on address"
+        try:
+            with pytest.raises(socket.error, match=expectedre):
+                contr1.start()
+                contr2.start()
+        finally:
+            contr2.stop()
+            contr1.stop()
 
     def test_server_attribute(self):
         controller = Controller(Sink())
-        self.assertIsNone(controller.server)
+        assert controller.server is None
         try:
             controller.start()
-            self.assertIsNotNone(controller.server)
+            assert controller.server is not None
         finally:
             controller.stop()
-            self.assertIsNone(controller.server)
+        assert controller.server is None
+
+    @pytest.mark.filterwarnings(
+        "ignore:server_kwargs will be removed:DeprecationWarning"
+    )
+    def test_enablesmtputf8_flag(self):
+        # Default is True
+        controller = Controller(Sink())
+        assert controller.SMTP_kwargs["enable_SMTPUTF8"]
+        # Explicit set must be reflected in server_kwargs
+        controller = Controller(Sink(), enable_SMTPUTF8=True)
+        assert controller.SMTP_kwargs["enable_SMTPUTF8"]
+        controller = Controller(Sink(), enable_SMTPUTF8=False)
+        assert not controller.SMTP_kwargs["enable_SMTPUTF8"]
+        # Explicit set must override server_kwargs
+        kwargs = dict(enable_SMTPUTF8=False)
+        controller = Controller(Sink(), enable_SMTPUTF8=True, server_kwargs=kwargs)
+        assert controller.SMTP_kwargs["enable_SMTPUTF8"]
+        kwargs = dict(enable_SMTPUTF8=True)
+        controller = Controller(Sink(), enable_SMTPUTF8=False, server_kwargs=kwargs)
+        assert not controller.SMTP_kwargs["enable_SMTPUTF8"]
+        # Set through server_kwargs must not be overridden if no explicit set
+        kwargs = dict(enable_SMTPUTF8=False)
+        controller = Controller(Sink(), server_kwargs=kwargs)
+        assert not controller.SMTP_kwargs["enable_SMTPUTF8"]
+
+    @pytest.mark.filterwarnings(
+        "ignore:server_kwargs will be removed:DeprecationWarning"
+    )
+    def test_serverhostname_arg(self):
+        contsink = partial(Controller, Sink())
+        controller = contsink()
+        assert "hostname" not in controller.SMTP_kwargs
+        controller = contsink(server_hostname="testhost1")
+        assert controller.SMTP_kwargs["hostname"] == "testhost1"
+        kwargs = dict(hostname="testhost2")
+        controller = contsink(server_kwargs=kwargs)
+        assert controller.SMTP_kwargs["hostname"] == "testhost2"
+        controller = contsink(server_hostname="testhost3", server_kwargs=kwargs)
+        assert controller.SMTP_kwargs["hostname"] == "testhost3"
 
 
-# Silence the "Exception ignored ... RuntimeError: Event loop is closed" message.
-# This goes hand-in-hand with TestFactory.setUpClass() below.
-# Source: https://github.com/aio-libs/aiohttp/issues/4324#issuecomment-733884349
-def silencer(func):
-    @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        try:
-            return func(self, *args, **kwargs)
-        except RuntimeError as e:
-            if str(e) != "Event loop is closed":
-                raise
-        except AttributeError as e:
-            # Added this to suppress the perplexing ignored exception below.
-            # Perplexing because I really don't know where that comes from. SMTP object
-            # could NOT have existed during that particular test case!
-            if str(e) != "'SMTP' object has no attribute '_closed'":
-                raise
-
-    return wrapper
-
-
-class TestFactory(unittest.TestCase):
-    Proactor = None
-    old_pa_del = None
-    SRProto = None
-    old_srp_del = None
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        # See silencer() above
-        try:
-            # noinspection PyUnresolvedReferences
-            cls.Proactor = asyncio.proactor_events._ProactorBasePipeTransport
-            cls.old_pa_del = cls.Proactor.__del__
-            cls.Proactor.__del__ = silencer(cls.old_pa_del)
-        except AttributeError:
-            # proactor_events only available on Windows. So we'll just skip if it's
-            # not found (indicating non-Windows platform)
-            pass
-        try:
-            cls.SRProto = asyncio.streams.StreamReaderProtocol
-            # noinspection PyUnresolvedReferences
-            cls.old_srp_del = cls.SRProto.__del__
-            cls.SRProto.__del__ = silencer(cls.old_srp_del)
-        except AttributeError:
-            # Sometimes the __del__ method is ... missing?? What???
-            pass
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        # gc.collect() hinted in https://stackoverflow.com/a/25067818/149900
-        # Probably to remove leftover "Exception ignored"?
-        gc.collect()
-        if cls.old_pa_del is not None:
-            cls.Proactor.__del__ = cls.old_pa_del
-        if cls.old_srp_del is not None:
-            cls.SRProto.__del__ = cls.old_srp_del
-
+class TestFactory:
     def test_normal_situation(self):
         cont = Controller(Sink())
         try:
             cont.start()
-            self.assertIsNotNone(cont.smtpd)
-            self.assertIsNone(cont._thread_exception)
+            assert cont.smtpd is not None
+            assert cont._thread_exception is None
         finally:
             cont.stop()
 
-    def test_unknown_args(self):
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
+    def test_unknown_args_direct(self, silence_event_loop_closed):
+        unknown = "this_is_an_unknown_kwarg"
+        cont = Controller(Sink(), **{unknown: True})
+        expectedre = r"__init__.. got an unexpected keyword argument '" + unknown + r"'"
+        try:
+            with pytest.raises(TypeError, match=expectedre):
+                cont.start()
+            assert cont.smtpd is None
+            assert isinstance(cont._thread_exception, TypeError)
+        finally:
+            cont.stop()
+
+    @pytest.mark.filterwarnings(
+        "ignore:server_kwargs will be removed:DeprecationWarning"
+    )
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
+    def test_unknown_args_inkwargs(self, silence_event_loop_closed):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), server_kwargs={unknown: True})
+        expectedre = r"__init__.. got an unexpected keyword argument '" + unknown + r"'"
         try:
-            with self.assertRaises(TypeError) as cm:
+            with pytest.raises(TypeError, match=expectedre):
                 cont.start()
-            self.assertIsNone(cont.smtpd)
-            excm = str(cm.exception)
-            self.assertIn("unexpected keyword", excm)
-            self.assertIn(unknown, excm)
+            assert cont.smtpd is None
         finally:
             cont.stop()
 
-    def test_factory_none(self):
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
+    def test_factory_none(self, mocker: MockFixture, silence_event_loop_closed):
         # Hypothetical situation where factory() did not raise an Exception
         # but returned None instead
-        with ExitStack() as stk:
-            cont = Controller(Sink())
-            stk.callback(cont.stop)
-
-            stk.enter_context(patch("aiosmtpd.controller.SMTP", return_value=None))
-
-            with self.assertRaises(RuntimeError) as cm:
+        mocker.patch("aiosmtpd.controller.SMTP", return_value=None)
+        cont = Controller(Sink())
+        expectedre = r"factory\(\) returned None"
+        try:
+            with pytest.raises(RuntimeError, match=expectedre):
                 cont.start()
-            self.assertIsNone(cont.smtpd)
-            excm = str(cm.exception)
-            self.assertEqual("factory() returned None", excm)
+            assert cont.smtpd is None
+        finally:
+            cont.stop()
 
-    def test_noexc_smtpd_missing(self):
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
+    def test_noexc_smtpd_missing(self, mocker, silence_event_loop_closed):
         # Hypothetical situation where factory() failed but no
         # Exception was generated.
-        with ExitStack() as stk:
-            cont = Controller(Sink())
-            stk.callback(cont.stop)
+        cont = Controller(Sink())
 
-            def hijacker(*args, **kwargs):
-                cont._thread_exception = None
-                # Must still return an (unmocked) _FakeServer to prevent a whole bunch
-                # of messy exceptions, although they doesn't affect the test at all.
-                return _FakeServer(cont.loop)
+        def hijacker(*args, **kwargs):
+            cont._thread_exception = None
+            # Must still return an (unmocked) _FakeServer to prevent a whole bunch
+            # of messy exceptions, although they doesn't affect the test at all.
+            return _FakeServer(cont.loop)
 
-            stk.enter_context(
-                patch("aiosmtpd.controller._FakeServer", side_effect=hijacker)
-            )
+        mocker.patch("aiosmtpd.controller._FakeServer", side_effect=hijacker)
+        mocker.patch(
+            "aiosmtpd.controller.SMTP", side_effect=RuntimeError("Simulated Failure")
+        )
 
-            stk.enter_context(
-                patch(
-                    "aiosmtpd.controller.SMTP",
-                    side_effect=RuntimeError("Simulated Failure"),
-                )
-            )
-
-            with self.assertRaises(RuntimeError) as cm:
+        expectedre = r"Unknown Error, failed to init SMTP server"
+        try:
+            with pytest.raises(RuntimeError, match=expectedre):
                 cont.start()
-            self.assertIsNone(cont.smtpd)
-            self.assertIsNone(cont._thread_exception)
-            excm = str(cm.exception)
-            self.assertEqual("Unknown Error, failed to init SMTP server", excm)
+            assert cont.smtpd is None
+            assert cont._thread_exception is None
+        finally:
+            cont.stop()
 
 
-class TestCompat(unittest.TestCase):
-
+class TestCompat:
     def test_version(self):
+        from aiosmtpd import __version__ as init_version
+        from aiosmtpd.smtp import __version__ as smtp_version
+
         assert smtp_version is init_version

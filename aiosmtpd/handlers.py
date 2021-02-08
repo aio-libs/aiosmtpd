@@ -9,16 +9,15 @@ Pass in an instance of one of these classes, or derive your own, to provide
 your own handling of messages.  Implement only the methods you care about.
 """
 
-import re
-import sys
 import asyncio
 import logging
 import mailbox
+import re
 import smtplib
-
+import sys
 from email import message_from_bytes, message_from_string
-from public import public
 
+from public import public
 
 EMPTYBYTES = b''
 COMMASPACE = ', '
@@ -101,14 +100,14 @@ class Proxy:
             content = envelope.content
         lines = content.splitlines(keepends=True)
         # Look for the last header
-        i = 0
+        _i = 0
         ending = CRLF
-        for i, line in enumerate(lines):  # pragma: nobranch
+        for _i, line in enumerate(lines):  # pragma: nobranch
             if NLCRE.match(line):
                 ending = line
                 break
         peer = session.peer[0].encode('ascii')
-        lines.insert(i, b'X-Peer: %s%s' % (peer, ending))
+        lines.insert(_i, b'X-Peer: %s%s' % (peer, ending))
         data = EMPTYBYTES.join(lines)
         refused = self._deliver(envelope.mail_from, envelope.rcpt_tos, data)
         # TBD: what to do with refused addresses?

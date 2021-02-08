@@ -23,63 +23,78 @@ jobs:
   qa_docs:
     runs-on: ubuntu-20.04
     steps:
-      - name: "Checkout latest commit"
+      - name: "Checkout latest PR commit"
         uses: actions/checkout@v2
-      - name: "Set up Python 3.8"
+      - name: "Set up Python"
         uses: actions/setup-python@v2
         with:
+          # 3.8 is chosen because it seems to be the fastest for <3.9
+          # (3.9 excluded because it seems to be still very unstable)
           python-version: 3.8
-      - name: "Install dependencies"
+      - name: "Update modules & install deps"
+        # language=bash
         run: |
-          python -m pip install --upgrade pip
-          pip install tox
-      - name: "Execute tox -e qa,docs"
+          python -m pip install --upgrade pip setuptools wheel
+          python setup.py develop
+      - name: "flake8 Style Checking"
+        # language=bash
         run: |
-          tox -e qa,docs
+          pip install colorama flake8
+          python -m flake8 aiosmtpd setup.py housekeep.py release.py
+      - name: "Docs Checking"
+        # language=bash
+        run: |
+          pip install colorama pytest pytest-mock sphinx sphinx-autofixture sphinx_rtd_theme
+          pytest -v aiosmtpd/docs
+          python setup.py build_sphinx
+      - name: "Static Type Checking"
+        # language=bash
+        run: |
+          pip install pytype
+          pytype --keep-going --jobs auto .
+      - name: "Other QA Checks"
+        # language=bash
+        run: |
+          pip install pytest pytest-mock check-manifest
+          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin master:master
+          pytest -v aiosmtpd/qa
+          check-manifest -v
   testing:
     needs: qa_docs
     strategy:
       # If a matrix fail, do NOT stop other matrix, let them run to completion
       fail-fast: false
       matrix:
-        os: [ "ubuntu-18.04", "ubuntu-20.04", "macos-10.15" ]
-        platform: [ "posix" ]
+        os: [ "ubuntu-18.04", "ubuntu-20.04", "macos-10.15", "windows-latest" ]
         python-version: [ "3.6", "3.7", "3.8", "3.9", "pypy3" ]
-        include:
-          - os: "windows-latest"
-            platform: "mswin"
-            # Only the latest frozen branch as indicated on
-            # https://devguide.python.org/#branchstatus
-            # ('frozen' means Status == "security")
-            # Reason being that Windows users can change their Python anytime,
-            # so there is no benefit in testing all released Python versions.
-            # Plus pypy3 implementation in Windows is ... complicated. We
-            # should stay away from all those complications; users choosing to
-            # run aiosmtpd on pypy3 on Windows should be considered advanced
-            # and know what they're doing.
-            python-version: "3.7"
     runs-on: ${{ matrix.os }}
     steps:
     - name: "Checkout latest commit"
       uses: actions/checkout@v2
+      with:
+        fetch-depth: 0  # Required by codecov/codecov-action@v1
     - name: "Set up Python ${{ matrix.python-version }}"
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
     - name: "Install dependencies"
+      # language=bash
       run: |
-        python -m pip install --upgrade pip
-        pip install tox
-    - name: "Execute tox"
-      env:
-        PLATFORM: ${{ matrix.platform }}
-      # "py" testenv means we'll use whatever Python provided by GA,
-      # as specified in 'matrix' above. No need to specify exact version.
+        python -m pip install --upgrade pip setuptools wheel
+        # Test deps
+        pip install colorama coverage[toml] coverage-conditional-plugin packaging pytest pytest-cov pytest-mock
+        # Package deps
+        python setup.py develop
+        # Fetch master because some test cases might need its existence
+        git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin master:master
+    - name: "Execute testing"
+      shell: bash
+      # language=bash
       run: |
-        tox -e py-cov
+        pytest --cov --cov-report=xml --cov-report=term
     - name: "Report to codecov"
       # Ubuntu 18.04 came out of the box with 3.6, and LOTS of system are still running
       # 18.04 happily, so we choose this as the 'canonical' code coverage testing.
       # One day we'll have to revisit this and bump the version ...
-      if: always() && matrix.python-version == '3.6' && matrix.os == 'ubuntu-latest'
+      if: matrix.python-version == '3.6' && matrix.os == 'ubuntu-18.04'
       uses: codecov/codecov-action@v1

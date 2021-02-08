@@ -24,7 +24,8 @@ div.body h4 {
 }
 
 .pre, pre, code {
-    font-family: Menlo,Consolas,"Ubuntu Mono",Inconsolata,"Bitstream Vera Sans Mono","lucida console","Courier New",monospace;
+    font-family: "Fira Code",Menlo,Consolas,"Ubuntu Mono",Inconsolata,"Bitstream Vera Sans Mono","lucida console","Courier New",monospace;
+    font-size: 90%;
 }
 
 div.highlight pre {
@@ -50,4 +51,8 @@ div#news-for-aiosmtpd h3 {
 
 em.sig-param > span.default_value, em.sig-param > span.o {
     color: rgb(128, 128, 128);
+}
+
+a {
+    text-decoration: underline dotted !important;
 }

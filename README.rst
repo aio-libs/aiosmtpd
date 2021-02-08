@@ -142,6 +142,10 @@ You can also add the ``-s``/``--capture=no`` option to show output, e.g.::
 
     $ tox -e py36-nocov -- -s
 
+and these options can be combined::
+
+    $ tox -e py36-nocov -- -x -s <testname>
+
 (The ``-e`` parameter is explained in the next section about 'testenvs'.
 In general, you'll want to choose the ``nocov`` testenvs if you want to show output,
 so you can see which test is generating which output.)
@@ -194,23 +198,22 @@ have been configured and tested:
 
 * ``docs``
 
-  Builds HTML documentation using Sphinx
+  Builds HTML documentation using Sphinx. A `pytest doctest`_ will run prior to
+  actual building of the documentation.
 
 
 Environment Variables
 -------------------------
 
-``PLATFORM``
-~~~~~~~~~~~~~~~~
+``ASYNCIO_CATCHUP_DELAY``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    Used on non-POSIX operating systems to specify tests to skip.
-    Valid values:
+    Due to how asyncio event loop works, some actions do not instantly get
+    responded to. This is especially so on slower / overworked systems.
+    In consideration of such situations, some test cases invoke a slight
+    delay to let the event loop catch up.
 
-    +-----------+-------------------------------------------------------+
-    | ``mswin`` | when running tox on Microsoft Windows (non-Cygwin)    |
-    +-----------+-------------------------------------------------------+
-    | ``wsl``   | when running tox on Windows Subsystem for Linux (WSL) |
-    +-----------+-------------------------------------------------------+
+    Defaults to `0.1` and can be set to any float value you want.
 
 
 Different Python Versions
@@ -233,26 +236,35 @@ versions on your system by using ``pyenv``. General steps:
    Python interpreter versions you want to make available to tox (see pyenv's
    documentation about this file)
 
+   **Tip:** The 1st line of ``.python-version`` indicates your *preferred* Python version
+   which will be used to run tox.
+
 5. Invoke tox with the option ``--tox-pyenv-no-fallback`` (see tox-pyenv's
    documentation about this option)
 
 
 ``housekeep.py``
--------------------
+----------------
 
 If you ever need to 'reset' your repo, you can use the ``housekeep.py`` utility
 like so::
 
     $ python housekeep.py superclean
 
-It is `strongly` recommended to NOT do superclean too often, though.
+It is *strongly* recommended to NOT do superclean too often, though.
 Every time you invoke ``superclean``,
 tox will have to recreate all its testenvs,
-and this will make testing `much` longer to finish.
+and this will make testing *much* longer to finish.
 
 ``superclean`` is typically only needed when you switch branches,
 or if you want to really ensure that artifacts from previous testing sessions
 won't interfere with your next testing sessions.
+
+For example, you want to force Sphinx to rebuild all documentation.
+Or, you're sharing a repo between environments (say, PSCore and Cygwin)
+and the cached Python bytecode messes up execution
+(e.g., sharing the exact same directory between Windows PowerShell and Cygwin
+will cause problems as Python becomes confused about the locations of the source code).
 
 
 License

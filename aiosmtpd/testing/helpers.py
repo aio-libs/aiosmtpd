@@ -1,22 +1,24 @@
 """Testing helpers."""
 
-import ssl
-import sys
+import os
 import select
 import socket
 import struct
-import asyncio
-import logging
-import warnings
-
-from contextlib import ExitStack
+import sys
+import time
+from smtplib import SMTP as SMTP_Client
 from typing import List
-from pkg_resources import resource_filename
-from unittest import TestCase
-from unittest.mock import patch
+
+from aiosmtpd.smtp import Envelope
+
+ASYNCIO_CATCHUP_DELAY = float(os.environ.get("ASYNCIO_CATCHUP_DELAY", 0.1))
+"""
+Delay (in seconds) to give asyncio event loop time to catch up and do things. May need
+to be increased for slow and/or overburdened test systems.
+"""
 
 
-def reset_connection(client):
+def reset_connection(client: SMTP_Client):
     # Close the connection with a TCP RST instead of a TCP FIN.  client must
     # be a smtplib.SMTP instance.
     #
@@ -30,63 +32,37 @@ def reset_connection(client):
     # };
     #
     # Is this correct for Windows/Cygwin and macOS?
-    struct_format = 'hh' if sys.platform == 'win32' else 'ii'
+    struct_format = "hh" if sys.platform == "win32" else "ii"
     l_onoff = 1
     l_linger = 0
     client.sock.setsockopt(
         socket.SOL_SOCKET,
         socket.SO_LINGER,
-        struct.pack(struct_format, l_onoff, l_linger))
+        struct.pack(struct_format, l_onoff, l_linger),
+    )
     client.close()
 
 
-# For integration with flufl.testing.
+class ReceivingHandler:
+    box: List[Envelope] = None
 
-def setup(testobj):
-    testobj.globs['resources'] = ExitStack()
+    def __init__(self):
+        self.box = []
 
-
-def teardown(testobj):
-    testobj.globs['resources'].close()
-
-
-def make_debug_loop():
-    loop = asyncio.get_event_loop()
-    loop.set_debug(True)
-    return loop
+    async def handle_DATA(self, server, session, envelope):
+        self.box.append(envelope)
+        return "250 OK"
 
 
-def start(plugin):
-    if plugin.stderr:
-        # Turn on lots of debugging.
-        patch('aiosmtpd.smtp.make_loop', make_debug_loop).start()
-        logging.getLogger('asyncio').setLevel(logging.DEBUG)
-        logging.getLogger('mail.log').setLevel(logging.DEBUG)
-        warnings.filterwarnings('always', category=ResourceWarning)
-
-
-def assert_auth_success(testcase: TestCase, *response):
-    assert response == (235, b"2.7.0 Authentication successful")
-
-
-def assert_auth_invalid(testcase: TestCase, *response):
-    assert response == (535, b"5.7.8 Authentication credentials invalid")
-
-
-def assert_auth_required(testcase: TestCase, *response):
-    assert response == (530, b"5.7.0 Authentication required")
-
-
-SUPPORTED_COMMANDS_TLS: bytes = (
-    b'Supported commands: AUTH DATA EHLO HELO HELP MAIL '
-    b'NOOP QUIT RCPT RSET STARTTLS VRFY'
-)
-
-SUPPORTED_COMMANDS_NOTLS = SUPPORTED_COMMANDS_TLS.replace(b" STARTTLS", b"")
+def catchup_delay(delay=ASYNCIO_CATCHUP_DELAY):
+    """
+    Sleep for awhile to give asyncio's event loop time to catch up.
+    """
+    time.sleep(delay)
 
 
 def send_recv(
-        sock: socket.socket, data: bytes, end: bytes = b"\r\n", timeout=0.1
+    sock: socket.socket, data: bytes, end: bytes = b"\r\n", timeout=0.1
 ) -> bytes:
     sock.send(data + end)
     slist = [sock]
@@ -99,23 +75,3 @@ def send_recv(
         else:
             break
     return b"".join(result)
-
-
-def get_server_context():
-    tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    tls_context.load_cert_chain(
-        resource_filename('aiosmtpd.tests.certs', 'server.crt'),
-        resource_filename('aiosmtpd.tests.certs', 'server.key'),
-    )
-    return tls_context
-
-
-class ReceivingHandler:
-    def __init__(self):
-        self.box = []
-        self.boxed_sess = []
-
-    async def handle_DATA(self, server, session, envelope):
-        self.box.append(envelope)
-        self.boxed_sess.append(session)
-        return '250 OK'

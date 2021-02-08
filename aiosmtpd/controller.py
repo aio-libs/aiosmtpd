@@ -1,17 +1,18 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import os
 import ssl
-import asyncio
 import threading
-
-from aiosmtpd.smtp import SMTP
 from contextlib import ExitStack
-from public import public
 from socket import create_connection
 from typing import Any, Coroutine, Dict, Optional
+from warnings import warn
 
+from public import public
+
+from aiosmtpd.smtp import SMTP
 
 AsyncServer = asyncio.base_events.Server
 
@@ -50,9 +51,11 @@ class Controller:
         port=8025,
         *,
         ready_timeout=1.0,
-        enable_SMTPUTF8=None,
         ssl_context: ssl.SSLContext = None,
-        server_kwargs: Dict[str, Any] = None
+        # SMTP parameters
+        server_hostname: str = None,
+        server_kwargs: Dict[str, Any] = None,
+        **SMTP_parameters,
     ):
         """
         `Documentation can be found here
@@ -64,23 +67,28 @@ class Controller:
         self.port = port
         self.ssl_context = ssl_context
         self.loop = asyncio.new_event_loop() if loop is None else loop
-        self.ready_timeout = os.getenv("AIOSMTPD_CONTROLLER_TIMEOUT", ready_timeout)
-        self.server_kwargs: Dict[str, Any] = server_kwargs or {}
-        if enable_SMTPUTF8 is not None:
-            # Uncomment next lines when we hit 1.3
-            # warn("enable_SMTPUTF8 will be removed in the future. "
-            #      "Please use server_kwargs instead.", DeprecationWarning)
-            self.server_kwargs["enable_SMTPUTF8"] = enable_SMTPUTF8
-        else:
-            # This line emulates previous behavior of defaulting enable_SMTPUTF8 to
-            # True. Which actually kinda conflicts with SMTP class's default, but it's
-            # explained in the documentation.
-            self.server_kwargs.setdefault("enable_SMTPUTF8", True)
+        self.ready_timeout = os.getenv(
+            'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
+        if server_kwargs:
+            warn(
+                "server_kwargs will be removed in version 2.0. "
+                "Just specify the keyword arguments to forward to SMTP "
+                "as kwargs to this __init__ method.",
+                DeprecationWarning
+            )
+        self.SMTP_kwargs: Dict[str, Any] = server_kwargs or {}
+        self.SMTP_kwargs.update(SMTP_parameters)
+        if server_hostname:
+            self.SMTP_kwargs["hostname"] = server_hostname
+        # Emulate previous behavior of defaulting enable_SMTPUTF8 to True
+        # It actually conflicts with SMTP class's default, but the reasoning is
+        # discussed in the docs.
+        self.SMTP_kwargs.setdefault("enable_SMTPUTF8", True)
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
         return SMTP(
-            self.handler, **self.server_kwargs
+            self.handler, **self.SMTP_kwargs
         )
 
     def _factory_invoker(self):
@@ -112,14 +120,14 @@ class Controller:
                 srv_coro
             )
             self.server = srv
-        except Exception as error:  # pragma: nowsl
+        except Exception as error:  # pragma: on-wsl
             # Usually will enter this part only if create_server() cannot bind to the
             # specified host:port.
             #
-            # Somehow WSL1.0 (Windows Subsystem for Linux) allows multiple
+            # Somehow WSL 1.0 (Windows Subsystem for Linux) allows multiple
             # listeners on one port?!
-            # That is why we add "pragma: nowsl" there, so when testing on
-            # WSL we can specify "PLATFORM=wsl".
+            # That is why we add "pragma: on-wsl" there, so this block will not affect
+            # coverage on WSL 1.0.
             self._thread_exception = error
             return
         self.loop.call_soon(ready_event.set)
@@ -149,8 +157,9 @@ class Controller:
         self._thread.start()
         # Wait a while until the server is responding.
         ready_event.wait(self.ready_timeout)
-        if self._thread_exception is not None:  # pragma: nowsl
+        if self._thread_exception is not None:  # pragma: on-wsl
             # See comment about WSL1.0 in the _run() method
+            assert self._thread is not None  # Stupid LGTM.com; see github/codeql#4918
             raise self._thread_exception
         # Apparently create_server invokes factory() "lazily", so exceptions in
         # factory() go undetected. To trigger factory() invocation we need to open
@@ -171,7 +180,7 @@ class Controller:
         self.loop.stop()
         try:
             _all_tasks = asyncio.all_tasks
-        except AttributeError:  # pragma: skipif_gt_py36
+        except AttributeError:  # pragma: py-gt-36
             _all_tasks = asyncio.Task.all_tasks
         for task in _all_tasks(self.loop):
             task.cancel()

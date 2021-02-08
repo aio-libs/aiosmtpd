@@ -24,6 +24,7 @@ Fixed/Improved
   (It gets reimported to ``aiosmtpd.smtp``,
   so programs relying on ``aiosmtpd.smtp.__version__`` should still work.)
   (Closes #241)
+* Uses pure ``pytest`` for all test cases
 
 
 1.2.4 (2021-01-24)

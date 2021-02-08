@@ -3,105 +3,127 @@
 
 """Test the SMTP protocol."""
 
-import os
-import time
-import socket
 import asyncio
+import itertools
 import logging
-import unittest
+import socket
+import time
 import warnings
-
-from aiosmtpd.controller import Controller
-from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import (
-    AuthResult,
-    CALL_LIMIT_DEFAULT,
-    Envelope as SMTPEnvelope,
-    MISSING,
-    SMTP as Server,
-    Session as SMTPSession,
-    __ident__ as GREETING,
-    auth_mechanism,
-)
-from aiosmtpd.testing.helpers import (
-    ReceivingHandler,
-    SUPPORTED_COMMANDS_NOTLS,
-    assert_auth_invalid,
-    assert_auth_required,
-    assert_auth_success,
-    reset_connection,
-    send_recv,
-)
 from base64 import b64encode
-from contextlib import ExitStack
+from contextlib import suppress
+from smtplib import SMTP as SMTPClient
 from smtplib import (
-    SMTP,
     SMTPAuthenticationError,
     SMTPDataError,
     SMTPResponseException,
-    SMTPServerDisconnected
+    SMTPServerDisconnected,
 )
-from unittest.mock import Mock, patch
+from textwrap import dedent
+from typing import Any, AnyStr, Callable, Generator, List, Tuple
 
-from typing import ContextManager, Tuple, cast
+import pytest
+from pytest_mock import MockFixture
 
-CRLF = '\r\n'
-BCRLF = b'\r\n'
+from aiosmtpd.controller import Controller
+from aiosmtpd.handlers import Sink
+from aiosmtpd.smtp import BOGUS_LIMIT, CALL_LIMIT_DEFAULT, MISSING
+from aiosmtpd.smtp import SMTP as Server
+from aiosmtpd.smtp import AuthResult
+from aiosmtpd.smtp import Envelope as SMTPEnvelope
+from aiosmtpd.smtp import Session as SMTPSession
+from aiosmtpd.smtp import __ident__ as GREETING
+from aiosmtpd.smtp import auth_mechanism
+from aiosmtpd.testing.helpers import (
+    ReceivingHandler,
+    catchup_delay,
+    reset_connection,
+    send_recv,
+)
+from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 
+from .conftest import Global, controller_data, handler_data
 
-ModuleResources = ExitStack()
-mail_logger = logging.getLogger('mail.log')
+CRLF = "\r\n"
+BCRLF = b"\r\n"
+MAIL_LOG = logging.getLogger("mail.log")
+MAIL_LOG.setLevel(logging.DEBUG)
 
-
-def setUpModule():
-    # Needed especially on FreeBSD because socket.getfqdn() is slow on that OS,
-    # and oftentimes (not always, though) leads to Error
-    ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
-
-    loglevel = int(os.environ.get("AIOSMTPD_TESTLOGLEVEL", logging.INFO))
-    mail_logger.setLevel(loglevel)
-
-    if "AIOSMTPD_TESTLOGFILE" in os.environ:
-        fhandler = logging.FileHandler(
-            os.environ["AIOSMTPD_TESTLOGFILE"],
-            mode="a",
-            encoding="latin1",
-        )
-        fhandler.setLevel(1)
-        fhandler.setFormatter(
-            logging.Formatter(
-                u"{asctime} - {name} - {levelname} - {message}",
-                style="{",
-            )
-        )
-        mail_logger.addHandler(fhandler)
-
-
-def tearDownModule():
-    ModuleResources.close()
+# fh = logging.FileHandler("~smtp.log")
+# fh.setFormatter(logging.Formatter("{asctime} - {levelname} - {message}", style="{"))
+# fh.setLevel(logging.DEBUG)
+# MAIL_LOG.addHandler(fh)
 
 
-def auth_callback(mechanism, login, password):
-    if login and login.decode() == 'goodlogin':
+# region #### Test Helpers ############################################################
+
+
+def auth_callback(mechanism, login, password) -> bool:
+    if login and login.decode() == "goodlogin":
         return True
     else:
         return False
 
 
-class DecodingController(Controller):
-    def factory(self):
-        return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
-                      auth_require_tls=False, auth_callback=auth_callback)
+class UndescribableError(Exception):
+    def __str__(self):
+        raise Exception()
+
+
+class ErrorSMTP(Server):
+    exception_type = ValueError
+
+    async def smtp_HELO(self, hostname):
+        raise self.exception_type("test")
+
+
+# endregion
+
+
+# region #### Special-Purpose Handlers ################################################
 
 
 class PeekerHandler:
     sess: SMTPSession = None
+    login: AnyStr = None
+    login_data: Any = None
+    mechanism: AnyStr = None
+    password: AnyStr = None
+
+    # Please do not insert "_" after auth; that will 'fool' SMTP into thinking this is
+    # an AUTH Mechanism, and we totally do NOT want that.
+    def authcallback(self, mechanism: str, login: bytes, password: bytes) -> bool:
+        self.login = login
+        self.password = password
+        return login == b"goodlogin" and password == b"goodpasswd"
+
+    def authenticator(
+        self,
+        server: Server,
+        session: SMTPSession,
+        envelope: SMTPEnvelope,
+        mechanism: str,
+        login_data: Tuple[bytes, bytes],
+    ) -> AuthResult:
+        self.sess = session
+        self.mechanism = mechanism
+        self.login_data = login_data
+        userb, passb = login_data
+        if userb == b"failme_with454":
+            return AuthResult(
+                success=False,
+                handled=False,
+                message="454 4.7.0 Temporary authentication failure",
+            )
+        else:
+            self.login = userb
+            self.password = passb
+            return AuthResult(success=True, auth_data=login_data)
 
     async def handle_MAIL(
-            self, server, session, envelope, address, mail_options
+        self, server, session: SMTPSession, envelope, address, mail_options
     ):
         self.sess = session
-        return "250 OK"
+        return S.S250_OK.to_str()
 
     async def auth_DENYMISSING(self, server, args):
         return MISSING
@@ -109,18 +131,14 @@ class PeekerHandler:
     async def auth_DENYFALSE(self, server, args):
         return False
 
-    async def auth_NULL(
-            self, server, args
-    ):
-        return "NULL_login"
-
     async def auth_NONE(self, server: Server, args):
-        await server.push("235 2.7.0  Authentication Succeeded")
+        await server.push(S.S235_AUTH_SUCCESS.to_str())
         return None
 
-    async def auth_DONT(
-            self, server, args
-    ):
+    async def auth_NULL(self, server, args):
+        return "NULL_login"
+
+    async def auth_DONT(self, server, args):
         return MISSING
 
     async def auth_WITH_UNDERSCORE(self, server: Server, args):
@@ -141,140 +159,41 @@ class PeekerHandler:
         return "250 OK"
 
 
-class PeekerAuth:
-    login: bytes = None
-    password: bytes = None
-    mechanism: str = None
-
-    sess: SMTPSession = None
-    login_data = None
-
-    def auth_callback(
-            self, mechanism: str, login: bytes, password: bytes
-    ) -> bool:
-        assert login is not None
-        assert password is not None
-        self.mechanism = mechanism
-        self.login = login
-        self.password = password
-        return True
-
-    def authenticator(
-            self,
-            server: Server,
-            session: SMTPSession,
-            envelope: SMTPEnvelope,
-            mechanism: str,
-            login_data: Tuple[bytes, bytes],
-    ) -> AuthResult:
-        self.sess = session
-        self.mechanism = mechanism
-        self.login_data = login_data
-        userb, passb = login_data
-        if userb == b"failme_with454":
-            return AuthResult(
-                success=False,
-                handled=False,
-                message="454 4.7.0 Temporary authentication failure",
-            )
-        else:
-            self.login = userb
-            self.password = passb
-            return AuthResult(success=True, auth_data=login_data)
-
-
-auth_peeker = PeekerAuth()
-
-
-class DecodingControllerPeekAuth(Controller):
-    def factory(self):
-        self.server_kwargs["enable_SMTPUTF8"] = True
-        return Server(self.handler, decode_data=True,
-                      auth_require_tls=False,
-                      auth_callback=auth_peeker.auth_callback,
-                      **self.server_kwargs)
-
-
-class DecodingControllerPeekAuthNewSystem(Controller):
-    def factory(self):
-        self.server_kwargs["enable_SMTPUTF8"] = True
-        return Server(self.handler, decode_data=True,
-                      auth_require_tls=False,
-                      authenticator=auth_peeker.authenticator,
-                      **self.server_kwargs)
-
-
-class NoDecodeController(Controller):
-    def factory(self):
-        return Server(self.handler, decode_data=False)
-
-
-class TimeoutController(Controller):
-    Delay: float = 2.0
-
-    def factory(self):
-        return Server(self.handler, timeout=self.Delay)
-
-
-class RequiredAuthDecodingController(Controller):
-    def factory(self):
-        return Server(self.handler, decode_data=True, enable_SMTPUTF8=True,
-                      auth_require_tls=False, auth_callback=auth_callback,
-                      auth_required=True)
-
-
 class StoreEnvelopeOnVRFYHandler:
     """Saves envelope for later inspection when handling VRFY."""
+
     envelope = None
 
     async def handle_VRFY(self, server, session, envelope, addr):
         self.envelope = envelope
-        return '250 OK'
-
-
-class SizedController(Controller):
-    def __init__(self, handler, size):
-        self.size = size
-        super().__init__(handler)
-
-    def factory(self):
-        return Server(self.handler, data_size_limit=self.size)
-
-
-class StrictASCIIController(Controller):
-    def factory(self):
-        return Server(self.handler, enable_SMTPUTF8=False, decode_data=True)
-
-
-class CustomHostnameController(Controller):
-    def factory(self):
-        return Server(self.handler, hostname='custom.localhost')
-
-
-class CustomIdentController(Controller):
-    def factory(self):
-        server = Server(self.handler, ident='Identifying SMTP v2112')
-        return server
+        return S.S250_OK.to_str()
 
 
 class ErroringHandler:
     error = None
+    custom_response = False
 
     async def handle_DATA(self, server, session, envelope):
-        return '499 Could not accept the message'
+        return "499 Could not accept the message"
 
     async def handle_exception(self, error):
         self.error = error
-        return '500 ErroringHandler handling error'
+        if not self.custom_response:
+            return "500 ErroringHandler handling error"
+        else:
+            return "451 Temporary error: ({}) {}".format(
+                error.__class__.__name__, str(error)
+            )
 
 
-class ErroringHandlerCustomResponse:
+class ErroringHandlerConnectionLost:
     error = None
 
+    async def handle_DATA(self, server, session, envelope):
+        raise ConnectionResetError("ErroringHandlerConnectionLost test")
+
     async def handle_exception(self, error):
         self.error = error
-        return '554 Persistent error: ({}) {}'.format(
-            error.__class__.__name__, str(error))
 
 
 class ErroringErrorHandler:
@@ -282,22 +201,7 @@ class ErroringErrorHandler:
 
     async def handle_exception(self, error):
         self.error = error
-        raise ValueError('ErroringErrorHandler test')
-
-
-class ErroringHandlerConnectionLost:
-    error = None
-
-    async def handle_DATA(self, server, session, envelope):
-        raise ConnectionResetError('ErroringHandlerConnectionLost test')
-
-    async def handle_exception(self, error):
-        self.error = error
-
-
-class UndescribableError(Exception):
-    def __str__(self):
-        raise Exception()
+        raise ValueError("ErroringErrorHandler test")
 
 
 class UndescribableErrorHandler:
@@ -308,9 +212,27 @@ class UndescribableErrorHandler:
         raise UndescribableError()
 
 
-class ErrorSMTP(Server):
-    async def smtp_HELO(self, hostname):
-        raise ValueError('test')
+class SleepingHeloHandler:
+    async def handle_HELO(self, server, session, envelope, hostname):
+        await asyncio.sleep(0.01)
+        session.host_name = hostname
+        return "250 {}".format(server.hostname)
+
+
+# endregion
+
+
+# region #### Special-Purpose Controllers #############################################
+
+
+# These are either impractical or impossible to implement using Controller
+
+
+class TimeoutController(Controller):
+    Delay: float = 1.0
+
+    def factory(self):
+        return Server(self.handler, timeout=self.Delay)
 
 
 class ErrorController(Controller):
@@ -318,75 +240,207 @@ class ErrorController(Controller):
         return ErrorSMTP(self.handler)
 
 
-class SleepingHeloHandler:
-    async def handle_HELO(self, server, session, envelope, hostname):
-        await asyncio.sleep(0.01)
-        session.host_name = hostname
-        return '250 {}'.format(server.hostname)
+class CustomHostnameController(Controller):
+    custom_name = "custom.localhost"
+
+    def factory(self):
+        return Server(self.handler, hostname=self.custom_name)
 
 
-class TestProtocol(unittest.TestCase):
-    def setUp(self):
-        self.transport = Mock()
-        self.transport.write = self._write
-        self.transport.get_extra_info.return_value = "MockedPeer"
-        self.responses = []
-        self._old_loop = asyncio.get_event_loop()
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
+class CustomIdentController(Controller):
+    ident: bytes = b"Identifying SMTP v2112"
 
-    def tearDown(self):
-        self.loop.close()
-        asyncio.set_event_loop(self._old_loop)
+    def factory(self):
+        server = Server(self.handler, ident=self.ident.decode())
+        return server
 
-    def _write(self, data):
-        self.responses.append(data)
 
-    def _get_protocol(self, *args, **kwargs):
-        protocol = Server(*args, loop=self.loop, **kwargs)
-        protocol.connection_made(self.transport)
-        return protocol
+# endregion
 
-    def test_honors_mail_delimeters(self):
+
+# region ##### Fixtures ###############################################################
+
+
+@pytest.fixture
+def transport_resp(mocker: MockFixture):
+    responses = []
+    mocked = mocker.Mock()
+    mocked.write = responses.append
+    #
+    yield mocked, responses
+
+
+@pytest.fixture
+def get_protocol(
+    temp_event_loop, transport_resp
+) -> Generator[Callable[..., Server], None, None]:
+    transport, _ = transport_resp
+
+    def getter(*args, **kwargs) -> Server:
+        proto = Server(*args, loop=temp_event_loop, **kwargs)
+        proto.connection_made(transport)
+        return proto
+
+    yield getter
+
+
+# region #### Fixtures: Controllers ##################################################
+
+
+@pytest.fixture
+def auth_peeker_controller(get_controller) -> Generator[Controller, None, None]:
+    handler = PeekerHandler()
+    controller = get_controller(
+        handler,
+        decode_data=True,
+        enable_SMTPUTF8=True,
+        auth_require_tls=False,
+        auth_callback=handler.authcallback,
+        auth_exclude_mechanism=["DONT"],
+    )
+    controller.start()
+    Global.set_addr_from(controller)
+    #
+    yield controller
+    #
+    controller.stop()
+
+
+@pytest.fixture
+def authenticator_peeker_controller(
+    get_controller,
+) -> Generator[Controller, None, None]:
+    handler = PeekerHandler()
+    controller = get_controller(
+        handler,
+        decode_data=True,
+        enable_SMTPUTF8=True,
+        auth_require_tls=False,
+        authenticator=handler.authenticator,
+        auth_exclude_mechanism=["DONT"],
+    )
+    controller.start()
+    Global.set_addr_from(controller)
+    #
+    yield controller
+    #
+    controller.stop()
+
+
+@pytest.fixture
+def decoding_authnotls_controller(
+    get_handler, get_controller
+) -> Generator[Controller, None, None]:
+    handler = get_handler()
+    controller = get_controller(
+        handler,
+        decode_data=True,
+        enable_SMTPUTF8=True,
+        auth_require_tls=False,
+        auth_callback=auth_callback,
+    )
+    controller.start()
+    Global.set_addr_from(controller)
+    #
+    yield controller
+    #
+    # Some test cases need to .stop() the controller inside themselves
+    # in such cases, we must suppress Controller's raise of AssertionError
+    # because Controller doesn't like .stop() to be invoked more than once
+    with suppress(AssertionError):
+        controller.stop()
+
+
+@pytest.fixture
+def error_controller(get_handler) -> Generator[ErrorController, None, None]:
+    handler = get_handler()
+    controller = ErrorController(handler)
+    controller.start()
+    Global.set_addr_from(controller)
+    #
+    yield controller
+    #
+    controller.stop()
+
+
+# endregion
+
+# endregion
+
+
+class _CommonMethods:
+    """Contain snippets that keep being performed again and again and again..."""
+
+    def _helo(self, client: SMTPClient, domain: str = "example.org") -> bytes:
+        code, mesg = client.helo(domain)
+        assert code == 250
+        return mesg
+
+    def _ehlo(self, client: SMTPClient, domain: str = "example.com") -> bytes:
+        code, mesg = client.ehlo(domain)
+        assert code == 250
+        return mesg
+
+
+class TestProtocol:
+    def test_honors_mail_delimiters(
+        self, temp_event_loop, transport_resp, get_protocol
+    ):
         handler = ReceivingHandler()
-        data = b'test\r\nmail\rdelimeters\nsaved\r\n'
-        protocol = self._get_protocol(handler)
-        protocol.data_received(BCRLF.join([
-            b'HELO example.org',
-            b'MAIL FROM: <anne@example.com>',
-            b'RCPT TO: <anne@example.com>',
-            b'DATA',
-            data + b'.',
-            b'QUIT\r\n'
-            ]))
+        protocol = get_protocol(handler)
+        data = b"test\r\nmail\rdelimiters\nsaved\r\n"
+        protocol.data_received(
+            BCRLF.join(
+                [
+                    b"HELO example.org",
+                    b"MAIL FROM: <anne@example.com>",
+                    b"RCPT TO: <anne@example.com>",
+                    b"DATA",
+                    data + b".",
+                    b"QUIT\r\n",
+                ]
+            )
+        )
         try:
-            self.loop.run_until_complete(protocol._handler_coroutine)
+            temp_event_loop.run_until_complete(protocol._handler_coroutine)
         except asyncio.CancelledError:
             pass
-        self.assertEqual(len(handler.box), 1)
-        self.assertEqual(handler.box[0].content, data)
+        _, responses = transport_resp
+        assert responses[5] == S.S250_OK.to_bytes() + b"\r\n"
+        assert len(handler.box) == 1
+        assert handler.box[0].content == data
 
-    def test_empty_email(self):
+    def test_empty_email(self, temp_event_loop, transport_resp, get_protocol):
         handler = ReceivingHandler()
-        protocol = self._get_protocol(handler)
-        protocol.data_received(BCRLF.join([
-            b'HELO example.org',
-            b'MAIL FROM: <anne@example.com>',
-            b'RCPT TO: <anne@example.com>',
-            b'DATA',
-            b'.',
-            b'QUIT\r\n'
-            ]))
+        protocol = get_protocol(handler)
+        protocol.data_received(
+            BCRLF.join(
+                [
+                    b"HELO example.org",
+                    b"MAIL FROM: <anne@example.com>",
+                    b"RCPT TO: <anne@example.com>",
+                    b"DATA",
+                    b".",
+                    b"QUIT\r\n",
+                ]
+            )
+        )
         try:
-            self.loop.run_until_complete(protocol._handler_coroutine)
+            temp_event_loop.run_until_complete(protocol._handler_coroutine)
         except asyncio.CancelledError:
             pass
-        self.assertEqual(self.responses[5], b'250 OK\r\n')
-        self.assertEqual(len(handler.box), 1)
-        self.assertEqual(handler.box[0].content, b'')
+        _, responses = transport_resp
+        assert responses[5] == S.S250_OK.to_bytes() + b"\r\n"
+        assert len(handler.box) == 1
+        assert handler.box[0].content == b""
 
 
-class TestSMTP(unittest.TestCase):
+@pytest.mark.usefixtures("plain_controller")
+@controller_data(
+    decode_data=True,
+    enable_SMTPUTF8=True,
+)
+class TestSMTP(_CommonMethods):
     valid_mailfrom_addresses = [
         # no space between colon and address
         "anne@example.com",
@@ -447,1941 +501,1487 @@ class TestSMTP(unittest.TestCase):
         "a" * 65 + "@example.com",  # local-part > 64 chars
     ]
 
-    def setUp(self):
-        controller = DecodingController(Sink)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
-
-    def test_binary(self):
-        with SMTP(*self.address) as client:
-            client.sock.send(b"\x80FAIL\r\n")
-            code, response = client.getreply()
-            self.assertEqual(code, 500)
-            self.assertEqual(response, b'Error: bad syntax')
-
-    def test_binary_space(self):
-        with SMTP(*self.address) as client:
-            client.sock.send(b"\x80 FAIL\r\n")
-            code, response = client.getreply()
-            self.assertEqual(code, 500)
-            self.assertEqual(response, b'Error: bad syntax')
-
-    def test_helo(self):
-        with SMTP(*self.address) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, bytes(socket.getfqdn(), 'utf-8'))
-
-    def test_helo_no_hostname(self):
-        with SMTP(*self.address) as client:
-            # smtplib substitutes .local_hostname if the argument is falsey.
-            client.local_hostname = ''
-            code, response = client.helo('')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: HELO hostname')
-
-    def test_helo_duplicate(self):
-        with SMTP(*self.address) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.helo('example.org')
-            self.assertEqual(code, 250)
-
-    def test_ehlo(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            actuals = response.splitlines()
-            expecteds = [
-                bytes(socket.getfqdn(), 'utf-8'),
-                b'SIZE 33554432',
-                b'SMTPUTF8',
-                b'AUTH LOGIN PLAIN',
-                b'HELP',
-            ]
-            # for actual, expected in zip(lines, expecteds):
-            #     self.assertEqual(actual, expected)
-            self.assertEqual(expecteds, actuals)
-
-    def test_ehlo_duplicate(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.ehlo('example.org')
-            self.assertEqual(code, 250)
-
-    def test_ehlo_no_hostname(self):
-        with SMTP(*self.address) as client:
-            # smtplib substitutes .local_hostname if the argument is falsey.
-            client.local_hostname = ''
-            code, response = client.ehlo('')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: EHLO hostname')
-
-    def test_helo_then_ehlo(self):
-        with SMTP(*self.address) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.ehlo('example.org')
-            self.assertEqual(code, 250)
-
-    def test_ehlo_then_helo(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.helo('example.org')
-            self.assertEqual(code, 250)
-
-    def test_noop(self):
-        with SMTP(*self.address) as client:
-            code, response = client.noop()
-            self.assertEqual(code, 250)
-
-    def test_noop_with_arg(self):
-        with SMTP(*self.address) as client:
-            # .noop() doesn't accept arguments.
-            code, response = client.docmd('NOOP', 'ok')
-            self.assertEqual(code, 250)
-
-    def test_quit(self):
-        client = SMTP(*self.address)
-        code, response = client.quit()
-        self.assertEqual(code, 221)
-        self.assertEqual(response, b'Bye')
-
-    def test_quit_with_arg(self):
-        client = SMTP(*self.address)
-        code, response = client.docmd('QUIT', 'oops')
-        self.assertEqual(code, 501)
-        self.assertEqual(response, b'Syntax: QUIT')
-
-    def test_help(self):
-        with SMTP(*self.address) as client:
-            # Don't get tricked by smtplib processing of the response.
-            code, response = client.docmd('HELP')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, SUPPORTED_COMMANDS_NOTLS)
-
-    def test_help_helo(self):
-        with SMTP(*self.address) as client:
-            # Don't get tricked by smtplib processing of the response.
-            code, response = client.docmd('HELP', 'HELO')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'Syntax: HELO hostname')
-
-    def test_help_ehlo(self):
-        with SMTP(*self.address) as client:
-            # Don't get tricked by smtplib processing of the response.
-            code, response = client.docmd('HELP', 'EHLO')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'Syntax: EHLO hostname')
-
-    def test_help_mail(self):
-        with SMTP(*self.address) as client:
-            # Don't get tricked by smtplib processing of the response.
-            code, response = client.docmd('HELP', 'MAIL')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
-
-    def test_help_mail_esmtp(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('HELP', 'MAIL')
-            self.assertEqual(code, 250)
-            self.assertEqual(
-                response,
-                b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')
-
-    def test_help_rcpt(self):
-        with SMTP(*self.address) as client:
-            # Don't get tricked by smtplib processing of the response.
-            code, response = client.docmd('HELP', 'RCPT')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'Syntax: RCPT TO: <address>')
-
-    def test_help_rcpt_esmtp(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('HELP', 'RCPT')
-            self.assertEqual(code, 250)
-            self.assertEqual(
-                response,
-                b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
-
-    def test_help_data(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('HELP', 'DATA')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'Syntax: DATA')
-
-    def test_help_rset(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('HELP', 'RSET')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'Syntax: RSET')
-
-    def test_help_noop(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('HELP', 'NOOP')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'Syntax: NOOP [ignored]')
-
-    def test_help_quit(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('HELP', 'QUIT')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'Syntax: QUIT')
-
-    def test_help_vrfy(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('HELP', 'VRFY')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'Syntax: VRFY <address>')
-
-    def test_help_auth(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('HELP', 'AUTH')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'Syntax: AUTH <mechanism>')
-
-    def test_help_bad_arg(self):
-        with SMTP(*self.address) as client:
-            # Don't get tricked by smtplib processing of the response.
-            code, response = client.docmd('HELP me!')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, SUPPORTED_COMMANDS_NOTLS)
-
-    def test_expn(self):
-        with SMTP(*self.address) as client:
-            code, response = client.expn('anne@example.com')
-            self.assertEqual(code, 502)
-            self.assertEqual(response, b'EXPN not implemented')
-
-    def test_mail_no_helo(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Error: send HELO first')
-
-    def test_mail_from_empty(self):
-        with SMTP(*self.address) as client:
-            client.helo('example.com')
-            code, response = client.docmd('MAIL FROM:')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
-
-    def test_mail_valid_address(self):
-        for mailfrom in self.valid_mailfrom_addresses:
-            with SMTP(*self.address) as client:
-                client.ehlo("mailfrom.example.com")
-                code, mesg = client.docmd(f"MAIL FROM: {mailfrom}")
-                self.assertEqual(250, code)
-                self.assertEqual(b"OK", mesg)
-
-    def test_mail_no_arg(self):
-        with SMTP(*self.address) as client:
-            client.helo('example.com')
-            code, response = client.docmd('MAIL')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
-
-    def test_mail_no_from(self):
-        with SMTP(*self.address) as client:
-            client.helo('example.com')
-            code, response = client.docmd('MAIL <anne@example.com>')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
-
-    def test_mail_params_no_esmtp(self):
-        with SMTP(*self.address) as client:
-            client.helo('example.com')
-            code, response = client.docmd(
-                'MAIL FROM: <anne@example.com> SIZE=10000')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
-
-    def test_mail_params_esmtp(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'MAIL FROM: <anne@example.com> SIZE=10000')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'OK')
-
-    def test_mail_from_twice(self):
-        with SMTP(*self.address) as client:
-            client.helo('example.com')
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'OK')
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Error: nested MAIL command')
-
-    def test_mail_from_malformed(self):
-        with SMTP(*self.address) as client:
-            client.helo('example.com')
-            code, response = client.docmd('MAIL FROM: Anne <anne@example.com>')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: MAIL FROM: <address>')
-
-    def test_bpo27931fix_smtp(self):
-        with SMTP(*self.address) as client:
-            client.helo("testbpo27931.example.com")
-            resp = client.docmd("MAIL FROM: <\"\"@example.com>")
-            self.assertEqual((250, b"OK"), resp)
-
-    def test_mail_from_invalid(self):
-        for addr in self.invalid_email_addresses:
-            with SMTP(*self.address) as client:
-                client.helo("testmailfrom.example.com")
-                resp = client.docmd(f"MAIL FROM: {addr}")
-                self.assertEqual((553, b'5.1.3 Error: malformed address'), resp)
-
-    def test_mail_malformed_params_esmtp(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'MAIL FROM: <anne@example.com> SIZE 10000')
-            self.assertEqual(code, 501)
-            self.assertEqual(
-                response,
-                b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')
-
-    def test_mail_missing_params_esmtp(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('MAIL FROM: <anne@example.com> SIZE')
-            self.assertEqual(code, 501)
-            self.assertEqual(
-                response,
-                b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')
-
-    def test_mail_unrecognized_params_esmtp(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'MAIL FROM: <anne@example.com> FOO=BAR')
-            self.assertEqual(code, 555)
-            self.assertEqual(
-                response,
-                b'MAIL FROM parameters not recognized or not implemented')
-
-    def test_mail_params_bad_syntax_esmtp(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'MAIL FROM: <anne@example.com> #$%=!@#')
-            self.assertEqual(code, 501)
-            self.assertEqual(
-                response,
-                b'Syntax: MAIL FROM: <address> [SP <mail-parameters>]')
-
-    def test_rcpt_no_helo(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('RCPT TO: <anne@example.com>')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Error: send HELO first')
-
-    def test_rcpt_no_mail(self):
-        with SMTP(*self.address) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('RCPT TO: <anne@example.com>')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Error: need MAIL command')
-
-    def test_rcpt_no_arg(self):
-        with SMTP(*self.address) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('RCPT')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: RCPT TO: <address>')
-
-    def test_rcpt_no_to(self):
-        with SMTP(*self.address) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('RCPT <anne@example.com')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: RCPT TO: <address>')
-
-    def test_rcpt_no_arg_esmtp(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('RCPT')
-            self.assertEqual(code, 501)
-            self.assertEqual(
-                response,
-                b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
-
-    def test_rcpt_no_address(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('RCPT TO:')
-            self.assertEqual(code, 501)
-            self.assertEqual(
-                response,
-                b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
-
-    def test_rcpt_with_params_no_esmtp(self):
-        with SMTP(*self.address) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd(
-                'RCPT TO: <bart@example.com> SIZE=1000')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: RCPT TO: <address>')
-
-    def test_rcpt_with_bad_params(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd(
-                'RCPT TO: <bart@example.com> #$%=!@#')
-            self.assertEqual(code, 501)
-            self.assertEqual(
-                response,
-                b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
-
-    def test_rcpt_with_unknown_params(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd(
-                'RCPT TO: <bart@example.com> FOOBAR')
-            self.assertEqual(code, 555)
-            self.assertEqual(
-                response,
-                b'RCPT TO parameters not recognized or not implemented')
-
-    def test_rcpt_address_valid(self):
-        for rcpt in self.valid_rcptto_addresses:
-            with SMTP(*self.address) as client:
-                client.helo("testrcpt.example.com")
-                client.docmd("MAIL FROM: <tester@example.com>")
-                resp = client.docmd(f"RCPT TO: {rcpt}")
-                self.assertEqual((250, b"OK"), resp)
-
-    def test_rcpt_address_invalid(self):
-        for addr in self.invalid_email_addresses:
-            with SMTP(*self.address) as client:
-                client.helo("testrcpt.example.com")
-                client.docmd("MAIL FROM: <tester@example.com>")
-                resp = client.docmd(f"RCPT TO: {addr}")
-                self.assertEqual((553, b'5.1.3 Error: malformed address'), resp)
-
-    def test_rset(self):
-        with SMTP(*self.address) as client:
-            code, response = client.rset()
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'OK')
-
-    def test_rset_with_arg(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('RSET FOO')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: RSET')
-
-    def test_vrfy(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('VRFY <anne@example.com>')
-            self.assertEqual(code, 252)
-            self.assertEqual(
-                response,
-                b'Cannot VRFY user, but will accept message and '
-                b'attempt delivery'
-                )
-
-    def test_vrfy_no_arg(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('VRFY')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: VRFY <address>')
-
-    def test_vrfy_not_an_address(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('VRFY @@')
-            self.assertEqual(code, 502)
-            self.assertEqual(response, b'Could not VRFY @@')
-
-    def test_data_no_helo(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('DATA')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Error: send HELO first')
-
-    def test_data_no_rcpt(self):
-        with SMTP(*self.address) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('DATA')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Error: need RCPT command')
-
-    def test_data_invalid_params(self):
-        with SMTP(*self.address) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('RCPT TO: <anne@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('DATA FOOBAR')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Syntax: DATA')
-
-    def test_empty_command(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('')
-            self.assertEqual(code, 500)
-            self.assertEqual(response, b'Error: bad syntax')
-
-    def test_too_long_command(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('a' * 513)
-            self.assertEqual(code, 500)
-            self.assertEqual(response, b'Command line too long')
-
-    def test_way_too_long_command(self):
-        with SMTP(*self.address) as client:
-            # Send a very large string to ensure it is broken
-            # into several packets, which hits the inner
-            # LimitOverrunError code path in _handle_client.
-            client.send('a' * 1000000)
-            code, response = client.docmd('a' * 1001)
-            self.assertEqual(code, 500)
-            self.assertEqual(response, b'Command line too long')
-            code, response = client.docmd('NOOP')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'OK')
-
-    @patch("logging.Logger.warning")
-    def test_unknown_command(self, mock_warning):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('FOOBAR')
-            self.assertEqual(code, 500)
-            self.assertEqual(
-                response,
-                b'Error: command "FOOBAR" not recognized')
-
-    def test_auth_no_ehlo(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('AUTH')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Error: send EHLO first')
-
-    def test_auth_helo(self):
-        with SMTP(*self.address) as client:
-            client.helo('example.com')
-            code, response = client.docmd('AUTH')
-            self.assertEqual(code, 500)
-            self.assertEqual(response, b"Error: command 'AUTH' not recognized")
-
-    def test_auth_too_many_values(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('AUTH PLAIN NONE NONE')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Too many values')
-
-    def test_auth_not_enough_values(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('AUTH')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Not enough value')
-
-    def test_auth_not_supported_methods(self):
-        for method in ('GSSAPI', 'DIGEST-MD5', 'MD5', 'CRAM-MD5'):
-            with SMTP(*self.address) as client:
-                client.ehlo('example.com')
-                code, response = client.docmd('AUTH ' + method)
-                self.assertEqual(code, 504)
-                self.assertEqual(
-                    response, b'5.5.4 Unrecognized authentication type')
-
-    def test_auth_already_authenticated(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'AUTH PLAIN ' +
-                b64encode(b'\0goodlogin\0goodpasswd').decode()
-                )
-            assert_auth_success(self, code, response)
-            code, response = client.docmd('AUTH')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Already authenticated')
-
-    def test_auth_plain_bad_base64_encoding(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('AUTH PLAIN not-b64')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b"5.5.2 Can't decode base64")
-
-    def test_auth_login_bad_base64_encoding(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            response = client.docmd('AUTH LOGIN not-b64')
-            assert response == (501, b"5.5.2 Can't decode base64")
-
-    def test_auth_plain_bad_base64_length(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'AUTH PLAIN ' + b64encode(b'\0onlylogin').decode())
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b"5.5.2 Can't split auth value")
-
-    def test_auth_bad_credentials(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'AUTH PLAIN ' +
-                b64encode(b'\0badlogin\0badpasswd').decode()
-                )
-            assert_auth_invalid(self, code, response)
-
-    def test_auth_two_steps_good_credentials(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('AUTH PLAIN')
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b'')
-            code, response = client.docmd(
-                b64encode(b'\0goodlogin\0goodpasswd').decode()
-            )
-            assert_auth_success(self, code, response)
-
-    def test_auth_two_steps_bad_credentials(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('AUTH PLAIN')
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b'')
-            code, response = client.docmd(
-                b64encode(b'\0badlogin\0badpasswd').decode()
-            )
-            assert_auth_invalid(self, code, response)
-
-    def test_auth_two_steps_abort(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('AUTH PLAIN')
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b'')
-            # Suppress log.warning()
-            with patch("logging.Logger.warning"):
-                code, response = client.docmd('*')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b"5.7.0 Auth aborted")
-
-    def test_auth_two_steps_bad_base64_encoding(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('AUTH PLAIN')
-            self.assertEqual(code, 334)
-            code, response = client.docmd("ab@%")
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b"5.5.2 Can't decode base64")
-
-    def test_auth_plain_good_credentials(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'AUTH PLAIN ' +
-                b64encode(b'\0goodlogin\0goodpasswd').decode()
-            )
-            assert_auth_success(self, code, response)
-
-    def test_auth_login_good_credentials(self):
-        with SMTP(*self.address) as client:
-            client.ehlo("example.com")
-            code, response = client.docmd("AUTH LOGIN")
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b"VXNlciBOYW1lAA==")
-            code, response = client.docmd('Z29vZGxvZ2lu')  # "goodlogin"
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b"UGFzc3dvcmQA")
-            code, response = client.docmd('Z29vZHBhc3N3ZA==')  # "goodpassword"
-            assert_auth_success(self, code, response)
-
-    def test_authplain_goodcreds_sanitized_log(self):
-        oldlevel = mail_logger.getEffectiveLevel()
-        mail_logger.setLevel(logging.DEBUG)
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            with self.assertLogs(mail_logger, level="DEBUG") as cm:
-                code, response = client.docmd(
-                    'AUTH PLAIN ' +
-                    b64encode(b'\0goodlogin\0goodpasswd').decode()
-                )
-        mail_logger.setLevel(oldlevel)
-        interestings = [
-            msg for msg in cm.output if "AUTH PLAIN" in msg
+    @pytest.mark.parametrize("data", [b"\x80FAIL\r\n", b"\x80 FAIL\r\n"])
+    def test_binary(self, client, data):
+        client.sock.send(data)
+        assert client.getreply() == S.S500_BAD_SYNTAX
+
+    def test_helo(self, client):
+        resp = client.helo("example.com")
+        assert resp == S.S250_FQDN
+
+    def test_close_then_continue(self, client):
+        self._helo(client)
+        client.close()
+        client.connect(*Global.SrvAddr)
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == S.S503_HELO_FIRST
+
+    def test_helo_no_hostname(self, client):
+        client.local_hostname = ""
+        resp = client.helo("")
+        assert resp == S.S501_SYNTAX_HELO
+
+    def test_helo_duplicate(self, client):
+        self._helo(client, "example.org")
+        self._helo(client, "example.com")
+
+    def test_ehlo(self, client):
+        code, mesg = client.ehlo("example.com")
+        lines = mesg.splitlines()
+        assert lines == [
+            bytes(socket.getfqdn(), "utf-8"),
+            b"SIZE 33554432",
+            b"SMTPUTF8",
+            b"HELP",
         ]
-        assert len(interestings) == 2
-        assert interestings[0].startswith("DEBUG:")
-        assert interestings[0].endswith("b'AUTH PLAIN ********\\r\\n'")
-        assert interestings[1].startswith("INFO:")
-        assert interestings[1].endswith("b'AUTH PLAIN ********'")
 
-    def test_auth_plain_null(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            response = client.docmd('AUTH PLAIN =')
-            self.assertEqual(
-                (501, b"5.5.2 Can't split auth value"),
-                response
-            )
+    def test_ehlo_duplicate(self, client):
+        self._ehlo(client, "example.com")
+        self._ehlo(client, "example.org")
 
-    def test_auth_two_steps_no_credentials(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('AUTH PLAIN')
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b'')
-            # "AAA=" is Base64 encoded "\x00\x00", representing null username and null
-            # password. See https://tools.ietf.org/html/rfc4616#page-3
-            code, response = client.docmd("AAA=")
-            assert_auth_invalid(self, code, response)
+    def test_ehlo_no_hostname(self, client):
+        client.local_hostname = ""
+        resp = client.ehlo("")
+        assert resp == S.S501_SYNTAX_EHLO
 
-    def test_auth_login_multisteps_no_credentials(self):
-        with SMTP(*self.address) as client:
-            client.ehlo("example.com")
-            code, response = client.docmd("AUTH LOGIN")
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b"VXNlciBOYW1lAA==")
-            code, response = client.docmd('=')
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b"UGFzc3dvcmQA")
-            code, response = client.docmd('=')
-            assert_auth_invalid(self, code, response)
+    def test_helo_then_ehlo(self, client):
+        self._helo(client, "example.com")
+        self._ehlo(client, "example.org")
+
+    def test_ehlo_then_helo(self, client):
+        self._ehlo(client, "example.org")
+        self._helo(client, "example.com")
+
+    def test_noop(self, client):
+        resp = client.noop()
+        assert resp == S.S250_OK
+
+    def test_noop_with_arg(self, plain_controller, client):
+        # smtplib.SMTP.noop() doesn't accept args
+        resp = client.docmd("NOOP ok")
+        assert resp == S.S250_OK
+
+    def test_quit(self, client):
+        resp = client.quit()
+        assert resp == S.S221_BYE
+
+    def test_quit_with_args(self, client):
+        resp = client.docmd("QUIT oops")
+        assert resp == S.S501_SYNTAX_QUIT
+
+    def test_help(self, client):
+        resp = client.docmd("HELP")
+        assert resp == S.S250_SUPPCMD_NOTLS
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "HELO",
+            "EHLO",
+            "MAIL",
+            "RCPT",
+            "DATA",
+            "RSET",
+            "NOOP",
+            "QUIT",
+            "VRFY",
+            "AUTH",
+        ],
+    )
+    def test_help_(self, client, command):
+        resp = client.docmd(f"HELP {command}")
+        syntax = getattr(S, f"S250_SYNTAX_{command}")
+        assert resp == syntax
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "MAIL",
+            "RCPT",
+        ],
+    )
+    def test_help_esmtp(self, client, command):
+        self._ehlo(client)
+        resp = client.docmd(f"HELP {command}")
+        syntax = getattr(S, f"S250_SYNTAX_{command}_E")
+        assert resp == syntax
+
+    def test_help_bad_arg(self, client):
+        resp = client.docmd("HELP me!")
+        assert resp == S.S501_SUPPCMD_NOTLS
+
+    def test_expn(self, client):
+        resp = client.expn("anne@example.com")
+        assert resp == S.S502_EXPN_NOTIMPL
+
+    @pytest.mark.parametrize(
+        "command",
+        ["MAIL FROM: <anne@example.com>", "RCPT TO: <anne@example.com>", "DATA"],
+        ids=lambda x: x.split()[0],
+    )
+    def test_no_helo(self, client, command):
+        resp = client.docmd(command)
+        assert resp == S.S503_HELO_FIRST
+
+    @pytest.mark.parametrize(
+        "address",
+        valid_mailfrom_addresses,
+        ids=itertools.count(),
+    )
+    def test_mail_valid_address(self, client, address):
+        self._ehlo(client)
+        resp = client.docmd(f"MAIL FROM:{address}")
+        assert resp == S.S250_OK
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "MAIL",
+            "MAIL <anne@example.com>",
+            "MAIL FROM:",
+            "MAIL FROM: <anne@example.com> SIZE=10000",
+            "MAIL FROM: Anne <anne@example.com>",
+        ],
+        ids=["noarg", "nofrom", "noaddr", "params_noesmtp", "malformed"],
+    )
+    def test_mail_smtp_errsyntax(self, client, command):
+        self._helo(client)
+        resp = client.docmd(command)
+        assert resp == S.S501_SYNTAX_MAIL
+
+    @pytest.mark.parametrize(
+        "param",
+        [
+            "SIZE=10000",
+            " SIZE=10000",
+            "SIZE=10000 ",
+        ],
+        ids=["norm", "extralead", "extratail"],
+    )
+    def test_mail_params_esmtp(self, client, param):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com> " + param)
+        assert resp == S.S250_OK
+
+    def test_mail_from_twice(self, client):
+        self._helo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == S.S250_OK
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == S.S503_MAIL_NESTED
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "MAIL FROM: <anne@example.com> SIZE 10000",
+            "MAIL FROM: <anne@example.com> SIZE",
+            "MAIL FROM: <anne@example.com> #$%=!@#",
+            "MAIL FROM: <anne@example.com> SIZE = 10000",
+        ],
+        ids=["malformed", "missing", "badsyntax", "space"],
+    )
+    def test_mail_esmtp_errsyntax(self, client, command):
+        self._ehlo(client)
+        resp = client.docmd(command)
+        assert resp == S.S501_SYNTAX_MAIL_E
+
+    def test_mail_esmtp_params_unrecognized(self, client):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com> FOO=BAR")
+        assert resp == S.S555_MAIL_PARAMS_UNRECOG
+
+    # This was a bug, and it's already fixed since 3.6 (see bpo below)
+    # Since we now only support >=3.6, there is no point emulating this bug.
+    # Rather, we test that bug is fixed.
+    #
+    # # Test the workaround http://bugs.python.org/issue27931
+    # @patch('email._header_value_parser.AngleAddr.addr_spec',
+    #        side_effect=IndexError, new_callable=PropertyMock)
+    # def test_mail_fail_parse_email(self, addr_spec):
+    #     self.client.helo('example.com')
+    #     self.client.assert_cmd_resp(
+    #         'MAIL FROM: <""@example.com>',
+    #         (501, b'Syntax: MAIL FROM: <address>')
+    #     )
+    def test_bpo27931fix_smtp(self, client):
+        self._helo(client)
+        resp = client.docmd('MAIL FROM: <""@example.com>')
+        assert resp == S.S250_OK
+        resp = client.docmd('RCPT TO: <""@example.org>')
+        assert resp == S.S250_OK
+
+    @pytest.mark.parametrize(
+        "address",
+        invalid_email_addresses,
+        ids=itertools.count(),
+    )
+    def test_mail_invalid_address(self, client, address):
+        self._helo(client)
+        resp = client.docmd(f"MAIL FROM: {address}")
+        assert resp == S.S553_MALFORMED
+
+    @pytest.mark.parametrize("address", invalid_email_addresses, ids=itertools.count())
+    def test_mail_esmtp_invalid_address(self, client, address):
+        self._ehlo(client)
+        resp = client.docmd(f"MAIL FROM: {address} SIZE=28113")
+        assert resp == S.S553_MALFORMED
+
+    def test_rcpt_no_mail(self, client):
+        self._helo(client)
+        resp = client.docmd("RCPT TO: <anne@example.com>")
+        assert resp == S.S503_MAIL_NEEDED
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "RCPT",
+            "RCPT <anne@example.com>",
+            "RCPT TO:",
+            "RCPT TO: <bart@example.com> SIZE=1000",
+            "RCPT TO: bart <bart@example.com>",
+        ],
+        ids=["noarg", "noto", "noaddr", "params", "malformed"],
+    )
+    def test_rcpt_smtp_errsyntax(self, client, command):
+        self._helo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == S.S250_OK
+        resp = client.docmd(command)
+        assert resp == S.S501_SYNTAX_RCPT
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "RCPT",
+            "RCPT <anne@example.com>",
+            "RCPT TO:",
+            "RCPT TO: <bart@example.com> #$%=!@#",
+            "RCPT TO: bart <bart@example.com>",
+        ],
+        ids=["noarg", "noto", "noaddr", "badparams", "malformed"],
+    )
+    def test_rcpt_esmtp_errsyntax(self, client, command):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == S.S250_OK
+        resp = client.docmd(command)
+        assert resp == S.S501_SYNTAX_RCPT_E
+
+    def test_rcpt_unknown_params(self, client):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == S.S250_OK
+        resp = client.docmd("RCPT TO: <bart@example.com> FOOBAR")
+        assert resp == S.S555_RCPT_PARAMS_UNRECOG
+
+    @pytest.mark.parametrize("address", valid_rcptto_addresses, ids=itertools.count())
+    def test_rcpt_valid_address(self, client, address):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == S.S250_OK
+        resp = client.docmd(f"RCPT TO: {address}")
+        assert resp == S.S250_OK
+
+    @pytest.mark.parametrize("address", invalid_email_addresses, ids=itertools.count())
+    def test_rcpt_invalid_address(self, client, address):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == S.S250_OK
+        resp = client.docmd(f"RCPT TO: {address}")
+        assert resp == S.S553_MALFORMED
+
+    # This was a bug, and it's already fixed since 3.6 (see bpo below)
+    # Since we now only support >=3.6, there is no point emulating this bug
+    # Rather, we test that bug is fixed.
+    #
+    # # Test the workaround http://bugs.python.org/issue27931
+    # @patch('email._header_value_parser.AngleAddr.addr_spec',
+    #        new_callable=PropertyMock)
+    # def test_rcpt_fail_parse_email(self, addr_spec):
+    #     self.client.assert_ehlo_ok('example.com')
+    #     self.client.assert_cmd_ok('MAIL FROM: <anne@example.com>')
+    #     addr_spec.side_effect = IndexError
+    #     self.client.assert_cmd_resp(
+    #         'RCPT TO: <""@example.com>',
+    #         (501, b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
+    #     )
+    def test_bpo27931fix_esmtp(self, client):
+        self._ehlo(client)
+        resp = client.docmd('MAIL FROM: <""@example.com> SIZE=28113')
+        assert resp == S.S250_OK
+        resp = client.docmd('RCPT TO: <""@example.org>')
+        assert resp == S.S250_OK
+
+    def test_rset(self, client):
+        resp = client.rset()
+        assert resp == S.S250_OK
+
+    def test_rset_with_arg(self, client):
+        resp = client.docmd("RSET FOO")
+        assert resp == S.S501_SYNTAX_RSET
+
+    def test_vrfy(self, client):
+        resp = client.docmd("VRFY <anne@example.com>")
+        assert resp == S.S252_CANNOT_VRFY
+
+    def test_vrfy_no_arg(self, client):
+        resp = client.docmd("VRFY")
+        assert resp == S.S501_SYNTAX_VRFY
+
+    def test_vrfy_not_address(self, client):
+        resp = client.docmd("VRFY @@")
+        assert resp == S.S502_VRFY_COULDNT(b"@@")
+
+    def test_data_no_rcpt(self, client):
+        self._helo(client)
+        resp = client.docmd("DATA")
+        assert resp == S.S503_RCPT_NEEDED
+
+    def test_data_354(self, plain_controller, client):
+        self._helo(client)
+        resp = client.docmd("MAIL FROM: <alice@example.org>")
+        assert resp == S.S250_OK
+        resp = client.docmd("RCPT TO: <bob@example.org>")
+        assert resp == S.S250_OK
+        # Note: We NEED to manually stop the controller if we must abort while
+        # in DATA phase. For reasons unclear, if we don't do that we'll hang
+        # the test case should the assertion fail
+        try:
+            resp = client.docmd("DATA")
+            assert resp == S.S354_DATA_ENDWITH
+        finally:
+            plain_controller.stop()
+
+    def test_data_invalid_params(self, client):
+        self._helo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == S.S250_OK
+        resp = client.docmd("RCPT TO: <anne@example.com>")
+        assert resp == S.S250_OK
+        resp = client.docmd("DATA FOOBAR")
+        assert resp == S.S501_SYNTAX_DATA
+
+    def test_empty_command(self, client):
+        resp = client.docmd("")
+        assert resp == S.S500_BAD_SYNTAX
+
+    def test_too_long_command(self, client):
+        resp = client.docmd("a" * 513)
+        assert resp == S.S500_CMD_TOO_LONG
+
+    def test_way_too_long_command(self, client):
+        # Send a very large string to ensure it is broken
+        # into several packets, which hits the inner
+        # LimitOverrunError code path in _handle_client.
+        client.send("a" * 1_000_000)
+        response = client.docmd("a" * 1001)
+        assert response == S.S500_CMD_TOO_LONG
+        response = client.docmd("NOOP")
+        assert response == S.S250_OK
+
+    def test_unknown_command(self, client):
+        resp = client.docmd("FOOBAR")
+        assert resp == S.S500_CMD_UNRECOG(b"FOOBAR")
 
 
-class TestSMTPAuth(unittest.TestCase):
-    def setUp(self):
-        self.handler = PeekerHandler()
-        controller = DecodingControllerPeekAuth(
-            self.handler, server_kwargs={"auth_exclude_mechanism": ["DONT"]}
+class TestSMTPNonDecoding(_CommonMethods):
+    @controller_data(decode_data=False)
+    def test_mail_invalid_body_param(self, plain_controller, client):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com> BODY=FOOBAR")
+        assert resp == S.S501_MAIL_BODY
+
+
+@pytest.mark.usefixtures("decoding_authnotls_controller")
+class TestSMTPAuth(_CommonMethods):
+    def test_no_ehlo(self, client):
+        resp = client.docmd("AUTH")
+        assert resp == S.S503_EHLO_FIRST
+
+    def test_helo(self, client):
+        self._helo(client)
+        resp = client.docmd("AUTH")
+        assert resp == S.S500_AUTH_UNRECOG
+
+    def test_not_enough_values(self, client):
+        self._ehlo(client)
+        resp = client.docmd("AUTH")
+        assert resp == S.S501_TOO_FEW
+
+    def test_already_authenticated(self, client):
+        self._ehlo(client)
+        resp = client.docmd(
+            "AUTH PLAIN " + b64encode(b"\0goodlogin\0goodpasswd").decode()
         )
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
+        assert resp == S.S235_AUTH_SUCCESS
+        resp = client.docmd("AUTH")
+        assert resp == S.S503_ALREADY_AUTH
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == S.S250_OK
 
-    def test_ehlo(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            lines = response.splitlines()
-            expecteds = [
-                bytes(socket.getfqdn(), 'utf-8'),
-                b'SIZE 33554432',
-                b'SMTPUTF8',
-                (
-                    b'AUTH DENYFALSE DENYMISSING LOGIN NONE NULL PLAIN '
-                    b'WITH-DASH WITH-MULTI-DASH WITH_UNDERSCORE'
-                ),
-                b'HELP',
-            ]
-            assert lines == expecteds
+    def test_auth_individually(self, client):
+        """AUTH state of different clients must be independent"""
+        client1 = client
+        with SMTPClient(*Global.SrvAddr) as client2:
+            for c in client1, client2:
+                c.ehlo("example.com")
+                resp = c.login("goodlogin", "goodpasswd")
+                assert resp == S.S235_AUTH_SUCCESS
 
-    def test_auth_byclient_plain(self):
-        with SMTP(*self.address) as client:
-            client.user = "gooduser"
-            client.password = "goodpass"
-            client.ehlo("example.com")
-            client.auth("plain", client.auth_plain)
-        self.assertEqual(b"gooduser", auth_peeker.login)
-        self.assertEqual(b"goodpass", auth_peeker.password)
-        self.assertEqual("PLAIN", auth_peeker.mechanism)
-
-    def test_auth_byclient_plain_notinitialok(self):
-        with SMTP(*self.address) as client:
-            client.user = "gooduser"
-            client.password = "goodpass"
-            client.ehlo("example.com")
-            client.auth("plain", client.auth_plain, initial_response_ok=False)
-        self.assertEqual(b"gooduser", auth_peeker.login)
-        self.assertEqual(b"goodpass", auth_peeker.password)
-        self.assertEqual("PLAIN", auth_peeker.mechanism)
-
-    def test_auth_byclient_login(self):
-        with SMTP(*self.address) as client:
-            client.user = "gooduser"
-            client.password = "goodpass"
-            client.ehlo("example.com")
-            client.auth("login", client.auth_login)
-        self.assertEqual(b"gooduser", auth_peeker.login)
-        self.assertEqual(b"goodpass", auth_peeker.password)
-        self.assertEqual("LOGIN", auth_peeker.mechanism)
-
-    # Mark this as expectedFailure because smtplib.SMTP implementation in Python>=3.5
-    # is buggy. See bpo-27820
-    @unittest.expectedFailure
-    def test_auth_byclient_login_notinitialok(self):
-        with SMTP(*self.address) as client:
-            client.user = "gooduser"
-            client.password = "goodpass"
-            client.ehlo("example.com")
-            client.auth("login", client.auth_login, initial_response_ok=False)
-        self.assertEqual(b"gooduser", auth_peeker.login)
-        self.assertEqual(b"goodpass", auth_peeker.password)
-        self.assertEqual("LOGIN", auth_peeker.mechanism)
-
-    def test_auth_plain_null_credential(self):
-        with SMTP(*self.address) as client:
-            client.ehlo("example.com")
-            code, response = client.docmd("AUTH PLAIN")
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b"")
-            # "AAA=" is Base64 encoded "\x00\x00", representing null username and
-            # null password. See https://tools.ietf.org/html/rfc4616#page-3
-            code, response = client.docmd("AAA=")
-            assert_auth_success(self, code, response)
-            self.assertEqual(auth_peeker.login, b"")
-            self.assertEqual(auth_peeker.password, b"")
-            response = client.mail("alice@example.com")
-            assert response == (250, b"OK")
-
-    def test_auth_login_null_credential(self):
-        with SMTP(*self.address) as client:
-            client.ehlo("example.com")
-            code, response = client.docmd("AUTH LOGIN")
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b"VXNlciBOYW1lAA==")
-            code, response = client.docmd('=')
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b"UGFzc3dvcmQA")
-            code, response = client.docmd('=')
-            assert_auth_success(self, code, response)
-            assert auth_peeker.mechanism == "LOGIN"
-            assert auth_peeker.login == b""
-            assert auth_peeker.password == b""
-            response = client.mail("alice@example.com")
-            assert response == (250, b"OK")
-
-    def test_auth_login_abort_login(self):
-        with SMTP(*self.address) as client:
-            client.ehlo("example.com")
-            code, response = client.docmd("AUTH LOGIN")
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b"VXNlciBOYW1lAA==")
-            # Suppress log.warning()
-            with patch("logging.Logger.warning"):
-                code, response = client.docmd('*')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b"5.7.0 Auth aborted")
-
-    def test_auth_login_abort_password(self):
-        auth_peeker.return_val = False
-        with SMTP(*self.address) as client:
-            client.ehlo("example.com")
-            code, response = client.docmd("AUTH LOGIN")
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b"VXNlciBOYW1lAA==")
-            code, response = client.docmd('=')
-            self.assertEqual(code, 334)
-            self.assertEqual(response, b"UGFzc3dvcmQA")
-            # Suppress log.warning()
-            with patch("logging.Logger.warning"):
-                code, response = client.docmd('*')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b"5.7.0 Auth aborted")
-
-    def test_auth_custom_mechanism(self):
-        auth_peeker.return_val = False
-        with SMTP(*self.address) as client:
-            client.ehlo("example.com")
-            code, response = client.docmd("AUTH NULL")
-            assert_auth_success(self, code, response)
-
-    def test_auth_disabled_mechanism(self):
-        with SMTP(*self.address) as client:
-            client.ehlo("example.com")
-            code, response = client.docmd("AUTH DONT")
-            self.assertEqual(code, 504)
-            self.assertEqual(response,
-                             b"5.5.4 Unrecognized authentication type")
-
-    def test_rset_maintain_authenticated(self):
+    def test_rset_maintain_authenticated(self, client):
         """RSET resets only Envelope not Session"""
-        with SMTP(*self.address) as client:
-            client.ehlo("example.com")
-            code, mesg = client.docmd("AUTH PLAIN")
-            self.assertEqual(code, 334)
-            self.assertEqual(mesg, b"")
-            # "AAA=" is Base64 encoded "\x00\x00", representing null username and
-            # null password. See https://tools.ietf.org/html/rfc4616#page-3
-            code, mesg = client.docmd("AAA=")
-            assert_auth_success(self, code, mesg)
-            self.assertEqual(auth_peeker.login, b"")
-            self.assertEqual(auth_peeker.password, b"")
-            code, mesg = client.mail("alice@example.com")
-            sess: SMTPSession = self.handler.sess
-            self.assertEqual(sess.login_data, b"")
-            code, mesg = client.rset()
-            self.assertEqual(code, 250)
-            code, mesg = client.docmd("AUTH PLAIN")
-            self.assertEqual(503, code)
-            self.assertEqual(b'Already authenticated', mesg)
+        self._ehlo(client, "example.com")
+        resp = client.login("goodlogin", "goodpasswd")
+        assert resp == S.S235_AUTH_SUCCESS
+        resp = client.mail("alice@example.com")
+        assert resp == S.S250_OK
+        resp = client.rset()
+        assert resp == S.S250_OK
+        resp = client.docmd("AUTH PLAIN")
+        assert resp == S.S503_ALREADY_AUTH
 
-    def test_auth_individually(self):
-        """AUTH state of different clients must be independent"""
-        with SMTP(*self.address) as client1, SMTP(*self.address) as client2:
-            for client in client1, client2:
-                client.ehlo("example.com")
-                code, mesg = client.docmd("AUTH PLAIN")
-                self.assertEqual(code, 334)
-                self.assertEqual(mesg, b"")
-                # "AAA=" is Base64 encoded "\x00\x00", representing null username and
-                # null password. See https://tools.ietf.org/html/rfc4616#page-3
-                code, mesg = client.docmd("AAA=")
-                assert_auth_success(self, code, mesg)
-
-    def test_auth_loginteract_warning(self):
-        """AUTH state of different clients must be independent"""
-        with SMTP(*self.address) as client:
-            client.ehlo("example.com")
-            resp = client.docmd("AUTH WITH_UNDERSCORE")
-            assert resp == (334, b"challenge")
-            with warnings.catch_warnings(record=True) as w:
-                code, mesg = client.docmd('=')
-            assert_auth_success(self, code, mesg)
-            assert len(w) > 0
-            assert str(w[0].message) == "AUTH interaction logging is enabled!"
-            assert str(w[1].message) == "Sensitive information might be leaked!"
-
-    def test_auth_NONE(self):
-        with SMTP(*self.address) as client:
-            client.ehlo("example.com")
-            code, mesg = client.docmd("AUTH NONE")
-            self.assertEqual(code, 235)
-            self.assertEqual(mesg, b"2.7.0  Authentication Succeeded")
-
-    def test_auth_DENYFALSE(self):
-        with SMTP(*self.address) as client:
-            client.ehlo("example.com")
-            code, mesg = client.docmd("AUTH DENYFALSE")
-            self.assertEqual(code, 535)
-
-    def test_auth_DENYMISSING(self):
-        with SMTP(*self.address) as client:
-            client.ehlo("example.com")
-            code, mesg = client.docmd("AUTH DENYMISSING")
-            self.assertEqual(code, 535)
+    @handler_data(class_=PeekerHandler)
+    def test_auth_loginteract_warning(self, client):
+        client.ehlo("example.com")
+        resp = client.docmd("AUTH WITH_UNDERSCORE")
+        assert resp == (334, b"challenge")
+        with warnings.catch_warnings(record=True) as w:
+            assert client.docmd("=") == S.S235_AUTH_SUCCESS
+        assert len(w) > 0
+        assert str(w[0].message) == "AUTH interaction logging is enabled!"
+        assert str(w[1].message) == "Sensitive information might be leaked!"
 
 
-class TestSMTPAuthNew(unittest.TestCase):
-    def setUp(self):
-        self.handler = PeekerHandler()
-        controller = DecodingControllerPeekAuthNewSystem(
-            self.handler, server_kwargs={"auth_exclude_mechanism": ["DONT"]}
+@pytest.mark.usefixtures("auth_peeker_controller")
+class TestAuthMechanisms(_CommonMethods):
+    @pytest.fixture
+    def do_auth_plain1(
+        self, client
+    ) -> Generator[Callable[[str], Tuple[int, bytes]], None, None]:
+        self._ehlo(client)
+
+        def do(param: str) -> Tuple[int, bytes]:
+            return client.docmd("AUTH PLAIN " + param)
+
+        do.client = client
+        yield do
+
+    @pytest.fixture
+    def do_auth_login3(
+        self, client
+    ) -> Generator[Callable[[str], Tuple[int, bytes]], None, None]:
+        self._ehlo(client)
+        resp = client.docmd("AUTH LOGIN")
+        assert resp == S.S334_AUTH_USERNAME
+
+        def do(param: str) -> Tuple[int, bytes]:
+            return client.docmd(param)
+
+        do.client = client
+        yield do
+
+    def test_ehlo(self, client):
+        code, mesg = client.ehlo("example.com")
+        assert code == 250
+        lines = mesg.splitlines()
+        assert lines == [
+            bytes(socket.getfqdn(), "utf-8"),
+            b"SIZE 33554432",
+            b"SMTPUTF8",
+            (
+                b"AUTH DENYFALSE DENYMISSING LOGIN NONE NULL PLAIN "
+                b"WITH-DASH WITH-MULTI-DASH WITH_UNDERSCORE"
+            ),
+            b"HELP",
+        ]
+
+    @pytest.mark.parametrize("mechanism", ["GSSAPI", "DIGEST-MD5", "MD5", "CRAM-MD5"])
+    def test_not_supported_mechanism(self, client, mechanism):
+        self._ehlo(client)
+        resp = client.docmd("AUTH " + mechanism)
+        assert resp == S.S504_AUTH_UNRECOG
+
+    def test_custom_mechanism(self, client):
+        self._ehlo(client)
+        resp = client.docmd("AUTH NULL")
+        assert resp == S.S235_AUTH_SUCCESS
+
+    def test_disabled_mechanism(self, client):
+        self._ehlo(client)
+        resp = client.docmd("AUTH DONT")
+        assert resp == S.S504_AUTH_UNRECOG
+
+    @pytest.mark.parametrize("init_resp", [True, False])
+    @pytest.mark.parametrize("mechanism", ["login", "plain"])
+    def test_byclient(self, auth_peeker_controller, client, mechanism, init_resp):
+        self._ehlo(client)
+        client.user = "goodlogin"
+        client.password = "goodpasswd"
+        auth_meth = getattr(client, "auth_" + mechanism)
+        if (mechanism, init_resp) == ("login", False):
+            with pytest.raises(SMTPAuthenticationError):
+                client.auth(mechanism, auth_meth, initial_response_ok=init_resp)
+            client.docmd("*")
+            pytest.xfail(reason="smtplib.SMTP.auth_login is buggy (bpo-27820)")
+        client.auth(mechanism, auth_meth, initial_response_ok=init_resp)
+        peeker = auth_peeker_controller.handler
+        assert isinstance(peeker, PeekerHandler)
+        assert peeker.login == b"goodlogin"
+        assert peeker.password == b"goodpasswd"
+
+    def test_plain1_bad_base64_encoding(self, do_auth_plain1):
+        resp = do_auth_plain1("not-b64")
+        assert resp == S.S501_AUTH_NOTB64
+
+    def test_plain1_bad_base64_length(self, do_auth_plain1):
+        resp = do_auth_plain1(b64encode(b"\0onlylogin").decode())
+        assert resp == S.S501_AUTH_CANTSPLIT
+
+    def test_plain1_too_many_values(self, do_auth_plain1):
+        resp = do_auth_plain1("NONE NONE")
+        assert resp == S.S501_TOO_MANY
+
+    def test_plain1_bad_username(self, do_auth_plain1):
+        resp = do_auth_plain1(b64encode(b"\0badlogin\0goodpasswd").decode())
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_plain1_bad_password(self, do_auth_plain1):
+        resp = do_auth_plain1(b64encode(b"\0goodlogin\0badpasswd").decode())
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_plain1_empty(self, do_auth_plain1):
+        resp = do_auth_plain1("=")
+        assert resp == S.S501_AUTH_CANTSPLIT
+
+    def test_plain1_good_credentials(self, auth_peeker_controller, do_auth_plain1):
+        resp = do_auth_plain1(b64encode(b"\0goodlogin\0goodpasswd").decode())
+        assert resp == S.S235_AUTH_SUCCESS
+        peeker = auth_peeker_controller.handler
+        assert isinstance(peeker, PeekerHandler)
+        assert peeker.login == b"goodlogin"
+        assert peeker.password == b"goodpasswd"
+        # noinspection PyUnresolvedReferences
+        resp = do_auth_plain1.client.mail("alice@example.com")
+        assert resp == S.S250_OK
+
+    def test_plain1_goodcreds_sanitized_log(self, caplog, client):
+        caplog.set_level("DEBUG")
+        client.ehlo("example.com")
+        code, response = client.docmd(
+            "AUTH PLAIN " + b64encode(b"\0goodlogin\0goodpasswd").decode()
         )
-        self.addCleanup(controller.stop)
-        controller.start()
-        self.address = (controller.hostname, controller.port)
+        interestings = [tup for tup in caplog.record_tuples if "AUTH PLAIN" in tup[-1]]
+        assert len(interestings) == 2
+        assert interestings[0][1] == logging.DEBUG
+        assert interestings[0][2].endswith("b'AUTH PLAIN ********\\r\\n'")
+        assert interestings[1][1] == logging.INFO
+        assert interestings[1][2].endswith("b'AUTH PLAIN ********'")
 
-    def test_newauth_success(self):
-        with SMTP(*self.address) as client:
-            client.user = "gooduser"
-            client.password = "goodpass"
-            client.ehlo("example.com")
-            client.auth("plain", client.auth_plain)
-        peer = auth_peeker.sess.peer
-        self.assertIn(peer[0], {"::1", "127.0.0.1", "localhost"})
-        self.assertGreater(peer[1], 0)
+    @pytest.fixture
+    def client_auth_plain2(self, client) -> Generator[SMTPClient, None, None]:
+        self._ehlo(client)
+        resp = client.docmd("AUTH PLAIN")
+        assert resp == S.S334_AUTH_EMPTYPROMPT
+        yield client
+
+    def test_plain2_good_credentials(self, auth_peeker_controller, client_auth_plain2):
+        resp = client_auth_plain2.docmd(b64encode(b"\0goodlogin\0goodpasswd").decode())
+        assert resp == S.S235_AUTH_SUCCESS
+        peeker = auth_peeker_controller.handler
+        assert isinstance(peeker, PeekerHandler)
+        assert peeker.login == b"goodlogin"
+        assert peeker.password == b"goodpasswd"
+        resp = client_auth_plain2.mail("alice@example.com")
+        assert resp == S.S250_OK
+
+    def test_plain2_bad_credentials(self, client_auth_plain2):
+        resp = client_auth_plain2.docmd(b64encode(b"\0badlogin\0badpasswd").decode())
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_plain2_no_credentials(self, client_auth_plain2):
+        resp = client_auth_plain2.docmd("=")
+        assert resp == S.S501_AUTH_CANTSPLIT
+
+    def test_plain2_abort(self, client_auth_plain2):
+        resp = client_auth_plain2.docmd("*")
+        assert resp == S.S501_AUTH_ABORTED
+
+    def test_plain2_bad_base64_encoding(self, client_auth_plain2):
+        resp = client_auth_plain2.docmd("ab@%")
+        assert resp == S.S501_AUTH_NOTB64
+
+    def test_login2_bad_base64(self, auth_peeker_controller, client):
+        self._ehlo(client)
+        resp = client.docmd("AUTH LOGIN ab@%")
+        assert resp == S.S501_AUTH_NOTB64
+
+    def test_login2_good_credentials(self, auth_peeker_controller, client):
+        self._ehlo(client)
+        line = "AUTH LOGIN " + b64encode(b"goodlogin").decode()
+        resp = client.docmd(line)
+        assert resp == S.S334_AUTH_PASSWORD
+        assert resp == S.S334_AUTH_PASSWORD
+        resp = client.docmd(b64encode(b"goodpasswd").decode())
+        assert resp == S.S235_AUTH_SUCCESS
+        peeker = auth_peeker_controller.handler
+        assert isinstance(peeker, PeekerHandler)
+        assert peeker.login == b"goodlogin"
+        assert peeker.password == b"goodpasswd"
+        resp = client.mail("alice@example.com")
+        assert resp == S.S250_OK
+
+    def test_login3_good_credentials(self, auth_peeker_controller, do_auth_login3):
+        resp = do_auth_login3(b64encode(b"goodlogin").decode())
+        assert resp == S.S334_AUTH_PASSWORD
+        resp = do_auth_login3(b64encode(b"goodpasswd").decode())
+        assert resp == S.S235_AUTH_SUCCESS
+        peeker = auth_peeker_controller.handler
+        assert isinstance(peeker, PeekerHandler)
+        assert peeker.login == b"goodlogin"
+        assert peeker.password == b"goodpasswd"
+        # noinspection PyUnresolvedReferences
+        resp = do_auth_login3.client.mail("alice@example.com")
+        assert resp == S.S250_OK
+
+    def test_login3_bad_base64(self, do_auth_login3):
+        resp = do_auth_login3("not-b64")
+        assert resp == S.S501_AUTH_NOTB64
+
+    def test_login3_bad_username(self, do_auth_login3):
+        resp = do_auth_login3(b64encode(b"badlogin").decode())
+        assert resp == S.S334_AUTH_PASSWORD
+        resp = do_auth_login3(b64encode(b"goodpasswd").decode())
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_login3_bad_password(self, do_auth_login3):
+        resp = do_auth_login3(b64encode(b"goodlogin").decode())
+        assert resp == S.S334_AUTH_PASSWORD
+        resp = do_auth_login3(b64encode(b"badpasswd").decode())
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_login3_empty_credentials(self, do_auth_login3):
+        resp = do_auth_login3("=")
+        assert resp == S.S334_AUTH_PASSWORD
+        resp = do_auth_login3("=")
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_login3_abort_username(self, do_auth_login3):
+        resp = do_auth_login3("*")
+        assert resp == S.S501_AUTH_ABORTED
+
+    def test_login3_abort_password(self, do_auth_login3):
+        resp = do_auth_login3("=")
+        assert resp == S.S334_AUTH_PASSWORD
+        resp = do_auth_login3("*")
+        assert resp == S.S501_AUTH_ABORTED
+
+    def test_DENYFALSE(self, client):
+        self._ehlo(client)
+        resp = client.docmd("AUTH DENYFALSE")
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_DENYMISSING(self, client):
+        self._ehlo(client)
+        resp = client.docmd("AUTH DENYMISSING")
+        assert resp == S.S535_AUTH_INVALID
+
+    def test_NONE(self, client):
+        self._ehlo(client)
+        resp = client.docmd("AUTH NONE")
+        assert resp == S.S235_AUTH_SUCCESS
+
+
+class TestAuthenticator(_CommonMethods):
+    def test_success(self, authenticator_peeker_controller, client):
+        client.user = "gooduser"
+        client.password = "goodpasswd"
+        self._ehlo(client)
+        client.auth("plain", client.auth_plain)
+        auth_peeker = authenticator_peeker_controller.handler
+        assert isinstance(auth_peeker, PeekerHandler)
+        assert auth_peeker.sess.peer[0] in {"::1", "127.0.0.1", "localhost"}
+        assert auth_peeker.sess.peer[1] > 0
         assert auth_peeker.sess.authenticated
-        assert auth_peeker.sess.login_data
-        assert auth_peeker.sess.auth_data == (b"gooduser", b"goodpass")
-        assert auth_peeker.login_data == (b"gooduser", b"goodpass")
+        assert auth_peeker.sess.auth_data == (b"gooduser", b"goodpasswd")
+        assert auth_peeker.login_data == (b"gooduser", b"goodpasswd")
 
-    def test_newauth_fail_withmessage(self):
-        with SMTP(*self.address) as client:
-            client.user = "failme_with454"
-            client.password = "anypass"
-            client.ehlo("example.com")
-            with self.assertRaises(SMTPAuthenticationError) as cm:
-                client.auth("plain", client.auth_plain)
-        self.assertEqual(cm.exception.smtp_code, 454)
-        self.assertEqual(cm.exception.smtp_error,
-                         b"4.7.0 Temporary authentication failure")
-        peer = auth_peeker.sess.peer
-        self.assertIn(peer[0], {"::1", "127.0.0.1", "localhost"})
-        self.assertGreater(peer[1], 0)
-        self.assertIsNone(auth_peeker.sess.login_data)
-        self.assertEqual((b"failme_with454", b"anypass"), auth_peeker.login_data)
+    def test_fail_withmesg(self, authenticator_peeker_controller, client):
+        client.user = "failme_with454"
+        client.password = "anypass"
+        self._ehlo(client)
+        with pytest.raises(SMTPAuthenticationError) as cm:
+            client.auth("plain", client.auth_plain)
+        assert cm.value.args == (454, b"4.7.0 Temporary authentication failure")
+        auth_peeker = authenticator_peeker_controller.handler
+        assert isinstance(auth_peeker, PeekerHandler)
+        assert auth_peeker.sess.peer[0] in {"::1", "127.0.0.1", "localhost"}
+        assert auth_peeker.sess.peer[1] > 0
+        assert auth_peeker.sess.login_data is None
+        assert auth_peeker.login_data == (b"failme_with454", b"anypass")
 
 
-class TestRequiredAuthentication(unittest.TestCase):
-    def setUp(self):
-        self.resource = ExitStack()
-        self.addCleanup(self.resource.close)
+@pytest.mark.filterwarnings("ignore:Requiring AUTH while not requiring TLS:UserWarning")
+@pytest.mark.usefixtures("plain_controller")
+@controller_data(
+    decode_data=True,
+    enable_SMTPUTF8=True,
+    auth_require_tls=False,
+    auth_callback=auth_callback,
+    auth_required=True,
+)
+class TestRequiredAuthentication(_CommonMethods):
+    def _login(self, client: SMTPClient):
+        self._ehlo(client)
+        resp = client.login("goodlogin", "goodpasswd")
+        assert resp == S.S235_AUTH_SUCCESS
 
-        # Suppress auth_req_but_no_tls warning
-        self.resource.enter_context(cast(ContextManager, warnings.catch_warnings()))
-        warnings.simplefilter("ignore", category=UserWarning)
+    def test_help_unauthenticated(self, client):
+        resp = client.docmd("HELP")
+        assert resp == S.S530_AUTH_REQUIRED
 
-        self.resource.enter_context(
-            cast(ContextManager, patch("logging.Logger.warning"))
-        )
+    def test_help_authenticated(self, client):
+        self._login(client)
+        resp = client.docmd("HELP")
+        assert resp == S.S250_SUPPCMD_NOTLS
 
-        controller = RequiredAuthDecodingController(Sink)
-        self.addCleanup(controller.stop)
-        controller.start()
-        self.address = (controller.hostname, controller.port)
+    def test_vrfy_unauthenticated(self, client):
+        resp = client.docmd("VRFY <anne@example.com>")
+        assert resp == S.S530_AUTH_REQUIRED
 
-    def test_help_unauthenticated(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('HELP')
-            assert_auth_required(self, code, response)
+    def test_mail_unauthenticated(self, client):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == S.S530_AUTH_REQUIRED
 
-    def test_vrfy_unauthenticated(self):
-        with SMTP(*self.address) as client:
-            code, response = client.docmd('VRFY <anne@example.com>')
-            assert_auth_required(self, code, response)
+    def test_rcpt_unauthenticated(self, client):
+        self._ehlo(client)
+        resp = client.docmd("RCPT TO: <anne@example.com>")
+        assert resp == S.S530_AUTH_REQUIRED
 
-    def test_mail_unauthenticated(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            assert_auth_required(self, code, response)
+    def test_rcpt_nomail_authenticated(self, client):
+        self._login(client)
+        resp = client.docmd("RCPT TO: <anne@example.com>")
+        assert resp == S.S503_MAIL_NEEDED
 
-    def test_rcpt_unauthenticated(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('RCPT TO: <anne@example.com>')
-            assert_auth_required(self, code, response)
+    def test_data_unauthenticated(self, client):
+        self._ehlo(client)
+        resp = client.docmd("DATA")
+        assert resp == S.S530_AUTH_REQUIRED
 
-    def test_data_unauthenticated(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('DATA')
-            assert_auth_required(self, code, response)
+    def test_data_authenticated(self, client):
+        self._ehlo(client, "example.com")
+        client.login("goodlogin", "goodpassword")
+        resp = client.docmd("DATA")
+        assert resp != S.S530_AUTH_REQUIRED
 
-    def test_help_authenticated(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'AUTH PLAIN ' +
-                b64encode(b'\0goodlogin\0goodpasswd').decode()
-            )
-            assert_auth_success(self, code, response)
-            response = client.docmd('HELP')
-            assert response == (250, SUPPORTED_COMMANDS_NOTLS)
+    def test_vrfy_authenticated(self, client):
+        self._login(client)
+        resp = client.docmd("VRFY <anne@example.com>")
+        assert resp == S.S252_CANNOT_VRFY
 
-    def test_vrfy_authenticated(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'AUTH PLAIN ' +
-                b64encode(b'\0goodlogin\0goodpasswd').decode()
-            )
-            assert_auth_success(self, 235, response)
-            code, response = client.docmd('VRFY <anne@example.com>')
-            self.assertEqual(code, 252)
-            self.assertEqual(
-                response,
-                b'Cannot VRFY user, but will accept message and '
-                b'attempt delivery'
-            )
+    def test_mail_authenticated(self, client):
+        self._login(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp, S.S250_OK
 
-    def test_mail_authenticated(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'AUTH PLAIN ' +
-                b64encode(b'\0goodlogin\0goodpasswd').decode()
-            )
-            assert_auth_success(self, code, response)
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'OK')
-
-    def test_rcpt_authenticated(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'AUTH PLAIN ' +
-                b64encode(b'\0goodlogin\0goodpasswd').decode()
-            )
-            assert_auth_success(self, code, response)
-            code, response = client.docmd('RCPT TO: <anne@example.com>')
-            self.assertEqual(code, 503)
-            self.assertEqual(response, b'Error: need MAIL command')
-
-    def test_data_authenticated(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('DATA')
-            assert_auth_required(self, code, response)
+    def test_data_norcpt_authenticated(self, client):
+        self._login(client)
+        resp = client.docmd("DATA")
+        assert resp == S.S503_RCPT_NEEDED
 
 
-class TestResetCommands(unittest.TestCase):
+class TestResetCommands:
     """Test that sender and recipients are reset on RSET, HELO, and EHLO.
 
     The tests below issue each command twice with different addresses and
     verify that mail_from and rcpt_tos have been replacecd.
     """
+
     expected_envelope_data = [
         # Pre-RSET/HELO/EHLO envelope data.
         dict(
-            mail_from='anne@example.com',
-            rcpt_tos=['bart@example.com', 'cate@example.com'],
-            ),
+            mail_from="anne@example.com",
+            rcpt_tos=["bart@example.com", "cate@example.com"],
+        ),
         dict(
-            mail_from='dave@example.com',
-            rcpt_tos=['elle@example.com', 'fred@example.com'],
-            ),
-        ]
+            mail_from="dave@example.com",
+            rcpt_tos=["elle@example.com", "fred@example.com"],
+        ),
+    ]
 
-    def setUp(self):
-        self._handler = StoreEnvelopeOnVRFYHandler()
-        self._controller = DecodingController(self._handler)
-        self._controller.start()
-        self._address = (self._controller.hostname, self._controller.port)
-        self.addCleanup(self._controller.stop)
-
-    def _send_envelope_data(self, client, mail_from, rcpt_tos):
+    def _send_envelope_data(
+        self,
+        client: SMTPClient,
+        mail_from: str,
+        rcpt_tos: List[str],
+    ):
         client.mail(mail_from)
         for rcpt in rcpt_tos:
             client.rcpt(rcpt)
 
-    def test_helo(self):
-        with SMTP(*self._address) as client:
-            # Each time through the loop, the HELO will reset the envelope.
-            for data in self.expected_envelope_data:
-                client.helo('example.com')
-                # Save the envelope in the handler.
-                client.vrfy('zuzu@example.com')
-                self.assertIsNone(self._handler.envelope.mail_from)
-                self.assertEqual(len(self._handler.envelope.rcpt_tos), 0)
-                self._send_envelope_data(client, **data)
-                client.vrfy('zuzu@example.com')
-                self.assertEqual(
-                    self._handler.envelope.mail_from, data['mail_from'])
-                self.assertEqual(
-                    self._handler.envelope.rcpt_tos, data['rcpt_tos'])
+    @handler_data(class_=StoreEnvelopeOnVRFYHandler)
+    def test_helo(self, decoding_authnotls_controller, client):
+        handler = decoding_authnotls_controller.handler
+        assert isinstance(handler, StoreEnvelopeOnVRFYHandler)
+        # Each time through the loop, the HELO will reset the envelope.
+        for data in self.expected_envelope_data:
+            client.helo("example.com")
+            # Save the envelope in the handler.
+            client.vrfy("zuzu@example.com")
+            assert handler.envelope.mail_from is None
+            assert len(handler.envelope.rcpt_tos) == 0
+            self._send_envelope_data(client, **data)
+            client.vrfy("zuzu@example.com")
+            assert handler.envelope.mail_from == data["mail_from"]
+            assert handler.envelope.rcpt_tos == data["rcpt_tos"]
 
-    def test_ehlo(self):
-        with SMTP(*self._address) as client:
-            # Each time through the loop, the EHLO will reset the envelope.
-            for data in self.expected_envelope_data:
-                client.ehlo('example.com')
-                # Save the envelope in the handler.
-                client.vrfy('zuzu@example.com')
-                self.assertIsNone(self._handler.envelope.mail_from)
-                self.assertEqual(len(self._handler.envelope.rcpt_tos), 0)
-                self._send_envelope_data(client, **data)
-                client.vrfy('zuzu@example.com')
-                self.assertEqual(
-                    self._handler.envelope.mail_from, data['mail_from'])
-                self.assertEqual(
-                    self._handler.envelope.rcpt_tos, data['rcpt_tos'])
+    @handler_data(class_=StoreEnvelopeOnVRFYHandler)
+    def test_ehlo(self, decoding_authnotls_controller, client):
+        handler = decoding_authnotls_controller.handler
+        assert isinstance(handler, StoreEnvelopeOnVRFYHandler)
+        # Each time through the loop, the EHLO will reset the envelope.
+        for data in self.expected_envelope_data:
+            client.ehlo("example.com")
+            # Save the envelope in the handler.
+            client.vrfy("zuzu@example.com")
+            assert handler.envelope.mail_from is None
+            assert len(handler.envelope.rcpt_tos) == 0
+            self._send_envelope_data(client, **data)
+            client.vrfy("zuzu@example.com")
+            assert handler.envelope.mail_from == data["mail_from"]
+            assert handler.envelope.rcpt_tos == data["rcpt_tos"]
 
-    def test_rset(self):
-        with SMTP(*self._address) as client:
-            client.helo('example.com')
-            # Each time through the loop, the RSET will reset the envelope.
-            for data in self.expected_envelope_data:
-                self._send_envelope_data(client, **data)
-                # Save the envelope in the handler.
-                client.vrfy('zuzu@example.com')
-                self.assertEqual(
-                    self._handler.envelope.mail_from, data['mail_from'])
-                self.assertEqual(
-                    self._handler.envelope.rcpt_tos, data['rcpt_tos'])
-                # Reset the envelope explicitly.
-                client.rset()
-                client.vrfy('zuzu@example.com')
-                self.assertIsNone(self._handler.envelope.mail_from)
-                self.assertEqual(len(self._handler.envelope.rcpt_tos), 0)
+    @handler_data(class_=StoreEnvelopeOnVRFYHandler)
+    def test_rset(self, decoding_authnotls_controller, client):
+        handler = decoding_authnotls_controller.handler
+        assert isinstance(handler, StoreEnvelopeOnVRFYHandler)
+        client.helo("example.com")
+        # Each time through the loop, the RSET will reset the envelope.
+        for data in self.expected_envelope_data:
+            self._send_envelope_data(client, **data)
+            # Save the envelope in the handler.
+            client.vrfy("zuzu@example.com")
+            assert handler.envelope.mail_from == data["mail_from"]
+            assert handler.envelope.rcpt_tos == data["rcpt_tos"]
+            # Reset the envelope explicitly.
+            client.rset()
+            client.vrfy("zuzu@example.com")
+            assert handler.envelope.mail_from is None
+            assert len(handler.envelope.rcpt_tos) == 0
 
 
-class TestSMTPWithController(unittest.TestCase):
-    def test_mail_with_size_too_large(self):
-        controller = SizedController(Sink(), 9999)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'MAIL FROM: <anne@example.com> SIZE=10000')
-            self.assertEqual(code, 552)
-            self.assertEqual(
-                response,
-                b'Error: message size exceeds fixed maximum message size')
+class TestSMTPWithController(_CommonMethods):
+    @controller_data(data_size_limit=9999)
+    def test_mail_with_size_too_large(self, plain_controller, client):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com> SIZE=10000")
+        assert resp == S.S552_EXCEED_SIZE
 
-    def test_mail_with_compatible_smtputf8(self):
-        handler = ReceivingHandler()
-        controller = Controller(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        recipient = 'bart\xCB@example.com'
-        sender = 'anne\xCB@example.com'
-        with SMTP(controller.hostname, controller.port) as client:
-            client.ehlo('example.com')
-            client.send(bytes(
-                'MAIL FROM: <' + sender + '> SMTPUTF8\r\n',
-                encoding='utf-8'))
-            code, response = client.getreply()
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'OK')
-            client.send(bytes(
-                'RCPT TO: <' + recipient + '>\r\n',
-                encoding='utf-8'))
-            code, response = client.getreply()
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'OK')
-            code, response = client.data('')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'OK')
-        self.assertEqual(handler.box[0].rcpt_tos[0], recipient)
-        self.assertEqual(handler.box[0].mail_from, sender)
-        peer = handler.boxed_sess[0].peer
-        self.assertIn(peer[0], {"::1", "127.0.0.1", "localhost"})
-        self.assertNotEqual(peer[1], 0)
+    @handler_data(class_=ReceivingHandler)
+    def test_mail_with_compatible_smtputf8(self, plain_controller, client):
+        receiving_handler = plain_controller.handler
+        assert isinstance(receiving_handler, ReceivingHandler)
+        sender = "anne\xCB@example.com"
+        recipient = "bart\xCB@example.com"
+        self._ehlo(client)
+        client.send(f"MAIL FROM: <{sender}> SMTPUTF8\r\n".encode("utf-8"))
+        assert client.getreply() == S.S250_OK
+        client.send(f"RCPT TO: <{recipient}>\r\n".encode("utf-8"))
+        assert client.getreply() == S.S250_OK
+        resp = client.data("")
+        assert resp == S.S250_OK
+        assert receiving_handler.box[0].mail_from == sender
+        assert receiving_handler.box[0].rcpt_tos == [recipient]
 
-    def test_mail_with_unrequited_smtputf8(self):
-        controller = Controller(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, b'OK')
+    def test_mail_with_unrequited_smtputf8(self, plain_controller, client):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == S.S250_OK
 
-    def test_mail_with_incompatible_smtputf8(self):
-        controller = Controller(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'MAIL FROM: <anne@example.com> SMTPUTF8=YES')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Error: SMTPUTF8 takes no arguments')
+    def test_mail_with_incompatible_smtputf8(self, plain_controller, client):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com> SMTPUTF8=YES")
+        assert resp == S.S501_SMTPUTF8_NOARG
 
-    def test_mail_invalid_body(self):
-        controller = Controller(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'MAIL FROM: <anne@example.com> BODY 9BIT')
-            self.assertEqual(code, 501)
-            self.assertEqual(response,
-                             b'Error: BODY can only be one of 7BIT, 8BITMIME')
+    def test_mail_invalid_body(self, plain_controller, client):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com> BODY 9BIT")
+        assert resp == S.S501_MAIL_BODY
 
-    def test_esmtp_no_size_limit(self):
-        controller = SizedController(Sink(), size=None)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            for line in response.splitlines():
-                self.assertNotEqual(line[:4], b'SIZE')
+    @controller_data(data_size_limit=None)
+    def test_esmtp_no_size_limit(self, plain_controller, client):
+        code, mesg = client.ehlo("example.com")
+        for ln in mesg.splitlines():
+            assert not ln.startswith(b"SIZE")
 
-    def test_process_message_error(self):
-        controller = Controller(ErroringHandler())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            with self.assertRaises(SMTPDataError) as cm:
-                client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: anne@example.com
-To: bart@example.com
-Subject: A test
+    @handler_data(class_=ErroringHandler)
+    def test_process_message_error(self, error_controller, client):
+        self._ehlo(client)
+        with pytest.raises(SMTPDataError) as excinfo:
+            client.sendmail(
+                "anne@example.com",
+                ["bart@example.com"],
+                dedent(
+                    """\
+                    From: anne@example.com
+                    To: bart@example.com
+                    Subjebgct: A test
+                    
+                    Testing
+                """
+                ),
+            )
+        assert excinfo.value.args == (499, b"Could not accept the message")
 
-Testing
-""")
-            self.assertEqual(cm.exception.smtp_code, 499)
-            self.assertEqual(cm.exception.smtp_error,
-                             b'Could not accept the message')
+    @controller_data(data_size_limit=100)
+    def test_too_long_message_body(self, plain_controller, client):
+        self._helo(client)
+        mail = "\r\n".join(["z" * 20] * 10)
+        with pytest.raises(SMTPResponseException) as excinfo:
+            client.sendmail("anne@example.com", ["bart@example.com"], mail)
+        assert excinfo.value.args == S.S552_DATA_TOO_MUCH
 
-    def test_too_long_message_body(self):
-        controller = SizedController(Sink(), size=100)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.helo('example.com')
-            mail = '\r\n'.join(['z' * 20] * 10)
-            with self.assertRaises(SMTPResponseException) as cm:
-                client.sendmail('anne@example.com', ['bart@example.com'], mail)
-            self.assertEqual(cm.exception.smtp_code, 552)
-            self.assertEqual(cm.exception.smtp_error,
-                             b'Error: Too much mail data')
+    @handler_data(class_=ReceivingHandler)
+    def test_dots_escaped(self, decoding_authnotls_controller, client):
+        receiving_handler = decoding_authnotls_controller.handler
+        assert isinstance(receiving_handler, ReceivingHandler)
+        self._helo(client)
+        mail = CRLF.join(["Test", ".", "mail"])
+        client.sendmail("anne@example.com", ["bart@example.com"], mail)
+        assert len(receiving_handler.box) == 1
+        assert receiving_handler.box[0].content == mail + CRLF
 
-    def test_too_long_body_delay_error(self):
-        size, sock = 20, None
+    @handler_data(class_=ErroringHandler)
+    def test_unexpected_errors(self, error_controller, client):
+        handler = error_controller.handler
+        resp = client.helo("example.com")
+        assert resp == (500, b"ErroringHandler handling error")
+        exception_type = ErrorSMTP.exception_type
+        assert isinstance(handler.error, exception_type)
 
-        cont = Controller(Sink(), hostname="localhost",
-                          server_kwargs={"data_size_limit": size})
-        self.addCleanup(cont.stop)
-        cont.start()
+    def test_unexpected_errors_unhandled(self, error_controller, client):
+        resp = client.helo("example.com")
+        exception_type = ErrorSMTP.exception_type
+        exception_nameb = exception_type.__name__.encode("ascii")
+        assert resp == (500, b"Error: (" + exception_nameb + b") test")
 
-        with socket.socket() as sock:
-            sock.connect((cont.hostname, cont.port))
-            rslt = send_recv(sock, b"EHLO example.com")
-            self.assertTrue(rslt.startswith(b"220"))
-            rslt = send_recv(sock, b"MAIL FROM: <anne@example.com>")
-            self.assertTrue(rslt.startswith(b"250"))
-            rslt = send_recv(sock, b"RCPT TO: <bruce@example.com>")
-            self.assertTrue(rslt.startswith(b"250"))
-            rslt = send_recv(sock, b"DATA")
-            self.assertTrue(rslt.startswith(b"354"))
-            rslt = send_recv(sock, b"a" * (size + 3))
-            # Must NOT receive status code here even if data is too much
-            self.assertEqual(b"", rslt)
-            rslt = send_recv(sock, b"\r\n.")
-            # *NOW* we must receive status code
-            self.assertEqual(b"552 Error: Too much mail data\r\n", rslt)
+    @handler_data(class_=ErroringHandler)
+    def test_unexpected_errors_custom_response(self, error_controller, client):
+        erroring_handler = error_controller.handler
+        erroring_handler.custom_response = True
+        resp = client.helo("example.com")
+        exception_type = ErrorSMTP.exception_type
+        assert isinstance(erroring_handler.error, exception_type)
+        exception_nameb = exception_type.__name__.encode("ascii")
+        assert resp == (451, b"Temporary error: (" + exception_nameb + b") test")
 
-    def test_data_line_too_long(self):
-        handler = ReceivingHandler()
-        controller = NoDecodeController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.helo('example.com')
-            mail = b'\r\n'.join([b'a' * 5555] * 3)
-            with self.assertRaises(SMTPDataError) as cm:
-                client.sendmail('anne@example.com', ['bart@example.com'], mail)
-        self.assertEqual(cm.exception.smtp_code, 500)
-        self.assertEqual(cm.exception.smtp_error,
-                         b'Line too long (see RFC5321 4.5.3.1.6)')
+    @handler_data(class_=ErroringErrorHandler)
+    def test_exception_handler_exception(self, error_controller, client):
+        handler = error_controller.handler
+        resp = client.helo("example.com")
+        assert resp == (500, b"Error: (ValueError) ErroringErrorHandler test")
+        exception_type = ErrorSMTP.exception_type
+        assert isinstance(handler.error, exception_type)
 
-    def test_too_long_line_delay_error(self):
-        sock = None
+    @handler_data(class_=UndescribableErrorHandler)
+    def test_exception_handler_undescribable(self, error_controller, client):
+        handler = error_controller.handler
+        resp = client.helo("example.com")
+        assert resp == (500, b"Error: Cannot describe error")
+        exception_type = ErrorSMTP.exception_type
+        assert isinstance(handler.error, exception_type)
 
-        cont = Controller(Sink(), hostname="localhost")
-        self.addCleanup(cont.stop)
-        cont.start()
+    @handler_data(class_=ErroringHandlerConnectionLost)
+    def test_exception_handler_multiple_connections_lost(
+        self, error_controller, client
+    ):
+        client1 = client
+        code, mesg = client1.ehlo("example.com")
+        assert code == 250
+        with SMTPClient(*Global.SrvAddr) as client2:
+            code, mesg = client2.ehlo("example.com")
+            assert code == 250
+            with pytest.raises(SMTPServerDisconnected) as exc:
+                mail = CRLF.join(["Test", ".", "mail"])
+                client2.sendmail("anne@example.com", ["bart@example.com"], mail)
+            assert isinstance(exc.value, SMTPServerDisconnected)
+            assert error_controller.handler.error is None
+            # At this point connection should be down
+            with pytest.raises(SMTPServerDisconnected) as exc:
+                client2.mail("alice@example.com")
+            assert str(exc.value) == "please run connect() first"
+        # client1 shouldn't be affected.
+        resp = client1.mail("alice@example.com")
+        assert resp == S.S250_OK
 
-        with socket.socket() as sock:
-            sock.connect((cont.hostname, cont.port))
-            rslt = send_recv(sock, b"EHLO example.com")
-            self.assertTrue(rslt.startswith(b"220"))
-            rslt = send_recv(sock, b"MAIL FROM: <anne@example.com>")
-            self.assertTrue(rslt.startswith(b"250"))
-            rslt = send_recv(sock, b"RCPT TO: <bruce@example.com>")
-            self.assertTrue(rslt.startswith(b"250"))
-            rslt = send_recv(sock, b"DATA")
-            self.assertTrue(rslt.startswith(b"354"))
-            rslt = send_recv(sock, b"a" * (Server.line_length_limit + 3))
-            # Must NOT receive status code here even if data is too much
-            self.assertEqual(b"", rslt)
-            rslt = send_recv(sock, b"\r\n.")
-            # *NOW* we must receive status code
-            self.assertEqual(b"500 Line too long (see RFC5321 4.5.3.1.6)\r\n", rslt)
+    @handler_data(class_=ReceivingHandler)
+    def test_bad_encodings(self, decoding_authnotls_controller, client):
+        handler: ReceivingHandler = decoding_authnotls_controller.handler
+        self._helo(client)
+        mail_from = b"anne\xFF@example.com"
+        mail_to = b"bart\xFF@example.com"
+        self._ehlo(client, "test")
+        client.send(b"MAIL FROM:" + mail_from + b"\r\n")
+        assert client.getreply() == S.S250_OK
+        client.send(b"RCPT TO:" + mail_to + b"\r\n")
+        assert client.getreply() == S.S250_OK
+        client.data("Test mail")
+        assert len(handler.box) == 1
+        envelope = handler.box[0]
+        mail_from2 = envelope.mail_from.encode("utf-8", errors="surrogateescape")
+        assert mail_from2 == mail_from
+        mail_to2 = envelope.rcpt_tos[0].encode("utf-8", errors="surrogateescape")
+        assert mail_to2 == mail_to
 
-    def test_too_long_lines_then_too_long_body(self):
-        # If "too long line" state was reached before "too much data" happens,
-        # SMTP should respond with '500' instead of '552'
-        size = 2000
-        controller = SizedController(Sink(), size=size)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.helo('example.com')
-            mail = '\r\n'.join(['z' * (size - 1)] * 2)
-            with self.assertRaises(SMTPResponseException) as cm:
-                client.sendmail('anne@example.com', ['bart@example.com'], mail)
-        self.assertEqual(cm.exception.smtp_code, 500)
-        self.assertEqual(cm.exception.smtp_error,
-                         b'Line too long (see RFC5321 4.5.3.1.6)')
+    @controller_data(decode_data=False)
+    def test_data_line_too_long(self, plain_controller, client):
+        self._helo(client)
+        client.helo("example.com")
+        mail = b"\r\n".join([b"a" * 5555] * 3)
+        with pytest.raises(SMTPDataError) as exc:
+            client.sendmail("anne@example.com", ["bart@example.com"], mail)
+        assert exc.value.args == S.S500_DATALINE_TOO_LONG
 
-    def test_too_long_body_then_too_long_lines(self):
-        # If "too much mail" state was reached before "too long line" gets received,
-        # SMTP should respond with '552' instead of '500'
-        controller = SizedController(Sink(), size=700)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.helo('example.com')
-            mail = '\r\n'.join(['z' * 76] * 10 + ["a" * 1100] * 2)
-            with self.assertRaises(SMTPResponseException) as cm:
-                client.sendmail('anne@example.com', ['bart@example.com'], mail)
-            self.assertEqual(cm.exception.smtp_code, 552)
-            self.assertEqual(cm.exception.smtp_error,
-                             b'Error: Too much mail data')
-
-    def test_long_line_double_count(self):
-        controller = SizedController(Sink(), size=10000)
+    @controller_data(data_size_limit=10000)
+    def test_long_line_double_count(self, plain_controller, client):
         # With a read limit of 1001 bytes in aiosmtp.SMTP, asyncio.StreamReader
         # returns too-long lines of length up to 2002 bytes.
         # This test ensures that bytes in partial lines are only counted once.
         # If the implementation has a double-counting bug, then a message of
         # 9998 bytes + CRLF will raise SMTPResponseException.
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.helo('example.com')
-            mail = 'z' * 9998
-            with self.assertRaises(SMTPDataError) as cm:
-                client.sendmail('anne@example.com', ['bart@example.com'], mail)
-        self.assertEqual(cm.exception.smtp_code, 500)
-        self.assertEqual(cm.exception.smtp_error,
-                         b'Line too long (see RFC5321 4.5.3.1.6)')
+        client.helo("example.com")
+        mail = "z" * 9998
+        with pytest.raises(SMTPDataError) as exc:
+            client.sendmail("anne@example.com", ["bart@example.com"], mail)
+        assert exc.value.args == S.S500_DATALINE_TOO_LONG
 
-    @patch("aiosmtpd.smtp.EMPTY_BARR")
-    def test_long_line_leak(self, mock_ebarr):
+    def test_long_line_leak(self, mocker: MockFixture, plain_controller, client):
         # Simulates situation where readuntil() does not raise LimitOverrunError,
         # but somehow the line_fragments when join()ed resulted in a too-long line
 
         # Hijack EMPTY_BARR.join() to return a bytes object that's definitely too long
-        mock_ebarr.join.return_value = (b"a" * 1010)
+        mock_ebarr = mocker.patch("aiosmtpd.smtp.EMPTY_BARR")
+        mock_ebarr.join.return_value = b"a" * 1010
 
-        controller = Controller(Sink())
-        self.addCleanup(controller.stop)
-        controller.start()
-        with SMTP(controller.hostname, controller.port) as client:
-            client.helo('example.com')
-            mail = 'z' * 72  # Make sure this is small and definitely within limits
-            with self.assertRaises(SMTPDataError) as cm:
-                client.sendmail('anne@example.com', ['bart@example.com'], mail)
-        self.assertEqual(cm.exception.smtp_code, 500)
-        self.assertEqual(cm.exception.smtp_error,
-                         b'Line too long (see RFC5321 4.5.3.1.6)')
+        client.helo("example.com")
+        mail = "z" * 72  # Make sure this is small and definitely within limits
+        with pytest.raises(SMTPDataError) as exc:
+            client.sendmail("anne@example.com", ["bart@example.com"], mail)
+        assert exc.value.args == S.S500_DATALINE_TOO_LONG
+        # self.assertEqual(cm.exception.smtp_code, 500)
+        # self.assertEqual(cm.exception.smtp_error,
+        #                  b'Line too long (see RFC5321 4.5.3.1.6)')
 
-    def test_dots_escaped(self):
-        handler = ReceivingHandler()
-        controller = DecodingController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.helo('example.com')
-            mail = CRLF.join(['Test', '.', 'mail'])
-            client.sendmail('anne@example.com', ['bart@example.com'], mail)
-            self.assertEqual(len(handler.box), 1)
-            self.assertEqual(handler.box[0].content, 'Test\r\n.\r\nmail\r\n')
+    @controller_data(data_size_limit=20)
+    def test_too_long_body_delay_error(self, plain_controller):
+        with socket.socket() as sock:
+            sock.connect((plain_controller.hostname, plain_controller.port))
+            rslt = send_recv(sock, b"EHLO example.com")
+            assert rslt.startswith(b"220")
+            rslt = send_recv(sock, b"MAIL FROM: <anne@example.com>")
+            assert rslt.startswith(b"250")
+            rslt = send_recv(sock, b"RCPT TO: <bruce@example.com>")
+            assert rslt.startswith(b"250")
+            rslt = send_recv(sock, b"DATA")
+            assert rslt.startswith(b"354")
+            rslt = send_recv(sock, b"a" * (20 + 3))
+            # Must NOT receive status code here even if data is too much
+            assert rslt == b""
+            rslt = send_recv(sock, b"\r\n.")
+            # *NOW* we must receive status code
+            assert rslt == b"552 Error: Too much mail data\r\n"
 
-    # Suppress logging to the console during the tests.  Depending on
-    # timing, the exception may or may not be logged.
-    @patch("logging.Logger.exception")
-    def test_unexpected_errors(self, mock_logex):
-        handler = ErroringHandler()
-        controller = ErrorController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, mesg = client.helo('example.com')
-        self.assertEqual(code, 500)
-        self.assertEqual(mesg, b'ErroringHandler handling error')
-        self.assertIsInstance(handler.error, ValueError)
+    @controller_data(data_size_limit=700)
+    def test_too_long_body_then_too_long_lines(self, plain_controller, client):
+        # If "too much mail" state was reached before "too long line" gets received,
+        # SMTP should respond with '552' instead of '500'
+        client.helo("example.com")
+        mail = "\r\n".join(["z" * 76] * 10 + ["a" * 1100] * 2)
+        with pytest.raises(SMTPResponseException) as exc:
+            client.sendmail("anne@example.com", ["bart@example.com"], mail)
+        assert exc.value.args == S.S552_DATA_TOO_MUCH
 
-    # Suppress logging to the console during the tests.  Depending on
-    # timing, the exception may or may not be logged.
-    @patch("logging.Logger.exception")
-    def test_unexpected_errors_unhandled(self, mock_logex):
-        handler = Sink()
-        handler.error = None
-        controller = ErrorController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, mesg = client.helo('example.com')
-        self.assertEqual(code, 500)
-        self.assertEqual(mesg, b'Error: (ValueError) test')
-        # handler.error did not change because the handler does not have a
-        # handle_exception() method.
-        self.assertIsNone(handler.error)
+    def test_too_long_line_delay_error(self, plain_controller):
+        with socket.socket() as sock:
+            sock.connect((plain_controller.hostname, plain_controller.port))
+            rslt = send_recv(sock, b"EHLO example.com")
+            assert rslt.startswith(b"220")
+            rslt = send_recv(sock, b"MAIL FROM: <anne@example.com>")
+            assert rslt.startswith(b"250")
+            rslt = send_recv(sock, b"RCPT TO: <bruce@example.com>")
+            assert rslt.startswith(b"250")
+            rslt = send_recv(sock, b"DATA")
+            assert rslt.startswith(b"354")
+            rslt = send_recv(sock, b"a" * (Server.line_length_limit + 3))
+            # Must NOT receive status code here even if data is too much
+            assert rslt == b""
+            rslt = send_recv(sock, b"\r\n.")
+            # *NOW* we must receive status code
+            assert rslt == b"500 Line too long (see RFC5321 4.5.3.1.6)\r\n"
 
-    # Suppress logging to the console during the tests.  Depending on
-    # timing, the exception may or may not be logged.
-    @patch("logging.Logger.exception")
-    def test_unexpected_errors_custom_response(self, mock_logex):
-        handler = ErroringHandlerCustomResponse()
-        controller = ErrorController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, mesg = client.helo('example.com')
-        self.assertEqual(code, 554)
-        self.assertEqual(mesg, b'Persistent error: (ValueError) test')
-        self.assertIsInstance(handler.error, ValueError)
-
-    # Suppress logging to the console during the tests.  Depending on
-    # timing, the exception may or may not be logged.
-    @patch("logging.Logger.exception")
-    def test_exception_handler_exception(self, mock_logex):
-        handler = ErroringErrorHandler()
-        controller = ErrorController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, mesg = client.helo('example.com')
-        self.assertEqual(code, 500)
-        self.assertEqual(mesg, b'Error: (ValueError) ErroringErrorHandler test')
-        self.assertIsInstance(handler.error, ValueError)
-
-    def test_exception_handler_multiple_connections_lost(self):
-        handler = ErroringHandlerConnectionLost()
-        controller = Controller(handler)
-        self.addCleanup(controller.stop)
-        controller.start()
-        with SMTP(controller.hostname, controller.port) as client1:
-            code, mesg = client1.ehlo('example.com')
-            self.assertEqual(code, 250)
-            with SMTP(controller.hostname, controller.port) as client2:
-                code, mesg = client2.ehlo('example.com')
-                self.assertEqual(code, 250)
-                with self.assertRaises(SMTPServerDisconnected) as cm:
-                    mail = CRLF.join(['Test', '.', 'mail'])
-                    client2.sendmail(
-                        'anne@example.com',
-                        ['bart@example.com'],
-                        mail)
-                self.assertIsInstance(cm.exception, SMTPServerDisconnected)
-                self.assertEqual(handler.error, None)
-                # At this point connection should be down
-                with self.assertRaises(SMTPServerDisconnected) as cm:
-                    client2.mail("alice@example.com")
-                self.assertEqual("please run connect() first", str(cm.exception))
-            # client1 shouldn't be affected.
-            code, mesg = client1.mail("alice@example.com")
-            self.assertEqual(code, 250)
-
-    # Suppress logging to the console during the tests.  Depending on
-    # timing, the exception may or may not be logged.
-    @patch("logging.Logger.exception")
-    def test_exception_handler_undescribable(self, mock_logex):
-        handler = UndescribableErrorHandler()
-        controller = ErrorController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, mesg = client.helo('example.com')
-        self.assertEqual(code, 500)
-        self.assertEqual(mesg, b'Error: Cannot describe error')
-        self.assertIsInstance(handler.error, ValueError)
-
-    def test_bad_encodings(self):
-        handler = ReceivingHandler()
-        controller = DecodingController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.helo('example.com')
-            mail_from = b'anne\xFF@example.com'
-            mail_to = b'bart\xFF@example.com'
-            client.ehlo('test')
-            client.send(b'MAIL FROM:' + mail_from + b'\r\n')
-            code, response = client.getreply()
-            self.assertEqual(code, 250)
-            client.send(b'RCPT TO:' + mail_to + b'\r\n')
-            code, response = client.getreply()
-            self.assertEqual(code, 250)
-            client.data('Test mail')
-            self.assertEqual(len(handler.box), 1)
-            envelope = handler.box[0]
-            mail_from2 = envelope.mail_from.encode(
-                'utf-8', errors='surrogateescape')
-            self.assertEqual(mail_from2, mail_from)
-            mail_to2 = envelope.rcpt_tos[0].encode(
-                'utf-8', errors='surrogateescape')
-            self.assertEqual(mail_to2, mail_to)
+    @controller_data(data_size_limit=2000)
+    def test_too_long_lines_then_too_long_body(self, plain_controller, client):
+        # If "too long line" state was reached before "too much data" happens,
+        # SMTP should respond with '500' instead of '552'
+        client.helo("example.com")
+        mail = "\r\n".join(["z" * (2000 - 1)] * 2)
+        with pytest.raises(SMTPResponseException) as exc:
+            client.sendmail("anne@example.com", ["bart@example.com"], mail)
+        assert exc.value.args == S.S500_DATALINE_TOO_LONG
 
 
-class TestCustomizations(unittest.TestCase):
-    def test_custom_hostname(self):
-        controller = CustomHostnameController(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            self.assertEqual(response, bytes('custom.localhost', 'utf-8'))
+class TestCustomization(_CommonMethods):
+    @controller_data(class_=CustomHostnameController)
+    def test_custom_hostname(self, plain_controller, client):
+        code, mesg = client.helo("example.com")
+        assert code == 250
+        assert mesg == CustomHostnameController.custom_name.encode("ascii")
 
-    def test_custom_greeting(self):
-        controller = CustomIdentController(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP() as client:
-            code, msg = client.connect(controller.hostname, controller.port)
-            self.assertEqual(code, 220)
-            # The hostname prefix is unpredictable.
-            self.assertEqual(msg[-22:], b'Identifying SMTP v2112')
+    def test_default_greeting(self, plain_controller, client):
+        controller = plain_controller
+        code, mesg = client.connect(controller.hostname, controller.port)
+        assert code == 220
+        # The hostname prefix is unpredictable
+        assert mesg.endswith(bytes(GREETING, "utf-8"))
 
-    def test_default_greeting(self):
-        controller = Controller(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP() as client:
-            code, msg = client.connect(controller.hostname, controller.port)
-            self.assertEqual(code, 220)
-            # The hostname prefix is unpredictable.
-            self.assertEqual(msg[-len(GREETING):], bytes(GREETING, 'utf-8'))
+    @controller_data(class_=CustomIdentController)
+    def test_custom_greeting(self, plain_controller, client):
+        controller = plain_controller
+        code, mesg = client.connect(controller.hostname, controller.port)
+        assert code == 220
+        # The hostname prefix is unpredictable.
+        assert mesg.endswith(CustomIdentController.ident)
 
-    def test_mail_invalid_body_param(self):
-        controller = NoDecodeController(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP() as client:
-            code, msg = client.connect(controller.hostname, controller.port)
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'MAIL FROM: <anne@example.com> BODY=FOOBAR')
-            self.assertEqual(code, 501)
-            self.assertEqual(
-                response,
-                b'Error: BODY can only be one of 7BIT, 8BITMIME')
+    @controller_data(decode_data=False)
+    def test_mail_invalid_body_param(self, plain_controller, client):
+        client.ehlo("example.com")
+        resp = client.docmd("MAIL FROM: <anne@example.com> BODY=FOOBAR")
+        assert resp == S.S501_MAIL_BODY
 
 
-class TestClientCrash(unittest.TestCase):
-    # GH#62 - if the client crashes during the SMTP dialog we want to make
-    # sure we don't get tracebacks where we call readline().
-    def setUp(self):
-        controller = Controller(Sink)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
-
-    def test_connection_reset_during_DATA(self):
-        with SMTP(*self.address) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('RCPT TO: <anne@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('DATA')
-            self.assertEqual(code, 354)
+class TestClientCrash(_CommonMethods):
+    def test_connection_reset_during_DATA(
+        self, mocker: MockFixture, plain_controller, client
+    ):
+        # Trigger factory() to produce the smtpd server
+        self._helo(client)
+        smtpd: Server = plain_controller.smtpd
+        spy = mocker.spy(smtpd._writer, "close")
+        # Do some stuff
+        client.docmd("MAIL FROM: <anne@example.com>")
+        client.docmd("RCPT TO: <bart@example.com>")
+        # Entering portion of code where hang is possible (upon assertion fail), so
+        # we must wrap with "try..finally". See pytest-dev/pytest#7989
+        try:
+            resp = client.docmd("DATA")
+            assert resp == S.S354_DATA_ENDWITH
             # Start sending the DATA but reset the connection before that
             # completes, i.e. before the .\r\n
-            client.send(b'From: <anne@example.com>')
+            client.send(b"From: <anne@example.com>")
             reset_connection(client)
-            # The connection should be disconnected, so trying to do another
-            # command from here will give us an exception.  In GH#62, the
-            # server just hung.
-            self.assertRaises(SMTPServerDisconnected, client.noop)
+            with pytest.raises(SMTPServerDisconnected):
+                client.noop()
+            catchup_delay()
+            # Apparently within that delay, ._writer.close() invoked several times
+            # That is okay; we just want to ensure that it's invoked at least once.
+            assert spy.call_count > 0
+        finally:
+            plain_controller.stop()
 
-    def test_connection_reset_during_command(self):
-        with SMTP(*self.address) as client:
-            client.helo('example.com')
-            # Start sending a command but reset the connection before that
-            # completes, i.e. before the \r\n
-            client.send('MAIL FROM: <anne')
-            reset_connection(client)
-            # The connection should be disconnected, so trying to do another
-            # command from here will give us an exception.  In GH#62, the
-            # server just hung.
-            self.assertRaises(SMTPServerDisconnected, client.noop)
+    def test_connection_reset_during_command(
+        self, mocker: MockFixture, plain_controller, client
+    ):
+        # Trigger factory() to produce the smtpd server
+        self._helo(client)
+        smtpd: Server = plain_controller.smtpd
+        spy = mocker.spy(smtpd._writer, "close")
+        # Start sending a command but reset the connection before that
+        # completes, i.e. before the \r\n
+        client.send("MAIL FROM: <anne")
+        reset_connection(client)
+        with pytest.raises(SMTPServerDisconnected):
+            client.noop()
+        catchup_delay()
+        # Should be called at least once. (In practice, almost certainly just once.)
+        assert spy.call_count > 0
 
-    def test_connection_reset_in_long_command(self):
-        with SMTP(*self.address) as client:
-            client.send('F' + 5555 * 'O')  # without CRLF
-            reset_connection(client)
+    def test_connection_reset_in_long_command(self, plain_controller, client):
+        client.send("F" + 5555 * "O")  # without CRLF
+        reset_connection(client)
+        catchup_delay()
+        # At this point, smtpd's StreamWriter hasn't been initialized. Prolly since
+        # the call is self._reader.readline() and we abort before CRLF is sent.
+        # That is why we don't need to 'spy' on writer.close()
+        writer = plain_controller.smtpd._writer
+        # transport.is_closing() == True if transport is in the process of closing,
+        # and still == True if transport is closed.
+        assert writer.transport.is_closing()
 
-    def test_close_in_command(self):
-        with SMTP(*self.address) as client:
+    def test_close_in_command(self, plain_controller, client):
+        # Don't include the CRLF.
+        client.send("FOO")
+        client.close()
+        catchup_delay()
+        # At this point, smtpd's StreamWriter hasn't been initialized. Prolly since
+        # the call is self._reader.readline() and we abort before CRLF is sent.
+        # That is why we don't need to 'spy' on writer.close()
+        writer = plain_controller.smtpd._writer
+        # transport.is_closing() == True if transport is in the process of closing,
+        # and still == True if transport is closed.
+        assert writer.transport.is_closing()
+
+    def test_close_in_command_2(self, mocker: MockFixture, plain_controller, client):
+        self._helo(client)
+        catchup_delay()
+        smtpd: Server = plain_controller.smtpd
+        writer = smtpd._writer
+        spy = mocker.spy(writer, "close")
+        # Don't include the CRLF.
+        client.send("FOO")
+        client.close()
+        catchup_delay()
+        # Check that smtpd._writer.close() invoked at least once
+        assert spy.call_count > 0
+        # transport.is_closing() == True if transport is in the process of closing,
+        # and still == True if transport is closed.
+        assert writer.transport.is_closing()
+
+    def test_close_in_long_command(self, plain_controller, client):
+        client.send("F" + 5555 * "O")  # without CRLF
+        client.close()
+        catchup_delay()
+        # At this point, smtpd's StreamWriter hasn't been initialized. Prolly since
+        # the call is self._reader.readline() and we abort before CRLF is sent.
+        # That is why we don't need to 'spy' on writer.close()
+        writer = plain_controller.smtpd._writer
+        # transport.is_closing() == True if transport is in the process of closing,
+        # and still == True if transport is closed.
+        assert writer.transport.is_closing()
+
+    def test_close_in_data(self, mocker: MockFixture, plain_controller, client):
+        self._helo(client)
+        smtpd: Server = plain_controller.smtpd
+        writer = smtpd._writer
+        spy = mocker.spy(writer, "close")
+        resp = client.docmd("MAIL FROM: <anne@example.com>")
+        assert resp == S.S250_OK
+        resp = client.docmd("RCPT TO: <bart@example.com>")
+        assert resp == S.S250_OK
+        # Entering portion of code where hang is possible (upon assertion fail), so
+        # we must wrap with "try..finally". See pytest-dev/pytest#7989
+        try:
+            resp = client.docmd("DATA")
+            assert resp == S.S354_DATA_ENDWITH
             # Don't include the CRLF.
-            client.send('FOO')
+            client.send("FOO")
             client.close()
+            catchup_delay()
+            # Check that smtpd._writer.close() invoked at least once
+            assert spy.call_count > 0
+            # transport.is_closing() == True if transport is in the process of closing,
+            # and still == True if transport is closed.
+            assert writer.transport.is_closing()
+        finally:
+            plain_controller.stop()
 
-    def test_close_in_long_command(self):
-        with SMTP(*self.address) as client:
-            client.send('F' + 5555 * 'O')  # without CRLF
-            client.close()
+    def test_sockclose_after_helo(self, mocker: MockFixture, plain_controller, client):
+        client.send("HELO example.com\r\n")
+        catchup_delay()
+        smtpd: Server = plain_controller.smtpd
+        writer = smtpd._writer
+        spy = mocker.spy(writer, "close")
 
-    def test_close_in_data(self):
-        with SMTP(*self.address) as client:
-            code, response = client.helo('example.com')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('MAIL FROM: <anne@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('RCPT TO: <bart@example.com>')
-            self.assertEqual(code, 250)
-            code, response = client.docmd('DATA')
-            self.assertEqual(code, 354)
-            # Don't include the CRLF.
-            client.send('FOO')
-            client.close()
-
-
-class TestStrictASCII(unittest.TestCase):
-    def setUp(self):
-        controller = StrictASCIIController(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
-
-    def test_ehlo(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            lines = response.splitlines()
-            self.assertNotIn(b'SMTPUTF8', lines)
-
-    def test_bad_encoded_param(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            client.send(b'MAIL FROM: <anne\xFF@example.com>\r\n')
-            code, response = client.getreply()
-            self.assertEqual(code, 500)
-            self.assertIn(b'Error: strict ASCII mode', response)
-
-    def test_mail_param(self):
-        with SMTP(*self.address) as client:
-            client.ehlo('example.com')
-            code, response = client.docmd(
-                'MAIL FROM: <anne@example.com> SMTPUTF8')
-            self.assertEqual(code, 501)
-            self.assertEqual(response, b'Error: SMTPUTF8 disabled')
-
-    def test_data(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            self.assertEqual(code, 250)
-            with self.assertRaises(SMTPDataError) as cm:
-                client.sendmail('anne@example.com', ['bart@example.com'], b"""\
-From: anne@example.com
-To: bart@example.com
-Subject: A test
-
-Testing\xFF
-""")
-            self.assertEqual(cm.exception.smtp_code, 500)
-            self.assertIn(b'Error: strict ASCII mode', cm.exception.smtp_error)
+        client.sock.shutdown(socket.SHUT_WR)
+        catchup_delay()
+        # Check that smtpd._writer.close() invoked at least once
+        assert spy.call_count > 0
+        # transport.is_closing() == True if transport is in the process of closing,
+        # and still == True if transport is closed.
+        assert writer.transport.is_closing()
 
 
-class TestSleepingHandler(unittest.TestCase):
-    def setUp(self):
-        controller = NoDecodeController(SleepingHeloHandler())
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
+@pytest.mark.usefixtures("plain_controller")
+@controller_data(enable_SMTPUTF8=False, decode_data=True)
+class TestStrictASCII(_CommonMethods):
+    def test_ehlo(self, client):
+        blines = self._ehlo(client)
+        assert b"SMTPUTF8" not in blines
 
-    def test_close_after_helo(self):
-        with SMTP(*self.address) as client:
-            client.send('HELO example.com\r\n')
-            client.sock.shutdown(socket.SHUT_WR)
-            self.assertRaises(SMTPServerDisconnected, client.getreply)
+    def test_bad_encoded_param(self, client):
+        self._ehlo(client)
+        client.send(b"MAIL FROM: <anne\xFF@example.com>\r\n")
+        assert client.getreply() == S.S500_STRICT_ASCII
+
+    def test_mail_param(self, client):
+        self._ehlo(client)
+        resp = client.docmd("MAIL FROM: <anne@example.com> SMTPUTF8")
+        assert resp == S.S501_SMTPUTF8_DISABLED
+
+    def test_data(self, client):
+        self._ehlo(client)
+        with pytest.raises(SMTPDataError) as excinfo:
+            client.sendmail(
+                "anne@example.com",
+                ["bart@example.com"],
+                b"From: anne@example.com\n"
+                b"To: bart@example.com\n"
+                b"Subject: A test\n"
+                b"\n"
+                b"Testing\xFF\n",
+            )
+        assert excinfo.value.args == S.S500_STRICT_ASCII
 
 
-class TestTimeout(unittest.TestCase):
-    def setUp(self):
-        controller = TimeoutController(Sink)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
+class TestSleepingHandler(_CommonMethods):
+    # What is the point here?
 
-    def test_timeout(self):
-        with SMTP(*self.address) as client:
-            code, response = client.ehlo('example.com')
-            time.sleep(0.1 + TimeoutController.Delay)
-            self.assertRaises(SMTPServerDisconnected, client.getreply)
+    @controller_data(decode_data=False)
+    @handler_data(class_=SleepingHeloHandler)
+    def test_close_after_helo(self, plain_controller, client):
+        #
+        # What are we actually testing?
+        #
+        client.send("HELO example.com\r\n")
+        client.sock.shutdown(socket.SHUT_WR)
+        with pytest.raises(SMTPServerDisconnected):
+            client.getreply()
 
 
-class TestAuthArgs(unittest.TestCase):
-    @patch("logging.Logger.warning")
-    @patch("aiosmtpd.smtp.warn")
-    def test_warn_authreqnotls(self, mock_warn: Mock, mock_warning: Mock):
-        """If auth_required=True while auth_require_tls=False, emit warning"""
-        _ = Server(Sink(), auth_required=True, auth_require_tls=False)
-        mock_warn.assert_any_call(
-            "Requiring AUTH while not requiring TLS "
-            "can lead to security vulnerabilities!"
+class TestTimeout(_CommonMethods):
+    @controller_data(class_=TimeoutController)
+    def test_timeout(self, plain_controller, client):
+        # This one is rapid, it must succeed
+        self._ehlo(client)
+        time.sleep(0.1 + TimeoutController.Delay)
+        with pytest.raises(SMTPServerDisconnected):
+            client.mail("anne@example.com")
+
+
+class TestAuthArgs:
+    def test_warn_authreqnotls(self, caplog):
+        with pytest.warns(UserWarning) as record:
+            _ = Server(Sink(), auth_required=True, auth_require_tls=False)
+        assert len(record) == 1
+        assert (
+            record[0].message.args[0]
+            == "Requiring AUTH while not requiring TLS can lead to "
+            "security vulnerabilities!"
         )
-        mock_warning.assert_any_call(
-            "auth_required == True but auth_require_tls == False"
+        assert caplog.record_tuples[0] == (
+            "mail.log",
+            logging.WARNING,
+            "auth_required == True but auth_require_tls == False",
         )
 
-    @patch("logging.Logger.info")
-    def test_log_authmechanisms(self, mock_info: Mock):
-        """At __init__ list of AUTH mechanisms must be logged"""
+    def test_log_authmechanisms(self, caplog):
+        caplog.set_level(logging.INFO)
         server = Server(Sink())
         auth_mechs = sorted(
             m.replace("auth_", "") + "(builtin)"
             for m in dir(server)
             if m.startswith("auth_")
         )
-        mock_info.assert_any_call(
-            f"Available AUTH mechanisms: {' '.join(auth_mechs)}"
+        assert (
+            caplog.record_tuples[0][-1]
+            == f"Available AUTH mechanisms: {' '.join(auth_mechs)}"
         )
 
-    def test_authmechname_decorator_badname(self):
-        self.assertRaises(ValueError, auth_mechanism, "has space")
-        self.assertRaises(ValueError, auth_mechanism, "has.dot")
-        self.assertRaises(ValueError, auth_mechanism, "has/slash")
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "has space",
+            "has.dot",
+            "has/slash",
+            "has\\backslash",
+        ],
+    )
+    def test_authmechname_decorator_badname(self, name):
+        with pytest.raises(ValueError):
+            auth_mechanism(name)
 
 
-class TestLimits(unittest.TestCase):
-    @patch("logging.Logger.warning")
-    def test_all_limit_15(self, mock_warning):
-        kwargs = dict(
-            command_call_limit=15,
-        )
-        controller = Controller(Sink(), server_kwargs=kwargs)
-        self.addCleanup(controller.stop)
-        controller.start()
-        with SMTP(controller.hostname, controller.port) as client:
-            code, mesg = client.ehlo('example.com')
-            self.assertEqual(250, code)
-            for _ in range(0, 15):
-                code, mesg = client.noop()
-                self.assertEqual(250, code)
-            code, mesg = client.noop()
-            self.assertEqual(421, code)
-            self.assertEqual(b"4.7.0 NOOP sent too many times", mesg)
-            with self.assertRaises(SMTPServerDisconnected):
-                client.noop()
-
-    @patch("logging.Logger.warning")
-    def test_different_limits(self, mock_warning):
-        noop_max, expn_max = 15, 5
-        kwargs = dict(
-            command_call_limit={"NOOP": noop_max, "EXPN": expn_max},
-        )
-        controller = Controller(Sink(), server_kwargs=kwargs)
-        self.addCleanup(controller.stop)
-        controller.start()
-        with SMTP(controller.hostname, controller.port) as client:
-            code, mesg = client.ehlo('example.com')
-            self.assertEqual(250, code)
-            for _ in range(0, noop_max):
-                code, mesg = client.noop()
-                self.assertEqual(250, code)
-            code, mesg = client.noop()
-            self.assertEqual(421, code)
-            self.assertEqual(b"4.7.0 NOOP sent too many times", mesg)
-            with self.assertRaises(SMTPServerDisconnected):
-                client.noop()
-        with SMTP(controller.hostname, controller.port) as client:
-            code, mesg = client.ehlo('example.com')
-            self.assertEqual(250, code)
-            for _ in range(0, expn_max):
-                code, mesg = client.expn("alice@example.com")
-                self.assertEqual(502, code)
-            code, mesg = client.expn("alice@example.com")
-            self.assertEqual(421, code)
-            self.assertEqual(b"4.7.0 EXPN sent too many times", mesg)
-            with self.assertRaises(SMTPServerDisconnected):
-                client.noop()
-        with SMTP(controller.hostname, controller.port) as client:
-            code, mesg = client.ehlo('example.com')
-            self.assertEqual(250, code)
-            for _ in range(0, CALL_LIMIT_DEFAULT):
-                code, mesg = client.vrfy("alice@example.com")
-                self.assertEqual(252, code)
-            code, mesg = client.vrfy("alice@example.com")
-            self.assertEqual(421, code)
-            self.assertEqual(b"4.7.0 VRFY sent too many times", mesg)
-            with self.assertRaises(SMTPServerDisconnected):
-                client.noop()
-
-    @patch("logging.Logger.warning")
-    def test_different_limits_custom_default(self, mock_warning):
-        # Important: make sure default_max > CALL_LIMIT_DEFAULT
-        # Others can be set small to cut down on testing time, but must be different
-        noop_max, expn_max, default_max = 7, 5, 25
-        self.assertGreater(default_max, CALL_LIMIT_DEFAULT)
-        self.assertNotEqual(noop_max, expn_max)
-        kwargs = dict(
-            command_call_limit={"NOOP": noop_max, "EXPN": expn_max, "*": default_max},
-        )
-        controller = Controller(Sink(), server_kwargs=kwargs)
-        self.addCleanup(controller.stop)
-        controller.start()
-        with SMTP(controller.hostname, controller.port) as client:
-            code, mesg = client.ehlo('example.com')
-            self.assertEqual(250, code)
-            for _ in range(0, noop_max):
-                code, mesg = client.noop()
-                self.assertEqual(250, code)
-            code, mesg = client.noop()
-            self.assertEqual(421, code)
-            self.assertEqual(b"4.7.0 NOOP sent too many times", mesg)
-            with self.assertRaises(SMTPServerDisconnected):
-                client.noop()
-        with SMTP(controller.hostname, controller.port) as client:
-            code, mesg = client.ehlo('example.com')
-            self.assertEqual(250, code)
-            for _ in range(0, expn_max):
-                code, mesg = client.expn("alice@example.com")
-                self.assertEqual(502, code)
-            code, mesg = client.expn("alice@example.com")
-            self.assertEqual(421, code)
-            self.assertEqual(b"4.7.0 EXPN sent too many times", mesg)
-            with self.assertRaises(SMTPServerDisconnected):
-                client.noop()
-        with SMTP(controller.hostname, controller.port) as client:
-            code, mesg = client.ehlo('example.com')
-            self.assertEqual(250, code)
-            for _ in range(0, default_max):
-                code, mesg = client.vrfy("alice@example.com")
-                self.assertEqual(252, code)
-            code, mesg = client.vrfy("alice@example.com")
-            self.assertEqual(421, code)
-            self.assertEqual(b"4.7.0 VRFY sent too many times", mesg)
-            with self.assertRaises(SMTPServerDisconnected):
-                client.noop()
+class TestLimits(_CommonMethods):
+    def _consume_budget(
+        self, client: SMTPClient, nums: int, cmd: str, *args, ok_expected=None
+    ):
+        code, _ = client.ehlo("example.com")
+        assert code == 250
+        func = getattr(client, cmd)
+        expected = ok_expected or S.S250_OK
+        for _ in range(0, nums):
+            assert func(*args) == expected
+        assert func(*args) == S.S421_TOO_MANY(cmd.upper().encode())
+        with pytest.raises(SMTPServerDisconnected):
+            client.noop()
 
     def test_limit_wrong_type(self):
-        kwargs = dict(
-            command_call_limit="invalid",
-        )
-        controller = Controller(Sink(), server_kwargs=kwargs)
-        self.addCleanup(controller.stop)
-        with self.assertRaises(TypeError):
-            controller.start()
+        with pytest.raises(TypeError) as exc:
+            # noinspection PyTypeChecker
+            _ = Server(Sink(), command_call_limit="invalid")
+        assert exc.value.args[0] == "command_call_limit must be int or Dict[str, int]"
 
     def test_limit_wrong_value_type(self):
-        kwargs = dict(
-            command_call_limit={"NOOP": "invalid"},
-        )
-        controller = Controller(Sink(), server_kwargs=kwargs)
-        self.addCleanup(controller.stop)
-        with self.assertRaises(TypeError):
-            controller.start()
+        with pytest.raises(TypeError) as exc:
+            # noinspection PyTypeChecker
+            _ = Server(Sink(), command_call_limit={"NOOP": "invalid"})
+        assert exc.value.args[0] == "All command_call_limit values must be int"
 
-    @patch("logging.Logger.warning")
-    def test_limit_bogus(self, mock_warning):
-        # Extreme limit.
-        kwargs = dict(
-            command_call_limit=1,
+    @controller_data(command_call_limit=15)
+    def test_all_limit_15(self, plain_controller, client):
+        self._consume_budget(client, 15, "noop")
+
+    @controller_data(command_call_limit={"NOOP": 15, "EXPN": 5})
+    def test_different_limits(self, plain_controller, client):
+        srv_ip_port = plain_controller.hostname, plain_controller.port
+
+        self._consume_budget(client, 15, "noop")
+
+        client.connect(*srv_ip_port)
+        self._consume_budget(
+            client, 5, "expn", "alice@example.com", ok_expected=S.S502_EXPN_NOTIMPL
         )
-        controller = Controller(Sink(), server_kwargs=kwargs)
-        self.addCleanup(controller.stop)
-        controller.start()
-        with SMTP(controller.hostname, controller.port) as client:
-            code, mesg = client.ehlo('example.com')
-            self.assertEqual(250, code)
-            for i in range(0, 4):
-                code, mesg = client.docmd(f"BOGUS{i}")
-                self.assertEqual(500, code)
-                expected = f"Error: command \"BOGUS{i}\" not recognized"
-                self.assertEqual(expected, mesg.decode("ascii"))
-            code, mesg = client.docmd("LASTBOGUS")
-            self.assertEqual(502, code)
-            self.assertEqual(
-                b"5.5.1 Too many unrecognized commands, goodbye.", mesg
-            )
-            with self.assertRaises(SMTPServerDisconnected):
-                client.noop()
+
+        client.connect(*srv_ip_port)
+        self._consume_budget(
+            client,
+            CALL_LIMIT_DEFAULT,
+            "vrfy",
+            "alice@example.com",
+            ok_expected=S.S252_CANNOT_VRFY,
+        )
+
+    @controller_data(command_call_limit={"NOOP": 7, "EXPN": 5, "*": 25})
+    def test_different_limits_custom_default(self, plain_controller, client):
+        # Important: make sure default_max > CALL_LIMIT_DEFAULT
+        # Others can be set small to cut down on testing time, but must be different
+        assert plain_controller.smtpd._call_limit_default > CALL_LIMIT_DEFAULT
+        srv_ip_port = plain_controller.hostname, plain_controller.port
+
+        self._consume_budget(client, 7, "noop")
+
+        client.connect(*srv_ip_port)
+        self._consume_budget(
+            client, 5, "expn", "alice@example.com", ok_expected=S.S502_EXPN_NOTIMPL
+        )
+
+        client.connect(*srv_ip_port)
+        self._consume_budget(
+            client,
+            25,
+            "vrfy",
+            "alice@example.com",
+            ok_expected=S.S252_CANNOT_VRFY,
+        )
+
+    @controller_data(command_call_limit=7)
+    def test_limit_bogus(self, plain_controller, client):
+        assert plain_controller.smtpd._call_limit_default > BOGUS_LIMIT
+        code, mesg = client.ehlo("example.com")
+        assert code == 250
+        for i in range(0, BOGUS_LIMIT - 1):
+            cmd = f"BOGUS{i}"
+            assert client.docmd(cmd) == S.S500_CMD_UNRECOG(cmd.encode())
+        assert client.docmd("LASTBOGUS") == S.S502_TOO_MANY_UNRECOG
+        with pytest.raises(SMTPServerDisconnected):
+            client.noop()

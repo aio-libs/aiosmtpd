@@ -1,556 +1,108 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
-import os
+import logging
 import sys
-import unittest
+from io import StringIO
+from mailbox import Maildir
+from operator import itemgetter
+from pathlib import Path
+from smtplib import SMTPDataError, SMTPRecipientsRefused
+from textwrap import dedent
+from types import SimpleNamespace
+from typing import AnyStr, Generator, Type, TypeVar, Union
+
+import pytest
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
 from aiosmtpd.smtp import SMTP as Server
-from contextlib import ExitStack
-from io import StringIO
-from mailbox import Maildir
-from operator import itemgetter
-from smtplib import SMTP, SMTPDataError, SMTPRecipientsRefused
-from tempfile import TemporaryDirectory
-from unittest.mock import call, patch, Mock
+from aiosmtpd.smtp import Session as ServerSession
+from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
+from aiosmtpd.testing.statuscodes import StatusCode
+
+from .conftest import Global, controller_data, handler_data
+
+try:
+    from typing_extensions import Protocol
+except ModuleNotFoundError:
+    from typing import Protocol
 
 
-CRLF = '\r\n'
+class HasFakeParser(Protocol):
+    fparser: "FakeParser"
+    exception: Type[Exception]
 
 
-ModuleResources = ExitStack()
+class KnowsUpstream(Protocol):
+    upstream: Controller
 
 
-def setUpModule():
-    # Needed especially on FreeBSD because socket.getfqdn() is slow on that OS,
-    # and oftentimes (not always, though) leads to Error
-    ModuleResources.enter_context(patch("socket.getfqdn", return_value="localhost"))
+T = TypeVar("T")
 
 
-def tearDownModule():
-    ModuleResources.close()
+CRLF = "\r\n"
 
 
-class DecodingController(Controller):
-    def factory(self):
-        return Server(self.handler, decode_data=True)
-
-
-class AUTHDecodingController(Controller):
-    def factory(self):
-        return Server(self.handler, decode_data=True, auth_require_tls=False)
-
-
-class DataHandler:
-    def __init__(self):
-        self.content = None
-        self.original_content = None
-
-    async def handle_DATA(self, server, session, envelope):
-        self.content = envelope.content
-        self.original_content = envelope.original_content
-        return '250 OK'
-
-
-class TestDebugging(unittest.TestCase):
-    def setUp(self):
-        self.stream = StringIO()
-        handler = Debugging(self.stream)
-        controller = DecodingController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
-
-    def test_debugging(self):
-        with ExitStack() as resources:
-            client = resources.enter_context(SMTP(*self.address))
-            peer = client.sock.getsockname()
-            client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-
-Testing
-""")
-        text = self.stream.getvalue()
-        self.assertMultiLineEqual(text, """\
----------- MESSAGE FOLLOWS ----------
-mail options: ['SIZE=102']
-
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-X-Peer: {!r}
-
-Testing
------------- END MESSAGE ------------
-""".format(peer))
-
-
-class TestDebuggingBytes(unittest.TestCase):
-    def setUp(self):
-        self.stream = StringIO()
-        handler = Debugging(self.stream)
-        controller = Controller(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
-
-    def test_debugging(self):
-        with ExitStack() as resources:
-            client = resources.enter_context(SMTP(*self.address))
-            peer = client.sock.getsockname()
-            client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-
-Testing
-""")
-        text = self.stream.getvalue()
-        self.assertMultiLineEqual(text, """\
----------- MESSAGE FOLLOWS ----------
-mail options: ['SIZE=102']
-
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-X-Peer: {!r}
-
-Testing
------------- END MESSAGE ------------
-""".format(peer))
-
-
-class TestDebuggingOptions(unittest.TestCase):
-    def setUp(self):
-        self.stream = StringIO()
-        handler = Debugging(self.stream)
-        controller = Controller(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
-
-    def test_debugging_without_options(self):
-        with SMTP(*self.address) as client:
-            # Prevent ESMTP options.
-            client.helo()
-            peer = client.sock.getsockname()
-            client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-
-Testing
-""")
-        text = self.stream.getvalue()
-        self.assertMultiLineEqual(text, """\
----------- MESSAGE FOLLOWS ----------
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-X-Peer: {!r}
-
-Testing
------------- END MESSAGE ------------
-""".format(peer))
-
-    def test_debugging_with_options(self):
-        with SMTP(*self.address) as client:
-            peer = client.sock.getsockname()
-            client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-
-Testing
-""", mail_options=['BODY=7BIT'])
-        text = self.stream.getvalue()
-        self.assertMultiLineEqual(text, """\
----------- MESSAGE FOLLOWS ----------
-mail options: ['SIZE=102', 'BODY=7BIT']
-
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-X-Peer: {!r}
-
-Testing
------------- END MESSAGE ------------
-""".format(peer))
-
-
-class TestMessage(unittest.TestCase):
-    def test_message(self):
-        # In this test, the message content comes in as a bytes.
-        handler = DataHandler()
-        controller = Controller(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-Message-ID: <ant>
-
-Testing
-""")
-        # The content is not converted, so it's bytes.
-        self.assertEqual(handler.content, handler.original_content)
-        self.assertIsInstance(handler.content, bytes)
-        self.assertIsInstance(handler.original_content, bytes)
-
-    def test_message_decoded(self):
-        # In this test, the message content comes in as a string.
-        handler = DataHandler()
-        controller = DecodingController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-Message-ID: <ant>
-
-Testing
-""")
-        self.assertNotEqual(handler.content, handler.original_content)
-        self.assertIsInstance(handler.content, str)
-        self.assertIsInstance(handler.original_content, bytes)
-
-
-class TestAsyncMessage(unittest.TestCase):
-    def setUp(self):
-        self.handled_message = None
-
-        class MessageHandler(AsyncMessage):
-            async def handle_message(handler_self, message):
-                self.handled_message = message
-
-        self.handler = MessageHandler()
-
-    def test_message(self):
-        # In this test, the message data comes in as bytes.
-        controller = Controller(self.handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-Message-ID: <ant>
-
-Testing
-""")
-        self.assertEqual(self.handled_message['subject'], 'A test')
-        self.assertEqual(self.handled_message['message-id'], '<ant>')
-        self.assertIsNotNone(self.handled_message['X-Peer'])
-        self.assertEqual(
-            self.handled_message['X-MailFrom'], 'anne@example.com')
-        self.assertEqual(self.handled_message['X-RcptTo'], 'bart@example.com')
-
-    def test_message_decoded(self):
-        # With a server that decodes the data, the messages come in as
-        # strings.  There's no difference in the message seen by the
-        # handler's handle_message() method, but internally this gives full
-        # coverage.
-        controller = DecodingController(self.handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-
-        with SMTP(controller.hostname, controller.port) as client:
-            client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-Message-ID: <ant>
-
-Testing
-""")
-        self.assertEqual(self.handled_message['subject'], 'A test')
-        self.assertEqual(self.handled_message['message-id'], '<ant>')
-        self.assertIsNotNone(self.handled_message['X-Peer'])
-        self.assertEqual(
-            self.handled_message['X-MailFrom'], 'anne@example.com')
-        self.assertEqual(self.handled_message['X-RcptTo'], 'bart@example.com')
-
-
-class TestMailbox(unittest.TestCase):
-    def setUp(self):
-        self.tempdir = TemporaryDirectory()
-        self.addCleanup(self.tempdir.cleanup)
-        self.maildir_path = os.path.join(self.tempdir.name, 'maildir')
-        self.handler = handler = Mailbox(self.maildir_path)
-        controller = Controller(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
-
-    def test_mailbox(self):
-        with SMTP(*self.address) as client:
-            client.sendmail(
-                'aperson@example.com', ['bperson@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-Message-ID: <ant>
-
-Hi Bart, this is Anne.
-""")
-            client.sendmail(
-                'cperson@example.com', ['dperson@example.com'], """\
-From: Cate Person <cate@example.com>
-To: Dave Person <dave@example.com>
-Subject: A test
-Message-ID: <bee>
-
-Hi Dave, this is Cate.
-""")
-            client.sendmail(
-                'eperson@example.com', ['fperson@example.com'], """\
-From: Elle Person <elle@example.com>
-To: Fred Person <fred@example.com>
-Subject: A test
-Message-ID: <cat>
-
-Hi Fred, this is Elle.
-""")
-        # Check the messages in the mailbox.
-        mailbox = Maildir(self.maildir_path)
-        messages = sorted(mailbox, key=itemgetter('message-id'))
-        self.assertEqual(
-            list(message['message-id'] for message in messages),
-            ['<ant>', '<bee>', '<cat>'])
-
-    def test_mailbox_reset(self):
-        with SMTP(*self.address) as client:
-            client.sendmail(
-                'aperson@example.com', ['bperson@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-Message-ID: <ant>
-
-Hi Bart, this is Anne.
-""")
-        self.handler.reset()
-        mailbox = Maildir(self.maildir_path)
-        self.assertEqual(list(mailbox), [])
+# region ##### Support Classes ###############################################
 
 
 class FakeParser:
-    def __init__(self):
-        self.message = None
+    """
+    Emulates ArgumentParser.error() to catch the message
+    """
+
+    message: AnyStr = None
 
     def error(self, message):
         self.message = message
         raise SystemExit
 
 
-class TestCLI(unittest.TestCase):
-    def setUp(self):
-        self.fakeparser = FakeParser()
+class DataHandler:
+    content: AnyStr = None
+    original_content: bytes = None
 
-    def test_debugging_cli_no_args(self):
-        handler = Debugging.from_cli(self.fakeparser)
-        self.assertIsNone(self.fakeparser.message)
-        self.assertEqual(handler.stream, sys.stdout)
-
-    def test_debugging_cli_two_args(self):
-        self.assertRaises(
-            SystemExit,
-            Debugging.from_cli, self.fakeparser, 'foo', 'bar')
-        self.assertEqual(
-            self.fakeparser.message, 'Debugging usage: [stdout|stderr]')
-
-    def test_debugging_cli_stdout(self):
-        handler = Debugging.from_cli(self.fakeparser, 'stdout')
-        self.assertIsNone(self.fakeparser.message)
-        self.assertEqual(handler.stream, sys.stdout)
-
-    def test_debugging_cli_stderr(self):
-        handler = Debugging.from_cli(self.fakeparser, 'stderr')
-        self.assertIsNone(self.fakeparser.message)
-        self.assertEqual(handler.stream, sys.stderr)
-
-    def test_debugging_cli_bad_argument(self):
-        self.assertRaises(
-            SystemExit,
-            Debugging.from_cli, self.fakeparser, 'stdfoo')
-        self.assertEqual(
-            self.fakeparser.message, 'Debugging usage: [stdout|stderr]')
-
-    def test_sink_cli_no_args(self):
-        handler = Sink.from_cli(self.fakeparser)
-        self.assertIsNone(self.fakeparser.message)
-        self.assertIsInstance(handler, Sink)
-
-    def test_sink_cli_any_args(self):
-        self.assertRaises(
-            SystemExit,
-            Sink.from_cli, self.fakeparser, 'foo')
-        self.assertEqual(
-            self.fakeparser.message, 'Sink handler does not accept arguments')
-
-    def test_mailbox_cli_no_args(self):
-        self.assertRaises(SystemExit, Mailbox.from_cli, self.fakeparser)
-        self.assertEqual(
-            self.fakeparser.message,
-            'The directory for the maildir is required')
-
-    def test_mailbox_cli_too_many_args(self):
-        self.assertRaises(SystemExit, Mailbox.from_cli, self.fakeparser,
-                          'foo', 'bar', 'baz')
-        self.assertEqual(
-            self.fakeparser.message,
-            'Too many arguments for Mailbox handler')
-
-    def test_mailbox_cli(self):
-        with TemporaryDirectory() as tmpdir:
-            handler = Mailbox.from_cli(self.fakeparser, tmpdir)
-            self.assertIsInstance(handler.mailbox, Maildir)
-            self.assertEqual(handler.mail_dir, tmpdir)
+    async def handle_DATA(self, server, session, envelope):
+        self.content = envelope.content
+        self.original_content = envelope.original_content
+        return S.S250_OK.to_str()
 
 
-class TestProxy(unittest.TestCase):
-    def setUp(self):
-        # There are two controllers and two SMTPd's running here.  The
-        # "upstream" one listens on port 9025 and is connected to a "data
-        # handler" which captures the messages it receives.  The second -and
-        # the one under test here- listens on port 9024 and proxies to the one
-        # on port 9025.  Because we need to set the decode_data flag
-        # differently for each different test, the controller of the proxy is
-        # created in the individual tests, not in the setup.
-        self.upstream = DataHandler()
-        upstream_controller = Controller(self.upstream, port=9025)
-        upstream_controller.start()
-        self.addCleanup(upstream_controller.stop)
-        self.proxy = Proxy(upstream_controller.hostname, 9025)
-        self.source = """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
+class AsyncMessageHandler(AsyncMessage):
+    handled_message = None
 
-Testing
-"""
-        # The upstream SMTPd will always receive the content as bytes
-        # delimited with CRLF.
-        self.expected = CRLF.join([
-            'From: Anne Person <anne@example.com>',
-            'To: Bart Person <bart@example.com>',
-            'Subject: A test',
-            'X-Peer: ::1',
-            '',
-            'Testing\r\n']).encode('ascii')
-
-    def test_deliver_bytes(self):
-        with ExitStack() as resources:
-            controller = Controller(self.proxy, port=9024)
-            controller.start()
-            resources.callback(controller.stop)
-            client = resources.enter_context(
-                SMTP(*(controller.hostname, controller.port)))
-            client.sendmail(
-                'anne@example.com', ['bart@example.com'], self.source)
-            client.quit()
-        self.assertEqual(self.upstream.content, self.expected)
-        self.assertEqual(self.upstream.original_content, self.expected)
-
-    def test_deliver_str(self):
-        with ExitStack() as resources:
-            controller = DecodingController(self.proxy, port=9024)
-            controller.start()
-            resources.callback(controller.stop)
-            client = resources.enter_context(
-                SMTP(*(controller.hostname, controller.port)))
-            client.sendmail(
-                'anne@example.com', ['bart@example.com'], self.source)
-            client.quit()
-        self.assertEqual(self.upstream.content, self.expected)
-        self.assertEqual(self.upstream.original_content, self.expected)
-
-
-class TestProxyMocked(unittest.TestCase):
-    def setUp(self):
-        handler = Proxy('localhost', 9025)
-        controller = DecodingController(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        self.address = (controller.hostname, controller.port)
-        self.source = """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
-
-Testing
-"""
-
-    def test_recipients_refused(self):
-        with ExitStack() as resources:
-            log_mock = resources.enter_context(patch('aiosmtpd.handlers.log'))
-            mock = resources.enter_context(
-                patch('aiosmtpd.handlers.smtplib.SMTP'))
-            mock().sendmail.side_effect = SMTPRecipientsRefused({
-                'bart@example.com': (500, 'Bad Bart'),
-                })
-            client = resources.enter_context(SMTP(*self.address))
-            client.sendmail(
-                'anne@example.com', ['bart@example.com'], self.source)
-            client.quit()
-            # The log contains information about what happened in the proxy.
-            self.assertEqual(
-                log_mock.info.call_args_list, [
-                    call('got SMTPRecipientsRefused'),
-                    call('we got some refusals: %s',
-                         {'bart@example.com': (500, 'Bad Bart')})]
-                )
-
-    def test_oserror(self):
-        with ExitStack() as resources:
-            log_mock = resources.enter_context(patch('aiosmtpd.handlers.log'))
-            mock = resources.enter_context(
-                patch('aiosmtpd.handlers.smtplib.SMTP'))
-            mock().sendmail.side_effect = OSError
-            client = resources.enter_context(SMTP(*self.address))
-            client.sendmail(
-                'anne@example.com', ['bart@example.com'], self.source)
-            client.quit()
-            # The log contains information about what happened in the proxy.
-            self.assertEqual(
-                log_mock.info.call_args_list, [
-                    call('we got some refusals: %s',
-                         {'bart@example.com': (-1, 'ignore')}),
-                    ]
-                )
+    async def handle_message(self, message):
+        self.handled_message = message
 
 
 class HELOHandler:
+    ReturnCode = StatusCode(250, b"pepoluan.was.here")
+
     async def handle_HELO(self, server, session, envelope, hostname):
-        return '250 geddy.example.com'
+        return self.ReturnCode.to_str()
 
 
 class EHLOHandlerDeprecated:
-    hostname = None
+    Domain = "alex.example.code"
+    ReturnCode = StatusCode(250, Domain.encode("ascii"))
 
     async def handle_EHLO(self, server, session, envelope, hostname):
-        self.hostname = hostname
-        return '250 alex.example.com'
+        return self.ReturnCode.to_str()
 
 
+# The suffix "New" is kept so we can catch all refs to the old "EHLOHandler" class
 class EHLOHandlerNew:
+    Domain = "bruce.example.code"
     hostname = None
     orig_responses = []
 
     def __init__(self, *features):
-        self.features = features
+        self.features = features or tuple()
 
     async def handle_EHLO(self, server, session, envelope, hostname, responses):
         self.hostname = hostname
+        self.orig_responses.clear()
         self.orig_responses.extend(responses)
         my_resp = [responses[0]]
         my_resp.extend(f"250-{f}" for f in self.features)
@@ -569,182 +121,58 @@ class EHLOHandlerIncompatibleLong:
 
 
 class MAILHandler:
+    ReplacementOptions = ["WAS_HANDLED"]
+    ReturnCode = StatusCode(250, b"Yeah, sure")
+
     async def handle_MAIL(self, server, session, envelope, address, options):
-        envelope.mail_options.extend(options)
-        return '250 Yeah, sure'
+        envelope.mail_options = self.ReplacementOptions
+        return self.ReturnCode.to_str()
 
 
 class RCPTHandler:
+    RejectCode = StatusCode(550, b"Rejected")
+
     async def handle_RCPT(self, server, session, envelope, address, options):
         envelope.rcpt_options.extend(options)
-        if address == 'bart@example.com':
-            return '550 Rejected'
+        if address == "bart@example.com":
+            return self.RejectCode.to_str()
         envelope.rcpt_tos.append(address)
-        return '250 OK'
+        return S.S250_OK.to_str()
 
 
-class DATAHandler:
+class ErroringDataHandler:
+    ReturnCode = StatusCode(599, b"Not today")
+
     async def handle_DATA(self, server, session, envelope):
-        return '599 Not today'
+        return self.ReturnCode.to_str()
 
 
 class AUTHHandler:
     async def handle_AUTH(self, server, session, envelope, args):
         server.authenticates = True
-        return '235 Authentication successful'
+        return S.S235_AUTH_SUCCESS.to_str()
 
 
 class NoHooksHandler:
     pass
 
 
-class TestHooks(unittest.TestCase):
-    def test_rcpt_hook(self):
-        controller = Controller(RCPTHandler())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            with self.assertRaises(SMTPRecipientsRefused) as cm:
-                client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: anne@example.com
-To: bart@example.com
-Subject: Test
+class DeprecatedHookController(Controller):
+    class DeprecatedHookServer(Server):
 
-""")
-            self.assertEqual(cm.exception.recipients, {
-                'bart@example.com': (550, b'Rejected'),
-                })
+        warnings: list = None
 
-    def test_helo_hook(self):
-        controller = Controller(HELOHandler())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, response = client.helo('me')
-        self.assertEqual(code, 250)
-        self.assertEqual(response, b'geddy.example.com')
+        def __init__(self, *args, **kws):
+            super().__init__(*args, **kws)
 
-    def test_ehlo_hook_oldsystem(self):
-        declare_myself = "me"
-        handler = EHLOHandlerDeprecated()
-        controller = Controller(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, response = client.ehlo(declare_myself)
-        self.assertEqual(code, 250)
-        self.assertEqual(declare_myself, handler.hostname)
-        lines = response.decode('utf-8').splitlines()
-        self.assertEqual(lines[-1], 'alex.example.com')
+        async def ehlo_hook(self):
+            pass
 
-    def test_ehlo_hook_newsystem(self):
-        declare_myself = "me"
-        handler = EHLOHandlerNew("FEATURE1", "FEATURE2 OPTION", "FEAT3 OPTA OPTB")
-        controller = Controller(handler)
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            code, response = client.ehlo(declare_myself)
-        self.assertEqual(code, 250)
-        self.assertEqual(declare_myself, handler.hostname)
-
-        self.assertIn("250-8BITMIME", handler.orig_responses)
-        self.assertIn("250-SMTPUTF8", handler.orig_responses)
-        self.assertNotIn("8bitmime", client.esmtp_features)
-        self.assertNotIn("smtputf8", client.esmtp_features)
-
-        self.assertIn("feature1", client.esmtp_features)
-        self.assertIn("feature2", client.esmtp_features)
-        self.assertEqual("OPTION", client.esmtp_features["feature2"])
-        self.assertIn("feat3", client.esmtp_features)
-        self.assertEqual("OPTA OPTB", client.esmtp_features["feat3"])
-        self.assertIn("help", client.esmtp_features)
-
-    def test_ehlo_hook_incompat_short(self):
-        handler = EHLOHandlerIncompatibleShort()
-        controller = Controller(handler)
-        self.addCleanup(controller.stop)
-        with self.assertRaises(RuntimeError):
-            controller.start()
-
-    def test_ehlo_hook_incompat_long(self):
-        handler = EHLOHandlerIncompatibleLong()
-        controller = Controller(handler)
-        self.addCleanup(controller.stop)
-        with self.assertRaises(RuntimeError):
-            controller.start()
-
-    def test_mail_hook(self):
-        controller = Controller(MAILHandler())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.helo('me')
-            code, response = client.mail('anne@example.com')
-        self.assertEqual(code, 250)
-        self.assertEqual(response, b'Yeah, sure')
-
-    def test_data_hook(self):
-        controller = Controller(DATAHandler())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            with self.assertRaises(SMTPDataError) as cm:
-                client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: anne@example.com
-To: bart@example.com
-Subject: Test
-
-Yikes
-""")
-            self.assertEqual(cm.exception.smtp_code, 599)
-            self.assertEqual(cm.exception.smtp_error, b'Not today')
-
-    def test_auth_hook(self):
-        controller = AUTHDecodingController(AUTHHandler())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.ehlo('me')
-            code, response = client.login("test", "test")
-        self.assertEqual(code, 235)
-        self.assertEqual(response, b'Authentication successful')
-
-    def test_no_hooks(self):
-        controller = Controller(NoHooksHandler())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.helo('me')
-            client.mail('anne@example.com')
-            client.rcpt(['bart@example.com'])
-            code, response = client.data("""\
-From: anne@example.com
-To: bart@example.com
-Subject: Test
-
-""")
-            self.assertEqual(code, 250)
-
-
-class CapturingServer(Server):
-    def __init__(self, *args, **kws):
-        self.warnings = None
-        super().__init__(*args, **kws)
-
-    async def smtp_DATA(self, arg):
-        with patch('aiosmtpd.smtp.warn') as mock:
-            await super().smtp_DATA(arg)
-        self.warnings = mock.call_args_list
-
-
-class CapturingController(Controller):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.smtpd = None
+        async def rset_hook(self):
+            pass
 
     def factory(self):
-        self.smtpd = CapturingServer(self.handler)
+        self.smtpd = self.DeprecatedHookServer(self.handler)
         return self.smtpd
 
 
@@ -758,108 +186,791 @@ class AsyncDeprecatedHandler:
         pass
 
 
-class DeprecatedHookServer(Server):
-    def __init__(self, *args, **kws):
-        self.warnings = None
-        super().__init__(*args, **kws)
-
-    async def smtp_EHLO(self, arg):
-        with patch('aiosmtpd.smtp.warn') as mock:
-            await super().smtp_EHLO(arg)
-        self.warnings = mock.call_args_list
-
-    async def smtp_RSET(self, arg):
-        with patch('aiosmtpd.smtp.warn') as mock:
-            await super().smtp_RSET(arg)
-        self.warnings = mock.call_args_list
-
-    async def ehlo_hook(self):
-        pass
-
-    async def rset_hook(self):
-        pass
+# endregion
 
 
-class DeprecatedHookController(Controller):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.smtpd = None
-
-    def factory(self):
-        self.smtpd = DeprecatedHookServer(self.handler)
-        return self.smtpd
+# region ##### Fixtures #######################################################
 
 
-class TestDeprecation(unittest.TestCase):
-    # handler.process_message() is deprecated.
-    def test_deprecation(self):
-        controller = CapturingController(DeprecatedHandler())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
+@pytest.fixture
+def debugging_controller(get_controller) -> Generator[Controller, None, None]:
+    # Cannot use plain_controller fixture because we need to first create the
+    # Debugging handler before creating the controller.
+    stream = StringIO()
+    handler = Debugging(stream)
+    controller = get_controller(handler)
+    controller.start()
+    Global.set_addr_from(controller)
+    #
+    yield controller
+    #
+    controller.stop()
+    stream.close()
 
-Testing
-""")
-        self.assertEqual(len(controller.smtpd.warnings), 1)
-        self.assertEqual(
-            controller.smtpd.warnings[0],
-            call('Use handler.handle_DATA() instead of .process_message()',
-                 DeprecationWarning))
 
-    def test_deprecation_async(self):
-        controller = CapturingController(AsyncDeprecatedHandler())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.sendmail('anne@example.com', ['bart@example.com'], """\
-From: Anne Person <anne@example.com>
-To: Bart Person <bart@example.com>
-Subject: A test
+@pytest.fixture
+def temp_maildir(tmp_path: Path) -> Generator[Path, None, None]:
+    maildir_path = tmp_path / "maildir"
+    yield maildir_path
 
-Testing
-""")
-        self.assertEqual(len(controller.smtpd.warnings), 1)
-        self.assertEqual(
-            controller.smtpd.warnings[0],
-            call('Use handler.handle_DATA() instead of .process_message()',
-                 DeprecationWarning))
 
-    def test_ehlo_hook_deprecation(self):
-        controller = DeprecatedHookController(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.ehlo('example.com')
-        self.assertEqual(len(controller.smtpd.warnings), 1)
-        self.assertEqual(
-            controller.smtpd.warnings[0],
-            call('Use handler.handle_EHLO() instead of .ehlo_hook()',
-                 DeprecationWarning))
+@pytest.fixture
+def mailbox_controller(
+        temp_maildir, get_controller
+) -> Generator[Controller, None, None]:
+    handler = Mailbox(temp_maildir)
+    controller = get_controller(handler)
+    controller.start()
+    Global.set_addr_from(controller)
+    #
+    yield controller
+    #
+    controller.stop()
 
-    def test_rset_hook_deprecation(self):
-        controller = DeprecatedHookController(Sink())
-        controller.start()
-        self.addCleanup(controller.stop)
-        with SMTP(controller.hostname, controller.port) as client:
-            client.rset()
-        self.assertEqual(len(controller.smtpd.warnings), 1)
-        self.assertEqual(
-            controller.smtpd.warnings[0],
-            call('Use handler.handle_RSET() instead of .rset_hook()',
-                 DeprecationWarning))
 
-    @patch("aiosmtpd.smtp.warn")
-    def test_handle_ehlo_4arg_deprecation(self, mock_warn: Mock):
-        handler = EHLOHandlerDeprecated()
-        _ = Server(handler)
-        mock_warn.assert_called_with(
-            "Use the 5-argument handle_EHLO() hook instead of "
-            "the 4-argument handle_EHLO() hook; "
-            "support for the 4-argument handle_EHLO() hook will be "
-            "removed in version 2.0",
-            DeprecationWarning
+@pytest.fixture
+def with_fake_parser():
+    """
+    Gets a function that will instantiate a handler_class using the class's
+    from_cli() @classmethod, using FakeParser as the parser.
+
+    This function will also catch any exceptions and store the exception's type --
+    alongside any message passed to FakeParser.error() -- in the handler object itself
+    (using the HasFakeParser protocol/mixin).
+    """
+    parser = FakeParser()
+
+    def handler_initer(handler_class: Type[T], *args) -> Union[T, HasFakeParser]:
+        handler: Union[T, HasFakeParser]
+        try:
+            handler = handler_class.from_cli(parser, *args)
+            handler.fparser = parser
+            handler.exception = None
+        except (Exception, SystemExit) as e:
+            handler = SimpleNamespace(fparser=parser, exception=type(e))
+        return handler
+
+    yield handler_initer
+
+
+@pytest.fixture
+def upstream_controller(get_controller) -> Generator[Controller, None, None]:
+    upstream_handler = DataHandler()
+    upstream_controller = get_controller(upstream_handler, port=9025)
+    upstream_controller.start()
+    # Notice that we do NOT invoke Global.set_addr_from() here
+    #
+    yield upstream_controller
+    #
+    upstream_controller.stop()
+
+
+@pytest.fixture
+def proxy_nodecode_controller(
+    upstream_controller, get_controller
+) -> Generator[Union[Controller, KnowsUpstream], None, None]:
+    proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
+    proxy_controller = get_controller(proxy_handler)
+    proxy_controller.upstream = upstream_controller
+    proxy_controller.start()
+    Global.set_addr_from(proxy_controller)
+    #
+    yield proxy_controller
+    #
+    proxy_controller.stop()
+
+
+@pytest.fixture
+def proxy_decoding_controller(
+    upstream_controller, get_controller
+) -> Generator[Union[Controller, KnowsUpstream], None, None]:
+    proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
+    proxy_controller = get_controller(proxy_handler, decode_data=True)
+    proxy_controller.upstream = upstream_controller
+    proxy_controller.start()
+    Global.set_addr_from(proxy_controller)
+    #
+    yield proxy_controller
+    #
+    proxy_controller.stop()
+
+
+# endregion
+
+
+class TestDebugging:
+    @controller_data(decode_data=True)
+    def test_debugging(self, debugging_controller, client):
+        peer = client.sock.getsockname()
+        client.sendmail(
+            "anne@example.com",
+            ["bart@example.com"],
+            dedent(
+                """\
+                From: Anne Person <anne@example.com>
+                To: Bart Person <bart@example.com>
+                Subject: A test
+    
+                Testing
+                """
+            ),
         )
+        handler = debugging_controller.handler
+        assert isinstance(handler, Debugging)
+        text = handler.stream.getvalue()
+        assert text == dedent(
+            f"""\
+            ---------- MESSAGE FOLLOWS ----------
+            mail options: ['SIZE=102']
+
+            From: Anne Person <anne@example.com>
+            To: Bart Person <bart@example.com>
+            Subject: A test
+            X-Peer: {peer!r}
+
+            Testing
+            ------------ END MESSAGE ------------
+            """
+        )
+
+    def test_debugging_bytes(self, debugging_controller, client):
+        peer = client.sock.getsockname()
+        client.sendmail(
+            "anne@example.com",
+            ["bart@example.com"],
+            dedent(
+                """\
+                From: Anne Person <anne@example.com>
+                To: Bart Person <bart@example.com>
+                Subject: A test
+    
+                Testing
+                """
+            ),
+        )
+        handler = debugging_controller.handler
+        assert isinstance(handler, Debugging)
+        text = handler.stream.getvalue()
+        assert text == dedent(
+            f"""\
+            ---------- MESSAGE FOLLOWS ----------
+            mail options: ['SIZE=102']
+
+            From: Anne Person <anne@example.com>
+            To: Bart Person <bart@example.com>
+            Subject: A test
+            X-Peer: {peer!r}
+
+            Testing
+            ------------ END MESSAGE ------------
+            """
+        )
+
+    def test_debugging_without_options(self, debugging_controller, client):
+        # Prevent ESMTP options.
+        client.helo()
+        peer = client.sock.getsockname()
+        client.sendmail(
+            "anne@example.com",
+            ["bart@example.com"],
+            dedent(
+                """\
+                From: Anne Person <anne@example.com>
+                To: Bart Person <bart@example.com>
+                Subject: A test
+    
+                Testing
+                """
+            ),
+        )
+        handler = debugging_controller.handler
+        assert isinstance(handler, Debugging)
+        text = handler.stream.getvalue()
+        assert text == dedent(
+            f"""\
+            ---------- MESSAGE FOLLOWS ----------
+            From: Anne Person <anne@example.com>
+            To: Bart Person <bart@example.com>
+            Subject: A test
+            X-Peer: {peer!r}
+
+            Testing
+            ------------ END MESSAGE ------------
+            """
+        )
+
+    def test_debugging_with_options(self, debugging_controller, client):
+        peer = client.sock.getsockname()
+        client.sendmail(
+            "anne@example.com",
+            ["bart@example.com"],
+            dedent(
+                """\
+                From: Anne Person <anne@example.com>
+                To: Bart Person <bart@example.com>
+                Subject: A test
+    
+                Testing
+                """
+            ),
+            mail_options=["BODY=7BIT"],
+        )
+        handler = debugging_controller.handler
+        assert isinstance(handler, Debugging)
+        text = handler.stream.getvalue()
+        assert text == dedent(
+            f"""\
+            ---------- MESSAGE FOLLOWS ----------
+            mail options: ['SIZE=102', 'BODY=7BIT']
+
+            From: Anne Person <anne@example.com>
+            To: Bart Person <bart@example.com>
+            Subject: A test
+            X-Peer: {peer!r}
+
+            Testing
+            ------------ END MESSAGE ------------
+            """
+        )
+
+
+class TestMessage:
+    @handler_data(class_=DataHandler)
+    def test_message(self, plain_controller, client):
+        handler = plain_controller.handler
+        assert isinstance(handler, DataHandler)
+        # In this test, the message content comes in as a bytes.
+        client.sendmail(
+            "anne@example.com",
+            ["bart@example.com"],
+            dedent(
+                """\
+                From: Anne Person <anne@example.com>
+                To: Bart Person <bart@example.com>
+                Subject: A test
+                Message-ID: <ant>
+    
+                Testing
+                """
+            ),
+        )
+        # The content is not converted, so it's bytes.
+        assert handler.content == handler.original_content
+        assert isinstance(handler.content, bytes)
+        assert isinstance(handler.original_content, bytes)
+
+    @handler_data(class_=DataHandler)
+    def test_message_decoded(self, decoding_controller, client):
+        handler = decoding_controller.handler
+        assert isinstance(handler, DataHandler)
+        # In this test, the message content comes in as a string.
+        client.sendmail(
+            "anne@example.com",
+            ["bart@example.com"],
+            dedent(
+                """\
+                From: Anne Person <anne@example.com>
+                To: Bart Person <bart@example.com>
+                Subject: A test
+                Message-ID: <ant>
+    
+                Testing
+                """
+            ),
+        )
+        assert handler.content != handler.original_content
+        assert isinstance(handler.content, str)
+        assert isinstance(handler.original_content, bytes)
+
+    @handler_data(class_=AsyncMessageHandler)
+    def test_message_async(self, plain_controller, client):
+        handler = plain_controller.handler
+        assert isinstance(handler, AsyncMessageHandler)
+        # In this test, the message data comes in as bytes.
+        client.sendmail(
+            "anne@example.com",
+            ["bart@example.com"],
+            dedent(
+                """\
+                From: Anne Person <anne@example.com>
+                To: Bart Person <bart@example.com>
+                Subject: A test
+                Message-ID: <ant>
+    
+                Testing
+                """
+            ),
+        )
+        handled_message = handler.handled_message
+        assert handled_message["subject"] == "A test"
+        assert handled_message["message-id"] == "<ant>"
+        assert handled_message["X-Peer"] is not None
+        assert handled_message["X-MailFrom"] == "anne@example.com"
+        assert handled_message["X-RcptTo"] == "bart@example.com"
+
+    @handler_data(class_=AsyncMessageHandler)
+    def test_message_decoded_async(self, decoding_controller, client):
+        handler = decoding_controller.handler
+        assert isinstance(handler, AsyncMessageHandler)
+        # With a server that decodes the data, the messages come in as
+        # strings.  There's no difference in the message seen by the
+        # handler's handle_message() method, but internally this gives full
+        # coverage.
+        client.sendmail(
+            "anne@example.com",
+            ["bart@example.com"],
+            dedent(
+                """\
+                From: Anne Person <anne@example.com>
+                To: Bart Person <bart@example.com>
+                Subject: A test
+                Message-ID: <ant>
+    
+                Testing
+                """
+            ),
+        )
+        handled_message = handler.handled_message
+        assert handled_message["subject"] == "A test"
+        assert handled_message["message-id"] == "<ant>"
+        assert handled_message["X-Peer"] is not None
+        assert handled_message["X-MailFrom"] == "anne@example.com"
+        assert handled_message["X-RcptTo"] == "bart@example.com"
+
+
+class TestMailbox:
+    def test_mailbox(self, temp_maildir, mailbox_controller, client):
+        client.sendmail(
+            "aperson@example.com",
+            ["bperson@example.com"],
+            dedent(
+                """\
+                From: Anne Person <anne@example.com>
+                To: Bart Person <bart@example.com>
+                Subject: A test
+                Message-ID: <ant>
+    
+                Hi Bart, this is Anne.
+                """
+            ),
+        )
+        client.sendmail(
+            "cperson@example.com",
+            ["dperson@example.com"],
+            dedent(
+                """\
+                From: Cate Person <cate@example.com>
+                To: Dave Person <dave@example.com>
+                Subject: A test
+                Message-ID: <bee>
+    
+                Hi Dave, this is Cate.
+                """
+            ),
+        )
+        client.sendmail(
+            "eperson@example.com",
+            ["fperson@example.com"],
+            dedent(
+                """\
+                From: Elle Person <elle@example.com>
+                To: Fred Person <fred@example.com>
+                Subject: A test
+                Message-ID: <cat>
+    
+                Hi Fred, this is Elle.
+                """
+            ),
+        )
+        # Check the messages in the mailbox.
+        mailbox = Maildir(temp_maildir)
+        messages = sorted(mailbox, key=itemgetter("message-id"))
+        assert list(message["message-id"] for message in messages) == [
+            "<ant>",
+            "<bee>",
+            "<cat>",
+        ]
+
+    def test_mailbox_reset(self, temp_maildir, mailbox_controller, client):
+        client.sendmail(
+            "aperson@example.com",
+            ["bperson@example.com"],
+            dedent(
+                """\
+                From: Anne Person <anne@example.com>
+                To: Bart Person <bart@example.com>
+                Subject: A test
+                Message-ID: <ant>
+    
+                Hi Bart, this is Anne.
+                """
+            ),
+        )
+        mailbox_controller.handler.reset()
+        mailbox = Maildir(temp_maildir)
+        assert list(mailbox) == []
+
+
+class TestCLI:
+    def test_debugging_no_args(self, with_fake_parser):
+        handler = with_fake_parser(Debugging)
+        assert handler.exception is None
+        assert handler.fparser.message is None
+        assert handler.stream == sys.stdout
+
+    def test_debugging_two_args(self, with_fake_parser):
+        handler = with_fake_parser(Debugging, "foo", "bar")
+        assert handler.exception is SystemExit
+        assert handler.fparser.message == "Debugging usage: [stdout|stderr]"
+
+    def test_debugging_stdout(self, with_fake_parser):
+        handler = with_fake_parser(Debugging, "stdout")
+        assert handler.exception is None
+        assert handler.fparser.message is None
+        assert handler.stream == sys.stdout
+
+    def test_debugging_stderr(self, with_fake_parser):
+        handler = with_fake_parser(Debugging, "stderr")
+        assert handler.exception is None
+        assert handler.fparser.message is None
+        assert handler.stream == sys.stderr
+
+    def test_debugging_bad_argument(self, with_fake_parser):
+        handler = with_fake_parser(Debugging, "stdfoo")
+        assert handler.exception is SystemExit
+        assert handler.fparser.message == "Debugging usage: [stdout|stderr]"
+
+    def test_sink_no_args(self, with_fake_parser):
+        handler = with_fake_parser(Sink)
+        assert handler.exception is None
+        assert handler.fparser.message is None
+        assert isinstance(handler, Sink)
+
+    def test_sink_any_args(self, with_fake_parser):
+        handler = with_fake_parser(Sink, "foo")
+        assert handler.exception is SystemExit
+        assert handler.fparser.message == "Sink handler does not accept arguments"
+
+    def test_mailbox_no_args(self, with_fake_parser):
+        handler = with_fake_parser(Mailbox)
+        assert handler.exception is SystemExit
+        assert handler.fparser.message == "The directory for the maildir is required"
+
+    def test_mailbox_too_many_args(self, with_fake_parser):
+        handler = with_fake_parser(Mailbox, "foo", "bar", "baz")
+        assert handler.exception is SystemExit
+        assert handler.fparser.message == "Too many arguments for Mailbox handler"
+
+    def test_mailbox(self, with_fake_parser, temp_maildir):
+        handler = with_fake_parser(Mailbox, temp_maildir)
+        assert handler.exception is None
+        assert handler.fparser.message is None
+        assert isinstance(handler.mailbox, Maildir)
+        assert handler.mail_dir == temp_maildir
+
+
+class TestProxy:
+    sender_addr = "anne@example.com"
+    receiver_addr = "bart@example.com"
+
+    source_lines = [
+        f"From: Anne Person <{sender_addr}>",
+        f"To: Bart Person <{receiver_addr}>",
+        "Subject: A test",
+        "%s",  # Insertion point; see below
+        "Testing",
+        "",
+    ]
+
+    # For "source" we insert an empty string
+    source = "\n".join(source_lines) % ""
+
+    # For "expected" we insert X-Peer with yet another template
+    expected_template = (
+        b"\r\n".join(ln.encode("ascii") for ln in source_lines) % b"X-Peer: %s\r\n"
+    )
+
+    # There are two controllers and two SMTPd's running here.  The
+    # "upstream" one listens on port 9025 and is connected to a "data
+    # handler" which captures the messages it receives.  The second -and
+    # the one under test here- listens on port 9024 and proxies to the one
+    # on port 9025.
+
+    def test_deliver_bytes(self, proxy_nodecode_controller, client):
+        client.sendmail(self.sender_addr, [self.receiver_addr], self.source)
+        upstream = proxy_nodecode_controller.upstream
+        upstream_handler = upstream.handler
+        assert isinstance(upstream_handler, DataHandler)
+        proxysess: ServerSession = proxy_nodecode_controller.smtpd.session
+        expected = self.expected_template % proxysess.peer[0].encode("ascii")
+        assert upstream.handler.content == expected
+        assert upstream.handler.original_content == expected
+
+    def test_deliver_str(self, proxy_decoding_controller, client):
+        client.sendmail(self.sender_addr, [self.receiver_addr], self.source)
+        upstream = proxy_decoding_controller.upstream
+        upstream_handler = upstream.handler
+        assert isinstance(upstream_handler, DataHandler)
+        proxysess: ServerSession = proxy_decoding_controller.smtpd.session
+        expected = self.expected_template % proxysess.peer[0].encode("ascii")
+        assert upstream.handler.content == expected
+        assert upstream.handler.original_content == expected
+
+
+class TestProxyMocked:
+    BAD_BART = {"bart@example.com": (500, "Bad Bart")}
+    SOURCE = dedent(
+        """\
+        From: Anne Person <anne@example.com>
+        To: Bart Person <bart@example.com>
+        Subject: A test
+
+        Testing
+        """
+    )
+
+    @pytest.fixture
+    def patch_smtp_refused(self, mocker):
+        mock = mocker.patch("aiosmtpd.handlers.smtplib.SMTP")
+        mock().sendmail.side_effect = SMTPRecipientsRefused(self.BAD_BART)
+
+    def test_recipients_refused(
+        self, caplog, patch_smtp_refused, proxy_decoding_controller, client
+    ):
+        logger_name = "mail.debug"
+        caplog.set_level(logging.INFO, logger=logger_name)
+        client.sendmail("anne@example.com", ["bart@example.com"], self.SOURCE)
+        # The log contains information about what happened in the proxy.
+        # Ideally it would be the newest 2 log records. However, sometimes asyncio
+        # will emit a log entry right afterwards or inbetween causing test fail if we
+        # just checked [-1] and [-2]. Therefore we need to scan backwards and simply
+        # note the two log entries' relative position
+        _l1 = _l2 = -1
+        for _l1, rt in enumerate(reversed(caplog.record_tuples)):
+            if rt == (logger_name, logging.INFO, "got SMTPRecipientsRefused"):
+                break
+        else:
+            pytest.fail("Can't find first log entry")
+        for _l2, rt in enumerate(reversed(caplog.record_tuples)):
+            if rt == (
+                logger_name,
+                logging.INFO,
+                f"we got some refusals: {self.BAD_BART}",
+            ):
+                break
+        else:
+            pytest.fail("Can't find second log entry")
+        assert _l2 < _l1, "Log entries in wrong order"
+
+    @pytest.fixture
+    def patch_smtp_oserror(self, mocker):
+        mock = mocker.patch("aiosmtpd.handlers.smtplib.SMTP")
+        mock().sendmail.side_effect = OSError
+        yield
+
+    def test_oserror(
+        self, caplog, patch_smtp_oserror, proxy_decoding_controller, client
+    ):
+        logger_name = "mail.debug"
+        caplog.set_level(logging.INFO, logger=logger_name)
+        client.sendmail("anne@example.com", ["bart@example.com"], self.SOURCE)
+        _l1 = -1
+        for _l1, rt in enumerate(reversed(caplog.record_tuples)):
+            if rt == (
+                logger_name,
+                logging.INFO,
+                "we got some refusals: {'bart@example.com': (-1, 'ignore')}",
+            ):
+                break
+        else:
+            pytest.fail("Can't find log entry")
+
+
+class TestHooks:
+    @handler_data(class_=HELOHandler)
+    def test_hook_HELO(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, HELOHandler)
+        resp = client.helo("me")
+        assert resp == HELOHandler.ReturnCode
+
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
+    @handler_data(class_=EHLOHandlerDeprecated)
+    def test_hook_EHLO_deprecated(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, EHLOHandlerDeprecated)
+        code, mesg = client.ehlo("me")
+        lines = mesg.decode("utf-8").splitlines()
+        assert code == 250
+        assert lines[-1] == EHLOHandlerDeprecated.Domain
+
+    def test_hook_EHLO_deprecated_warning(self):
+        with pytest.warns(
+                DeprecationWarning,
+                match=(
+                    # Is a regex; escape regex special chars if necessary
+                    r"Use the 5-argument handle_EHLO\(\) hook instead of the "
+                    r"4-argument handle_EHLO\(\) hook; support for the 4-argument "
+                    r"handle_EHLO\(\) hook will be removed in version 2.0"
+                )
+        ):
+            _ = Server(EHLOHandlerDeprecated())
+
+    @handler_data(
+        class_=EHLOHandlerNew,
+        args_=("FEATURE1", "FEATURE2 OPTION", "FEAT3 OPTA OPTB"),
+    )
+    def test_hook_EHLO_new(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, EHLOHandlerNew)
+        code, mesg = client.ehlo("me")
+        lines = mesg.decode("utf-8").splitlines()
+        assert code == 250
+        assert len(lines) == 5  # server name + 3 features + HELP
+        handler = plain_controller.handler
+        assert "250-8BITMIME" in handler.orig_responses
+        assert "8bitmime" not in client.esmtp_features
+        assert "250-SMTPUTF8" in handler.orig_responses
+        assert "smtputf8" not in client.esmtp_features
+
+        assert "feature1" in client.esmtp_features
+        assert "feature2" in client.esmtp_features
+        assert client.esmtp_features["feature2"] == "OPTION"
+        assert "feat3" in client.esmtp_features
+        assert client.esmtp_features["feat3"] == "OPTA OPTB"
+        assert "help" in client.esmtp_features
+
+    @pytest.mark.parametrize(
+        "handler_class",
+        [EHLOHandlerIncompatibleShort, EHLOHandlerIncompatibleLong],
+        ids=["TooShort", "TooLong"],
+    )
+    def test_hook_EHLO_incompat(self, handler_class):
+        with pytest.raises(RuntimeError, match="Unsupported EHLO Hook"):
+            _ = Server(handler_class())
+
+    @handler_data(class_=MAILHandler)
+    def test_hook_MAIL(self, plain_controller, client):
+        assert isinstance(plain_controller, Controller)
+        handler = plain_controller.handler
+        assert isinstance(handler, MAILHandler)
+        client.ehlo("me")
+        resp = client.mail("anne@example.com", ("BODY=7BIT", "SIZE=2000"))
+        assert resp == MAILHandler.ReturnCode
+        smtpd = plain_controller.smtpd
+        assert smtpd.envelope.mail_options == MAILHandler.ReplacementOptions
+
+    @handler_data(class_=RCPTHandler)
+    def test_hook_RCPT(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, RCPTHandler)
+        client.helo("me")
+        with pytest.raises(SMTPRecipientsRefused) as excinfo:
+            client.sendmail(
+                "anne@example.com",
+                ["bart@example.com"],
+                dedent(
+                    """\
+                    From: anne@example.com
+                    To: bart@example.com
+                    Subject: Test
+
+                    """
+                ),
+            )
+        assert excinfo.value.recipients == {
+            "bart@example.com": RCPTHandler.RejectCode,
+        }
+
+    @handler_data(class_=ErroringDataHandler)
+    def test_hook_DATA(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, ErroringDataHandler)
+        with pytest.raises(SMTPDataError) as excinfo:
+            client.sendmail(
+                "anne@example.com",
+                ["bart@example.com"],
+                dedent(
+                    """\
+                    From: anne@example.com
+                    To: bart@example.com
+                    Subject: Test
+
+                    Yikes
+                    """
+                ),
+            )
+        expected: StatusCode = ErroringDataHandler.ReturnCode
+        assert excinfo.value.smtp_code == expected.code
+        assert excinfo.value.smtp_error == expected.mesg
+
+    @controller_data(decode_data=True, auth_require_tls=False)
+    @handler_data(class_=AUTHHandler)
+    def test_hook_AUTH(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, AUTHHandler)
+        client.ehlo("me")
+        resp = client.login("test", "test")
+        assert resp == S.S235_AUTH_SUCCESS
+
+    @handler_data(class_=NoHooksHandler)
+    def test_hook_NoHooks(self, plain_controller, client):
+        assert isinstance(plain_controller.handler, NoHooksHandler)
+        client.helo("me")
+        client.mail("anne@example.com")
+        client.rcpt(["bart@example.cm"])
+        code, _ = client.data(
+            dedent(
+                """\
+                From: anne@example.com
+                To: bart@example.com
+                Subject: Test
+    
+                """
+            )
+        )
+        assert code == 250
+
+
+class TestDeprecation:
+    def _process_message_testing(self, controller, client):
+        assert isinstance(controller, Controller)
+        expectedre = r"Use handler.handle_DATA\(\) instead of .process_message\(\)"
+        with pytest.warns(DeprecationWarning, match=expectedre):
+            client.sendmail(
+                "anne@example.com",
+                ["bart@example.com"],
+                dedent(
+                    """
+                    From: Anne Person <anne@example.com>
+                    To: Bart Person <bart@example.com>
+                    Subject: A test
+    
+                    Testing
+                    """
+                ),
+            )
+
+    @handler_data(class_=DeprecatedHandler)
+    def test_process_message(self, plain_controller, client):
+        """handler.process_message is Deprecated"""
+        handler = plain_controller.handler
+        assert isinstance(handler, DeprecatedHandler)
+        controller = plain_controller
+        self._process_message_testing(controller, client)
+
+    @handler_data(class_=AsyncDeprecatedHandler)
+    def test_process_message_async(self, plain_controller, client):
+        """handler.process_message is Deprecated"""
+        handler = plain_controller.handler
+        assert isinstance(handler, AsyncDeprecatedHandler)
+        controller = plain_controller
+        self._process_message_testing(controller, client)
+
+    @controller_data(class_=DeprecatedHookController)
+    def test_ehlo_hook(self, plain_controller, client):
+        """SMTP.ehlo_hook is Deprecated"""
+        expectedre = r"Use handler.handle_EHLO\(\) instead of .ehlo_hook\(\)"
+        with pytest.warns(DeprecationWarning, match=expectedre):
+            client.ehlo("example.com")
+
+    @controller_data(class_=DeprecatedHookController)
+    def test_rset_hook(self, plain_controller, client):
+        """SMTP.rset_hook is Deprecated"""
+        expectedre = r"Use handler.handle_RSET\(\) instead of .rset_hook\(\)"
+        with pytest.warns(DeprecationWarning, match=expectedre):
+            client.rset()
