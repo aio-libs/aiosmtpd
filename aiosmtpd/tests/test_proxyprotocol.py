@@ -662,6 +662,23 @@ class TestProxyProtocolV1Controller:
         assert plain_controller.smtpd._proxy_timeout > 0.0
         self._okay()
 
+    def test_hiccup(self, plain_controller):
+        assert plain_controller.smtpd._proxy_timeout > 0.0
+        prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect(Global.SrvAddr)
+            sock.sendall(prox_test[0:20])
+            time.sleep(0.01)
+            sock.sendall(prox_test[20:])
+            resp = sock.makefile("rb").readline()
+            assert resp.startswith(b"220 ")
+            with SMTPClient() as client:
+                client.sock = sock
+                code, mesg = client.ehlo("example.org")
+                assert code == 250
+                code, mesg = client.quit()
+                assert code == 221
+
     def test_timeout(self, plain_controller):
         assert plain_controller.smtpd._proxy_timeout > 0.0
         prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
