@@ -19,8 +19,6 @@ import sys
 
 from pathlib import Path
 
-from aiosmtpd import __version__
-
 try:
     # noinspection PyPackageRequirements
     from colorama import init as colorama_init  # pytype: disable=import-error
@@ -36,9 +34,18 @@ RE__VERSION = re.compile(r"""__version__ = (['"])(?P<ver>[^'"]+)(\1)""")
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-curdir = Path(".").expanduser().absolute()
-sys.path.insert(0, str(curdir / "_exts"))
-sys.path.insert(0, str(curdir.parent))
+repo_root = Path("../..").expanduser().absolute()
+
+
+def syspath_insert(pth: Path):
+    print(f"Inserting {pth}")
+    sys.path.insert(0, str(pth))
+
+
+syspath_insert(repo_root)
+syspath_insert(repo_root / "aiosmtpd" / "docs" / "_exts")
+syspath_insert(repo_root / "aiosmtpd")
+
 
 # region -- General configuration ------------------------------------------------
 
@@ -82,6 +89,10 @@ copyright = f"2015-{datetime.datetime.now().year}, {author}"
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
+
+from aiosmtpd import __version__  # noqa: E402
+# "noqa: E402" used to silence flake8 protest
+
 release = __version__
 version = __version__
 
