@@ -544,8 +544,11 @@ class SMTP(asyncio.StreamReaderProtocol):
                 status = await self._call_handler_hook("PROXY")
             else:
                 status = False
+            await asyncio.sleep(0)
             if status is MISSING or not status:
                 self.transport.close()
+            await asyncio.sleep(0)
+            if not self.transport:
                 return self._handler_coroutine.cancel()
             self._reset_timeout()
 

@@ -644,29 +644,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
 @controller_data(proxy_protocol_timeout=0.3)
 @handler_data(class_=ProxyPeekerHandler)
 class TestProxyProtocolV1Controller:
-    def test_timeout(self, plain_controller):
-        assert plain_controller.smtpd._proxy_timeout > 0.0
-        prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect(Global.SrvAddr)
-            time.sleep(plain_controller.smtpd._proxy_timeout * 1.1)
-            with pytest.raises(ConnectionAbortedError):
-                sock.send(prox_test)
-                _ = sock.recv(4096)
-
-    def test_nonewline(self, plain_controller):
-        assert plain_controller.smtpd._proxy_timeout > 0.0
-        prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r"
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect(Global.SrvAddr)
-            sock.send(prox_test)
-            time.sleep(plain_controller.smtpd._proxy_timeout * 1.1)
-            with pytest.raises(ConnectionAbortedError):
-                sock.send(b"\n")
-                _ = sock.recv(4096)
-
-    def test_okay(self, plain_controller):
-        assert plain_controller.smtpd._proxy_timeout > 0.0
+    def _okay(self):
         prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
@@ -679,3 +657,42 @@ class TestProxyProtocolV1Controller:
                 assert code == 250
                 code, mesg = client.quit()
                 assert code == 221
+
+    def test_okay(self, plain_controller):
+        assert plain_controller.smtpd._proxy_timeout > 0.0
+        self._okay()
+
+    def test_timeout(self, plain_controller):
+        assert plain_controller.smtpd._proxy_timeout > 0.0
+        prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect(Global.SrvAddr)
+            time.sleep(plain_controller.smtpd._proxy_timeout * 1.1)
+            with pytest.raises(ConnectionAbortedError):
+                sock.send(prox_test)
+                resp = sock.recv(4096)
+                # I am totally NOT happy with this workaround, but I can't find
+                # a better way. Feel free to submit a PR.
+                if resp == b"":
+                    raise ConnectionAbortedError
+        # Assert that we can connect properly afterwards (that is, server is not
+        # terminated)
+        self._okay()
+
+    def test_nonewline(self, plain_controller):
+        assert plain_controller.smtpd._proxy_timeout > 0.0
+        prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r"
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect(Global.SrvAddr)
+            sock.send(prox_test)
+            time.sleep(plain_controller.smtpd._proxy_timeout * 1.1)
+            with pytest.raises(ConnectionAbortedError):
+                sock.send(b"\n")
+                resp = sock.recv(4096)
+                # I am totally NOT happy with this workaround, but I can't find
+                # a better way. Feel free to submit a PR.
+                if resp == b"":
+                    raise ConnectionAbortedError
+        # Assert that we can connect properly afterwards (that is, server is not
+        # terminated)
+        self._okay()
