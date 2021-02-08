@@ -763,3 +763,20 @@ class TestProxyProtocolV2Controller:
                 assert code == 250
                 code, mesg = client.quit()
                 assert code == 221
+
+    def test_timeout(self, plain_controller):
+        assert plain_controller.smtpd._proxy_timeout > 0.0
+        prox_test = TEST_V2_DATA_EXACT
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect(Global.SrvAddr)
+            time.sleep(plain_controller.smtpd._proxy_timeout * 1.1)
+            with pytest.raises(ConnectionAbortedError):
+                sock.send(prox_test)
+                resp = sock.recv(4096)
+                # I am totally NOT happy with this workaround, but I can't find
+                # a better way. Feel free to submit a PR.
+                if resp == b"":
+                    raise ConnectionAbortedError
+        # Assert that we can connect properly afterwards (that is, server is not
+        # terminated)
+        self._okay()
