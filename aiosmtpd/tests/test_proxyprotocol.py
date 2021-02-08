@@ -419,6 +419,7 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
             src_port=45138,
             dst_port=25253,
         )
+        assert b"not part of PROXYv2" not in pd.rest
         assert pd.tlv
         assert pd.tlv.same_attribs(
             AUTHORITY=b"AUTHORITY",
