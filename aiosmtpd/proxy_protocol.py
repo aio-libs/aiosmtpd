@@ -87,7 +87,7 @@ _anoinit = partial(attr.ib, init=False)
 
 @public
 class ProxyTLV:
-    __slots__ = ("_tlv", )
+    __slots__ = ("_tlv",)
 
     PP2_TYPENAME = {
         0x01: "ALPN",
@@ -130,8 +130,8 @@ class ProxyTLV:
             i = 0
             while i < len(chunk):
                 typ = chunk[i]
-                len_ = int.from_bytes(chunk[i + 1: i + 3], "big")
-                val = chunk[i + 3: i + 3 + len_]
+                len_ = int.from_bytes(chunk[i + 1 : i + 3], "big")
+                val = chunk[i + 3 : i + 3 + len_]
                 if len(val) < len_:
                     raise MalformedTLV
                 typ_name = cls.PP2_TYPENAME.get(typ, f"x{typ:02x}")
@@ -200,6 +200,7 @@ class ProxyData:
 
     def __bool__(self):
         return self.valid
+
 
 # endregion
 

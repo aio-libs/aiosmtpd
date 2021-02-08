@@ -24,7 +24,8 @@ from aiosmtpd.proxy_protocol import (
     ProxyData,
     ProxyTLV,
 )
-from aiosmtpd.smtp import SMTP as SMTPServer, Session as SMTPSession
+from aiosmtpd.smtp import SMTP as SMTPServer
+from aiosmtpd.smtp import Session as SMTPSession
 from aiosmtpd.tests.conftest import Global, controller_data, handler_data
 
 DEFAULT_AUTOCANCEL = 0.1
@@ -399,7 +400,6 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
 
 
 class TestProxyProtocolV2(_TestProxyProtocolCommon):
-
     def test_1(self, setup_proxy_protocol):
         setup_proxy_protocol(self)
         self.protocol.data_received(TEST_V2_DATA_XTRA)
