@@ -696,7 +696,7 @@ class TestProxyProtocolV1Controller:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
             time.sleep(plain_controller.smtpd._proxy_timeout * 1.1)
-            with pytest.raises(ConnectionAbortedError):
+            with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
                 sock.send(prox_test)
                 resp = sock.recv(4096)
                 # I am totally NOT happy with this workaround, but I can't find
@@ -714,7 +714,7 @@ class TestProxyProtocolV1Controller:
             sock.connect(Global.SrvAddr)
             sock.send(prox_test)
             time.sleep(plain_controller.smtpd._proxy_timeout * 1.1)
-            with pytest.raises(ConnectionAbortedError):
+            with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
                 sock.send(b"\n")
                 resp = sock.recv(4096)
                 # I am totally NOT happy with this workaround, but I can't find
@@ -770,7 +770,7 @@ class TestProxyProtocolV2Controller:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
             time.sleep(plain_controller.smtpd._proxy_timeout * 1.1)
-            with pytest.raises(ConnectionAbortedError):
+            with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
                 sock.send(prox_test)
                 resp = sock.recv(4096)
                 # I am totally NOT happy with this workaround, but I can't find
