@@ -3,6 +3,16 @@
 ===================
 
 
+1.4.0 (aiosmtpd-next)
+=====================
+
+Added
+-----
+* Support for `**PROXY Protocol**`_
+
+.. _`**PROXY Protocol**`: https://www.haproxy.com/blog/using-haproxy-with-the-proxy-protocol-to-better-secure-your-database/
+
+
 1.3.0 (2021-02-09)
 ==================
 
