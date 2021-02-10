@@ -303,7 +303,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             auth_callback: AuthCallbackType = None,
             command_call_limit: Union[int, Dict[str, int], None] = None,
             authenticator: AuthenticatorType = None,
-            proxy_protocol_timeout: Optional[float] = None,
+            proxy_protocol_timeout: Optional[Union[int, float]] = None,
             loop=None
     ):
         self.__ident__ = ident or __ident__
@@ -348,10 +348,11 @@ class SMTP(asyncio.StreamReaderProtocol):
             log.warning("auth_required == True but auth_require_tls == False")
         self._auth_require_tls = auth_require_tls
 
-        if proxy_protocol_timeout <= 0:
-            raise ValueError("proxy_protocol_timeout must be > 0")
-        elif proxy_protocol_timeout < 3.0:
-            log.warning("proxy_protocol_timeout < 3.0")
+        if proxy_protocol_timeout is not None:
+            if proxy_protocol_timeout <= 0:
+                raise ValueError("proxy_protocol_timeout must be > 0")
+            elif proxy_protocol_timeout < 3.0:
+                log.warning("proxy_protocol_timeout < 3.0")
         self._proxy_timeout = proxy_protocol_timeout
 
         self._authenticator: Optional[AuthenticatorType]
