@@ -184,6 +184,18 @@ The following hooks are currently supported (in alphabetical order):
 
    Called during ``NOOP``.
 
+.. method:: handle_PROXY(server, session, envelope, proxy_data)
+
+   :param SMTP server: The :class:`SMTP` instance invoking the hook.
+   :param Session session: The Session data *so far* (see Important note below)
+   :param Envelope envelope: The Envelope data *so far* (see Important note below)
+   :param ProxyData proxy_data: The result of parsing the PROXY Header
+   :return: Truthy or Falsey, indicating if the connection may continue or not, respectively
+
+   Called during PROXY Protocol Handshake.
+
+   See :ref:`ProxyProtocol` for more information.
+
 .. py:method:: handle_QUIT(server, session, envelope) -> str
    :async:
 
