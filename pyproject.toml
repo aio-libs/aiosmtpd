@@ -59,7 +59,6 @@ output = "coverage-${INTERP}.xml"
 
 [tool.check-manifest]
 ignore = [
-    "_static/**",
     "examples/**",
 ]
 
