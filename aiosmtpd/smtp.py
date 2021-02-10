@@ -145,8 +145,7 @@ class Session:
         self.extended_smtp = False
         self.loop = loop
 
-        self.login_data = None
-        """Legacy login_data, usually containing the username"""
+        self._login_data = None
 
         self.auth_data = None
         """
@@ -157,6 +156,23 @@ class Session:
         """
 
         self.authenticated = None
+
+    @property
+    def login_data(self):
+        """Legacy login_data, usually containing the username"""
+        warn(
+            "Session.login_data is deprecated and will be removed in version 2.0",
+            DeprecationWarning
+        )
+        return self._login_data
+
+    @login_data.setter
+    def login_data(self, value):
+        warn(
+            "Session.login_data is deprecated and will be removed in version 2.0",
+            DeprecationWarning
+        )
+        self._login_data = value
 
 
 @public
