@@ -25,7 +25,7 @@ div.body h4 {
 
 .pre, pre, code {
     font-family: "Fira Code",Menlo,Consolas,"Ubuntu Mono",Inconsolata,"Bitstream Vera Sans Mono","lucida console","Courier New",monospace;
-    font-size: 90%;
+    font-size: 100%;
 }
 
 div.highlight pre {
@@ -44,6 +44,14 @@ dl.class > dt {
 
 dl.attribute > dt {
     font-size: 100% !important;
+}
+
+dl.field-list {
+    margin-bottom: 0.25em !important;
+}
+
+dl.field-list ul.simple {
+    margin-bottom: 0.25em !important;
 }
 
 .sig-paren {
