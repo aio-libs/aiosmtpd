@@ -32,12 +32,18 @@ div.highlight pre {
     font-size: 90%;
 }
 
+/*
 code.descname {
     font-size: 100% !important;
 }
+*/
 
-dl.class > dt > code.descname {
-    font-size: 110% !important;
+dl.class > dt {
+    font-size: 100% !important;
+}
+
+dl.attribute > dt {
+    font-size: 100% !important;
 }
 
 .sig-paren {
