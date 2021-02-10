@@ -53,6 +53,7 @@ jobs:
           pip install pytype
           pytype --keep-going --jobs auto .
       - name: "Other QA Checks"
+        shell: bash
         # language=bash
         run: |
           pip install pytest pytest-mock check-manifest
@@ -88,14 +89,14 @@ jobs:
         pip install colorama coverage[toml] coverage-conditional-plugin packaging pytest pytest-cov pytest-mock
         # Package deps
         python setup.py develop
-        # Fetch master if needed because some test cases need its existence
-        if [[ $GITHUB_REF != refs/heads/master ]]; then
-          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin master:master
-        fi
     - name: "Execute testing"
       shell: bash
       # language=bash
       run: |
+        # Fetch master if needed because some test cases need its existence
+        if [[ $GITHUB_REF != refs/heads/master ]]; then
+          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin master:master
+        fi
         pytest --cov --cov-report=xml --cov-report=term
     - name: "Report to codecov"
       # Ubuntu 18.04 came out of the box with 3.6, and LOTS of system are still running
