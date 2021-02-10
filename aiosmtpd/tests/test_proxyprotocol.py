@@ -230,11 +230,8 @@ class TestProxyProtocolInit:
 
     def test_le_3(self, caplog, temp_event_loop):
         _ = SMTPServer(Sink(), proxy_protocol_timeout=1, loop=temp_event_loop)
-        assert caplog.record_tuples[-1] == (
-            "mail.log",
-            logging.WARNING,
-            "proxy_protocol_timeout < 3.0",
-        )
+        expect = ("mail.log", logging.WARNING, "proxy_protocol_timeout < 3.0")
+        assert expect in caplog.record_tuples
 
 
 class TestProxyProtocolV1(_TestProxyProtocolCommon):
