@@ -2,14 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import operator
 import random
 import socket
 import struct
 import time
 from base64 import b64decode
+from contextlib import contextmanager
 from functools import partial
 from ipaddress import IPv4Address, IPv6Address
-from smtplib import SMTP as SMTPClient
+from smtplib import SMTP as SMTPClient, SMTPServerDisconnected
 from typing import List
 
 import pytest
@@ -41,7 +43,7 @@ TEST_TLV_DATA_1 = (
 )
 
 # This has a tail which is not part of PROXYv2
-TEST_V2_DATA_XTRA = b64decode(
+TEST_V2_DATA1_XTRA = b64decode(
     "DQoNCgANClFVSVQKIREAcn8AAAF/AAABsFJipQMABFT9xv8CAAlBVVRIT1JJVFkFAAlVTklRVUVf\n"
     "SUQgAEQBAAAAACEAB1RMU3YxLjIlAAdSU0E0MDk2JAAKUlNBLVNIQTI1NiMAG0VDREhFLVJTQS1B\n"
     "RVMyNTYtR0NNLVNIQTM4NFRlc3QgZGF0YSB0aGF0IGlzIG5vdCBwYXJ0IG9mIFBST1hZdjIuCg==\n"
@@ -51,7 +53,7 @@ TEST_V2_DATA_XTRA = b64decode(
 # b"Test data that is not part of PROXYv2.\n"
 
 # This same as the above but no extraneous tail
-TEST_V2_DATA_EXACT = b64decode(
+TEST_V2_DATA1_EXACT = b64decode(
     "DQoNCgANClFVSVQKIREAcn8AAAF/AAABsFJipQMABFT9xv8CAAlBVVRIT1JJVFkFAAlVTklRVUVf\n"
     "SUQgAEQBAAAAACEAB1RMU3YxLjIlAAdSU0E0MDk2JAAKUlNBLVNIQTI1NiMAG0VDREhFLVJTQS1B\n"
     "RVMyNTYtR0NNLVNIQTM4NA==\n"
@@ -59,17 +61,22 @@ TEST_V2_DATA_EXACT = b64decode(
 
 
 class ProxyPeekerHandler(Sink):
-    def __init__(self):
+    def __init__(self, retval=True):
         self.called = False
         self.sessions: List[SMTPSession] = []
         self.proxy_datas: List[ProxyData] = []
-        self.retval = True
+        self.retval = retval
 
     async def handle_PROXY(self, server, session, envelope):
         self.called = True
         self.sessions.append(session)
         self.proxy_datas.append(session.proxy_data)
         return self.retval
+
+
+@contextmanager
+def does_not_raise():
+    yield
 
 
 @pytest.fixture
@@ -190,6 +197,27 @@ class TestProxyTLV:
             SSL_KEY_ALG=b"RSA4096",
         )
         assert not ptlv.same_attribs(false_attrib=None)
+
+    @parametrize(
+        "typeint, typename",
+        [
+            (0x01, "ALPN"),
+            (0x02, "AUTHORITY"),
+            (0x03, "CRC32C"),
+            (0x04, "NOOP"),
+            (0x05, "UNIQUE_ID"),
+            (0x20, "SSL"),
+            (0x21, "SSL_VERSION"),
+            (0x22, "SSL_CN"),
+            (0x23, "SSL_CIPHER"),
+            (0x24, "SSL_SIG_ALG"),
+            (0x25, "SSL_KEY_ALG"),
+            (0x30, "NETNS"),
+            (None, "wrongname"),
+        ]
+    )
+    def test_backmap(self, typename, typeint):
+        assert ProxyTLV.name_to_num(typename) == typeint
 
 
 class TestProxyProtocolV1(_TestProxyProtocolCommon):
@@ -402,7 +430,7 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
 class TestProxyProtocolV2(_TestProxyProtocolCommon):
     def test_1(self, setup_proxy_protocol):
         setup_proxy_protocol(self)
-        self.protocol.data_received(TEST_V2_DATA_XTRA)
+        self.protocol.data_received(TEST_V2_DATA1_XTRA)
         self.runner()
         sess: SMTPSession = self.protocol.session
         assert sess.proxy_data.error == ""
@@ -654,12 +682,18 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
 
 @controller_data(proxy_protocol_timeout=0.3)
 @handler_data(class_=ProxyPeekerHandler)
-class TestProxyProtocolV1Controller:
-    def _okay(self):
-        prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
+class TestWithController:
+    GOOD_V1_HANDSHAKE = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
+
+    HANDSHAKES = {
+        "v1": GOOD_V1_HANDSHAKE,
+        "v2": TEST_V2_DATA1_EXACT,
+    }
+
+    def _okay(self, handshake: bytes):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
-            sock.sendall(prox_test)
+            sock.sendall(handshake)
             resp = sock.makefile("rb").readline()
             assert resp.startswith(b"220 ")
             with SMTPClient() as client:
@@ -669,18 +703,23 @@ class TestProxyProtocolV1Controller:
                 code, mesg = client.quit()
                 assert code == 221
 
-    def test_okay(self, plain_controller):
+    @parametrize(
+        "handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys()
+    )
+    def test_okay(self, plain_controller, handshake):
         assert plain_controller.smtpd._proxy_timeout > 0.0
-        self._okay()
+        self._okay(handshake)
 
-    def test_hiccup(self, plain_controller):
+    @parametrize(
+        "handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys()
+    )
+    def test_hiccup(self, plain_controller, handshake):
         assert plain_controller.smtpd._proxy_timeout > 0.0
-        prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
-            sock.sendall(prox_test[0:20])
+            sock.sendall(handshake[0:20])
             time.sleep(0.01)
-            sock.sendall(prox_test[20:])
+            sock.sendall(handshake[20:])
             resp = sock.makefile("rb").readline()
             assert resp.startswith(b"220 ")
             with SMTPClient() as client:
@@ -690,93 +729,95 @@ class TestProxyProtocolV1Controller:
                 code, mesg = client.quit()
                 assert code == 221
 
-    def test_timeout(self, plain_controller):
+    @parametrize(
+        "handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys()
+    )
+    def test_timeout(self, plain_controller, handshake):
         assert plain_controller.smtpd._proxy_timeout > 0.0
-        prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
             time.sleep(plain_controller.smtpd._proxy_timeout * 1.1)
+            # noinspection PyTypeChecker
             with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
-                sock.send(prox_test)
+                sock.send(handshake)
                 resp = sock.recv(4096)
-                # I am totally NOT happy with this workaround, but I can't find
-                # a better way. Feel free to submit a PR.
+                if resp == b"":
+                    raise ConnectionAbortedError
+            # Try resending the handshake. Should also fail (because connection has
+            # been closed by the server.
+            # noinspection PyTypeChecker
+            with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
+                sock.send(handshake)
+                resp = sock.recv(4096)
                 if resp == b"":
                     raise ConnectionAbortedError
         # Assert that we can connect properly afterwards (that is, server is not
         # terminated)
-        self._okay()
+        self._okay(handshake)
 
-    def test_nonewline(self, plain_controller):
+    @parametrize(
+        "handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys()
+    )
+    def test_incomplete(self, plain_controller, handshake):
         assert plain_controller.smtpd._proxy_timeout > 0.0
-        prox_test = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r"
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
-            sock.send(prox_test)
+            sock.send(handshake[:-1])
             time.sleep(plain_controller.smtpd._proxy_timeout * 1.1)
+            # noinspection PyTypeChecker
             with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
                 sock.send(b"\n")
+                resp = sock.recv(4096)  # On Windows, this line raises
+                if resp == b"":  # On Linux, no raise, just "EOF"
+                    raise ConnectionAbortedError
+            # Try resending the handshake. Should also fail (because connection has
+            # been closed by the server.
+            # noinspection PyTypeChecker
+            with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
+                sock.send(handshake)
                 resp = sock.recv(4096)
-                # I am totally NOT happy with this workaround, but I can't find
-                # a better way. Feel free to submit a PR.
                 if resp == b"":
                     raise ConnectionAbortedError
         # Assert that we can connect properly afterwards (that is, server is not
         # terminated)
-        self._okay()
+        self._okay(handshake)
 
 
 @controller_data(proxy_protocol_timeout=0.3)
 @handler_data(class_=ProxyPeekerHandler)
-class TestProxyProtocolV2Controller:
-    def _okay(self):
-        prox_test = TEST_V2_DATA_EXACT
+class TestHandlerAcceptReject:
+    # We test *both* Accept *and* reject to ensure that the handshakes are valid
+    @parametrize(
+        "handler_retval", [True, False]
+    )
+    @parametrize(
+        "handshake",
+        [
+            b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n",
+            TEST_V2_DATA1_EXACT
+        ],
+        ids=["v1", "v2"],
+    )
+    def test_simple(self, plain_controller, handshake, handler_retval):
+        assert plain_controller.smtpd._proxy_timeout > 0.0
+        assert isinstance(plain_controller.handler, ProxyPeekerHandler)
+        plain_controller.handler.retval = handler_retval
+        if handler_retval:
+            oper = operator.ne
+            # See "Parametrizing conditional raising" in
+            # https://docs.pytest.org/en/stable/example/parametrize.html
+            expect = does_not_raise()
+        else:
+            oper = operator.eq
+            expect = pytest.raises(SMTPServerDisconnected)
+        oper = operator.ne if handler_retval else operator.eq
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
-            sock.sendall(prox_test)
-            resp = sock.makefile("rb").readline()
-            assert resp.startswith(b"220 ")
-            with SMTPClient() as client:
-                client.sock = sock
-                code, mesg = client.ehlo("example.org")
-                assert code == 250
-                code, mesg = client.quit()
-                assert code == 221
-
-    def test_okay(self, plain_controller):
-        assert plain_controller.smtpd._proxy_timeout > 0.0
-        self._okay()
-
-    def test_hiccup(self, plain_controller):
-        assert plain_controller.smtpd._proxy_timeout > 0.0
-        prox_test = TEST_V2_DATA_EXACT
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect(Global.SrvAddr)
-            sock.sendall(prox_test[0:20])
-            time.sleep(0.001)
-            sock.sendall(prox_test[20:])
-            resp = sock.makefile("rb").readline()
-            assert resp.startswith(b"220 ")
-            with SMTPClient() as client:
-                client.sock = sock
-                code, mesg = client.ehlo("example.org")
-                assert code == 250
-                code, mesg = client.quit()
-                assert code == 221
-
-    def test_timeout(self, plain_controller):
-        assert plain_controller.smtpd._proxy_timeout > 0.0
-        prox_test = TEST_V2_DATA_EXACT
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect(Global.SrvAddr)
-            time.sleep(plain_controller.smtpd._proxy_timeout * 1.1)
-            with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
-                sock.send(prox_test)
-                resp = sock.recv(4096)
-                # I am totally NOT happy with this workaround, but I can't find
-                # a better way. Feel free to submit a PR.
-                if resp == b"":
-                    raise ConnectionAbortedError
-        # Assert that we can connect properly afterwards (that is, server is not
-        # terminated)
-        self._okay()
+            sock.sendall(handshake)
+            resp = sock.recv(4096)
+            assert oper(resp, b"")
+            with expect:
+                with SMTPClient() as client:
+                    client.sock = sock
+                    code, mesg = client.ehlo("example.org")
+                    assert code == 250
