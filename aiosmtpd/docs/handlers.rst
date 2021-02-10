@@ -30,7 +30,7 @@ line, but its constructor cannot accept arguments.
 
 .. _hooks:
 
-Handler hooks
+Handler Hooks
 =============
 
 Handlers can implement hooks that get called during the SMTP dialog, or in
@@ -179,8 +179,8 @@ implemented by handlers.  These have different APIs, and are called
 
 .. _auth_hooks:
 
-AUTH hooks
-=============
+AUTH Hooks
+==========
 
 In addition to the above SMTP hooks, you can also implement AUTH hooks.
 **These hooks are asynchronous**.
