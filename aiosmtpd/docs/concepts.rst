@@ -32,6 +32,10 @@ Sessions and envelopes
 Two classes are used during the SMTP dialog with clients.  Instances of these
 are passed to the handler hooks.
 
+.. note::
+
+   Handler Hooks MAY add new attributes to these classes for inter-hook coordination.
+
 
 Session
 -------
@@ -118,17 +122,20 @@ completed, or in certain error conditions as mandated by :rfc:`5321`.
 .. class:: Envelope
 
    .. attribute:: mail_from
+      :type: str
 
       Defaulting to None, this attribute holds the email address given in the
       ``MAIL FROM`` command.
 
    .. attribute:: mail_options
+      :type: List[str]
 
       Defaulting to None, this attribute contains a list of any ESMTP mail
       options provided by the client, such as those passed in by
       :meth:`smtplib.SMTP.sendmail`
 
    .. attribute:: content
+      :type: AnyStr
 
       Defaulting to None, this attribute will contain the contents of the
       message as provided by the ``DATA`` command.  If the ``decode_data``
@@ -137,17 +144,20 @@ completed, or in certain error conditions as mandated by :rfc:`5321`.
       bytes.
 
    .. attribute:: original_content
+      :type: bytes
 
       Defaulting to None, this attribute will contain the contents of the
       message as provided by the ``DATA`` command.  Unlike the :attr:`content`
       attribute, this attribute will always contain the raw bytes.
 
    .. attribute:: rcpt_tos
+      :type: List[str]
 
       Defaulting to the empty list, this attribute will contain a list of the
       email addresses provided in the ``RCPT TO`` commands.
 
    .. attribute:: rcpt_options
+      :type: List[str]
 
       Defaulting to the empty list, this attribute will contain the list of
       any recipient options provided by the client, such as those passed in by

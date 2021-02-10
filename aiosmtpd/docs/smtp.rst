@@ -1,10 +1,10 @@
 .. _smtp:
 
-================
- The SMTP class
-================
+=================
+ The SMTP Module
+=================
 
-At the heart of this module is the ``SMTP`` class.
+At the heart of this module is the ``SMTP`` class in the ``aiosmtpd.smtp`` module.
 This class implements the :rfc:`5321` Simple Mail Transport Protocol.
 Often you won't run an ``SMTP`` instance directly,
 but instead will use a :ref:`Controller <controller>` instance to run the server in a subthread.
@@ -100,8 +100,41 @@ override to provide additional responses.
 
 .. _smtp_api:
 
-SMTP API
-========
+aiosmtpd.smtp
+=============
+
+.. py:module:: aiosmtpd.smtp
+
+.. py:data:: AuthenticatorType
+   :value: Callable[[SMTP, Session, Envelope, str, Any], AuthResult]
+
+.. decorator:: auth_mechanism(actual_name)
+
+   :param actual_name: Name of the AUTH Mechanism implemented by the method.
+      See :ref:`authmech` for more info.
+   :type actual_name: str
+
+   This decorator specifies the actual name of the AUTH Mechanism implemented
+   by the method being decorated, regardless of the method's name.
+
+   .. important::
+
+      The decorated method's name MUST still start with ``auth_``
+
+.. class:: AuthResult
+
+   Contains the result of the Authentication Procedure.
+
+   For more info, please see :class:`AuthResult`
+
+.. class:: LoginPassword(login: bytes, password: bytes)
+
+   A subclass of :class:`typing.NamedTuple` that holds the Authentication Data for the
+   built-in ``LOGIN`` and ``PLAIN`` AUTH Mechanisms.
+
+   It is to be used for Authentication purposes by :func:`Authenticator`
+
+   For more information, please refer to the :ref:`auth` page.
 
 .. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, \
    decode_data=False, hostname=None, ident=None, tls_context=None, \
@@ -216,7 +249,7 @@ SMTP API
 
       This is the only way to completely disable the built-in AUTH mechanisms.
 
-      See :ref:`auth_hooks` for a more in-depth discussion on AUTH mechanisms.
+      See :ref:`auth` for a more in-depth discussion on AUTH mechanisms.
 
       .. versionadded:: 1.2.2
 
@@ -239,29 +272,8 @@ SMTP API
       :value: None
 
       A function whose signature is identical to ``aiosmtpd.smtp.AuthenticatorType``.
-      The function must accept five arguments:
 
-          * ``server`` -- reference to the calling SMTP instance
-          * ``session`` -- the Session object of the current SMTP session
-          * ``envelope`` -- the Envelope object of the current SMTP session so far
-          * ``mechanism`` -- the SMTP Auth Mechanism chosen by the SMTP Client
-          * ``auth_data`` -- a data structure containing information necessary for authentication.
-            For built-in mechanisms this invariably contains a tuple of ``(username, password)``
-
-      The function must return an instance of ``aiosmtpd.smtp.AuthResult``,
-      a namedtuple with the following fields/attributes:
-
-          * ``success`` -- True if authentication successful
-          * ``handled`` -- (ignored if ``success`` is True)
-            Indicates all necessary processing (e.g., sending of SMTP Status Codes) has been handled and
-            the calling SMTP instance does not need to perform further processing
-          * ``message`` -- (Optional) Message explaining the ``success`` value.
-            If ``handled`` is false, then contains the SMTP Status Code to be sent by the calling SMTP instance
-          * ``auth_data`` -- (only if ``success`` is True)
-            A free-form data structure containing the authentication information.
-            For the built-in AUTH mechanisms, invariably contains a tuple of ``(username, password)``
-
-      If ``authenticator`` is set, :attr:`auth_callback` will be ignored.
+      See :func:`Authenticator` for more information.
 
       .. versionadded:: 1.3
 
@@ -407,6 +419,7 @@ SMTP API
       A method subclasses can override to return custom ``Envelope`` instances.
 
    .. method:: push(status)
+      :async:
 
       The method that subclasses and handlers should use to return statuses to
       SMTP clients.  This is a coroutine.  *status* can be a bytes object, but
@@ -415,6 +428,7 @@ SMTP API
       encoded as UTF-8.
 
    .. method:: smtp_<COMMAND>(arg)
+      :async:
 
       Coroutine methods implementing the SMTP protocol commands.  For example,
       ``smtp_HELO()`` implements the SMTP ``HELO`` command.  Subclasses can
@@ -422,6 +436,31 @@ SMTP API
       extensions to the SMTP protocol.  *arg* is the rest of the SMTP command
       given by the client, or None if nothing but the command was given.
 
+   .. py:method:: challenge_auth(\
+      challenge, encode_to_b64=True, log_client_response=False\
+      ) -> Union[_Missing, bytes]
+      :async:
+
+      :param challenge: The SMTP AUTH challenge to send to the client.
+         May be in plaintext, may be in base64. Do NOT prefix with "334 "!
+      :type challenge: Union[str, bytes, bytearray]
+      :param encode_to_b64: If true, will perform base64-encoding before sending
+         the challenge to the client.
+      :type encode_to_b64: bool
+      :param log_client_response: If true, will perform logging of client response
+      :type log_client_response: bool
+      :return: Response from client (already base64-decoded) or ``MISSING`` (see description)
+
+      This method will return ``MISSING`` if either of these scenarios happen:
+
+         * client aborted the ``AUTH`` procedure by sending ``b"*"``, or
+         * client response to the challenge cannot be base64-decoded.
+
+      .. warning::
+
+         Setting ``log_client_response=True`` might cause leakage of sensitive information!
+
+         :boldital:`DO NOT TURN ON` UNLESS ABSOLUTELY NECESSARY!
 
 .. _tls:
 

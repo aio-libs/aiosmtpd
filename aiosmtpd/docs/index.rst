@@ -14,6 +14,7 @@ Contents
    smtp
    lmtp
    handlers
+   auth
    migrating
    testing
    manpage
@@ -24,4 +25,5 @@ Indices and tables
 ==================
 
 * :ref:`genindex`
+* :ref:`modindex`
 * :ref:`search`
