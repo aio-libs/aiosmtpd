@@ -12,7 +12,8 @@ from base64 import b64decode
 from contextlib import contextmanager
 from functools import partial
 from ipaddress import IPv4Address, IPv6Address
-from smtplib import SMTP as SMTPClient, SMTPServerDisconnected
+from smtplib import SMTP as SMTPClient
+from smtplib import SMTPServerDisconnected
 from typing import List
 
 import pytest
@@ -215,7 +216,7 @@ class TestProxyTLV:
             (0x25, "SSL_KEY_ALG"),
             (0x30, "NETNS"),
             (None, "wrongname"),
-        ]
+        ],
     )
     def test_backmap(self, typename, typeint):
         assert ProxyTLV.name_to_num(typename) == typeint
@@ -719,16 +720,12 @@ class TestWithController:
                 code, mesg = client.quit()
                 assert code == 221
 
-    @parametrize(
-        "handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys()
-    )
+    @parametrize("handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys())
     def test_okay(self, plain_controller, handshake):
         assert plain_controller.smtpd._proxy_timeout > 0.0
         self._okay(handshake)
 
-    @parametrize(
-        "handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys()
-    )
+    @parametrize("handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys())
     def test_hiccup(self, plain_controller, handshake):
         assert plain_controller.smtpd._proxy_timeout > 0.0
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -745,9 +742,7 @@ class TestWithController:
                 code, mesg = client.quit()
                 assert code == 221
 
-    @parametrize(
-        "handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys()
-    )
+    @parametrize("handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys())
     def test_timeout(self, plain_controller, handshake):
         assert plain_controller.smtpd._proxy_timeout > 0.0
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -771,9 +766,7 @@ class TestWithController:
         # terminated)
         self._okay(handshake)
 
-    @parametrize(
-        "handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys()
-    )
+    @parametrize("handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys())
     def test_incomplete(self, plain_controller, handshake):
         assert plain_controller.smtpd._proxy_timeout > 0.0
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -803,14 +796,12 @@ class TestWithController:
 @handler_data(class_=ProxyPeekerHandler)
 class TestHandlerAcceptReject:
     # We test *both* Accept *and* reject to ensure that the handshakes are valid
-    @parametrize(
-        "handler_retval", [True, False]
-    )
+    @parametrize("handler_retval", [True, False])
     @parametrize(
         "handshake",
         [
             b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n",
-            TEST_V2_DATA1_EXACT
+            TEST_V2_DATA1_EXACT,
         ],
         ids=["v1", "v2"],
     )
