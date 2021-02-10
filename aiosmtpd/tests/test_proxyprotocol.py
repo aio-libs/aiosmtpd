@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import logging
 import operator
 import random
 import socket
@@ -218,6 +219,21 @@ class TestProxyTLV:
     )
     def test_backmap(self, typename, typeint):
         assert ProxyTLV.name_to_num(typename) == typeint
+
+
+class TestProxyProtocolInit:
+    @parametrize("value", [int(-1), float(-1.0), int(0), float(0.0)])
+    def test_value_error(self, temp_event_loop, value):
+        with pytest.raises(ValueError, match=r"proxy_protocol_timeout must be > 0"):
+            _ = SMTPServer(Sink(), proxy_protocol_timeout=value, loop=temp_event_loop)
+
+    def test_le_3(self, caplog, temp_event_loop):
+        _ = SMTPServer(Sink(), proxy_protocol_timeout=1, loop=temp_event_loop)
+        assert caplog.record_tuples[-1] == (
+            "mail.log",
+            logging.WARNING,
+            "proxy_protocol_timeout < 3.0",
+        )
 
 
 class TestProxyProtocolV1(_TestProxyProtocolCommon):

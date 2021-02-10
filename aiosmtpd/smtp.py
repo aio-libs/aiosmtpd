@@ -334,7 +334,6 @@ class SMTP(asyncio.StreamReaderProtocol):
                             "this might cause client connection problems")
         self.require_starttls = tls_context and require_starttls
         self._timeout_duration = timeout
-        self._proxy_timeout = proxy_protocol_timeout
         self._timeout_handle = None
         self._tls_handshake_okay = True
         self._tls_protocol = None
@@ -348,6 +347,12 @@ class SMTP(asyncio.StreamReaderProtocol):
                  "can lead to security vulnerabilities!")
             log.warning("auth_required == True but auth_require_tls == False")
         self._auth_require_tls = auth_require_tls
+
+        if proxy_protocol_timeout <= 0:
+            raise ValueError("proxy_protocol_timeout must be > 0")
+        elif proxy_protocol_timeout < 3.0:
+            log.warning("proxy_protocol_timeout < 3.0")
+        self._proxy_timeout = proxy_protocol_timeout
 
         self._authenticator: Optional[AuthenticatorType]
         self._auth_callback: Optional[AuthCallbackType]
