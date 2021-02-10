@@ -56,7 +56,10 @@ jobs:
         # language=bash
         run: |
           pip install pytest pytest-mock check-manifest
-          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin master:master
+          # Fetch master if needed because some test cases need its existence
+          if [[ $GITHUB_REF != refs/heads/master ]]; then
+            git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin master:master
+          fi
           pytest -v aiosmtpd/qa
           check-manifest -v
   testing:
@@ -85,8 +88,10 @@ jobs:
         pip install colorama coverage[toml] coverage-conditional-plugin packaging pytest pytest-cov pytest-mock
         # Package deps
         python setup.py develop
-        # Fetch master because some test cases might need its existence
-        git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin master:master
+        # Fetch master if needed because some test cases need its existence
+        if [[ $GITHUB_REF != refs/heads/master ]]; then
+          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin master:master
+        fi
     - name: "Execute testing"
       shell: bash
       # language=bash
