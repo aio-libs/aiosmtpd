@@ -87,6 +87,10 @@ object is created.
          This is the "legacy" login_data,
          populated only if :attr:`auth_callback` parameter is set.
 
+      .. deprecated:: 1.3
+
+         This attribute **will be removed in version 2.0**.
+
    .. py:attribute:: auth_data
 
       Contains the authentication data returned by
