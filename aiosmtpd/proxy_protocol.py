@@ -86,10 +86,10 @@ _anoinit = partial(attr.ib, init=False)
 
 
 @public
-class ProxyTLV:
+class ProxyTLV(dict):
     __slots__ = ("_tlv",)
 
-    PP2_TYPENAME = {
+    PP2_TYPENAME: Dict[int, str] = {
         0x01: "ALPN",
         0x02: "AUTHORITY",
         0x03: "CRC32C",
@@ -104,30 +104,27 @@ class ProxyTLV:
         0x30: "NETNS",
     }
 
-    def __init__(self, **kwargs):
-        self._tlv: Dict[str, Any] = kwargs
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def __getattr__(self, item):
-        return self._tlv.get(item)
-
-    def __contains__(self, item: str):
-        return item in self._tlv
+        return self.get(item)
 
     def same_attribs(self, **kwargs) -> bool:
-        _tlv = self._tlv
         for k, v in kwargs.items():
-            if _tlv.get(k, _NOT_FOUND) != v:
+            if self.get(k, _NOT_FOUND) != v:
                 return False
         return True
 
     @classmethod
-    def from_raw(cls, raw: Union[bytes, bytearray]):
-        if len(raw) == 0:
-            return None
-
-        def parse(chunk: Union[bytes, bytearray]) -> dict:
-            rslt = {}
-            i = 0
+    def parse(
+            cls,
+            chunk: Union[bytes, bytearray],
+            partial_ok: bool = True,
+    ) -> Dict[str, Any]:
+        rslt = {}
+        i = 0
+        try:
             while i < len(chunk):
                 typ = chunk[i]
                 len_ = int.from_bytes(chunk[i + 1 : i + 3], "big")
@@ -136,16 +133,38 @@ class ProxyTLV:
                     raise MalformedTLV
                 typ_name = cls.PP2_TYPENAME.get(typ, f"x{typ:02x}")
                 if typ_name == "SSL":
-                    rslt["SSL"] = True
                     rslt["SSL_CLIENT"] = val[0]
                     rslt["SSL_VERIFY"] = int.from_bytes(val[1:5], "big")
-                    rslt.update(parse(val[5:]))
+                    try:
+                        rslt.update(cls.parse(val[5:]))
+                        rslt["SSL"] = True
+                    except MalformedTLV:
+                        rslt["SSL"] = False
                 else:
                     rslt[typ_name] = val
                 i += 3 + len_
-            return rslt
+        except MalformedTLV:
+            if not partial_ok:
+                raise
+        return rslt
 
-        return cls(**parse(raw))
+    @classmethod
+    def from_raw(cls, raw: Union[bytes, bytearray]) -> Optional["ProxyTLV"]:
+        """
+        Parses raw bytes for TLV Vectors, decode them and giving them human-readable
+        name if applicable, and returns a ProxyTLV object.
+        """
+        if len(raw) == 0:
+            return None
+        parsed = cls.parse(raw, partial_ok=False)
+        return cls(parsed)
+
+    @classmethod
+    def name_to_num(cls, name: str) -> Optional[int]:
+        for k, v in cls.PP2_TYPENAME.items():
+            if name == v:
+                return k
+        return None
 
 
 @public
