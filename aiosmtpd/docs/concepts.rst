@@ -40,7 +40,9 @@ The session represents the state built up during a client's socket connection
 to the server.  Each time a client connects to the server, a new session
 object is created.
 
-.. class:: Session()
+.. class:: Session(loop)
+
+   :param loop: asyncio event loop currently running :class:`SMTP`.
 
    .. attribute:: peer
 
@@ -71,11 +73,33 @@ object is created.
 
       This is the asyncio event loop instance.
 
+      :ref:`hooks` can utilize this if needed,
+      for instance invoking :meth:`~asyncio.loop.call_later` to set some timers.
+
    .. attribute:: login_data
 
       Contains the login information gathered during the ``AUTH`` procedure.
       If it contains ``None``, that means authentication has not taken place
       or has failed.
+
+      .. warning::
+
+         This is the "legacy" login_data,
+         populated only if :attr:`auth_callback` parameter is set.
+
+   .. py:attribute:: auth_data
+
+      Contains the authentication data returned by
+      the :attr:`authenticator` callback.
+
+   .. py:attribute:: authenticated
+      :type: Optional[bool]
+
+      A tri-state flag indicating status of authentication:
+
+        * ``None`` := Authentication has not been performed
+        * ``False`` := Authentication has been performed, but failed
+        * ``True`` := Authentication has been performed, and succeeded
 
 
 Envelope
