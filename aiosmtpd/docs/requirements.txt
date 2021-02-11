@@ -2,6 +2,8 @@
 sphinx>=2.1
 sphinx-autofixture
 sphinx_rtd_theme
+# Required by Sphinx.autodoc
+pytest>=6.0
 
 # aiosmtpd deps
 atpublic
