@@ -41,9 +41,16 @@ parametrize = pytest.mark.parametrize
 random_port = partial(random.getrandbits, 16)
 
 TEST_TLV_DATA_1 = (
-    b"\x03\x00\x04Z\xfd\xc6\xff\x02\x00\tAUTHORITI\x05\x00\tUNIKUE_ID "
-    b"\x00D\x01\x00\x00\x00\x00!\x00\x07TLSv1.3%\x00\x07RSA4096$\x00\nRS"
-    b"A-SHA256#\x00\x1bECDHE-RSA-AES256-CBC-SHA384"
+    b"\x03\x00\x04Z\xfd\xc6\xff\x02\x00\tAUTHORITI\x05\x00\tUNIKUE_ID"
+    b"\x20\x00D\x01\x00\x00\x00\x00!\x00\x07TLSv1.3%\x00\x07RSA4096"
+    b"$\x00\nRSA-SHA256#\x00\x1bECDHE-RSA-AES256-CBC-SHA384"
+)
+
+TEST_TLV_DATA_2 = (
+    b"\x03\x00\x04Z\xfd\xc6\xff\x02\x00\tAUTHORIT2\x05\x00\tUNIQUEID2"
+    b"\x20\x00D\x01\x00\x00\x00\x00!\x00\x07TLSv1.3%\x00\x07RSA4096"
+    b"$\x00\nRSA-SHA256#\x00\x1bECDHE-RSA-AES256-CBC-SHA384"
+    b"\x30\x00\x09something"
 )
 
 # This has a tail which is not part of PROXYv2
