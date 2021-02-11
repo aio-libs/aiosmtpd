@@ -35,6 +35,7 @@ from aiosmtpd.smtp import Session as SMTPSession
 from aiosmtpd.tests.conftest import Global, controller_data, handler_data
 
 DEFAULT_AUTOCANCEL = 0.1
+TIMEOUT_MULTIPLIER = 1.5
 
 param = pytest.param
 parametrize = pytest.mark.parametrize
@@ -823,7 +824,7 @@ class TestWithController:
         assert plain_controller.smtpd._proxy_timeout > 0.0
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
-            time.sleep(plain_controller.smtpd._proxy_timeout * 1.1)
+            time.sleep(plain_controller.smtpd._proxy_timeout * TIMEOUT_MULTIPLIER)
             # noinspection PyTypeChecker
             with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
                 sock.send(handshake)
@@ -848,7 +849,7 @@ class TestWithController:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
             sock.send(handshake[:-1])
-            time.sleep(plain_controller.smtpd._proxy_timeout * 1.1)
+            time.sleep(plain_controller.smtpd._proxy_timeout * TIMEOUT_MULTIPLIER)
             # noinspection PyTypeChecker
             with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
                 sock.send(b"\n")
