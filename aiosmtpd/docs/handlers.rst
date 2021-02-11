@@ -185,6 +185,7 @@ The following hooks are currently supported (in alphabetical order):
    Called during ``NOOP``.
 
 .. method:: handle_PROXY(server, session, envelope, proxy_data)
+   :noindex:
 
    :param SMTP server: The :class:`SMTP` instance invoking the hook.
    :param Session session: The Session data *so far* (see Important note below)
