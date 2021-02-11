@@ -213,6 +213,12 @@ class ProxyData:
     undecoded TLV (v2). If the latter, you can use the ProxyTLV class to parse the
     binary data.
     """
+    whole_raw: bytearray = _anoinit(factory=bytearray)
+    """
+    The whole undecoded PROXYv2 Header as-received. This can be used to (1) perform
+    troubleshooting, and/or (2) calculate CRC32C (which will NOT be implemented in
+    this module to reduce number of deps.
+    """
     error: str = _anoinit(default="")
     """If not an empty string, contains the error encountered when parsing"""
     _tlv: Optional[ProxyTLV] = _anoinit(default=None)
@@ -305,6 +311,7 @@ async def _get_v1(reader: AsyncReader, initial=b"") -> ProxyData:
 
 async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
     proxy_data = ProxyData(version=2)
+    whole_raw = bytearray()
 
     signature = bytearray(initial)
     sig_left = 12 - len(signature)
@@ -314,12 +321,14 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
     signature = signature[0:12]
     if signature != V2_SIGNATURE:
         return proxy_data.with_error("PROXYv2 wrong signature")
+    whole_raw += signature
 
     hdr_left = 4 - len(header)
     if hdr_left > 0:  # pragma: no branch
         header += await reader.readexactly(hdr_left)
     rest = header[4:]
     header = header[0:4]
+    whole_raw += header
 
     ver_cmd, fam_proto, len_ = struct.unpack("!BBH", header)
 
@@ -341,6 +350,9 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
     rest_left = len_ - len(rest)
     if rest_left > 0:
         rest += await reader.readexactly(rest_left)
+
+    whole_raw += rest
+    proxy_data.whole_raw = whole_raw
 
     if fam_proto not in V2_PARSE_ADDR_FAMPRO:
         proxy_data.rest = rest

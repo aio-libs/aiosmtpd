@@ -542,15 +542,17 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
     ) -> ProxyData:
         ver_cmd = 0x20 + cmd.value
         fam_pro = (fam << 4) + proto
-        self.protocol.data_received(
+        to_send = bytes(
             V2_SIGNATURE
             + ver_cmd.to_bytes(1, "big")
             + fam_pro.to_bytes(1, "big")
             + len(payload).to_bytes(2, "big")
             + payload
         )
+        self.protocol.data_received(to_send)
         self.runner()
         assert self.protocol.session.proxy_data.error == ""
+        assert self.protocol.session.proxy_data.whole_raw == to_send
         handler = self.protocol.event_handler
         assert handler.called
         return handler.proxy_datas[-1]
