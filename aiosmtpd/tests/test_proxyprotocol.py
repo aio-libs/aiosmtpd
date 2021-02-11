@@ -290,7 +290,7 @@ class TestProxyTLV:
             b"\x20\x00\x0D\x01\x02\x03\x04\x05\x21\x00\x07version\x22\x00\x09trunc"
         )
         with pytest.raises(MalformedTLV):
-            rslt = ProxyTLV.parse(test_data, partial_ok=False)
+            _ = ProxyTLV.parse(test_data, partial_ok=False)
 
 
 class TestProxyProtocolInit:
