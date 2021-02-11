@@ -826,15 +826,15 @@ class TestWithController:
             sock.connect(Global.SrvAddr)
             time.sleep(plain_controller.smtpd._proxy_timeout * TIMEOUT_MULTIPLIER)
             # noinspection PyTypeChecker
-            with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
+            with pytest.raises(ConnectionError):
                 sock.send(handshake)
                 resp = sock.recv(4096)
                 if resp == b"":
-                    raise ConnectionAbortedError
+                    raise ConnectionError
             # Try resending the handshake. Should also fail (because connection has
             # been closed by the server.
             # noinspection PyTypeChecker
-            with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
+            with pytest.raises(ConnectionError):
                 sock.send(handshake)
                 resp = sock.recv(4096)
                 if resp == b"":
@@ -851,19 +851,19 @@ class TestWithController:
             sock.send(handshake[:-1])
             time.sleep(plain_controller.smtpd._proxy_timeout * TIMEOUT_MULTIPLIER)
             # noinspection PyTypeChecker
-            with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
+            with pytest.raises(ConnectionError):
                 sock.send(b"\n")
                 resp = sock.recv(4096)  # On Windows, this line raises
                 if resp == b"":  # On Linux, no raise, just "EOF"
-                    raise ConnectionAbortedError
+                    raise ConnectionError
             # Try resending the handshake. Should also fail (because connection has
             # been closed by the server.
             # noinspection PyTypeChecker
-            with pytest.raises((ConnectionAbortedError, ConnectionResetError)):
+            with pytest.raises(ConnectionError):
                 sock.send(handshake)
                 resp = sock.recv(4096)
                 if resp == b"":
-                    raise ConnectionAbortedError
+                    raise ConnectionError
         # Assert that we can connect properly afterwards (that is, server is not
         # terminated)
         self._okay(handshake)
