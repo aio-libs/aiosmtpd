@@ -94,7 +94,7 @@ _anoinit = partial(attr.ib, init=False)
 
 
 @public
-class ProxyTLV(dict):
+class ProxyTLV(dict):  # lgtm[py/missing-equals]
     __slots__ = ("tlv_loc",)
 
     # https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt#L538-L549
