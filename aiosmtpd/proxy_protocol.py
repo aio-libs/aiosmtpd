@@ -6,7 +6,7 @@ import struct
 from enum import IntEnum
 from functools import partial
 from ipaddress import IPv4Address, IPv6Address, ip_address
-from typing import Any, AnyStr, Awaitable, Dict, Optional, Tuple, Union
+from typing import Any, AnyStr, Dict, Optional, Tuple, Union
 
 import attr
 from public import public
@@ -77,14 +77,17 @@ class UnknownTypeTLV(KeyError):
 
 @public
 class AsyncReader(Protocol):  # pragma: nocover
-    def read(self, num_bytes: Optional[int] = None) -> Awaitable[bytes]:
+    async def read(self, num_bytes: Optional[int] = None) -> bytes:
         ...
+        return b""
 
-    def readexactly(self, n: int) -> Awaitable[bytes]:
+    async def readexactly(self, n: int) -> bytes:
         ...
+        return b""
 
-    def readuntil(self, until_chars: Optional[bytes] = None) -> Awaitable[bytes]:
+    async def readuntil(self, until_chars: Optional[bytes] = None) -> bytes:
         ...
+        return b""
 
 
 _anoinit = partial(attr.ib, init=False)

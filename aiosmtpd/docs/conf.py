@@ -14,7 +14,7 @@
 
 import datetime
 import re
-import sphinx_rtd_theme  # noqa: F401
+import sphinx_rtd_theme  # noqa: F401 # pytype: disable=import-error
 import sys
 
 from pathlib import Path
