@@ -14,7 +14,7 @@ from functools import partial
 from ipaddress import IPv4Address, IPv6Address
 from smtplib import SMTP as SMTPClient
 from smtplib import SMTPServerDisconnected
-from typing import List
+from typing import Any, Dict, List
 
 import pytest
 from pytest_mock import MockFixture
@@ -25,8 +25,10 @@ from aiosmtpd.proxy_protocol import (
     V2_FAM,
     V2_PRO,
     V2_SIGNATURE,
+    MalformedTLV,
     ProxyData,
     ProxyTLV,
+    UnknownTypeTLV,
 )
 from aiosmtpd.smtp import SMTP as SMTPServer
 from aiosmtpd.smtp import Session as SMTPSession
@@ -244,6 +246,44 @@ class TestProxyTLV:
     )
     def test_backmap(self, typename, typeint):
         assert ProxyTLV.name_to_num(typename) == typeint
+
+    def test_parse_partial(self):
+        TEST_TLV_DATA_1_TRUNCATED = (
+            b"\x03\x00\x04Z\xfd\xc6\xff\x02\x00\tAUTHORITI\x05\x00\tUNIKUE_I"
+        )
+        rslt: Dict[str, Any]
+        rslt, _ = ProxyTLV.parse(TEST_TLV_DATA_1_TRUNCATED)
+        assert isinstance(rslt, dict)
+        assert "CRC32C" in rslt
+
+    def test_unknowntype_notstrict(self):
+        test_data = b"\xFF\x00\x04yeah"
+        rslt: Dict[str, Any]
+        rslt, _ = ProxyTLV.parse(test_data, strict=False)
+        assert "xFF" in rslt
+        assert rslt["xFF"] == b"yeah"
+
+    def test_unknowntype_strict(self):
+        test_data = b"\xFF\x00\x04yeah"
+        with pytest.raises(UnknownTypeTLV):
+            _ = ProxyTLV.parse(test_data, strict=True)
+
+    def test_malformed_ssl_partialok(self):
+        test_data = (
+            b"\x20\x00\x17\x01\x02\x03\x04\x05\x21\x00\x07version\x22\x00\x09trunc"
+        )
+        rslt: Dict[str, Any]
+        rslt, _ = ProxyTLV.parse(test_data, partial_ok=True)
+        assert rslt["SSL"] is False
+        assert rslt["SSL_VERSION"] == b"version"
+        assert "SSL_CN" not in rslt
+
+    def test_malformed_ssl_notpartialok(self):
+        test_data = (
+            b"\x20\x00\x0D\x01\x02\x03\x04\x05\x21\x00\x07version\x22\x00\x09trunc"
+        )
+        with pytest.raises(MalformedTLV):
+            rslt = ProxyTLV.parse(test_data, partial_ok=False)
 
 
 class TestProxyProtocolInit:

@@ -6,7 +6,7 @@ import struct
 from enum import IntEnum
 from functools import partial
 from ipaddress import IPv4Address, IPv6Address, ip_address
-from typing import Any, AnyStr, Awaitable, Dict, Optional, Union
+from typing import Any, AnyStr, Awaitable, Dict, Optional, Tuple, Union
 
 import attr
 from public import public
@@ -71,6 +71,11 @@ class MalformedTLV(RuntimeError):
 
 
 @public
+class UnknownTypeTLV(KeyError):
+    pass
+
+
+@public
 class AsyncReader(Protocol):  # pragma: nocover
     def read(self, num_bytes: Optional[int] = None) -> Awaitable[bytes]:
         ...
@@ -87,7 +92,7 @@ _anoinit = partial(attr.ib, init=False)
 
 @public
 class ProxyTLV(dict):
-    __slots__ = ("_tlv",)
+    __slots__ = ("tlv_loc",)
 
     PP2_TYPENAME: Dict[int, str] = {
         0x01: "ALPN",
@@ -104,8 +109,9 @@ class ProxyTLV(dict):
         0x30: "NETNS",
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, _tlv_loc: Dict[str, int], **kwargs):
         super().__init__(*args, **kwargs)
+        self.tlv_loc = _tlv_loc
 
     def __getattr__(self, item):
         return self.get(item)
@@ -121,46 +127,63 @@ class ProxyTLV(dict):
 
     @classmethod
     def parse(
-            cls,
-            chunk: Union[bytes, bytearray],
-            partial_ok: bool = True,
-    ) -> Dict[str, Any]:
-        rslt = {}
-        i = 0
-        try:
+        cls,
+        data: Union[bytes, bytearray],
+        partial_ok: bool = True,
+        strict: bool = False,
+    ) -> Tuple[Dict[str, Any], Dict[str, int]]:
+        rslt: Dict[str, Any] = {}
+        tlv_loc: Dict[str, int] = {}
+
+        def _pars(chunk: Union[bytes, bytearray], *, offset: int):
+            i = 0
             while i < len(chunk):
                 typ = chunk[i]
                 len_ = int.from_bytes(chunk[i + 1 : i + 3], "big")
                 val = chunk[i + 3 : i + 3 + len_]
                 if len(val) < len_:
-                    raise MalformedTLV
-                typ_name = cls.PP2_TYPENAME.get(typ, f"x{typ:02x}")
+                    raise MalformedTLV(f"TLV 0x{typ:02X} is malformed!")
+                typ_name = cls.PP2_TYPENAME.get(typ)
+                if typ_name is None:
+                    typ_name = f"x{typ:02X}"
+                    if strict:
+                        raise UnknownTypeTLV(typ_name)
+                tlv_loc[typ_name] = offset + i
                 if typ_name == "SSL":
                     rslt["SSL_CLIENT"] = val[0]
                     rslt["SSL_VERIFY"] = int.from_bytes(val[1:5], "big")
                     try:
-                        rslt.update(cls.parse(val[5:]))
+                        _pars(val[5:], offset=i)
                         rslt["SSL"] = True
                     except MalformedTLV:
                         rslt["SSL"] = False
+                        if not partial_ok:
+                            raise
+                        else:
+                            return
                 else:
                     rslt[typ_name] = val
                 i += 3 + len_
+
+        try:
+            _pars(data, offset=0)
         except MalformedTLV:
             if not partial_ok:
                 raise
-        return rslt
+        return rslt, tlv_loc
 
     @classmethod
-    def from_raw(cls, raw: Union[bytes, bytearray]) -> Optional["ProxyTLV"]:
+    def from_raw(
+        cls, raw: Union[bytes, bytearray], strict: bool = False
+    ) -> Optional["ProxyTLV"]:
         """
         Parses raw bytes for TLV Vectors, decode them and giving them human-readable
         name if applicable, and returns a ProxyTLV object.
         """
         if len(raw) == 0:
             return None
-        parsed = cls.parse(raw, partial_ok=False)
-        return cls(parsed)
+        parsed, tlv_loc = cls.parse(raw, partial_ok=False, strict=strict)
+        return cls(parsed, _tlv_loc=tlv_loc)
 
     @classmethod
     def name_to_num(cls, name: str) -> Optional[int]:
