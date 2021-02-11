@@ -94,6 +94,7 @@ _anoinit = partial(attr.ib, init=False)
 class ProxyTLV(dict):
     __slots__ = ("tlv_loc",)
 
+    # https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt#L538-L549
     PP2_TYPENAME: Dict[int, str] = {
         0x01: "ALPN",
         0x02: "AUTHORITY",
