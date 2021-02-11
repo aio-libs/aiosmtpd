@@ -226,8 +226,14 @@ class ProxyData:
     troubleshooting, and/or (2) calculate CRC32C (which will NOT be implemented in
     this module to reduce number of deps.
     """
+    tlv_start: int = _anoinit(default=None)
+    """
+    Byte offset of the first TLV Vector within whole_raw.
+    """
     error: str = _anoinit(default="")
-    """If not an empty string, contains the error encountered when parsing"""
+    """
+    If not an empty string, contains the error encountered when parsing
+    """
     _tlv: Optional[ProxyTLV] = _anoinit(default=None)
 
     @property
@@ -396,6 +402,8 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
         proxy_data.dst_addr = d_addr
 
     proxy_data.rest = rest
+    if rest:
+        proxy_data.tlv_start = 16 + addr_len
 
     return proxy_data
 
