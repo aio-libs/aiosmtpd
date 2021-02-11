@@ -70,10 +70,14 @@ The signature of ``handle_PROXY`` must be as follows:
 
 .. method:: handle_PROXY(server, session, envelope, proxy_data)
 
-   :param SMTP server: The :class:`SMTP` instance invoking the hook.
-   :param Session session: The Session data *so far* (see Important note below)
-   :param Envelope envelope: The Envelope data *so far* (see Important note below)
-   :param ProxyData proxy_data: The result of parsing the PROXY Header
+   :param server: The :class:`SMTP` instance invoking the hook.
+   :type server: aiosmtpd.smtp.SMTP
+   :param session: The Session data *so far* (see Important note below)
+   :type session: Session
+   :param envelope: The Envelope data *so far* (see Important note below)
+   :type envelope: Envelope
+   :param proxy_data: The result of parsing the PROXY Header
+   :type proxy_data: ProxyData
    :return: Truthy or Falsey, indicating if the connection may continue or not, respectively
 
    .. important::
@@ -199,6 +203,29 @@ All you need to do is to *validate* the parsed result in the ``handle_PROXY`` ho
 
       This property will indicate if PROXY Header is valid or not.
 
+   .. py:attribute:: whole_raw
+      :type: bytearray
+
+      This attribute contains the whole PROXYv2 Header,
+      from the signature up to and including the last TLV Vector.
+
+      If you need to verify the ``CRC32C`` TLV Vector,
+      you should run the CRC32C calculation against the contents of this attribute.
+
+      For more information, see the next section, :ref:`crc32c`.
+
+      The value will be empty if PROXY version is 1.
+
+   .. py:attribute:: tlv_start
+      :type: int
+
+      This attribute points to the first TLV Vector *if exists*.
+
+      If you need to verify the ``CRC32C`` TLV Vector,
+      you should run the CRC32C calculation against the contents of this attribute.
+
+      The value will be ``None`` if PROXY version is 1.
+
    |
    | :part:`Methods`
 
@@ -252,7 +279,7 @@ All you need to do is to *validate* the parsed result in the ``handle_PROXY`` ho
 
    It is a subclass of :class:`dict`,
    so all of ``dict``'s methods are available.
-   It is basically a `Dict[str, Any]`.
+   It is basically a `Dict[str, Any]` with additional methods and attributes.
    The list below only describes methods & attributes added to this class.
 
    .. py:attribute:: PP2_TYPENAME
@@ -268,6 +295,14 @@ All you need to do is to *validate* the parsed result in the ``handle_PROXY`` ho
          The ``SSL`` Name is special.
          Rather than containing the TLV Subvectors as described in the standard,
          it is a ``bool`` value that indicates whether the PP2_SUBTYPE_SSL
+
+   .. py:attribute:: tlv_loc
+      :type: Dict[str, int]
+
+      A mapping to show the start location of certain TLV Vectors.
+
+      The keys are the TYPENAME (see :attr:`PP2_TYPENAME` above),
+      and the value is the offset from start of the TLV Vectors.
 
    .. py:method:: same_attribs(**kwargs) -> bool
 
@@ -332,6 +367,55 @@ All you need to do is to *validate* the parsed result in the ``handle_PROXY`` ho
 
       This is a helper method to perform back-mapping of typenames.
 
+.. _crc32c:
+
+Note on CRC32C Calculation
+==========================
+
+Neither the :class:`ProxyData` nor :class:`ProxyTLV` classes implement `PROXYv2 CRC32C validation`_;
+the main reason being that Python has no built-in module for calculating CRC32C.
+To perform CRC32C, third-party modules need to be installed,
+but we are uncomfortable doing that for the following reasons:
+
+* There are more than one third-party modules providing CRC32C,
+  e.g., ``crcmod``, ``crc32c``, ``google-crc32c``, etc.
+  There is no clear comparison between them.
+* Some of these third-party modules seem to be no longer being maintained
+* Most of the available third-party modules are binary distribution.
+  This potentially causes problems with existing binaries/libraries.
+* We really don't like adding dependencies outside those that are really needed.
+
+In short, we have strong reasons to NOT implement PROXYv2 CRC32C validation,
+and we have plans to NEVER implement it.
+
+If you *absolutely* need PROXYv2 CRC32C validation,
+you should perform it yourself in the :meth:`handle_PROXY` hook.
+To assist you, we have provided the :attr:`whole_raw`, :attr:`tlv_start`, and :attr:`tlv_loc` attributes.
+
+You should do the following:
+
+1. Find the "CRC32C" TLV Vector in ``whole_raw``;
+   it would start at byte ``tlv_start + tlv_loc["CRC32C"]``
+
+2. Zero out the 4-octet value of the "CRC32C" TLV Vector
+
+3. Perform CRC32C calculation over the modified ``whole_raw``
+
+4. Convert the result to big-endian bytes,
+   and compare with the ``.CRC32C`` attribute of the ProxyTLV instance
+
+Example::
+
+    # The int(3) at end is to skip over the "T" and "L" part
+    offset = proxy_data.tlv_start + proxy_data.tlv.tlv_loc["CRC32C"] + 3
+    # Since whole_raw is a bytearray, we can do slice replacement
+    proxy_data.whole_raw[offset:offset + 4] = "\x00\x00\x00\x00"
+    # Actual syntax will depend on the module you use
+    calculated: int = crc32c(proxy_data.whole_raw)
+    # Adjust first part as necessary if calculated is not int
+    validated = calculated.to_bytes(4, "big") == proxy_data.tlv.CRC32C
+
+Good luck!
 
 .. _`command`: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L346-L358
 .. _`address family`: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L366-L381
@@ -339,3 +423,4 @@ All you need to do is to *validate* the parsed result in the ``handle_PROXY`` ho
 .. _`transport protocol being proxied`: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L388-L402
 .. _TLV portion: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L519
 .. _listed in the documentation: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L538-L549
+.. _PROXYv2 CRC32C validation: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L574-L597
