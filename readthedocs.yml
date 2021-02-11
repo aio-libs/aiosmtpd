@@ -11,4 +11,4 @@ sphinx:
 python:
   version: 3.8
   install:
-    - requirements: aiosmtpd/docs/requirements.txt
+    - requirements: aiosmtpd/docs/RTD-requirements.txt

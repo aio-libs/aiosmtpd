@@ -64,7 +64,7 @@ extensions = [
     "sphinx_rtd_theme"
 ]
 # IMPORTANT: If you edit this, also edit the following:
-#   - aiosmtpd/docs/requirements.txt
+#   - aiosmtpd/docs/RTD-requirements.txt
 #   -
 
 # Add any paths that contain templates here, relative to this directory.
