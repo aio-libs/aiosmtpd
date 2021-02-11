@@ -293,6 +293,14 @@ class TestProxyTLV:
         with pytest.raises(MalformedTLV):
             _ = ProxyTLV.parse(test_data, partial_ok=False)
 
+    def test_eq(self):
+        data1 = b"\x03\x00\x04Z\xfd\xc6\xff\x02\x00\tAUTHORITI"
+        ptlv1 = ProxyTLV.from_raw(data1)
+        data2 = b"\x02\x00\tAUTHORITI\x03\x00\x04Z\xfd\xc6\xff"
+        ptlv2 = ProxyTLV.from_raw(data2)
+        assert ptlv1 is not ptlv2
+        assert ptlv1 == ptlv2
+
 
 class TestProxyProtocolInit:
     @parametrize("value", [int(-1), float(-1.0), int(0), float(0.0)])

@@ -94,7 +94,7 @@ _anoinit = partial(attr.ib, init=False)
 
 
 @public
-class ProxyTLV(dict):  # lgtm[py/missing-equals]
+class ProxyTLV(dict):
     __slots__ = ("tlv_loc",)
 
     # https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt#L538-L549
@@ -119,6 +119,9 @@ class ProxyTLV(dict):  # lgtm[py/missing-equals]
 
     def __getattr__(self, item):
         return self.get(item)
+
+    def __eq__(self, other):
+        return super().__eq__(other)
 
     def same_attribs(self, _raises: bool = False, **kwargs) -> bool:
         for k, v in kwargs.items():
