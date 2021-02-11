@@ -292,10 +292,16 @@ class TestProxyProtocolInit:
         with pytest.raises(ValueError, match=r"proxy_protocol_timeout must be > 0"):
             _ = SMTPServer(Sink(), proxy_protocol_timeout=value, loop=temp_event_loop)
 
-    def test_le_3(self, caplog, temp_event_loop):
+    def test_lt_3(self, caplog, temp_event_loop):
         _ = SMTPServer(Sink(), proxy_protocol_timeout=1, loop=temp_event_loop)
         expect = ("mail.log", logging.WARNING, "proxy_protocol_timeout < 3.0")
         assert expect in caplog.record_tuples
+
+    @parametrize("value", [int(3), float(3.0), int(4), float(4.0)])
+    def test_ge_3(self, caplog, temp_event_loop, value):
+        _ = SMTPServer(Sink(), proxy_protocol_timeout=value, loop=temp_event_loop)
+        expect = ("mail.log", logging.WARNING, "proxy_protocol_timeout < 3.0")
+        assert expect not in caplog.record_tuples
 
 
 class TestProxyProtocolV1(_TestProxyProtocolCommon):
