@@ -110,9 +110,12 @@ class ProxyTLV(dict):
     def __getattr__(self, item):
         return self.get(item)
 
-    def same_attribs(self, **kwargs) -> bool:
+    def same_attribs(self, _raises: bool = False, **kwargs) -> bool:
         for k, v in kwargs.items():
-            if self.get(k, _NOT_FOUND) != v:
+            actual = self.get(k, _NOT_FOUND)
+            if actual != v:
+                if _raises:
+                    raise ValueError(f"mismatch:{k} actual={actual!r} expect={v!r}")
                 return False
         return True
 

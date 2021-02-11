@@ -198,7 +198,31 @@ class TestProxyTLV:
             SSL_SIG_ALG=b"RSA-SHA256",
             SSL_KEY_ALG=b"RSA4096",
         )
+        assert not ptlv.same_attribs(SSL=False)
         assert not ptlv.same_attribs(false_attrib=None)
+
+    def test_2(self):
+        ptlv = ProxyTLV.from_raw(TEST_TLV_DATA_2)
+        assert "ALPN" not in ptlv
+        assert "NOOP" not in ptlv
+        assert "SSL_CN" not in ptlv
+        assert "NETNS" in ptlv
+        assert ptlv.ALPN is None
+        assert ptlv.AUTHORITY == b"AUTHORIT2"
+        assert ptlv.UNIQUE_ID == b"UNIQUEID2"
+        assert ptlv.same_attribs(
+            CRC32C=b"Z\xfd\xc6\xff",
+            UNIQUE_ID=b"UNIQUEID2",
+            SSL=True,
+            SSL_VERSION=b"TLSv1.3",
+            SSL_CIPHER=b"ECDHE-RSA-AES256-CBC-SHA384",
+            SSL_SIG_ALG=b"RSA-SHA256",
+            SSL_KEY_ALG=b"RSA4096",
+            NETNS=b"something",
+        )
+        assert not ptlv.same_attribs(false_attrib=None)
+        with pytest.raises(ValueError, match=r"mismatch:SSL"):
+            ptlv.same_attribs(SSL=False, _raises=True)
 
     @parametrize(
         "typeint, typename",
