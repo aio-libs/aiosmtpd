@@ -168,6 +168,17 @@ class TestUnixSocketController:
         finally:
             cont.stop()
 
+    def test_server_creation_ssl(self, tmp_path, ssl_context_server):
+        sockfile = tmp_path / "smtp"
+        cont = UnixSocketController(
+            Sink(), unix_socket=sockfile, ssl_context=ssl_context_server
+        )
+        try:
+            cont.start()
+            assert sockfile.exists()
+        finally:
+            cont.stop()
+
 
 class TestFactory:
     def test_normal_situation(self):
