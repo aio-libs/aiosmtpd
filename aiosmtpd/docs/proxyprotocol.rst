@@ -103,11 +103,36 @@ the ``aiosmtpd.proxy_protocol`` module contains the full parsing logic.
 
 All you need to do is to *validate* the parsed result in the ``handle_PROXY`` hook.
 
+.. py:module:: aiosmtpd.proxy_protocol
+
+Enums
+=====
+
+.. class:: AF
+
+   .. py:attribute:: \
+      UNSPEC = 0
+      IP4 = 1
+      IP6 = 2
+      UNIX = 3
+
+.. class:: PROTO
+
+   .. py:attribute:: \
+      UNSPEC = 0
+      UNKNOWN = 0
+      STREAM = 1
+      DGRAM = 2
+
+.. class:: V2_CMD
+
+   .. py:attribute:: \
+      LOCAL = 0
+      PROXY = 1
+
 
 ``ProxyData`` API
 =================
-
-.. py:module:: aiosmtpd.proxy_protocol
 
 .. py:class:: ProxyData(\
    version=None\
@@ -124,23 +149,26 @@ All you need to do is to *validate* the parsed result in the ``handle_PROXY`` ho
       If ``None``, it indicates that parsing has failed and the header is malformed.
 
    .. py:attribute:: command
-      :type: int
+      :type: V2_CMD
 
       Contains the `command`_. Only set if ``version=2``
 
    .. py:attribute:: family
-      :type: int
+      :type: AF
 
-      Contains the `address family`_. Only set if ``version=2``
+      Contains the `address family`_.
+
+      For Version 1, :attr:`AF.UNIX` is not valid.
 
    .. py:attribute:: protocol
-      :type: Union[bytes, int]
+      :type: PROTO
 
-      For PROXY Header version 1,
-      it contains a human-readable indication of the `INET protocol and family`_.
+      Contains an integer indicating the `transport protocol being proxied`_.
 
-      For PROXY Header version 2,
-      it contains an integer indicating the `transport protocol being proxied`_.
+      For Version 1:
+        * ``UNSPEC`` means ``UNKNOWN``
+        * ``STREAM`` means ``TCP``
+        * ``DGRAM`` is invalid
 
    .. py:attribute:: src_addr
       :type: Union[IPv4Address, IPv6Address, AnyStr]
@@ -148,7 +176,7 @@ All you need to do is to *validate* the parsed result in the ``handle_PROXY`` ho
       Contains the source address
       (i.e., address of the "original" client).
 
-      The type of this attribute depends on the address family.
+      The type of this attribute depends on the :attr:`address family <family>`.
 
    .. py:attribute:: dst_addr
       :type: Union[IPv4Address, IPv6Address, AnyStr]

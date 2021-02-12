@@ -26,29 +26,29 @@ class V2_CMD(IntEnum):
     PROXY = 1
 
 
-class V2_FAM(IntEnum):
+class AF(IntEnum):
     UNSPEC = 0
-    IP4 = 1
-    IP6 = 2
+    INET = 1
+    INET6 = 2
     UNIX = 3
 
 
-class V2_PRO(IntEnum):
+class PROTO(IntEnum):
     UNSPEC = 0
     STREAM = 1
     DGRAM = 2
 
 
 V2_VALID_CMDS = {item.value for item in V2_CMD}
-V2_VALID_FAMS = {item.value for item in V2_FAM}
-V2_VALID_PROS = {item.value for item in V2_PRO}
+V2_VALID_FAMS = {item.value for item in AF}
+V2_VALID_PROS = {item.value for item in PROTO}
 V2_PARSE_ADDR_FAMPRO = {
-    (V2_FAM.IP4 << 4) | V2_PRO.STREAM,
-    (V2_FAM.IP4 << 4) | V2_PRO.DGRAM,
-    (V2_FAM.IP6 << 4) | V2_PRO.STREAM,
-    (V2_FAM.IP6 << 4) | V2_PRO.DGRAM,
-    (V2_FAM.UNIX << 4) | V2_PRO.STREAM,
-    (V2_FAM.UNIX << 4) | V2_PRO.DGRAM,
+    (AF.INET << 4) | PROTO.STREAM,
+    (AF.INET << 4) | PROTO.DGRAM,
+    (AF.INET6 << 4) | PROTO.STREAM,
+    (AF.INET6 << 4) | PROTO.DGRAM,
+    (AF.UNIX << 4) | PROTO.STREAM,
+    (AF.UNIX << 4) | PROTO.DGRAM,
 }
 
 
@@ -205,11 +205,12 @@ class ProxyTLV(dict):
 class ProxyData:
     version: Optional[int] = attr.ib(kw_only=True, init=True)
     """PROXY Protocol version; None if not recognized/malformed"""
-    command: Optional[int] = _anoinit(default=None)
+    command: Optional[V2_CMD] = _anoinit(default=None)
     """PROXYv2 command"""
-    family: Optional[int] = _anoinit(default=None)
-    """PROXYv2 protocol family"""
-    protocol: Optional[Union[int, AnyStr]] = _anoinit(default=None)
+    family: Optional[AF] = _anoinit(default=None)
+    """Address Family (AF)"""
+    protocol: Optional[PROTO] = _anoinit(default=None)
+    """Proxied Protocol (PROTO)"""
     src_addr: Optional[EndpointAddress] = _anoinit(default=None)
     dst_addr: Optional[EndpointAddress] = _anoinit(default=None)
     src_port: Optional[int] = _anoinit(default=None)
@@ -295,6 +296,8 @@ async def _get_v1(reader: AsyncReader, initial=b"") -> ProxyData:
     proxy_data.protocol = proto
     rest = mp.group("rest")
     if proto == b"UNKNOWN":
+        proxy_data.protocol = PROTO.UNKNOWN
+        proxy_data.family = PROTO.UNSPEC
         proxy_data.rest = rest
     else:
         mr = RE_PROXYv1_ADDR.match(rest)
@@ -315,6 +318,11 @@ async def _get_v1(reader: AsyncReader, initial=b"") -> ProxyData:
             return proxy_data.with_error("PROXYv1 src port out of bounds")
         if not 0 <= dstport <= 65535:
             return proxy_data.with_error("PROXYv1 dst port out of bounds")
+        proxy_data.protocol = PROTO.STREAM
+        if proto.endswith(b"4"):
+            proxy_data.family = AF.INET
+        else:
+            proxy_data.family = AF.INET6
         proxy_data.src_addr = srcip
         proxy_data.dst_addr = dstip
         proxy_data.src_port = srcport
@@ -372,12 +380,12 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
         proxy_data.rest = rest
         return proxy_data
 
-    if proxy_data.family == V2_FAM.IP4:
+    if proxy_data.family == AF.INET:
         unpacker = "!4s4sHH"
-    elif proxy_data.family == V2_FAM.IP6:
+    elif proxy_data.family == AF.INET6:
         unpacker = "!16s16sHH"
     else:
-        assert proxy_data.family == V2_FAM.UNIX
+        assert proxy_data.family == AF.UNIX
         unpacker = "108s108s0s0s"
 
     addr_len = struct.calcsize(unpacker)
@@ -387,18 +395,18 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
     rest = rest[addr_len:]
     s_addr, d_addr, s_port, d_port = struct.unpack(unpacker, addr_struct)
 
-    if proxy_data.family == V2_FAM.IP4:
+    if proxy_data.family == AF.INET:
         proxy_data.src_addr = IPv4Address(s_addr)
         proxy_data.dst_addr = IPv4Address(d_addr)
         proxy_data.src_port = s_port
         proxy_data.dst_port = d_port
-    elif proxy_data.family == V2_FAM.IP6:
+    elif proxy_data.family == AF.INET6:
         proxy_data.src_addr = IPv6Address(s_addr)
         proxy_data.dst_addr = IPv6Address(d_addr)
         proxy_data.src_port = s_port
         proxy_data.dst_port = d_port
     else:
-        assert proxy_data.family == V2_FAM.UNIX
+        assert proxy_data.family == AF.UNIX
         proxy_data.src_addr = s_addr
         proxy_data.dst_addr = d_addr
 
