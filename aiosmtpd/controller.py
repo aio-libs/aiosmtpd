@@ -191,9 +191,9 @@ class Controller(BaseThreadedController):
     def __init__(
         self,
         handler,
-        loop=None,
         hostname: Optional[str] = None,
         port: int = 8025,
+        loop=None,
         *,
         ready_timeout: float = 1.0,
         ssl_context: ssl.SSLContext = None,
