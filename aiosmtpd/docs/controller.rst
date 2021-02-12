@@ -164,7 +164,8 @@ with some differences:
     :skipif: in_win32
 
     >>> from aiosmtpd.controller import UnixSocketController
-    >>> controller = UnixSocketController(ExampleHandler(), unix_socket="smtp_socket~")
+    >>> from aiosmtpd.handlers import Sink
+    >>> controller = UnixSocketController(Sink(), unix_socket="smtp_socket~")
     >>> controller.start()
 
 **Rather than connecting to IP:port, you connect to the Socket file.**
