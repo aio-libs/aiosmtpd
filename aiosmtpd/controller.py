@@ -111,7 +111,7 @@ class BaseThreadedController(metaclass=ABCMeta):
         raise NotImplementedError  # pragma: nocover
 
     @abstractmethod
-    def _test_server(self):
+    def _trigger_server(self):
         raise NotImplementedError  # pragma: nocover
 
     def _run(self, ready_event):
@@ -158,9 +158,9 @@ class BaseThreadedController(metaclass=ABCMeta):
         # factory() go undetected. To trigger factory() invocation we need to open
         # a connection to the server and 'exchange' some traffic.
         try:
-            self._test_server()
+            self._trigger_server()
         except Exception:
-            # We totally don't care of exceptions experienced by _test_server,
+            # We totally don't care of exceptions experienced by _trigger_server,
             # which _will_ happen if factory() experienced problems.
             pass
         if self._thread_exception is not None:
@@ -220,7 +220,7 @@ class Controller(BaseThreadedController):
             ssl=self.ssl_context,
         )
 
-    def _test_server(self):
+    def _trigger_server(self):
         """
         Opens a socket connection to the newly launched server, wrapping in an SSL
         Context if necessary, and read some data from it to ensure that factory()
@@ -263,7 +263,7 @@ class UnixSocketController(BaseThreadedController):  # pragma: on-win32
             ssl=self.ssl_context,
         )
 
-    def _test_server(self):
+    def _trigger_server(self):
         with ExitStack() as stk:
             s: socket = stk.enter_context(socket(AF_UNIX, SOCK_STREAM))
             s.connect(self.unix_socket)
