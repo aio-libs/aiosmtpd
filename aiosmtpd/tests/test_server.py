@@ -78,10 +78,11 @@ class TestController:
     """Tests for the aiosmtpd.controller.Controller class"""
 
     @pytest.mark.filterwarnings("ignore")
-    def test_ready_timeout(self, printer):
+    def test_ready_timeout(self):
         cont = SlowStartController(Sink())
+        expectre = r"SMTP server failed to start within allotted time"
         try:
-            with pytest.raises(TimeoutError):
+            with pytest.raises(TimeoutError, match=expectre):
                 cont.start()
         finally:
             cont.stop()
