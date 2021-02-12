@@ -5,6 +5,7 @@ import asyncio
 import os
 import ssl
 import threading
+from abc import ABCMeta, abstractmethod
 from contextlib import ExitStack
 from socket import create_connection
 from typing import Any, Coroutine, Dict, Optional
@@ -36,7 +37,7 @@ class _FakeServer(asyncio.StreamReaderProtocol):
 
 
 @public
-class Controller:
+class BaseThreadedController(metaclass=ABCMeta):
     server: Optional[AsyncServer] = None
     server_coro: Coroutine = None
     smtpd = None
@@ -47,14 +48,11 @@ class Controller:
         self,
         handler,
         loop=None,
-        hostname=None,
-        port=8025,
         *,
-        ready_timeout=1.0,
-        ssl_context: ssl.SSLContext = None,
+        ready_timeout: float = 1.0,
+        ssl_context: Optional[ssl.SSLContext] = None,
         # SMTP parameters
-        server_hostname: str = None,
-        server_kwargs: Dict[str, Any] = None,
+        server_hostname: Optional[str] = None,
         **SMTP_parameters,
     ):
         """
@@ -63,20 +61,20 @@ class Controller:
 /docs/controller.html#controller-api>`_.
         """
         self.handler = handler
-        self.hostname = "::1" if hostname is None else hostname
-        self.port = port
-        self.ssl_context = ssl_context
         self.loop = asyncio.new_event_loop() if loop is None else loop
-        self.ready_timeout = os.getenv(
-            'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
-        if server_kwargs:
+        self.ready_timeout = float(
+            os.getenv("AIOSMTPD_CONTROLLER_TIMEOUT", ready_timeout)
+        )
+        self.ssl_context = ssl_context
+        self.SMTP_kwargs: Dict[str, Any] = {}
+        if "server_kwargs" in SMTP_parameters:
             warn(
                 "server_kwargs will be removed in version 2.0. "
                 "Just specify the keyword arguments to forward to SMTP "
                 "as kwargs to this __init__ method.",
-                DeprecationWarning
+                DeprecationWarning,
             )
-        self.SMTP_kwargs: Dict[str, Any] = server_kwargs or {}
+            self.SMTP_kwargs = SMTP_parameters.pop("server_kwargs")
         self.SMTP_kwargs.update(SMTP_parameters)
         if server_hostname:
             self.SMTP_kwargs["hostname"] = server_hostname
@@ -87,9 +85,7 @@ class Controller:
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
-        return SMTP(
-            self.handler, **self.SMTP_kwargs
-        )
+        return SMTP(self.handler, **self.SMTP_kwargs)
 
     def _factory_invoker(self):
         """Wraps factory() to catch exceptions during instantiation"""
@@ -102,6 +98,14 @@ class Controller:
             self._thread_exception = err
             return _FakeServer(self.loop)
 
+    @abstractmethod
+    def _create_server(self) -> Coroutine:
+        raise NotImplementedError  # pragma: nocover
+
+    @abstractmethod
+    def _test_server(self):
+        raise NotImplementedError  # pragma: nocover
+
     def _run(self, ready_event):
         asyncio.set_event_loop(self.loop)
         try:
@@ -109,16 +113,8 @@ class Controller:
             # detect the types of the vars. Cannot use `assert isinstance`, because
             # Python 3.6 in asyncio debug mode has a bug wherein CoroWrapper is not
             # an instance of Coroutine
-            srv_coro: Coroutine = self.loop.create_server(
-                self._factory_invoker,
-                host=self.hostname,
-                port=self.port,
-                ssl=self.ssl_context,
-            )
-            self.server_coro = srv_coro
-            srv: AsyncServer = self.loop.run_until_complete(
-                srv_coro
-            )
+            self.server_coro = self._create_server()
+            srv: AsyncServer = self.loop.run_until_complete(self.server_coro)
             self.server = srv
         except Exception as error:  # pragma: on-wsl
             # Usually will enter this part only if create_server() cannot bind to the
@@ -137,18 +133,6 @@ class Controller:
         self.loop.close()
         self.server = None
 
-    def _testconn(self):
-        """
-        Opens a socket connection to the newly launched server, wrapping in an SSL
-        Context if necessary, and read some data from it to ensure that factory()
-        gets invoked.
-        """
-        with ExitStack() as stk:
-            s = stk.enter_context(create_connection((self.hostname, self.port), 1.0))
-            if self.ssl_context:
-                s = stk.enter_context(self.ssl_context.wrap_socket(s))
-            _ = s.recv(1024)
-
     def start(self):
         assert self._thread is None, "SMTP daemon already running"
         ready_event = threading.Event()
@@ -159,15 +143,16 @@ class Controller:
         ready_event.wait(self.ready_timeout)
         if self._thread_exception is not None:  # pragma: on-wsl
             # See comment about WSL1.0 in the _run() method
-            assert self._thread is not None  # Stupid LGTM.com; see github/codeql#4918
             raise self._thread_exception
+        if not ready_event.is_set():
+            raise TimeoutError("SMTP server failed to start within allotted time")
         # Apparently create_server invokes factory() "lazily", so exceptions in
         # factory() go undetected. To trigger factory() invocation we need to open
         # a connection to the server and 'exchange' some traffic.
         try:
-            self._testconn()
+            self._test_server()
         except Exception:
-            # We totally don't care of exceptions experienced by _testconn,
+            # We totally don't care of exceptions experienced by _test_server,
             # which _will_ happen if factory() experienced problems.
             pass
         if self._thread_exception is not None:
@@ -191,3 +176,50 @@ class Controller:
         self._thread.join()
         self._thread = None
         self._thread_exception = None
+
+
+@public
+class Controller(BaseThreadedController):
+    def __init__(
+        self,
+        handler,
+        loop=None,
+        hostname: Optional[str] = None,
+        port: int = 8025,
+        *,
+        ready_timeout: float = 1.0,
+        ssl_context: ssl.SSLContext = None,
+        # SMTP parameters
+        server_hostname: Optional[str] = None,
+        **SMTP_parameters,
+    ):
+        super().__init__(
+            handler,
+            loop,
+            ready_timeout=ready_timeout,
+            server_hostname=server_hostname,
+            **SMTP_parameters
+        )
+        self.hostname = "::1" if hostname is None else hostname
+        self.port = port
+        self.ssl_context = ssl_context
+
+    def _create_server(self) -> Coroutine:
+        return self.loop.create_server(
+            self._factory_invoker,
+            host=self.hostname,
+            port=self.port,
+            ssl=self.ssl_context,
+        )
+
+    def _test_server(self):
+        """
+        Opens a socket connection to the newly launched server, wrapping in an SSL
+        Context if necessary, and read some data from it to ensure that factory()
+        gets invoked.
+        """
+        with ExitStack() as stk:
+            s = stk.enter_context(create_connection((self.hostname, self.port), 1.0))
+            if self.ssl_context:
+                s = stk.enter_context(self.ssl_context.wrap_socket(s))
+            _ = s.recv(1024)
