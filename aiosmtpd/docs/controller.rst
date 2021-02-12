@@ -241,6 +241,10 @@ The EHLO response does not include the ``SMTPUTF8`` ESMTP option.
     8BITMIME
     HELP
 
+Stop the controller if we're done experimenting:
+
+.. doctest::
+
     >>> controller.stop()
 
 
