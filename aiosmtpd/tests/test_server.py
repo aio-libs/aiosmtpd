@@ -5,8 +5,11 @@
 
 import platform
 import socket
+import ssl
 import time
+from contextlib import ExitStack
 from functools import partial
+from pathlib import Path
 
 import pytest
 from pytest_mock import MockFixture
@@ -159,23 +162,47 @@ class TestController:
 
 @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
 class TestUnixSocketController:
-    def test_server_creation(self, tmp_path):
-        sockfile = tmp_path / "smtp"
-        cont = UnixSocketController(Sink(), unix_socket=sockfile)
+    sockfile: Path = None
+
+    def _assert_good_server(self, ssl_context: ssl.SSLContext = None):
+        assert self.sockfile.exists()
+        with ExitStack() as stk:
+            sock: socket.socket = stk.enter_context(
+                socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            )
+            sock.connect(str(self.sockfile))
+            if ssl_context:
+                sock = stk.enter_context(ssl_context.wrap_socket(sock))
+            resp = sock.recv(1024)
+            assert resp.startswith(b"220 ")
+            assert resp.endswith(b"\r\n")
+            sock.send(b"EHLO socket.test\r\n")
+            time.sleep(0.1)
+            resp = sock.recv(1024)
+            lines = resp.splitlines()
+            assert lines[-1] == b"250 HELP"
+            sock.send(b"QUIT\r\n")
+            time.sleep(0.1)
+            resp = sock.recv(1024)
+            assert resp.startswith(b"221")
+
+    def test_server_creation(self, tmp_path, printer):
+        self.sockfile = tmp_path / "smtp"
+        cont = UnixSocketController(Sink(), unix_socket=self.sockfile)
         try:
             cont.start()
-            assert sockfile.exists()
+            self._assert_good_server()
         finally:
             cont.stop()
 
     def test_server_creation_ssl(self, tmp_path, ssl_context_server):
-        sockfile = tmp_path / "smtp"
+        self.sockfile = tmp_path / "smtp"
         cont = UnixSocketController(
-            Sink(), unix_socket=sockfile, ssl_context=ssl_context_server
+            Sink(), unix_socket=self.sockfile, ssl_context=ssl_context_server
         )
         try:
             cont.start()
-            assert sockfile.exists()
+            self._assert_good_server(ssl_context_server)
         finally:
             cont.stop()
 
