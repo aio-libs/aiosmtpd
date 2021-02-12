@@ -39,7 +39,7 @@ jobs:
       - name: "flake8 Style Checking"
         # language=bash
         run: |
-          pip install colorama flake8
+          pip install colorama flake8 flake8-bugbear
           python -m flake8 aiosmtpd setup.py housekeep.py release.py
       - name: "Docs Checking"
         # language=bash
