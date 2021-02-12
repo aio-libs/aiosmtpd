@@ -10,6 +10,8 @@ import time
 from contextlib import ExitStack
 from functools import partial
 from pathlib import Path
+from tempfile import mkdtemp
+from typing import Generator
 
 import pytest
 from pytest_mock import MockFixture
@@ -46,6 +48,26 @@ def in_wsl():
     # On Linux (incl. WSL), platform.release() returns the kernel version.
     # As of 2021-02-07, only WSL has a kernel with "Microsoft" in the version.
     return "microsoft" in platform.release().casefold()
+
+
+@pytest.fixture
+def safe_socket_dir() -> Generator[Path, None, None]:
+    # See:
+    #   - https://github.com/aio-libs/aiohttp/issues/3572
+    #   - https://github.com/aio-libs/aiohttp/pull/3832/files
+    #   - https://unix.stackexchange.com/a/367012/5589
+    tmpdir = Path(mkdtemp()).absolute()
+    assert len(str(tmpdir)) <= 87  # 92 (max on HP-UX) minus 5 (allow 4-char fn)
+    #
+    yield tmpdir
+    #
+    plist = [p for p in tmpdir.rglob("*")]
+    for p in reversed(plist):
+        if p.is_dir():
+            p.rmdir()
+        else:
+            p.unlink()
+    tmpdir.rmdir()
 
 
 class TestServer:
@@ -208,8 +230,8 @@ class TestUnixSocketController:
             resp = sock.recv(1024)
             assert resp.startswith(b"221")
 
-    def test_server_creation(self, tmp_path):
-        self.sockfile = tmp_path / "smtp"
+    def test_server_creation(self, safe_socket_dir):
+        self.sockfile = safe_socket_dir / "smtp"
         cont = UnixSocketController(Sink(), unix_socket=self.sockfile)
         try:
             cont.start()
@@ -217,8 +239,8 @@ class TestUnixSocketController:
         finally:
             cont.stop()
 
-    def test_server_creation_ssl(self, tmp_path, ssl_context_server):
-        self.sockfile = tmp_path / "smtp"
+    def test_server_creation_ssl(self, safe_socket_dir, ssl_context_server):
+        self.sockfile = safe_socket_dir / "smtp"
         cont = UnixSocketController(
             Sink(), unix_socket=self.sockfile, ssl_context=ssl_context_server
         )
