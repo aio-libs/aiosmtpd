@@ -42,6 +42,7 @@ on-wsl = "'Microsoft' in platform_release"
     # On Windows, platform.release() returns the Windows version (e.g., "7" or "10")
     # On Linux (incl. WSL), platform.release() returns the kernel version.
     # As of 2021-02-07, only WSL has a kernel with "Microsoft" in the version.
+on-not-win32 = "sys_platform != 'win32'"
 
 [tool.coverage.report]
 exclude_lines = [

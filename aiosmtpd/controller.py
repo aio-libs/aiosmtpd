@@ -7,8 +7,13 @@ import ssl
 import threading
 from abc import ABCMeta, abstractmethod
 from contextlib import ExitStack
-from socket import create_connection
-from typing import Any, Coroutine, Dict, Optional
+from pathlib import Path
+from socket import create_connection, socket, SOCK_STREAM
+try:
+    from socket import AF_UNIX
+except ImportError:  # pragma: on-not-win32
+    AF_UNIX = None
+from typing import Any, Coroutine, Dict, Optional, Union
 from warnings import warn
 
 from public import public
@@ -220,6 +225,45 @@ class Controller(BaseThreadedController):
         """
         with ExitStack() as stk:
             s = stk.enter_context(create_connection((self.hostname, self.port), 1.0))
+            if self.ssl_context:
+                s = stk.enter_context(self.ssl_context.wrap_socket(s))
+            _ = s.recv(1024)
+
+
+class UnixSocketController(BaseThreadedController):  # pragma: on-win32
+    def __init__(
+        self,
+        handler,
+        unix_socket: Optional[Union[str, Path]],
+        loop=None,
+        *,
+        ready_timeout=1.0,
+        ssl_context=None,
+        # SMTP parameters
+        server_hostname: str = None,
+        **SMTP_parameters,
+    ):
+        super().__init__(
+            handler,
+            loop,
+            ready_timeout=ready_timeout,
+            ssl_context=ssl_context,
+            server_hostname=server_hostname,
+            **SMTP_parameters
+        )
+        self.unix_socket = str(unix_socket)
+
+    def _create_server(self) -> Coroutine:
+        return self.loop.create_unix_server(
+            self._factory_invoker,
+            path=self.unix_socket,
+            ssl=self.ssl_context,
+        )
+
+    def _test_server(self):
+        with ExitStack() as stk:
+            s: socket = stk.enter_context(socket(AF_UNIX, SOCK_STREAM))
+            s.connect(self.unix_socket)
             if self.ssl_context:
                 s = stk.enter_context(self.ssl_context.wrap_socket(s))
             _ = s.recv(1024)
