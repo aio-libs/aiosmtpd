@@ -5,6 +5,7 @@
 
 import platform
 import socket
+import time
 from functools import partial
 
 import pytest
@@ -15,6 +16,19 @@ from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
 
 from .conftest import Global
+
+
+class SlowStartController(Controller):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("ready_timeout", 0.5)
+        super().__init__(*args, **kwargs)
+
+    def _run(self, ready_event):
+        time.sleep(self.ready_timeout * 1.1)
+        try:
+            super()._run(ready_event)
+        except Exception:
+            pass
 
 
 def in_wsl():
@@ -55,6 +69,15 @@ class TestServer:
 
 class TestController:
     """Tests for the aiosmtpd.controller.Controller class"""
+
+    @pytest.mark.filterwarnings("ignore")
+    def test_ready_timeout(self, printer):
+        cont = SlowStartController(Sink())
+        try:
+            with pytest.raises(TimeoutError):
+                cont.start()
+        finally:
+            cont.stop()
 
     @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
     def test_socket_error_dupe(self, plain_controller, client):
