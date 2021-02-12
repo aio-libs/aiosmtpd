@@ -25,6 +25,14 @@ dialog.
 Using the controller
 ====================
 
+.. _tcpserver:
+
+TCP-based Server
+----------------
+
+The :class:`Controller` class creates a TCP-based server,
+listening on an Internet endpoint (i.e., ``ip_address:port`` pair).
+
 Say you want to receive email for ``example.com`` and print incoming mail data
 to the console.  Start by implementing a handler as follows:
 
@@ -139,6 +147,47 @@ There are a number of built-in :ref:`handler classes <handlers>` that you can
 use to do some common tasks, and it's easy to write your own handler.  For a
 full overview of the methods that handler classes may implement, see the
 section on :ref:`handler hooks <hooks>`.
+
+Unix Socket-based Server
+------------------------
+
+The :class:`UnixSocketController` class creates a server listening to
+a Unix Socket (i.e., a special file that can act as a 'pipe' for interprocess
+communication).
+
+Usage is identical with the example described in the :ref:`tcpserver` section above,
+with some differences:
+
+**Rather than specifying a hostname:port to listen on, you specify the Socket's filepath:**
+
+.. doctest::
+   :skipif: in_win32
+
+    >>> from aiosmtpd.controller import UnixSocketController
+    >>> controller = UnixSocketController(ExampleHandler(), unix_socket="smtp_socket~")
+    >>> controller.start()
+
+**Rather than connecting to IP:port, you connect to the Socket file.**
+Python's :class:`smtplib.SMTP` sadly cannot connect to a Unix Socket,
+so we need to handle it on our own here:
+
+.. doctest::
+   :skipif: in_win32
+
+    >>> import socket
+    >>> sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    >>> sock.connect("smtp_socket~")
+
+Try sending something, don't forget to end with ``"\r\n"``:
+
+.. doctest::
+   :skipif: in_win32
+
+    >>> sock.send("HELO example.org\r\n")
+    >>> resp = sock.recv(1023)
+    >>> print(resp)
+    b"1234"
+
 
 .. _enablesmtputf8:
 

@@ -152,6 +152,11 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
 }
 
+doctest_global_setup = """
+import platform
+in_win32 = platform.system() == "Windows"
+"""
+
 # endregion
 
 
