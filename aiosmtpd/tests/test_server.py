@@ -11,7 +11,7 @@ from functools import partial
 import pytest
 from pytest_mock import MockFixture
 
-from aiosmtpd.controller import Controller, _FakeServer
+from aiosmtpd.controller import Controller, _FakeServer, UnixSocketController
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
 
@@ -29,6 +29,10 @@ class SlowStartController(Controller):
             super()._run(ready_event)
         except Exception:
             pass
+
+
+def in_win32():
+    return platform.system().casefold() == "windows"
 
 
 def in_wsl():
@@ -151,6 +155,18 @@ class TestController:
         assert controller.SMTP_kwargs["hostname"] == "testhost2"
         controller = contsink(server_hostname="testhost3", server_kwargs=kwargs)
         assert controller.SMTP_kwargs["hostname"] == "testhost3"
+
+
+@pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
+class TestUnixSocketController:
+    def test_server_creation(self, tmp_path):
+        sockfile = tmp_path / "smtp"
+        cont = UnixSocketController(Sink(), unix_socket=sockfile)
+        try:
+            cont.start()
+            assert sockfile.exists()
+        finally:
+            cont.stop()
 
 
 class TestFactory:
