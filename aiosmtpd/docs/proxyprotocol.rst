@@ -395,7 +395,7 @@ You should do the following:
 1. Find the "CRC32C" TLV Vector in ``whole_raw``;
    it would start at byte ``tlv_start + tlv_loc["CRC32C"]``
 
-2. Zero out the 4-octet value of the "CRC32C" TLV Vector
+2. Zero out the 4-octet Value part of the "CRC32C" TLV Vector
 
 3. Perform CRC32C calculation over the modified ``whole_raw``
 
