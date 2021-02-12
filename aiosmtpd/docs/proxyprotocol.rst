@@ -206,15 +206,13 @@ All you need to do is to *validate* the parsed result in the ``handle_PROXY`` ho
    .. py:attribute:: whole_raw
       :type: bytearray
 
-      This attribute contains the whole PROXYv2 Header,
-      from the signature up to and including the last TLV Vector.
+      This attribute contains the whole PROXY Header.
+      For version 1, it contains everything up to and including the terminating ``\r\n``.
+      For version 2, it contains everything up to and including the last TLV Vector.
 
-      If you need to verify the ``CRC32C`` TLV Vector,
+      If you need to verify the ``CRC32C`` TLV Vector (PROXYv2),
       you should run the CRC32C calculation against the contents of this attribute.
-
       For more information, see the next section, :ref:`crc32c`.
-
-      The value will be empty if PROXY version is 1.
 
    .. py:attribute:: tlv_start
       :type: int

@@ -222,7 +222,7 @@ class ProxyData:
     """
     whole_raw: bytearray = _anoinit(factory=bytearray)
     """
-    The whole undecoded PROXYv2 Header as-received. This can be used to (1) perform
+    The whole undecoded PROXY Header as-received. This can be used to (1) perform
     troubleshooting, and/or (2) calculate CRC32C (which will NOT be implemented in
     this module to reduce number of deps.
     """
@@ -319,6 +319,7 @@ async def _get_v1(reader: AsyncReader, initial=b"") -> ProxyData:
         proxy_data.dst_addr = dstip
         proxy_data.src_port = srcport
         proxy_data.dst_port = dstport
+    proxy_data.whole_raw = proxyline
     return proxy_data
 
 
