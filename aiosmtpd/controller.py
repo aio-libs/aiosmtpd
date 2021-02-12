@@ -66,7 +66,10 @@ class BaseThreadedController(metaclass=ABCMeta):
 /docs/controller.html#controller-api>`_.
         """
         self.handler = handler
-        self.loop = asyncio.new_event_loop() if loop is None else loop
+        if loop is None:
+            self.loop = asyncio.new_event_loop()
+        else:
+            self.loop = loop
         self.ready_timeout = float(
             os.getenv("AIOSMTPD_CONTROLLER_TIMEOUT", ready_timeout)
         )

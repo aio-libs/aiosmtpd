@@ -86,6 +86,15 @@ class TestController:
         finally:
             cont.stop()
 
+    def test_reuse_loop(self, temp_event_loop):
+        cont = Controller(Sink(), loop=temp_event_loop)
+        assert cont.loop is temp_event_loop
+        try:
+            cont.start()
+            assert cont.smtpd.loop is temp_event_loop
+        finally:
+            cont.stop()
+
     @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
     def test_socket_error_dupe(self, plain_controller, client):
         contr2 = Controller(
