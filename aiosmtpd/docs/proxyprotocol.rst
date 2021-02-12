@@ -29,6 +29,9 @@ such as `Amazon Web Services`_, `HAProxy`_, `NGINX`_, `stunnel`_, `Varnish`_, an
 ``aiosmtpd`` implements the PROXY Protocol as defined in |HAProxy2.3.0|_;
 *both* Version 1 and Version 2 are supported.
 
+.. _HAProxy2.3.0: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt
+.. |HAProxy2.3.0| replace:: **HAProxy v2.3.0**
+
 
 Activating
 ==========
@@ -39,7 +42,7 @@ to a positive numeric value (``int`` or ``float``)
 
 The `PROXY Protocol documentation suggests`_ that the timeout should not be less than 3.0 seconds.
 
-.. _PROXY Protocol documentation suggests: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L172-L174
+.. _PROXY Protocol documentation suggests: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt#L172-L174
 
 .. important::
 
@@ -52,10 +55,7 @@ The `PROXY Protocol documentation suggests`_ that the timeout should not be less
 
    This is `as specified`_ in the PROXY Protocol documentation.
 
-.. _as specified: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L176-L180
-
-.. _HAProxy2.3.0: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt
-.. |HAProxy2.3.0| replace:: **HAProxy version 2.3.0**
+.. _as specified: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt#L176-L180
 
 
 ``handle_PROXY`` Hook
@@ -417,10 +417,10 @@ Example::
 
 Good luck!
 
-.. _`command`: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L346-L358
-.. _`address family`: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L366-L381
-.. _`INET protocol and family`:  https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L207-L213
-.. _`transport protocol being proxied`: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L388-L402
-.. _TLV portion: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L519
-.. _listed in the documentation: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L538-L549
-.. _PROXYv2 CRC32C validation: https://github.com/haproxy/haproxy/blob/1c0a722a83e7c45456a2b82c15889ab9ab5c4948/doc/proxy-protocol.txt#L574-L597
+.. _`command`: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt#L346-L358
+.. _`address family`: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt#L366-L381
+.. _`INET protocol and family`:  https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt#L207-L213
+.. _`transport protocol being proxied`: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt#L388-L402
+.. _TLV portion: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt#L519
+.. _listed in the documentation: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt#L538-L549
+.. _PROXYv2 CRC32C validation: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt#L574-L597
