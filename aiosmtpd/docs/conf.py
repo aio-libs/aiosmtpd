@@ -13,7 +13,6 @@
 # serve to show the default.
 
 import datetime
-import re
 import sphinx_rtd_theme  # noqa: F401
 import sys
 
@@ -26,9 +25,6 @@ try:
     colorama_init()
 except ImportError:
     colorama_init = None
-
-
-RE__VERSION = re.compile(r"""__version__ = (['"])(?P<ver>[^'"]+)(\1)""")
 
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -51,7 +47,8 @@ syspath_insert(repo_root / "aiosmtpd")
 
 # autoprogramm needs Sphinx>=1.2.2
 # :classmethod: needs Sphinx>=2.1
-needs_sphinx = "2.1"
+# :noindex: needs Sphinx>=3.2
+needs_sphinx = "3.2"
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -66,7 +63,7 @@ extensions = [
 ]
 # IMPORTANT: If you edit this, also edit the following:
 #   - aiosmtpd/docs/RTD-requirements.txt
-#   -
+#   - tox.ini
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
