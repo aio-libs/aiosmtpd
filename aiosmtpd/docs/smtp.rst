@@ -9,6 +9,8 @@ This class implements the :rfc:`5321` Simple Mail Transport Protocol.
 Often you won't run an ``SMTP`` instance directly,
 but instead will use a :ref:`Controller <controller>` instance to run the server in a subthread.
 
+.. doctest::
+
     >>> from aiosmtpd.controller import Controller
 
 The ``SMTP`` class is itself a subclass of |StreamReaderProtocol|_
@@ -25,7 +27,9 @@ require subclassing the ``SMTP`` class.
 
 For example, let's say you wanted to add a new SMTP command called ``PING``.
 All methods implementing ``SMTP`` commands are prefixed with ``smtp_``; they
-must also be coroutines.  Here's how you could implement this use case::
+must also be coroutines.  Here's how you could implement this use case:
+
+.. doctest::
 
     >>> import asyncio
     >>> from aiosmtpd.smtp import SMTP as Server, syntax
@@ -34,7 +38,9 @@ must also be coroutines.  Here's how you could implement this use case::
     ...     async def smtp_PING(self, arg):
     ...         await self.push('259 Pong')
 
-Now let's run this server in a controller::
+Now let's run this server in a controller:
+
+.. doctest::
 
     >>> from aiosmtpd.handlers import Sink
     >>> class MyController(Controller):
@@ -46,11 +52,15 @@ Now let's run this server in a controller::
 
 We can now connect to this server with an ``SMTP`` client.
 
+.. doctest::
+
     >>> from smtplib import SMTP as Client
     >>> client = Client(controller.hostname, controller.port)
 
 Let's ping the server.  Since the ``PING`` command isn't an official ``SMTP``
 command, we have to use the lower level interface to talk to it.
+
+.. doctest::
 
     >>> code, message = client.docmd('PING')
     >>> code
@@ -61,15 +71,21 @@ command, we have to use the lower level interface to talk to it.
 Because we prefixed the ``smtp_PING()`` method with the ``@syntax()``
 decorator, the command shows up in the ``HELP`` output.
 
+.. doctest::
+
     >>> print(client.help().decode('utf-8'))
     Supported commands: AUTH DATA EHLO HELO HELP MAIL NOOP PING QUIT RCPT RSET VRFY
 
 And we can get more detailed help on the new command.
 
+.. doctest::
+
     >>> print(client.help('PING').decode('utf-8'))
     Syntax: PING [ignored]
 
 Don't forget to ``stop()`` the controller when you're done.
+
+.. doctest::
 
     >>> controller.stop()
 

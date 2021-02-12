@@ -3,7 +3,8 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
-addopts = """--doctest-glob="*.rst" --strict-markers -rfEX"""
+# addopts = """--doctest-glob="*.rst" --strict-markers -rfEX"""
+addopts = """--strict-markers -rfEX"""
 markers = [
     "client_data",
     "controller_data",

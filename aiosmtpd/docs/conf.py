@@ -59,6 +59,7 @@ needs_sphinx = "2.1"
 extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.autodoc",
+    "sphinx.ext.doctest",
     "sphinx_autofixture",
     "autoprogramm",
     "sphinx_rtd_theme"

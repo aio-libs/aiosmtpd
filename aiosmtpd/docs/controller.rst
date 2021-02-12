@@ -26,7 +26,9 @@ Using the controller
 ====================
 
 Say you want to receive email for ``example.com`` and print incoming mail data
-to the console.  Start by implementing a handler as follows::
+to the console.  Start by implementing a handler as follows:
+
+.. doctest::
 
     >>> import asyncio
     >>> class ExampleHandler:
@@ -47,7 +49,9 @@ to the console.  Start by implementing a handler as follows::
     ...         return '250 Message accepted for delivery'
 
 Pass an instance of your ``ExampleHandler`` class to the ``Controller``, and
-then start it::
+then start it:
+
+.. doctest::
 
     >>> from aiosmtpd.controller import Controller
     >>> controller = Controller(ExampleHandler())
@@ -60,7 +64,9 @@ the :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` environment variable or by passing a
 different ``ready_timeout`` duration to the Controller's constructor.
 
 Connect to the server and send a message, which then gets printed by
-``ExampleHandler``::
+``ExampleHandler``:
+
+.. doctest::
 
     >>> from smtplib import SMTP as Client
     >>> client = Client(controller.hostname, controller.port)
@@ -98,7 +104,9 @@ valid recipients to the ``rcpt_tos`` attribute of the envelope and to return a
 successful status.
 
 Thus, if we try to send a message to a recipient not inside ``example.com``,
-it is rejected::
+it is rejected:
+
+.. doctest::
 
     >>> client.sendmail('aperson@example.com', ['cperson@example.net'], """\
     ... From: Anne Person <anne@example.com>
@@ -114,9 +122,13 @@ it is rejected::
 
 When you're done with the SMTP server, stop it via the controller.
 
+.. doctest::
+
     >>> controller.stop()
 
 The server is guaranteed to be stopped.
+
+.. doctest::
 
     >>> client.connect(controller.hostname, controller.port)
     Traceback (most recent call last):
@@ -137,7 +149,9 @@ It's very common to want to enable the ``SMTPUTF8`` ESMTP option, therefore
 this is the default for the ``Controller`` constructor.  For backward
 compatibility reasons, this is *not* the default for the ``SMTP`` class
 though.  If you want to disable this in the ``Controller``, you can pass this
-argument into the constructor::
+argument into the constructor:
+
+.. doctest::
 
     >>> from aiosmtpd.handlers import Sink
     >>> controller = Controller(Sink(), enable_SMTPUTF8=False)
@@ -149,6 +163,8 @@ argument into the constructor::
     250
 
 The EHLO response does not include the ``SMTPUTF8`` ESMTP option.
+
+.. doctest::
 
     >>> lines = message.decode('utf-8').splitlines()
     >>> # Don't print the server host name line, since that's variable.
