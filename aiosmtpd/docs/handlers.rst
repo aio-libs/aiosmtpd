@@ -7,8 +7,8 @@
 Handlers are classes which can implement :ref:`hook methods <hooks>` that get
 called at various points in the SMTP dialog.
 
-Handlers can also be named on
-the :ref:`command line <cli>`, but if the class's constructor takes arguments,
+Handlers can also be named on the :ref:`command line <cli>`,
+but if the class's constructor takes arguments,
 you must define a ``@classmethod`` that converts the positional arguments and
 returns a handler instance:
 
@@ -30,32 +30,86 @@ line, but its constructor cannot accept arguments.
 
 .. _hooks:
 
-Handler hooks
+Handler Hooks
 =============
 
 Handlers can implement hooks that get called during the SMTP dialog, or in
-exceptional cases.  These *handler hooks* are all called **asynchronously**
-(i.e. they are coroutines) and they *must* return a status string, such as
-``'250 OK'``.  All handler hooks are optional and default behaviors are
-carried out by the ``SMTP`` class when a hook is omitted, so you only need to
-implement the ones you care about.  When a handler hook is defined, it may
-have additional responsibilities as described below.
+exceptional cases.  These *handler hooks* are ALL called **asynchronously**
+(i.e. they are coroutines).
+
+All handler hooks are optional and default behaviors are
+carried out by the :class:`SMTP` class when a hook is omitted,
+so you only need to implement the ones you care about.
+
+When a handler hook is defined,
+it may have additional responsibilities as described below.
+
+
+Common Arguments
+----------------
 
 All handler hooks will be called with at least three arguments:
-(1) the ``SMTP`` server instance,
-(2) :ref:`a session instance <sessions_and_envelopes>`, and
-(3) :ref:`an envelope instance <sessions_and_envelopes>`.
+
+.. py:attribute:: server
+   :type: SMTP
+
+   The ``SMTP`` server instance
+
+.. py:attribute:: session
+   :type: Session
+
+   The :ref:`session instance <sessions_and_envelopes>` currently being handled, and
+
+.. py:attribute:: envelope
+   :type: Envelope
+
+   The :ref:`envelope instance <sessions_and_envelopes>` of the current SMTP Transaction
 
 Some handler hooks will receive additional arguments.
 
-The following hooks are currently defined:
 
-.. py:method:: handle_HELO(server, session, envelope, hostname)
+Supported Hooks
+---------------
 
-    Called during ``HELO``.  The ``hostname`` argument is the host name given
-    by the client in the ``HELO`` command.  If implemented, this hook must
-    also set the ``session.host_name`` attribute before returning
-    ``'250 {}'.format(server.hostname)`` as the status.
+The following hooks are currently supported (in alphabetical order):
+
+.. py:method:: handle_AUTH(server, session, envelope, args)
+   :noindex:
+
+   Called to handle ``AUTH`` command if you need custom AUTH behavior.
+
+   For more information, please read the documentation for :ref:`auth`.
+
+.. py:method:: handle_DATA(server, session, envelope) -> str
+   :async:
+
+   :return: Response message to be sent to the client
+
+   Called during ``DATA`` after the entire message (`"SMTP content"
+   <https://tools.ietf.org/html/rfc5321#section-2.3.9>`_ as described in
+   RFC 5321) has been received.
+
+   The content is available in ``envelope.original_content`` as type ``bytes``,
+   normalized according to the transparency rules
+   as defined in :rfc:`RFC 5321, §4.5.2 <5321#section-4.5.2>`.
+
+   In addition, the ``envelope.content`` attribute will also contain the contents;
+   the type depends on whether :class:`~aiosmtpd.smtp.SMTP` was instantiated with
+   ``decode_data=False`` or ``decode_data=True``.
+   See :attr:`Envelope.content` for more info.
+
+.. py:method:: handle_EHLO(server, session, envelope, hostname, responses) -> List[str]
+   :async:
+   :noindex:
+
+   :param hostname: The host name given by the client in the ``EHLO`` command
+   :type hostname: str
+   :return: Response message to be sent to the client
+
+   This hook is called during ``EHLO``.
+
+   This hook may push *additional* ``250-<command>`` responses to the client by doing
+   ``await server.push(status)`` before returning ``"250 HELP"`` as the final response.
 
     .. important::
 
@@ -66,92 +120,107 @@ The following hooks are currently defined:
 
         This also applies to the :meth:`handle_EHLO` hook below.
 
-.. py:method:: handle_EHLO(server, session, envelope, hostname)
-               handle_EHLO(server, session, envelope, hostname, responses)
+   .. deprecated:: 1.3
 
-    Called during ``EHLO``.  The ``hostname`` argument is the host name given
-    by the client in the ``EHLO`` command.
+      Use the :meth:`5-argument form <handle_EHLO>` instead.
+      Support for the 4-argument form **will be removed in version 2.0**
 
-    There are two implementation forms.
+.. py:method:: handle_EHLO(server, session, envelope, hostname, responses) -> List[str]
+   :async:
 
-    The first form accepts only 4 (four) arguments.
-    This hook may push *additional* ``250-<command>`` responses to the client by doing
-    ``await server.push(status)`` before returning ``"250 HELP"`` as the final response.
+   :param hostname: The host name given by the client in the ``EHLO`` command
+   :type hostname: str
+   :param responses: The 'planned' responses to the ``EHLO`` command
+      *including* the last ``250 HELP`` response.
+   :type responses: List[str]
+   :return: List of response messages to be sent to the client
 
-    **The 4-argument form will be deprecated in version 2.0**
+   Called during ``EHLO``.
 
-    The second form accept 5 (five) arguments.
-    ``responses`` is a list strings representing the 'planned' responses to the ``EHLO`` command,
-    *including* the last ``250 HELP`` response.
-    The hook must return a list containing the desired responses.
-    *This is the only exception to the requirement of returning a status string.*
+   The hook MUST return a list containing the desired responses.
+   The returned list should end with ``250 HELP``
 
-    .. important::
+   This hook MUST also set the :attr:``session.host_name`` attribute.
 
-        It is strongly recommended to not change element ``[0]`` of the list
-        (containing the hostname of the SMTP server),
-        and to end the list with ``"250 HELP"``
+   .. important::
 
-.. py:method:: handle_NOOP(server, session, envelope, arg)
+      It is strongly recommended to not change element ``[0]`` of the list
+      (containing the hostname of the SMTP server).
 
-    Called during ``NOOP``.
+.. py:method:: handle_HELO(server, session, envelope, hostname) -> str
+   :async:
 
-.. py:method:: handle_QUIT(server, session, envelope)
+   :param hostname: The host name given by client during ``HELO``
+   :type hostname: str
+   :return: Response message to be sent to the client
 
-    Called during ``QUIT``.
+   This hook is called during ``HELO``.
 
-.. py:method:: handle_VRFY(server, session, envelope, address)
+   If implemented,
+   this hook MUST also set the :attr:``session.host_name`` attribute
+   before returning ``'250 {}'.format(server.hostname)`` as the status.
 
-    Called during ``VRFY``.  The ``address`` argument is the parsed email
-    address given by the client in the ``VRFY`` command.
+.. py:method:: handle_MAIL(server, session, envelope, address, mail_options) -> str
+   :async:
 
-.. py:method:: handle_MAIL(server, session, envelope, address, mail_options)
+   :param address: The parsed email address given by the client in the ``MAIL FROM`` command
+   :type address: str
+   :param mail_options: Additional ESMTP MAIL options provided by the client
+   :type mail_options: List[str]
+   :return: Response message to be sent to the client
 
-    Called during ``MAIL FROM``.  The ``address`` argument is the parsed email
-    address given by the client in the ``MAIL FROM`` command, and
-    ``mail_options`` are any additional ESMTP mail options providing by the
-    client.  If implemented, this hook must also set the
-    ``envelope.mail_from`` attribute and it may extend
-    ``envelope.mail_options`` (which is always a Python list).
+   Called during ``MAIL FROM``.
 
-.. py:method:: handle_RCPT(server, session, envelope, address, rcpt_options)
+   If implemented,
+   this hook MUST also set the :attr:`envelope.mail_from` attribute
+   and it MAY extend :attr:`envelope.mail_options` (which is always a Python list).
 
-    Called during ``RCPT TO``.  The ``address`` argument is the parsed email
-    address given by the client in the ``RCPT TO`` command, and
-    ``rcpt_options`` are any additional ESMTP recipient options provided by
-    the client.  If implemented, this hook should append the address to
-    ``envelope.rcpt_tos`` and may extend ``envelope.rcpt_options`` (both of
-    which are always Python lists).
+.. py:method:: handle_NOOP(server, session, envelope, arg) -> str
+   :async:
 
-.. py:method:: handle_RSET(server, session, envelope)
+   :param arg: All characters following the ``NOOP`` command
+   :type arg: str
+   :return: Response message to be sent to the client
 
-    Called during ``RSET``.
+   Called during ``NOOP``.
 
-.. py:method:: handle_DATA(server, session, envelope)
+.. py:method:: handle_QUIT(server, session, envelope) -> str
+   :async:
 
-    Called during ``DATA`` after the entire message (`"SMTP content"
-    <https://tools.ietf.org/html/rfc5321#section-2.3.9>`_ as described in
-    RFC 5321) has been received.  The content is available on the ``envelope``
-    object, but the values are dependent on whether the ``SMTP`` class was
-    instantiated with ``decode_data=False`` (the default) or
-    ``decode_data=True``.  In the former case, both ``envelope.content`` and
-    ``envelope.original_content`` will be the content bytes (normalized
-    according to the transparency rules in :rfc:`RFC 5321, §4.5.2 <5321#section-4.5.2>`).  In the latter
-    case, ``envelope.original_content`` will be the normalized bytes, but
-    ``envelope.content`` will be the UTF-8 decoded string of the original
-    content.
+   :return: Response message to be sent to the client
 
-.. py:method:: handle_AUTH(server, session, envelope, args)
+   Called during ``QUIT``.
 
-    Called to handle ``AUTH`` command, if you need custom AUTH behavior.
-    You *must* comply with :rfc:`4954`.
-    Most of the time, you don't *need* to implement this hook;
-    :ref:`AUTH hooks <auth_hooks>` are provided to override/implement selctive
-    SMTP AUTH mechanisms (see below).
+.. py:method:: handle_RCPT(server, session, envelope, address, rcpt_options) -> str
+   :async:
 
-    ``args`` will contain the list of words following the ``AUTH`` command.
-    You will need to call some ``server`` methods and modify some ``session``
-    properties. ``envelope`` is usually ignored.
+   :param address: The parsed email address given by the client in the ``MAIL FROM`` command
+   :type address: str
+   :param rcpt_options: Additional ESMTP RCPT options provided by the client
+   :type rcpt_options: List[str]
+   :return: Response message to be sent to the client
+
+   Called during ``RCPT TO``.
+
+   If implemented,
+   this hook SHOULD append the address to ``envelope.rcpt_tos``
+   and it MAY extend ``envelope.rcpt_options`` (both of which are always Python lists).
+
+.. py:method:: handle_RSET(server, session, envelope) -> str
+   :async:
+
+   :return: Response message to be sent to the client
+
+   Called during ``RSET``.
+
+.. py:method:: handle_VRFY(server, session, envelope, address) -> str
+   :async:
+
+   :param address: The parsed email address given by the client in the ``VRFY`` command
+   :type address: str
+   :return: Response message to be sent to the client
+
+   Called during ``VRFY``.
 
 In addition to the SMTP command hooks, the following hooks can also be
 implemented by handlers.  These have different APIs, and are called
@@ -177,141 +246,96 @@ implemented by handlers.  These have different APIs, and are called
         If client connection is lost, this handler will NOT be called.
 
 
-.. _auth_hooks:
-
-AUTH hooks
-=============
-
-In addition to the above SMTP hooks, you can also implement AUTH hooks.
-**These hooks are asynchronous**.
-Every AUTH hook is named ``auth_MECHANISM`` where ``MECHANISM`` is the all-uppercase
-mechanism that the hook will implement. AUTH hooks will be called with the SMTP
-server instance and a list of str following the ``AUTH`` command.
-
-.. important::
-
-   If ``MECHANISM`` has a dash within its name,
-   use **double-underscore** to represent the dash.
-   For example, to implement a ``MECH-WITH-DASHES`` mechanism,
-   name the AUTH hook as ``auth_MECH__WITH__DASHES``.
-
-   Single underscores will not be modified.
-   So a hook named ``auth_MECH_WITH_UNDERSCORE``
-   will implement the ``MECH_WITH_UNDERSCORE`` mechanism.
-
-   (If in the future a SASL mechanism with double underscores in its name gets defined,
-   this name-mangling mechanism will be revisited.
-   That is very unlikely to happen, though.)
-
-   Alternatively, you can also use the ``@auth_mechanism(actual_name)`` decorator,
-   which you can import from the :mod:`aiosmtpd.smtp` module.
-
-The SMTP class provides built-in AUTH hooks for the ``LOGIN`` and ``PLAIN``
-mechanisms, named ``auth_LOGIN`` and ``auth_PLAIN``, respectively.
-If the handler class implements ``auth_LOGIN`` and/or ``auth_PLAIN``, then
-those methods of the handler instance will override the built-in methods.
-
-.. py:method:: auth_MECHANISM(server: SMTP, args: List[str])
-
-  :boldital:`server` is the instance of the ``SMTP`` class invoking the AUTH hook.
-  This allows the AUTH hook implementation to invoke facilities such as the
-  ``push()`` and ``challenge_auth()`` methods.
-
-  :boldital:`args` is a list of string split from the string after the ``AUTH`` command.
-  ``args[0]`` is always equal to ``MECHANISM``.
-
-  The AUTH hook **must** perform the actual validation of AUTH credentials.
-  In the built-in AUTH hooks, this is done by invoking the function specified
-  by the ``auth_callback`` initialization argument. AUTH hooks in handlers
-  are NOT required to do the same.
-
-  The AUTH hook **must** return one of the following values:
-
-    * ``None`` -- an error happened during AUTH exchange/procedure, and has
-      been handled inside the hook. :meth:`~SMTP.smtp_AUTH` will not do anything more.
-
-    * ``MISSING`` -- no error during exchange, but the credentials received
-      are invalid/rejected. (``MISSING`` is a pre-instantiated object you
-      can import from :mod:`aiosmtpd.smtp`)
-
-    * *Anything else* -- an 'identity' of the STMP user. Usually is the username
-      given during AUTH exchange/procedure, but not necessarily so; can also
-      be, for instance, a Session ID. This will be stored in the Session
-      object's ``login_data`` property (see
-      :ref:`Session and Envelopes <sessions_and_envelopes>`)
-
-**NOTE:** Defining *additional* AUTH hooks in your handler will NOT disable
-the built-in LOGIN and PLAIN hooks; if you do not want to offer the LOGIN and
-PLAIN mechanisms, specify them in the ``auth_exclude_mechanism`` parameter
-of the :ref:`SMTP class<smtp_api>`.
-
-
 Built-in handlers
 =================
 
 The following built-in handlers can be imported from :mod:`aiosmtpd.handlers`:
 
-* :class:`Debugging` - this class prints the contents of the received messages to a
-  given output stream.  Programmatically, you can pass the stream to print to
-  into the constructor.
+.. py:module:: aiosmtpd.handlers
 
-  When specified on the command line, the (optional) positional
-  argument must either be the string ``stdout`` or ``stderr`` indicating which
-  stream to use.
-  Examples::
+.. py:class:: AsyncMessage
+
+   A subclass of the :class:`~aiosmtpd.handlers.Message` handler,
+   it is also an :term:`abstract base class` (it must be subclassed).
+
+   The only difference with :class:`Message` is that
+   :func:`handle_message()` is called *asynchronously*.
+
+   This class **cannot** be used on the command line.
+
+.. py:class:: Debugging
+
+   This class prints the contents of the received messages to a given output stream.
+   Programmatically, you can pass the stream to print to into the constructor.
+
+   When specified on the command line,
+   the (optional) positional argument
+   must either be the string ``stdout`` or ``stderr``
+   indicating which stream to use.
+   Examples::
 
       aiosmtpd -c aiosmtpd.handlers.Debugging
       aiosmtpd -c aiosmtpd.handlers.Debugging stderr
       aiosmtpd -c aiosmtpd.handlers.Debugging stdout
 
-* :class:`Proxy` - this class is a relatively simple SMTP proxy; it forwards
-  messages to a remote host and port.  The constructor takes the host name and
-  port as positional arguments.
+.. py:class:: Mailbox
 
-  This class **cannot** be used on the command line.
+   A subclass of the :class:`~aiosmtpd.handlers.Message` handler
+   which adds the messages to a :class:`~mailbox.Maildir`.
+   See :ref:`mailboxhandler` for details.
 
-* :class:`Sink` - this class just consumes and discards messages.  It's essentially
-  the "no op" handler.
-
-  It can be used on the command line, but accepts no positional arguments.
-  Example::
-
-      aiosmtpd -c aiosmtpd.handlers.Sink
-
-* :class:`Message` - this class is an :term:`abstract base class` (it must be subclassed) which
-  converts the message content into a message instance.  The class used to
-  create these instances can be passed to the constructor, and defaults to
-  :class:`email.message.Message`
-
-  This message instance gains a few additional headers (e.g. :mailheader:`X-Peer`,
-  :mailheader:`X-MailFrom`, and :mailheader:`X-RcptTo`).  You can override this behavior by
-  overriding the ``prepare_message()`` method, which takes a session and an
-  envelope.  The message instance is then passed to the handler's
-  ``handle_message()`` method.  It is this method that must be implemented in
-  the subclass.  ``prepare_message()`` and ``handle_message()`` are both
-  called *synchronously*.
-
-  This class **cannot** be used on the command line.
-
-* :class:`AsyncMessage` - a subclass of the ``Message`` handler,
-  it is also an :term:`abstract base class` (it must be subclassed).
-  The only difference with :class:`Message` is that
-  ``handle_message()`` is called *asynchronously*.
-
-  This class **cannot** be used on the command line.
-
-* :class:`Mailbox` - a subclass of the ``Message`` handler which adds the messages
-  to a :class:`~mailbox.Maildir`.  See below for details.
-
-  When specified on the command line,
-  it accepts *exactly* one positional argument which is
-  the ``maildir`` (i.e, directory where email messages will be stored.)
-  Example::
+   When specified on the command line,
+   it accepts *exactly* one positional argument which is
+   the ``maildir`` (i.e, directory where email messages will be stored.)
+   Example::
 
       aiosmtpd -c aiosmtpd.handlers.Mailbox /home/myhome/Maildir
 
+.. py:class:: Message
 
-The Mailbox handler
+   This class is an :term:`abstract base class` (it must be subclassed)
+   which converts the message content into a message instance.
+   The class used to create these instances can be passed to the constructor,
+   and defaults to :class:`email.message.Message`
+
+   This message instance gains a few additional headers
+   (e.g. :mailheader:`X-Peer`, :mailheader:`X-MailFrom`, and :mailheader:`X-RcptTo`).
+   You can override this behavior by overriding the :func:`prepare_message` method,
+   which takes a session and an envelope.
+   The message instance is then passed to the handler's :func:`handle_message()` method.
+   It is this method that must be implemented in the subclass.
+
+   :func:`prepare_message()` and :func:`handle_message()`` are both called :boldital:`synchronously`.
+
+   This class **cannot** be used on the command line.
+
+.. py:class:: Proxy
+
+   This class is a relatively simple SMTP proxy;
+   it forwards messages to a remote host and port.
+   The constructor takes the host name and port as positional arguments.
+
+   This class **cannot** be used on the command line.
+
+   .. important::
+
+      Do not confuse this class with `the PROXY Protocol`_;
+      they are two totally different things.
+
+.. py:class:: Sink
+
+   This class just consumes and discards messages.
+   It's essentially the "no op" handler.
+
+   It can be used on the command line, but accepts no positional arguments.
+   Example::
+
+      aiosmtpd -c aiosmtpd.handlers.Sink
+
+
+.. _mailboxhandler:
+
+The Mailbox Handler
 ===================
 
 A convenient handler is the ``Mailbox`` handler, which stores incoming
@@ -391,3 +415,6 @@ We open up the mailbox again, and all three messages are waiting for us.
 Cleanup when we're done.
 
     >>> resources.close()
+
+
+.. _`the PROXY Protocol`: https://www.haproxy.com/blog/haproxy/proxy-protocol/

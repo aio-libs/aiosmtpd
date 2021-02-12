@@ -32,6 +32,10 @@ Sessions and envelopes
 Two classes are used during the SMTP dialog with clients.  Instances of these
 are passed to the handler hooks.
 
+.. note::
+
+   Handler Hooks MAY add new attributes to these classes for inter-hook coordination.
+
 
 Session
 -------
@@ -40,7 +44,9 @@ The session represents the state built up during a client's socket connection
 to the server.  Each time a client connects to the server, a new session
 object is created.
 
-.. class:: Session()
+.. class:: Session(loop)
+
+   :param loop: asyncio event loop currently running :class:`SMTP`.
 
    .. attribute:: peer
 
@@ -71,11 +77,37 @@ object is created.
 
       This is the asyncio event loop instance.
 
+      :ref:`hooks` can utilize this if needed,
+      for instance invoking :meth:`~asyncio.loop.call_later` to set some timers.
+
    .. attribute:: login_data
 
       Contains the login information gathered during the ``AUTH`` procedure.
       If it contains ``None``, that means authentication has not taken place
       or has failed.
+
+      .. warning::
+
+         This is the "legacy" login_data,
+         populated only if :attr:`auth_callback` parameter is set.
+
+      .. deprecated:: 1.3
+
+         This attribute **will be removed in version 2.0**.
+
+   .. py:attribute:: auth_data
+
+      Contains the authentication data returned by
+      the :attr:`authenticator` callback.
+
+   .. py:attribute:: authenticated
+      :type: Optional[bool]
+
+      A tri-state flag indicating status of authentication:
+
+        * ``None`` := Authentication has not been performed
+        * ``False`` := Authentication has been performed, but failed
+        * ``True`` := Authentication has been performed, and succeeded
 
 
 Envelope
@@ -90,17 +122,20 @@ completed, or in certain error conditions as mandated by :rfc:`5321`.
 .. class:: Envelope
 
    .. attribute:: mail_from
+      :type: str
 
       Defaulting to None, this attribute holds the email address given in the
       ``MAIL FROM`` command.
 
    .. attribute:: mail_options
+      :type: List[str]
 
       Defaulting to None, this attribute contains a list of any ESMTP mail
       options provided by the client, such as those passed in by
       :meth:`smtplib.SMTP.sendmail`
 
    .. attribute:: content
+      :type: AnyStr
 
       Defaulting to None, this attribute will contain the contents of the
       message as provided by the ``DATA`` command.  If the ``decode_data``
@@ -109,17 +144,20 @@ completed, or in certain error conditions as mandated by :rfc:`5321`.
       bytes.
 
    .. attribute:: original_content
+      :type: bytes
 
       Defaulting to None, this attribute will contain the contents of the
       message as provided by the ``DATA`` command.  Unlike the :attr:`content`
       attribute, this attribute will always contain the raw bytes.
 
    .. attribute:: rcpt_tos
+      :type: List[str]
 
       Defaulting to the empty list, this attribute will contain a list of the
       email addresses provided in the ``RCPT TO`` commands.
 
    .. attribute:: rcpt_options
+      :type: List[str]
 
       Defaulting to the empty list, this attribute will contain the list of
       any recipient options provided by the client, such as those passed in by
