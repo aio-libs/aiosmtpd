@@ -3,6 +3,20 @@
 ===================
 
 
+1.4.0 (aiosmtpd-next)
+=====================
+
+Added
+-----
+* New :class:`UnixSocketController` class to implement Unix socket-based SMTP server
+  (Closes #114)
+
+Fixed/Improved
+--------------
+* Now uses Sphinx's Doctest facility, which is much more flexible than pytest's doctest
+* :class:`Controller` now actually reacts to timeout
+
+
 1.3.0 (2021-02-09)
 ==================
 
