@@ -18,13 +18,13 @@ You can read the reasoning behind this in `their blog`_.
 .. _their blog: https://www.haproxy.com/blog/haproxy/proxy-protocol/
 
 This initiative has been accepted and supported by many important software and services
-such as `Amazon Web Services`_, `haproxy`_, `nginx`_, `stunnel`_, `varnish`_, and many others.
+such as `Amazon Web Services`_, `HAProxy`_, `NGINX`_, `stunnel`_, `Varnish`_, and many others.
 
 .. _Amazon Web Services: https://docs.aws.amazon.com/elasticloadbalancing/latest/classic/enable-proxy-protocol.html
-.. _haproxy: http://cbonte.github.io/haproxy-dconv/2.3/configuration.html#5.2-send-proxy
-.. _nginx: https://nginx.org/en/docs/stream/ngx_stream_proxy_module.html#proxy_protocol
+.. _HAProxy: http://cbonte.github.io/haproxy-dconv/2.3/configuration.html#5.2-send-proxy
+.. _NGINX: https://nginx.org/en/docs/stream/ngx_stream_proxy_module.html#proxy_protocol
 .. _stunnel: https://www.stunnel.org/static/stunnel.html#proxy
-.. _varnish: https://info.varnish-software.com/blog/proxy-protocol-original-value-client-identity
+.. _Varnish: https://info.varnish-software.com/blog/proxy-protocol-original-value-client-identity
 
 ``aiosmtpd`` implements the PROXY Protocol as defined in |HAProxy2.3.0|_;
 *both* Version 1 and Version 2 are supported.
