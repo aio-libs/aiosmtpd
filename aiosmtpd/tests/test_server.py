@@ -165,6 +165,10 @@ class TestUnixSocketController:
     sockfile: Path = None
 
     def _assert_good_server(self, ssl_context: ssl.SSLContext = None):
+        # Note: all those time.sleep()s are necessary
+        # Remember that we're running in "Threaded" mode, and there's the GIL...
+        # The time.sleep()s lets go of the GIL allowing the asyncio loop to move
+        # forward
         assert self.sockfile.exists()
         with ExitStack() as stk:
             sock: socket.socket = stk.enter_context(
@@ -173,20 +177,28 @@ class TestUnixSocketController:
             sock.connect(str(self.sockfile))
             if ssl_context:
                 sock = stk.enter_context(ssl_context.wrap_socket(sock))
+                time.sleep(0.1)
             resp = sock.recv(1024)
             assert resp.startswith(b"220 ")
             assert resp.endswith(b"\r\n")
             sock.send(b"EHLO socket.test\r\n")
-            time.sleep(0.1)
-            resp = sock.recv(1024)
-            lines = resp.splitlines()
-            assert lines[-1] == b"250 HELP"
+            # We need to "build" resparr because, especially when socket is wrapped
+            # in SSL, the SMTP server takes it sweet time responding with the list
+            # of ESMTP features ...
+            resparr = bytearray()
+            while not resparr.endswith(b"250 HELP\r\n"):
+                time.sleep(0.1)
+                resp = sock.recv(1024)
+                if not resp:
+                    break
+                resparr += resp
+            assert resparr.endswith(b"250 HELP\r\n")
             sock.send(b"QUIT\r\n")
             time.sleep(0.1)
             resp = sock.recv(1024)
             assert resp.startswith(b"221")
 
-    def test_server_creation(self, tmp_path, printer):
+    def test_server_creation(self, tmp_path):
         self.sockfile = tmp_path / "smtp"
         cont = UnixSocketController(Sink(), unix_socket=self.sockfile)
         try:
@@ -202,6 +214,8 @@ class TestUnixSocketController:
         )
         try:
             cont.start()
+            # Allow additional time for SSL to kick in
+            time.sleep(0.1)
             self._assert_good_server(ssl_context_server)
         finally:
             cont.stop()
