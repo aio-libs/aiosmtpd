@@ -149,8 +149,7 @@ class Session:
         self.proxy_data: Optional[ProxyData] = None
         """Data from PROXY Protocol handshake"""
 
-        self.login_data = None
-        """Legacy login_data, usually containing the username"""
+        self._login_data = None
 
         self.auth_data = None
         """
