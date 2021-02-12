@@ -160,8 +160,8 @@ with some differences:
 
 **Rather than specifying a hostname:port to listen on, you specify the Socket's filepath:**
 
-.. doctest::
-   :skipif: in_win32
+.. doctest:: unix_socket
+    :skipif: in_win32
 
     >>> from aiosmtpd.controller import UnixSocketController
     >>> controller = UnixSocketController(ExampleHandler(), unix_socket="smtp_socket~")
@@ -171,22 +171,39 @@ with some differences:
 Python's :class:`smtplib.SMTP` sadly cannot connect to a Unix Socket,
 so we need to handle it on our own here:
 
-.. doctest::
-   :skipif: in_win32
+.. doctest:: unix_socket
+    :skipif: in_win32
 
     >>> import socket
-    >>> sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    >>> sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     >>> sock.connect("smtp_socket~")
+    >>> resp = sock.recv(1024)
+    >>> resp[0:4]
+    b'220 '
 
 Try sending something, don't forget to end with ``"\r\n"``:
 
-.. doctest::
-   :skipif: in_win32
+.. doctest:: unix_socket
+    :skipif: in_win32
 
-    >>> sock.send("HELO example.org\r\n")
-    >>> resp = sock.recv(1023)
-    >>> print(resp)
-    b"1234"
+    >>> sock.send(b"HELO example.org\r\n")
+    18
+    >>> resp = sock.recv(1024)
+    >>> resp[0:4]
+    b'250 '
+
+And close everything when done:
+
+.. doctest:: unix_socket
+    :skipif: in_win32
+
+    >>> sock.send(b"QUIT\r\n")
+    6
+    >>> resp = sock.recv(1024)
+    >>> resp[0:4]
+    b'221 '
+    >>> sock.close()
+    >>> controller.stop()
 
 
 .. _enablesmtputf8:
@@ -205,7 +222,7 @@ argument into the constructor:
     >>> from aiosmtpd.handlers import Sink
     >>> controller = Controller(Sink(), enable_SMTPUTF8=False)
     >>> controller.start()
-
+    >>>
     >>> client = Client(controller.hostname, controller.port)
     >>> code, message = client.ehlo('me')
     >>> code
