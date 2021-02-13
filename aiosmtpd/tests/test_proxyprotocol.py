@@ -403,7 +403,7 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
             valid=True,
             version=1,
             family=AF.UNSPEC,
-            protocol=PROTO.UNKNOWN,
+            protocol=PROTO.UNSPEC,
             rest=b" whatever",
         )
 
@@ -419,7 +419,7 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
             valid=True,
             version=1,
             family=AF.UNSPEC,
-            protocol=PROTO.UNKNOWN,
+            protocol=PROTO.UNSPEC,
             rest=b"",
         )
 

@@ -296,8 +296,8 @@ async def _get_v1(reader: AsyncReader, initial=b"") -> ProxyData:
     proxy_data.protocol = proto
     rest = mp.group("rest")
     if proto == b"UNKNOWN":
-        proxy_data.protocol = PROTO.UNKNOWN
-        proxy_data.family = PROTO.UNSPEC
+        proxy_data.protocol = PROTO.UNSPEC
+        proxy_data.family = AF.UNSPEC
         proxy_data.rest = rest
     else:
         mr = RE_PROXYv1_ADDR.match(rest)
