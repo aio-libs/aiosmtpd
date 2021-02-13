@@ -71,6 +71,17 @@ TEST_V2_DATA1_EXACT = b64decode(
     "RVMyNTYtR0NNLVNIQTM4NA==\n"
 )
 
+PUBLIC_V1_PATTERNS: Dict[str, bytes] = {
+    "joaoreis81": b"PROXY TCP4 222.222.22.222 111.11.11.111 33504 25",
+    "haproxydoc": b"PROXY TCP4 192.168.0.1 192.168.0.11 56324 443",
+    "cloudflare4": b"PROXY TCP4 192.0.2.0 192.0.2.255 42300 443",
+    "cloudflare6": (
+        b"PROXY TCP6 2001:db8:: 2001:db8:ffff:ffff:ffff:ffff:ffff:ffff 42300 443"
+    ),
+    "avinetworks": b"PROXY TCP4 12.97.16.194 136.179.21.69 31646 80",
+    "googlecloud": b"PROXY TCP4 192.0.2.1 198.51.100.1 15221 110",
+}
+
 
 class ProxyPeekerHandler(Sink):
     def __init__(self, retval=True):
@@ -357,6 +368,17 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
         self.protocol.data_received(data)
         self.runner()
         assert self.transport.close.called
+
+    @parametrize("patt", PUBLIC_V1_PATTERNS.values(), ids=PUBLIC_V1_PATTERNS.keys())
+    def test_valid_patterns(self, setup_proxy_protocol, patt: bytes):
+        if not patt.endswith(b"\r\n"):
+            patt += b"\r\n"
+        setup_proxy_protocol(self)
+        self.protocol.data_received(patt)
+        self.runner()
+        assert self.protocol.session.proxy_data.error == ""
+        handler = self.protocol.event_handler
+        assert handler.called
 
     def _assert_valid(self, af, proto, srcip, dstip, srcport, dstport, testline):
         self.protocol.data_received(testline.encode("ascii"))
