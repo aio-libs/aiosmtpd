@@ -216,7 +216,7 @@ Enums
 
         * For address family ``UNSPEC``,
           it contains all the bytes following the 16-octet header preamble
-        * For address families :addr:`AF.INET`, :addr:`AF.INET6`, and :addr:`AF.UNIX`
+        * For address families :attr:`AF.INET`, :attr:`AF.INET6`, and :attr:`AF.UNIX`
           it contains all the bytes following the address information
 
    .. py:attribute:: tlv
