@@ -126,10 +126,16 @@ class ProxyTLV(dict):
     def same_attribs(self, _raises: bool = False, **kwargs) -> bool:
         for k, v in kwargs.items():
             actual = self.get(k, _NOT_FOUND)
+            if actual is _NOT_FOUND:
+                if _raises:
+                    raise KeyError(f"notfound:{k}")
+                else:
+                    return False
             if actual != v:
                 if _raises:
                     raise ValueError(f"mismatch:{k} actual={actual!r} expect={v!r}")
-                return False
+                else:
+                    return False
         return True
 
     @classmethod
@@ -254,13 +260,19 @@ class ProxyData:
         self.error = error_msg
         return self
 
-    def same_attribs(self, **kwargs) -> bool:
+    def same_attribs(self, _raises: bool = False, **kwargs) -> bool:
         for k, v in kwargs.items():
-            try:
-                if getattr(self, k) != v:
+            actual = getattr(self, k, _NOT_FOUND)
+            if actual is _NOT_FOUND:
+                if _raises:
+                    raise KeyError(f"notfound:{k}")
+                else:
                     return False
-            except AttributeError:
-                return False
+            if actual != v:
+                if _raises:
+                    raise ValueError(f"mismatch:{k} actual={actual!r} expect={v!r}")
+                else:
+                    return False
         return True
 
     def __bool__(self):

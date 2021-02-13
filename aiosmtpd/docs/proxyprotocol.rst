@@ -264,7 +264,13 @@ Enums
 
       Sets the instance's :attr:`error` attribute and returns itself.
 
-   .. py:method:: same_attribs(**kwargs) -> bool
+   .. py:method:: same_attribs(_raises=False, **kwargs) -> bool
+
+      :param _raises: If ``True``, raise exception if attribute not match/not found,
+         instead of returning a bool. Defaults to ``False``
+      :type _raises: bool
+      :raises ValueError: if ``_raises=True`` and attribute is found but value is wrong
+      :raises KeyError: if ``_raises=True`` and attribute is not found
 
       A helper method to quickly verify whether an attribute exists
       and contain the same value as expected.
@@ -283,6 +289,7 @@ Enums
       and contains the values ``1``, ``b"TCP4"``, and ``None``, respectively.
 
       Missing attributes and/or differing values will return a ``False``
+      (unless ``_raises=True``)
 
       .. note::
 
@@ -332,7 +339,13 @@ Enums
       The keys are the TYPENAME (see :attr:`PP2_TYPENAME` above),
       and the value is the offset from start of the TLV Vectors.
 
-   .. py:method:: same_attribs(**kwargs) -> bool
+   .. py:method:: same_attribs(_raises=False, **kwargs) -> bool
+
+      :param _raises: If ``True``, raise exception if attribute not match/not found,
+         instead of returning a bool. Defaults to ``False``
+      :type _raises: bool
+      :raises ValueError: if ``_raises=True`` and attribute is found but value is wrong
+      :raises KeyError: if ``_raises=True`` and attribute is not found
 
       A helper method to quickly verify whether an attribute exists
       and contain the same value as expected.
@@ -351,6 +364,7 @@ Enums
       and contains the values ``b"some_authority"`` and ``True``, respectively.
 
       Missing attributes and/or differing values will return a ``False``
+      (unless ``_raises=True``)
 
       .. note::
 

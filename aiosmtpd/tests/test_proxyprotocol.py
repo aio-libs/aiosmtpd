@@ -145,24 +145,42 @@ class TestProxyData:
 
     def test_mismatch(self):
         pd = ProxyData(version=1)
-        pd.protocol = "UNKNOWN"
+        pd.protocol = PROTO.UNSPEC
         assert pd.valid
         assert pd
-        assert not pd.same_attribs(protocol="DIFFERENT")
+        assert not pd.same_attribs(protocol=PROTO.STREAM)
+
+    def test_mismatch_raises(self):
+        pd = ProxyData(version=1)
+        pd.protocol = PROTO.UNSPEC
+        assert pd.valid
+        assert pd
+        expectre = r"mismatch:protocol actual=.* expect=.*"
+        with pytest.raises(ValueError, match=expectre):
+            pd.same_attribs(_raises=True, protocol=PROTO.STREAM)
 
     def test_unsetkey(self):
         pd = ProxyData(version=1)
-        pd.protocol = "UNKNOWN"
+        pd.protocol = PROTO.UNSPEC
         assert pd.valid
         assert pd
         assert not pd.same_attribs(src_addr="Missing")
 
     def test_unknownkey(self):
         pd = ProxyData(version=1)
-        pd.protocol = "UNKNOWN"
+        pd.protocol = PROTO.UNSPEC
         assert pd.valid
         assert pd
         assert not pd.same_attribs(strange_key="Unrecognized")
+
+    def test_unknownkey_raises(self):
+        pd = ProxyData(version=1)
+        pd.protocol = PROTO.UNSPEC
+        assert pd.valid
+        assert pd
+        expectre = r"notfound:strange_key"
+        with pytest.raises(KeyError, match=expectre):
+            pd.same_attribs(_raises=True, strange_key="Unrecognized")
 
     def test_tlv_none(self):
         pd = ProxyData(version=2)
@@ -208,8 +226,20 @@ class TestProxyTLV:
             SSL_SIG_ALG=b"RSA-SHA256",
             SSL_KEY_ALG=b"RSA4096",
         )
+
+    def test_1_ne(self):
+        ptlv = ProxyTLV.from_raw(TEST_TLV_DATA_1)
         assert not ptlv.same_attribs(SSL=False)
         assert not ptlv.same_attribs(false_attrib=None)
+
+    def test_1_ne_raises(self):
+        ptlv = ProxyTLV.from_raw(TEST_TLV_DATA_1)
+        expectre = r"mismatch:AUTHORITY actual=.* expect=.*"
+        with pytest.raises(ValueError, match=expectre):
+            ptlv.same_attribs(_raises=True, AUTHORITY=b"whut")
+        expectre = r"notfound:i_dont_even"
+        with pytest.raises(KeyError, match=expectre):
+            ptlv.same_attribs(_raises=True, i_dont_even=b"what is this")
 
     def test_2(self):
         ptlv = ProxyTLV.from_raw(TEST_TLV_DATA_2)
