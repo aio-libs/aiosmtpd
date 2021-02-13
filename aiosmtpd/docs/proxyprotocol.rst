@@ -26,7 +26,7 @@ such as `Amazon Web Services`_, `HAProxy`_, `NGINX`_, `stunnel`_, `Varnish`_, an
 .. _stunnel: https://www.stunnel.org/static/stunnel.html#proxy
 .. _Varnish: https://info.varnish-software.com/blog/proxy-protocol-original-value-client-identity
 
-``aiosmtpd`` implements the PROXY Protocol as defined in |HAProxy2.3.0|_;
+``aiosmtpd`` implements the PROXY Protocol as defined in the documentation accompanying |HAProxy2.3.0|_;
 *both* Version 1 and Version 2 are supported.
 
 .. _HAProxy2.3.0: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt
