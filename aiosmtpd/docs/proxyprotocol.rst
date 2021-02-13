@@ -116,13 +116,16 @@ Enums
       IP6 = 2
       UNIX = 3
 
+   For Version 1, ``UNKNOWN`` is mapped to ``UNSPEC``.
+
 .. class:: PROTO
 
    .. py:attribute:: \
       UNSPEC = 0
-      UNKNOWN = 0
       STREAM = 1
       DGRAM = 2
+
+   For Version 1, ``UNKNOWN`` is mapped to ``UNSPEC``, and ``TCP`` is mapped into ``STREAM``
 
 .. class:: V2_CMD
 
@@ -158,17 +161,14 @@ Enums
 
       Contains the `address family`_.
 
-      For Version 1, :attr:`AF.UNIX` is not valid.
+      Valid values for Version 1 excludes :attr:`AF.UNIX`.
 
    .. py:attribute:: protocol
       :type: PROTO
 
       Contains an integer indicating the `transport protocol being proxied`_.
 
-      For Version 1:
-        * ``UNSPEC`` means ``UNKNOWN``
-        * ``STREAM`` means ``TCP``
-        * ``DGRAM`` is invalid
+      Valid values for Version 1 excludes :attr:`PROTO.DGRAM`.
 
    .. py:attribute:: src_addr
       :type: Union[IPv4Address, IPv6Address, AnyStr]
@@ -192,7 +192,7 @@ Enums
       Contains the source port
       (i.e., port of the "original" client).
 
-      Valid only for address family of ``AF_INET`` or ``AF_INET6``
+      Valid only for address family of :attr:`AF.INET` or :attr:`AF.INET6`
 
    .. py:attribute:: dst_port
       :type: int
@@ -200,7 +200,7 @@ Enums
       Contains the destination port
       (i.e., port of the proxying entity to which the "original" client connected).
 
-      Valid only for address family of ``AF_INET`` or ``AF_INET6``
+      Valid only for address family of :attr:`AF.INET` or :attr:`AF.INET6`
 
    .. py:attribute:: rest
       :type: Union[bytes, bytearray]
@@ -216,7 +216,7 @@ Enums
 
         * For address family ``UNSPEC``,
           it contains all the bytes following the 16-octet header preamble
-        * For address families ``AF_INET``, ``AF_INET6``, and ``UNIX``
+        * For address families :addr:`AF.INET`, :addr:`AF.INET6`, and :addr:`AF.UNIX`
           it contains all the bytes following the address information
 
    .. py:attribute:: tlv
@@ -224,7 +224,9 @@ Enums
 
       This property contains the result of the TLV Parsing attempt of the :attr:`rest` attribute.
 
-      If ``None`` that means either (1) :attr:`rest` is empty, or (2) TLV Parsing is not successful.
+      If this property returns ``None`` that means either
+      (1) :attr:`rest` is empty, or
+      (2) TLV Parsing is not successful.
 
    .. py:attribute:: valid
       :type: bool
@@ -234,7 +236,7 @@ Enums
    .. py:attribute:: whole_raw
       :type: bytearray
 
-      This attribute contains the whole PROXY Header.
+      This attribute contains the whole, undecoded and unmodified, PROXY Header.
       For version 1, it contains everything up to and including the terminating ``\r\n``.
       For version 2, it contains everything up to and including the last TLV Vector.
 
@@ -405,10 +407,12 @@ but we are uncomfortable doing that for the following reasons:
 
 * There are more than one third-party modules providing CRC32C,
   e.g., ``crcmod``, ``crc32c``, ``google-crc32c``, etc.
-  There is no clear comparison between them.
-* Some of these third-party modules seem to be no longer being maintained
+  Problem is, there is no known clear comparison between them,
+  so we cannot tell easily which one is 'best'.
+* Some of these third-party modules seem to be no longer being maintained.
 * Most of the available third-party modules are binary distribution.
-  This potentially causes problems with existing binaries/libraries.
+  This potentially causes problems with existing binaries/libraries,
+  not to mention possible (albeit unlikely) vector for malware.
 * We really don't like adding dependencies outside those that are really needed.
 
 In short, we have strong reasons to NOT implement PROXYv2 CRC32C validation,
@@ -419,6 +423,8 @@ you should perform it yourself in the :meth:`handle_PROXY` hook.
 To assist you, we have provided the :attr:`whole_raw`, :attr:`tlv_start`, and :attr:`tlv_loc` attributes.
 
 You should do the following:
+
+0. Choose a CRC32C module of your liking, install that, and import it.
 
 1. Find the "CRC32C" TLV Vector in ``whole_raw``;
    it would start at byte ``tlv_start + tlv_loc["CRC32C"]``
