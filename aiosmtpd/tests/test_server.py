@@ -64,7 +64,7 @@ def in_wsl():
     return "microsoft" in platform.release().casefold()
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def safe_socket_dir() -> Generator[Path, None, None]:
     # See:
     #   - https://github.com/aio-libs/aiohttp/issues/3572
