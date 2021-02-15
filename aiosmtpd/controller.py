@@ -46,6 +46,7 @@ class BaseThreadedController(metaclass=ABCMeta):
     server: Optional[AsyncServer] = None
     server_coro: Coroutine = None
     smtpd = None
+    _factory_invoked: Optional[threading.Event] = None
     _thread: Optional[threading.Thread] = None
     _thread_exception: Optional[Exception] = None
 
@@ -105,6 +106,8 @@ class BaseThreadedController(metaclass=ABCMeta):
         except Exception as err:
             self._thread_exception = err
             return _FakeServer(self.loop)
+        finally:
+            self._factory_invoked.set()
 
     @abstractmethod
     def _create_server(self) -> Coroutine:
@@ -144,6 +147,7 @@ class BaseThreadedController(metaclass=ABCMeta):
     def start(self):
         assert self._thread is None, "SMTP daemon already running"
         ready_event = threading.Event()
+        self._factory_invoked = threading.Event()
         self._thread = threading.Thread(target=self._run, args=(ready_event,))
         self._thread.daemon = True
         self._thread.start()
@@ -163,6 +167,8 @@ class BaseThreadedController(metaclass=ABCMeta):
             # We totally don't care of exceptions experienced by _trigger_server,
             # which _will_ happen if factory() experienced problems.
             pass
+        if not self._factory_invoked.wait(self.ready_timeout):
+            raise TimeoutError("SMTP server not responding within allotted time")
         if self._thread_exception is not None:
             raise self._thread_exception
         # Defensive

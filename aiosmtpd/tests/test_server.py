@@ -36,6 +36,20 @@ class SlowStartController(Controller):
             pass
 
 
+class SlowFactoryController(Controller):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("ready_timeout", 0.5)
+        super().__init__(*args, **kwargs)
+
+    def factory(self):
+        time.sleep(self.ready_timeout * 3)
+        return super().factory()
+
+    def _factory_invoker(self):
+        time.sleep(self.ready_timeout * 3)
+        return super()._factory_invoker()
+
+
 def in_win32():
     return platform.system().casefold() == "windows"
 
@@ -103,6 +117,16 @@ class TestController:
     def test_ready_timeout(self):
         cont = SlowStartController(Sink())
         expectre = r"SMTP server failed to start within allotted time"
+        try:
+            with pytest.raises(TimeoutError, match=expectre):
+                cont.start()
+        finally:
+            cont.stop()
+
+    @pytest.mark.filterwarnings("ignore")
+    def test_factory_timeout(self):
+        cont = SlowFactoryController(Sink())
+        expectre = r"SMTP server not responding within allotted time"
         try:
             with pytest.raises(TimeoutError, match=expectre):
                 cont.start()
