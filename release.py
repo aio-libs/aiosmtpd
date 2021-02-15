@@ -46,7 +46,7 @@ choice = input(f"Release aiosmtpd {version} - correct? [y/N]: ")
 if choice.lower() not in ("y", "yes"):
     sys.exit("Release aborted")
 if not GPG_SIGNING_ID:
-    choice = input(f"You did not specify GPG signing ID! Continue? [y/N]: ")
+    choice = input("You did not specify GPG signing ID! Continue? [y/N]: ")
     if choice.lower() not in ("y", "yes"):
         sys.exit("Release aborted")
 
