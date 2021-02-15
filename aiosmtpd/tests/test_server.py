@@ -215,6 +215,20 @@ class TestController:
         controller = contsink(server_hostname="testhost3", server_kwargs=kwargs)
         assert controller.SMTP_kwargs["hostname"] == "testhost3"
 
+    def test_stop_default(self):
+        controller = Controller(Sink())
+        with pytest.raises(AssertionError, match="SMTP daemon not running"):
+            controller.stop()
+
+    def test_stop_assert(self):
+        controller = Controller(Sink())
+        with pytest.raises(AssertionError, match="SMTP daemon not running"):
+            controller.stop(no_assert=False)
+
+    def test_stop_noassert(self):
+        controller = Controller(Sink())
+        controller.stop(no_assert=True)
+
 
 @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
 class TestUnixSocketController:

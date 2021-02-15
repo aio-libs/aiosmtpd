@@ -44,7 +44,7 @@ class _FakeServer(asyncio.StreamReaderProtocol):
 @public
 class BaseThreadedController(metaclass=ABCMeta):
     server: Optional[AsyncServer] = None
-    server_coro: Coroutine = None
+    server_coro: Optional[Coroutine] = None
     smtpd = None
     _factory_invoked: Optional[threading.Event] = None
     _thread: Optional[threading.Thread] = None
@@ -184,12 +184,17 @@ class BaseThreadedController(metaclass=ABCMeta):
         for task in _all_tasks(self.loop):
             task.cancel()
 
-    def stop(self):
-        assert self._thread is not None, "SMTP daemon not running"
+    def stop(self, no_assert=False):
+        assert no_assert or self._thread is not None, "SMTP daemon not running"
         self.loop.call_soon_threadsafe(self._stop)
-        self._thread.join()
-        self._thread = None
+        if self._thread is not None:
+            self._thread.join()
+            self._thread = None
         self._thread_exception = None
+        self._factory_invoked = None
+        self.server_coro = None
+        self.server = None
+        self.smtpd = None
 
 
 @public
