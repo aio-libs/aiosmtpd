@@ -561,6 +561,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
         if self._proxy_timeout is not None:
             self._reset_timeout(self._proxy_timeout)
+            log.debug("%r waiting PROXY handshake", self.session.peer)
             self.session.proxy_data = await get_proxy(self._reader)
             if self.session.proxy_data:
                 log.info("%r valid PROXY handshake", self.session.peer)
