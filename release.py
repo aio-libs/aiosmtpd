@@ -8,41 +8,85 @@ import subprocess
 import sys
 from pathlib import Path
 
-import aiosmtpd.smtp as smtpd
+from aiosmtpd import __version__ as version
 
 TWINE_CONFIG = Path(os.environ.get("TWINE_CONFIG", "~/.pypirc")).expanduser()
 TWINE_REPO = os.environ.get("TWINE_REPOSITORY", "aiosmtpd")
 UPSTREAM_REMOTE = os.environ.get("UPSTREAM_REMOTE", "upstream")
 GPG_SIGNING_ID = os.environ.get("GPG_SIGNING_ID")
+DISTFILES = [
+    f"dist/aiosmtpd-{version}.tar.gz",
+    f"dist/aiosmtpd-{version}-py3-none-any.whl",
+]
 
-version = smtpd.__version__
+try:
+    subprocess.run(["twine", "--version"], stdout=subprocess.PIPE)
+except FileNotFoundError:
+    print("Please install 'twine' first")
+    sys.exit(1)
+result = subprocess.run(
+    ["twine", "verify-upload"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+)
+if result.returncode == 2:
+    print("*** Package twine-verify-upload is not yet installed.")
+    print("*** Consider installing it. It is very useful :)")
+    has_verify = False
+else:
+    has_verify = True
 
-print(f"""
+print(
+    f"""
 TWINE_CONFIG = {TWINE_CONFIG}
 TWINE_REPO = {TWINE_REPO}
 UPSTREAM_REMOTE = {UPSTREAM_REMOTE}
 GPG_SIGNING_ID = {GPG_SIGNING_ID or 'None'}
-""")
+"""
+)
 choice = input(f"Release aiosmtpd {version} - correct? [y/N]: ")
 if choice.lower() not in ("y", "yes"):
     sys.exit("Release aborted")
-else:
-    # We're probably already in the right place
-    os.chdir(Path(__file__).absolute().parent)
+if not GPG_SIGNING_ID:
+    choice = input(f"You did not specify GPG signing ID! Continue? [y/N]: ")
+    if choice.lower() not in ("y", "yes"):
+        sys.exit("Release aborted")
+
+choice = input("Run tox first? [y/N]: ")
+if choice.lower() in ("y", "yes"):
+    subprocess.run("tox")
+
+# We're probably already in the right place
+os.chdir(Path(__file__).absolute().parent)
+
+try:
     # Let's use *this* python to build, please
-    subprocess.run([sys.executable, "setup.py", "sdist"])
-    # Assuming twine is installed. And that we're only building .tar.gz
-    subprocess.run(["twine", "check", f"dist/aiosmtpd-{version}.tar.gz"])
+    subprocess.run([sys.executable, "setup.py", "sdist"], check=True)
+    subprocess.run([sys.executable, "setup.py", "bdist_wheel"], check=True)
+    for f in DISTFILES:
+        assert Path(f).exists(), f"{f} is missing!"
+
+    # Assuming twine is installed.
+    subprocess.run(["twine", "check"] + DISTFILES, check=True)
+
     # You should have an aiosmtpd bit setup in your ~/.pypirc - for twine
-    twine_up = [
-        "twine", "upload", "--config-file", str(TWINE_CONFIG), "-r", TWINE_REPO
-    ]
+    twine_up = f"twine upload --config-file {TWINE_CONFIG} -r {TWINE_REPO}".split()
     if GPG_SIGNING_ID:
-        twine_up.extend(["-s", "-i", GPG_SIGNING_ID])
-    twine_up.append(f"dist/aiosmptd-{version}.tar.gz")
-    subprocess.run(twine_up)
-    # Only tag when we've actually built and uploaded. If something goes wrong
-    # we may need the tag somewhere else!
+        twine_up.extend(["--sign", "--identity", GPG_SIGNING_ID])
+    twine_up.extend(DISTFILES)
+    subprocess.run(twine_up, check=True)
+
+    if has_verify:
+        twine_verif = ["twine", "verify_upload"] + DISTFILES
+        subprocess.run(twine_verif, check=True)
+except subprocess.CalledProcessError as e:
+    print("ERROR: Last step returned exitcode != 0")
+    sys.exit(e.returncode)
+
+# Only tag when we've actually built and uploaded. If something goes wrong
+# we may need the tag somewhere else!
+choice = input("tag and push? [Y/n]: ")
+if choice.lower() not in ("n", "no"):
+    pass
+else:
     # The annotation information should come from the changelog
     subprocess.run(["git", "tag", "-a", version])
     # And now push the tag, of course.
