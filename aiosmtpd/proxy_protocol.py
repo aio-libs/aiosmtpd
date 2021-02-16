@@ -4,6 +4,7 @@
 import logging
 import re
 import struct
+from collections import deque
 from enum import IntEnum
 from functools import partial
 from ipaddress import IPv4Address, IPv6Address, ip_address
@@ -17,7 +18,6 @@ try:
 except ImportError:  # pragma: py-ge-38
     from typing_extensions import Protocol
 
-V1_VALID_PROS = {"TCP4", "TCP6", "UNKNOWN", b"TCP4", b"TCP6", b"UNKNOWN"}
 
 V2_SIGNATURE = b"\r\n\r\n\x00\r\nQUIT\n"
 
@@ -260,6 +260,7 @@ class ProxyData:
         return self._tlv
 
     def with_error(self, error_msg: str) -> "ProxyData":
+        log.warning(f"PROXY error: {error_msg}")
         self.error = error_msg
         return self
 
@@ -284,65 +285,94 @@ class ProxyData:
 
 # endregion
 
-
-RE_PROXYv1 = re.compile(br"PROXY (?P<proto>TCP4\b|TCP6\b|UNKNOWN)(?P<rest>.*)\r\n")
-RE_PROXYv1_ADDR = re.compile(
-    # Every piece below MUST start with b" "
-    br" (?P<srcip>[0-9a-fA-F.:]+)"  # Validation done by ipaddress.ip_address
-    br" (?P<dstip>[0-9a-fA-F.:]+)"
-    br" (?P<srcport>[1-9]\d{0,4}|0)"  # 1-5 digits not starting with 0, or 0
-    br" (?P<dstport>[1-9]\d{0,4}|0)"
-    br"$"
-)
+_COMPILED_RE = type(re.compile(r""))
+RE_ADDR_ALLOWCHARS = re.compile(r"^[0-9a-fA-F.:]+$")
+RE_PORT_NOLEADZERO = re.compile(r"^[1-9]\d{0,4}|0$")
 
 # Reference: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt
 
 
 async def _get_v1(reader: AsyncReader, initial=b"") -> ProxyData:
     proxy_data = ProxyData(version=1)
-    proxyline = bytearray(initial)
-    proxyline += await reader.readuntil()
-    if len(proxyline) > 107:
-        return proxy_data.with_error("PROXYv1 too long")
-    mp = RE_PROXYv1.match(proxyline)
-    if not mp:
+    proxy_data.whole_raw = bytearray(initial)
+
+    log.debug("Get all PROXYv1 handshake")
+    data = await reader.readuntil()
+    log.debug("Got PROXYv1 handshake")
+    proxy_data.whole_raw += data
+    if len(proxy_data.whole_raw) > 107:
+        return proxy_data.with_error("PROXYv1 header too long")
+    if not data.endswith(b"\r\n"):
         return proxy_data.with_error("PROXYv1 malformed")
-    proto = mp.group("proto")
-    proxy_data.protocol = proto
-    rest = mp.group("rest")
+    # Split using b" " so two consecutive SP will result in an empty field
+    # (instead of silently treated as an SP)
+    data_parts = deque(data[:-2].split(b" "))
+
+    if data_parts.popleft() != b"":
+        # If first elem is not b"", then between proxy_line[5] and first b" " there
+        # are characters. Or, in other words, there are characters _right_after_
+        # the b"PROXY" signature
+        return proxy_data.with_error("PROXYv1 wrong signature")
+
+    proto = data_parts.popleft()
+
     if proto == b"UNKNOWN":
         proxy_data.protocol = PROTO.UNSPEC
         proxy_data.family = AF.UNSPEC
-        proxy_data.rest = rest
+        proxy_data.rest = (b" " + b" ".join(data_parts)) if data_parts else b""
+        return proxy_data
+
+    if proto.endswith(b"4"):
+        af = AF.INET
+    elif proto.endswith(b"6"):
+        af = AF.INET6
     else:
-        mr = RE_PROXYv1_ADDR.match(rest)
-        if not mr:
-            return proxy_data.with_error("PROXYv1 address malformed")
-        try:
-            srcip = ip_address(mr.group("srcip").decode("latin-1"))
-            dstip = ip_address(mr.group("dstip").decode("latin-1"))
-            srcport = int(mr.group("srcport"))
-            dstport = int(mr.group("dstport"))
-        except ValueError:
-            return proxy_data.with_error("PROXYv1 address parse error")
-        if proto == b"TCP4" and not srcip.version == dstip.version == 4:
-            return proxy_data.with_error("PROXYv1 address not IPv4")
-        if proto == b"TCP6" and not srcip.version == dstip.version == 6:
-            return proxy_data.with_error("PROXYv1 address not IPv6")
-        if not 0 <= srcport <= 65535:
-            return proxy_data.with_error("PROXYv1 src port out of bounds")
-        if not 0 <= dstport <= 65535:
-            return proxy_data.with_error("PROXYv1 dst port out of bounds")
-        proxy_data.protocol = PROTO.STREAM
-        if proto.endswith(b"4"):
-            proxy_data.family = AF.INET
-        else:
-            proxy_data.family = AF.INET6
-        proxy_data.src_addr = srcip
-        proxy_data.dst_addr = dstip
-        proxy_data.src_port = srcport
-        proxy_data.dst_port = dstport
-    proxy_data.whole_raw = proxyline
+        return proxy_data.with_error("PROXYv1 unrecognized family")
+    proxy_data.family = af
+
+    if not proto.startswith(b"TCP"):
+        return proxy_data.with_error("PROXYv1 unrecognized protocol")
+
+    proxy_data.protocol = PROTO.STREAM
+
+    async def get_ap(matcher: _COMPILED_RE) -> str:
+        chunk = data_parts.popleft().decode("latin-1")
+        if not matcher.match(chunk):
+            raise ValueError
+        return chunk
+
+    try:
+        addr = await get_ap(RE_ADDR_ALLOWCHARS)
+        src_addr = ip_address(addr)
+        addr = await get_ap(RE_ADDR_ALLOWCHARS)
+        dst_addr = ip_address(addr)
+    except ValueError:
+        return proxy_data.with_error("PROXYv1 address malformed")
+
+    if af == AF.INET and not src_addr.version == dst_addr.version == 4:
+        return proxy_data.with_error("PROXYv1 address not IPv4")
+    elif af == AF.INET6 and not src_addr.version == dst_addr.version == 6:
+        return proxy_data.with_error("PROXYv1 address not IPv6")
+
+    proxy_data.src_addr = src_addr
+    proxy_data.dst_addr = dst_addr
+
+    try:
+        port = await get_ap(RE_PORT_NOLEADZERO)
+        proxy_data.src_port = int(port)
+        port = await get_ap(RE_PORT_NOLEADZERO)
+        proxy_data.dst_port = int(port)
+    except ValueError:
+        return proxy_data.with_error("PROXYv1 port malformed")
+
+    if not 0 <= proxy_data.src_port <= 65535:
+        return proxy_data.with_error("PROXYv1 src port out of bounds")
+    if not 0 <= proxy_data.dst_port <= 65535:
+        return proxy_data.with_error("PROXYv1 dst port out of bounds")
+
+    if data_parts:
+        return proxy_data.with_error("PROXYv1 unrecognized extraneous data")
+
     return proxy_data
 
 

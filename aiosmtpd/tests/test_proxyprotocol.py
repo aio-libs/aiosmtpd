@@ -14,7 +14,7 @@ from functools import partial
 from ipaddress import IPv4Address, IPv6Address
 from smtplib import SMTP as SMTPClient
 from smtplib import SMTPServerDisconnected
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pytest
 from pytest_mock import MockFixture
@@ -25,10 +25,12 @@ from aiosmtpd.proxy_protocol import (
     AF,
     PROTO,
     V2_SIGNATURE,
+    AsyncReader,
     MalformedTLV,
     ProxyData,
     ProxyTLV,
     UnknownTypeTLV,
+    get_proxy,
 )
 from aiosmtpd.smtp import SMTP as SMTPServer
 from aiosmtpd.smtp import Session as SMTPSession
@@ -80,6 +82,13 @@ PUBLIC_V1_PATTERNS: Dict[str, bytes] = {
     ),
     "avinetworks": b"PROXY TCP4 12.97.16.194 136.179.21.69 31646 80",
     "googlecloud": b"PROXY TCP4 192.0.2.1 198.51.100.1 15221 110",
+}
+
+GOOD_V1_HANDSHAKE = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
+
+HANDSHAKES = {
+    "v1": GOOD_V1_HANDSHAKE,
+    "v2": TEST_V2_DATA1_EXACT,
 }
 
 
@@ -343,6 +352,66 @@ class TestProxyTLV:
         assert ptlv1 == ptlv2
 
 
+class TestModule:
+    class MockAsyncReader(AsyncReader):
+        def __init__(self, data, timeout=0.4):
+            self.data = bytearray(data)
+            self.timeout = 0.4
+
+        async def read(self, num_bytes: Optional[int] = None) -> bytes:
+            emit = self.data[0:num_bytes]
+            del self.data[0:num_bytes]
+            return emit
+
+        async def readexactly(self, n: int) -> bytes:
+            emit = self.data[0:n]
+            del self.data[0:n]
+            if len(emit) < n:
+                await asyncio.sleep(self.timeout)
+            return emit
+
+        async def readuntil(self, until_chars: Optional[bytes] = None) -> bytes:
+            if until_chars is None:
+                until_chars = b"\n"
+            emit = bytearray()
+            _count = 0
+            for _count, char in enumerate(self.data, start=1):
+                emit += char.to_bytes(1, "big")
+                if char in until_chars:
+                    break
+            del self.data[0:_count]
+            return emit
+
+    @parametrize("handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys())
+    def test_get(self, caplog, temp_event_loop, handshake):
+        caplog.set_level(logging.DEBUG)
+        mock_reader = self.MockAsyncReader(handshake)
+        reslt = temp_event_loop.run_until_complete(get_proxy(mock_reader))
+        assert isinstance(reslt, ProxyData)
+        assert reslt.valid
+
+    def test_cut_v1(self, caplog, temp_event_loop):
+        caplog.set_level(logging.DEBUG)
+        mock_reader = self.MockAsyncReader(GOOD_V1_HANDSHAKE[0:20])
+        reslt = temp_event_loop.run_until_complete(get_proxy(mock_reader))
+        assert isinstance(reslt, ProxyData)
+        assert not reslt.valid
+        assert reslt.error == "PROXYv1 malformed"
+        expect = ("mail.debug", 30, "PROXY error: PROXYv1 malformed")
+        assert expect in caplog.record_tuples
+
+    def test_cut_v2(self, caplog, temp_event_loop):
+        caplog.set_level(logging.DEBUG)
+        mock_reader = self.MockAsyncReader(TEST_V2_DATA1_EXACT[0:20])
+        reslt = temp_event_loop.run_until_complete(get_proxy(mock_reader))
+        assert isinstance(reslt, ProxyData)
+        assert not reslt.valid
+        expect_msg = "PROXY exception: Connection lost while waiting for tail part"
+        assert reslt.error == expect_msg
+        expect = ("mail.debug", 30, "PROXY error: " + expect_msg)
+        assert expect in caplog.record_tuples
+
+
 class TestProxyProtocolInit:
     @parametrize("value", [int(-1), float(-1.0), int(0), float(0.0)])
     def test_value_error(self, temp_event_loop, value):
@@ -484,10 +553,28 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
         assert self.transport.close.called
         assert self.protocol.session.proxy_data.error == expect_err
 
+    def test_invalid_sig(self, setup_proxy_protocol):
+        prox_test = "PROXY1 UNKNOWN whatevs\r\n"
+        setup_proxy_protocol(self)
+        self._assert_invalid(prox_test, "PROXYv1 wrong signature")
+
+    def test_unsupported_family(self, setup_proxy_protocol):
+        prox_test = "PROXY TCP5 123.123.123.123 231.231.231.231 80 90\r\n"
+        setup_proxy_protocol(self)
+        self._assert_invalid(prox_test, "PROXYv1 unrecognized family")
+        prox_test = "PROXY TCP 123.123.123.123 231.231.231.231 80 90\r\n"
+        setup_proxy_protocol(self)
+        self._assert_invalid(prox_test, "PROXYv1 unrecognized family")
+
+    def test_unsupported_proto(self, setup_proxy_protocol):
+        prox_test = "PROXY UDP4 123.123.123.123 231.231.231.231 80 90\r\n"
+        setup_proxy_protocol(self)
+        self._assert_invalid(prox_test, "PROXYv1 unrecognized protocol")
+
     def test_too_long(self, setup_proxy_protocol):
         prox_test = "PROXY UNKNOWN " + "*" * 100 + "\r\n"
         setup_proxy_protocol(self)
-        self._assert_invalid(prox_test, "PROXYv1 too long")
+        self._assert_invalid(prox_test, "PROXYv1 header too long")
 
     def test_malformed_nocr(self, setup_proxy_protocol):
         prox_test = "PROXY UNKNOWN\n"
@@ -534,26 +621,39 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
     IP6_cafe = "2021:cafe::0002"
 
     @parametrize(
-        "srcip, dstip, srcport, dstport",
+        "srcip, dstip, srcport, dstport, whatwrong",
         [
-            param(IP6_dead, IP6_cafe, "02501", None, id="zeroleader"),
-            param(" " + IP6_dead, IP6_cafe, None, None, id="space1"),
-            param(IP6_dead, " " + IP6_cafe, None, None, id="space2"),
-            param(IP6_dead, IP6_cafe, " 8080", None, id="space3"),
-            param(IP6_dead, IP6_cafe, None, " 0", id="space4"),
-            param(IP6_dead, IP6_cafe, None, "0 ", id="space5"),
-            param(IP6_dead[:-1] + "g", IP6_cafe, None, None, id="addr6s"),
-            param(IP6_dead, IP6_cafe[:-1] + "h", None, None, id="addr6d"),
+            param(IP6_dead, IP6_cafe, "02501", None, "port", id="zeroleader"),
+            param(" " + IP6_dead, IP6_cafe, None, None, "address", id="space1"),
+            param(IP6_dead, " " + IP6_cafe, None, None, "address", id="space2"),
+            param(IP6_dead, IP6_cafe, " 8080", None, "port", id="space3"),
+            param(IP6_dead, IP6_cafe, None, " 0", "port", id="space4"),
+            param(IP6_dead[:-1] + "g", IP6_cafe, None, None, "address", id="addr6s"),
+            param(IP6_dead, IP6_cafe[:-1] + "h", None, None, "address", id="addr6d"),
         ],
     )
-    def test_malformed_addr(self, setup_proxy_protocol, srcip, dstip, srcport, dstport):
+    def test_malformed_addr(
+        self, setup_proxy_protocol, srcip, dstip, srcport, dstport, whatwrong
+    ):
         if srcport is None:
             srcport = random_port()
         if dstport is None:
             dstport = random_port()
         prox_test = f"PROXY TCP6 {srcip} {dstip} {srcport} {dstport}\r\n"
         setup_proxy_protocol(self)
-        self._assert_invalid(prox_test, "PROXYv1 address malformed")
+        self._assert_invalid(prox_test, f"PROXYv1 {whatwrong} malformed")
+
+    @parametrize(
+        "extra",
+        [
+            param(" ", id="space"),
+            param(" text", id="sptext"),
+        ],
+    )
+    def test_extra(self, setup_proxy_protocol, extra):
+        prox_test = f"PROXY TCP6 {self.IP6_dead} {self.IP6_cafe} 0 25{extra}\r\n"
+        setup_proxy_protocol(self)
+        self._assert_invalid(prox_test, "PROXYv1 unrecognized extraneous data")
 
     def test_malformed_addr4(self, setup_proxy_protocol):
         srcip = "1.2.3.a"
@@ -562,7 +662,7 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
         dstport = 65535
         prox_test = f"PROXY TCP6 {srcip} {dstip} {srcport} {dstport}\r\n"
         setup_proxy_protocol(self)
-        self._assert_invalid(prox_test, "PROXYv1 address parse error")
+        self._assert_invalid(prox_test, "PROXYv1 address malformed")
 
     def test_ports_oob(self, setup_proxy_protocol):
         srcip = "1.2.3.4"
@@ -841,13 +941,6 @@ class TestProxyProtocolV2(_TestProxyProtocolCommon):
 @controller_data(proxy_protocol_timeout=0.3)
 @handler_data(class_=ProxyPeekerHandler)
 class TestWithController:
-    GOOD_V1_HANDSHAKE = b"PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
-
-    HANDSHAKES = {
-        "v1": GOOD_V1_HANDSHAKE,
-        "v2": TEST_V2_DATA1_EXACT,
-    }
-
     def _okay(self, handshake: bytes):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
