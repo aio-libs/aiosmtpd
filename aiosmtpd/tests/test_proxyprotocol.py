@@ -445,7 +445,8 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
         setup_proxy_protocol(self)
         self.protocol.data_received(patt)
         self.runner()
-        assert self.protocol.session.proxy_data.error == ""
+        sess: SMTPSession = self.protocol.session
+        assert sess.proxy_data.error == ""
         handler = self.protocol.event_handler
         assert handler.called
 

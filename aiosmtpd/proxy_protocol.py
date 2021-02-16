@@ -23,21 +23,40 @@ V2_SIGNATURE = b"\r\n\r\n\x00\r\nQUIT\n"
 
 
 class V2_CMD(IntEnum):
+    """
+    Valid Version 2 "command"
+    """
+
     LOCAL = 0
     PROXY = 1
 
 
 class AF(IntEnum):
+    """
+    Valid address families. Version 1 "UNKNOWN" mapped to "UNSPEC"
+    """
+
     UNSPEC = 0
+    """For version 1, means UNKNOWN"""
     INET = 1
+    """Internet Protocol v4"""
     INET6 = 2
+    """Internet Protocol v6"""
     UNIX = 3
+    """Unix Socket; invalid for version 1"""
 
 
 class PROTO(IntEnum):
+    """
+    Valid transport protocols. Version 1 "UNKNOWN" mapped to "UNSPEC"
+    """
+
     UNSPEC = 0
+    """For version 1, means UNKNOWN"""
     STREAM = 1
+    """TCP"""
     DGRAM = 2
+    """UDP; invalid for version 1"""
 
 
 V2_VALID_CMDS = {item.value for item in V2_CMD}
@@ -51,6 +70,7 @@ V2_PARSE_ADDR_FAMPRO = {
     (AF.UNIX << 4) | PROTO.STREAM,
     (AF.UNIX << 4) | PROTO.DGRAM,
 }
+"""Family & Proto combinations that need address parsing"""
 
 
 __all__ = [
@@ -84,7 +104,7 @@ class AsyncReader(Protocol):  # pragma: nocover
         ...
         return b""
 
-    async def readexactly(self, n: int) -> bytes:
+    async def readexactly(self, num_bytes: int) -> bytes:
         ...
         return b""
 
@@ -98,6 +118,10 @@ _anoinit = partial(attr.ib, init=False)
 
 @public
 class ProxyTLV(dict):
+    """
+    Represents the TLV Vectors inside a PROXYv2 Handshake
+    """
+
     __slots__ = ("tlv_loc",)
 
     # https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt#L538-L549
@@ -127,6 +151,13 @@ class ProxyTLV(dict):
         return super().__eq__(other)
 
     def same_attribs(self, _raises: bool = False, **kwargs) -> bool:
+        """
+        Helper function to test whether attribute(s) exists, and whether the attribute's
+        value is as expected. For ProxyTLV, since it inherits from dict, you can also
+        use direct dict comparison.
+
+        :param _raises: If True, raises an Error instead of returning bool
+        """
         for k, v in kwargs.items():
             actual = self.get(k, _NOT_FOUND)
             if actual is _NOT_FOUND:
@@ -148,6 +179,13 @@ class ProxyTLV(dict):
         partial_ok: bool = True,
         strict: bool = False,
     ) -> Tuple[Dict[str, Any], Dict[str, int]]:
+        """
+        Parse a bunch of bytes into TLV Vectors.
+
+        :param data: The bunch of bytes to parse
+        :param partial_ok: Keep result of parsing so far if error encountered
+        :param strict: If true, reject unrecognized TYPEs
+        """
         rslt: Dict[str, Any] = {}
         tlv_loc: Dict[str, int] = {}
 
@@ -195,6 +233,9 @@ class ProxyTLV(dict):
         """
         Parses raw bytes for TLV Vectors, decode them and giving them human-readable
         name if applicable, and returns a ProxyTLV object.
+
+        :param raw: The raw bytes
+        :param strict: If true, reject unrecognized TYPEs
         """
         if len(raw) == 0:
             return None
@@ -203,6 +244,12 @@ class ProxyTLV(dict):
 
     @classmethod
     def name_to_num(cls, name: str) -> Optional[int]:
+        """
+        Perform backmapping from TYPENAME to TYPE (numeric)
+
+        :param name: TYPENAME to backmap
+        :return: TYPE (int) if backmap available, else None
+        """
         for k, v in cls.PP2_TYPENAME.items():
             if name == v:
                 return k
@@ -212,6 +259,10 @@ class ProxyTLV(dict):
 @public
 @attr.s(slots=True)
 class ProxyData:
+    """
+    Represents data received during PROXY Protocol Handshake, in an already-parsed form
+    """
+
     version: Optional[int] = attr.ib(kw_only=True, init=True)
     """PROXY Protocol version; None if not recognized/malformed"""
     command: Optional[V2_CMD] = _anoinit(default=None)
@@ -483,7 +534,7 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
 async def get_proxy(reader_func: AsyncReader) -> ProxyData:
     """
     :param reader_func: Async function that implements the AsyncReader protocol.
-    :return: Proxy Data if valid
+    :return: Proxy Data
     """
     log.debug("Waiting for PROXY signature")
     signature = await reader_func.readexactly(5)
