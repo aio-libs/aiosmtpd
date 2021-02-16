@@ -966,7 +966,7 @@ class TestWithController:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
             sock.sendall(handshake[0:20])
-            time.sleep(0.01)
+            time.sleep(0.1)
             sock.sendall(handshake[20:])
             resp = sock.makefile("rb").readline()
             assert resp.startswith(b"220 ")
