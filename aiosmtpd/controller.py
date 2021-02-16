@@ -40,6 +40,7 @@ class Controller:
     server: Optional[AsyncServer] = None
     server_coro: Coroutine = None
     smtpd = None
+    _factory_invoked: Optional[threading.Event] = None
     _thread: Optional[threading.Thread] = None
     _thread_exception: Optional[Exception] = None
 
@@ -101,6 +102,8 @@ class Controller:
         except Exception as err:
             self._thread_exception = err
             return _FakeServer(self.loop)
+        finally:
+            self._factory_invoked.set()
 
     def _run(self, ready_event):
         asyncio.set_event_loop(self.loop)
@@ -152,6 +155,7 @@ class Controller:
     def start(self):
         assert self._thread is None, "SMTP daemon already running"
         ready_event = threading.Event()
+        self._factory_invoked = threading.Event()
         self._thread = threading.Thread(target=self._run, args=(ready_event,))
         self._thread.daemon = True
         self._thread.start()
@@ -170,6 +174,8 @@ class Controller:
             # We totally don't care of exceptions experienced by _testconn,
             # which _will_ happen if factory() experienced problems.
             pass
+        if not self._factory_invoked.wait(self.ready_timeout):
+            raise TimeoutError("SMTP server not responding within allotted time")
         if self._thread_exception is not None:
             raise self._thread_exception
         # Defensive
