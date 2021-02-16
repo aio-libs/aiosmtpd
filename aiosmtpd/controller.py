@@ -6,7 +6,8 @@ import os
 import ssl
 import threading
 from contextlib import ExitStack
-from socket import create_connection, timeout as socket_timeout
+from socket import create_connection
+from socket import timeout as socket_timeout
 from typing import Any, Coroutine, Dict, Optional
 from warnings import warn
 
@@ -68,14 +69,13 @@ class Controller:
         self.port = port
         self.ssl_context = ssl_context
         self.loop = asyncio.new_event_loop() if loop is None else loop
-        self.ready_timeout = os.getenv(
-            'AIOSMTPD_CONTROLLER_TIMEOUT', ready_timeout)
+        self.ready_timeout = os.getenv("AIOSMTPD_CONTROLLER_TIMEOUT", ready_timeout)
         if server_kwargs:
             warn(
                 "server_kwargs will be removed in version 2.0. "
                 "Just specify the keyword arguments to forward to SMTP "
                 "as kwargs to this __init__ method.",
-                DeprecationWarning
+                DeprecationWarning,
             )
         self.SMTP_kwargs: Dict[str, Any] = server_kwargs or {}
         self.SMTP_kwargs.update(SMTP_parameters)
@@ -88,9 +88,7 @@ class Controller:
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
-        return SMTP(
-            self.handler, **self.SMTP_kwargs
-        )
+        return SMTP(self.handler, **self.SMTP_kwargs)
 
     def _factory_invoker(self):
         """Wraps factory() to catch exceptions during instantiation"""
@@ -119,9 +117,7 @@ class Controller:
                 ssl=self.ssl_context,
             )
             self.server_coro = srv_coro
-            srv: AsyncServer = self.loop.run_until_complete(
-                srv_coro
-            )
+            srv: AsyncServer = self.loop.run_until_complete(srv_coro)
             self.server = srv
         except Exception as error:  # pragma: on-wsl
             # Usually will enter this part only if create_server() cannot bind to the
