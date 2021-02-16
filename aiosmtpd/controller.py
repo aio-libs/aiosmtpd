@@ -166,11 +166,15 @@ class Controller:
         self._thread.daemon = True
         self._thread.start()
         # Wait a while until the server is responding.
-        ready_event.wait(self.ready_timeout)
-        if self._thread_exception is not None:  # pragma: on-wsl
-            # See comment about WSL1.0 in the _run() method
-            assert self._thread is not None  # Stupid LGTM.com; see github/codeql#4918
-            raise self._thread_exception
+        if not ready_event.wait(self.ready_timeout):
+            # An exception within self._run will also result in ready_event not set
+            # So, we first test for that, before raising TimeoutError
+            if self._thread_exception is not None:  # pragma: on-wsl
+                # See comment about WSL1.0 in the _run() method
+                raise self._thread_exception
+            else:
+                raise TimeoutError("SMTP server failed to start within allotted time")
+
         # Apparently create_server invokes factory() "lazily", so exceptions in
         # factory() go undetected. To trigger factory() invocation we need to open
         # a connection to the server and 'exchange' some traffic.
