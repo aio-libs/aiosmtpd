@@ -160,8 +160,9 @@ class Controller:
 
     def start(self):
         assert self._thread is None, "SMTP daemon already running"
-        ready_event = threading.Event()
         self._factory_invoked = threading.Event()
+
+        ready_event = threading.Event()
         self._thread = threading.Thread(target=self._run, args=(ready_event,))
         self._thread.daemon = True
         self._thread.start()
@@ -191,6 +192,7 @@ class Controller:
             raise TimeoutError("SMTP server not responding within allotted time")
         if self._thread_exception is not None:
             raise self._thread_exception
+
         # Defensive
         if self.smtpd is None:
             raise RuntimeError("Unknown Error, failed to init SMTP server")
