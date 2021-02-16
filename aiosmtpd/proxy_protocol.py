@@ -1,6 +1,7 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
 import re
 import struct
 from enum import IntEnum
@@ -58,6 +59,8 @@ __all__ = [
 
 
 _NOT_FOUND = object()
+
+log = logging.getLogger("mail.debug")
 
 
 # region #### Custom Types ############################################################
@@ -347,24 +350,32 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
     proxy_data = ProxyData(version=2)
     whole_raw = bytearray()
 
+    async def read_rest(
+        field_name: str, field_buf: bytearray, field_len: int
+    ) -> Tuple[bytearray, bytearray]:
+        left = field_len - len(field_buf)
+        while left > 0:
+            piece = await reader.read(left)
+            left -= len(piece)
+            if not piece or left < 0:
+                raise ConnectionError(f"Connection lost while waiting for {field_name}")
+            field_buf += piece
+        return field_buf[0:field_len], field_buf[field_len:]
+
     signature = bytearray(initial)
-    sig_left = 12 - len(signature)
-    if sig_left > 0:  # pragma: no branch
-        signature += await reader.read(sig_left)
-    header = signature[12:]
-    signature = signature[0:12]
+    log.debug("Waiting for PROXYv2 signature")
+    signature, header = await read_rest("signature", signature, 12)
     if signature != V2_SIGNATURE:
         return proxy_data.with_error("PROXYv2 wrong signature")
+    log.debug("Got PROXYv2 signature")
     whole_raw += signature
 
-    hdr_left = 4 - len(header)
-    if hdr_left > 0:  # pragma: no branch
-        header += await reader.readexactly(hdr_left)
-    rest = header[4:]
-    header = header[0:4]
+    log.debug("Waiting for PROXYv2 Header")
+    header, tail_part = await read_rest("header", header, 4)
+    log.debug("Got PROXYv2 header")
     whole_raw += header
 
-    ver_cmd, fam_proto, len_ = struct.unpack("!BBH", header)
+    ver_cmd, fam_proto, len_tail = struct.unpack("!BBH", header)
 
     if (ver_cmd & 0xF0) != 0x20:
         return proxy_data.with_error("PROXYv2 illegal version")
@@ -381,15 +392,14 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
     if proxy_data.protocol not in V2_VALID_PROS:
         return proxy_data.with_error("PROXYv2 unsupported protocol")
 
-    rest_left = len_ - len(rest)
-    if rest_left > 0:
-        rest += await reader.readexactly(rest_left)
-
-    whole_raw += rest
+    log.debug("Waiting for PROXYv2 tail part")
+    tail_part, _ = await read_rest("tail part", tail_part, len_tail)
+    log.debug("Got PROXYv2 tail part")
+    whole_raw += tail_part
     proxy_data.whole_raw = whole_raw
 
     if fam_proto not in V2_PARSE_ADDR_FAMPRO:
-        proxy_data.rest = rest
+        proxy_data.rest = tail_part
         return proxy_data
 
     if proxy_data.family == AF.INET:
@@ -401,10 +411,10 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
         unpacker = "108s108s0s0s"
 
     addr_len = struct.calcsize(unpacker)
-    addr_struct = rest[0:addr_len]
+    addr_struct = tail_part[0:addr_len]
     if len(addr_struct) < addr_len:
         return proxy_data.with_error("PROXYv2 truncated address")
-    rest = rest[addr_len:]
+    tail_part = tail_part[addr_len:]
     s_addr, d_addr, s_port, d_port = struct.unpack(unpacker, addr_struct)
 
     if proxy_data.family == AF.INET:
@@ -422,8 +432,8 @@ async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
         proxy_data.src_addr = s_addr
         proxy_data.dst_addr = d_addr
 
-    proxy_data.rest = rest
-    if rest:
+    proxy_data.rest = tail_part
+    if tail_part:
         proxy_data.tlv_start = 16 + addr_len
 
     return proxy_data
@@ -435,11 +445,14 @@ async def get_proxy(reader_func: AsyncReader) -> ProxyData:
     :param reader_func: Async function that implements the AsyncReader protocol.
     :return: Proxy Data if valid
     """
+    log.debug("Waiting for PROXY signature")
     signature = await reader_func.readexactly(5)
     try:
         if signature == b"PROXY":
+            log.debug("PROXY version 1")
             return await _get_v1(reader_func, signature)
-        elif signature == b"\r\n\r\n\x00":
+        elif signature == V2_SIGNATURE[0:5]:
+            log.debug("PROXY version 2")
             return await _get_v2(reader_func, signature)
         else:
             return ProxyData(version=None).with_error("PROXY unrecognized signature")
