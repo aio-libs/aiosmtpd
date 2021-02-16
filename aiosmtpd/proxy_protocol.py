@@ -547,5 +547,5 @@ async def get_proxy(reader_func: AsyncReader) -> ProxyData:
             return await _get_v2(reader_func, signature)
         else:
             return ProxyData(version=None).with_error("PROXY unrecognized signature")
-    except Exception as e:  # pragma: nocover
+    except Exception as e:
         return ProxyData(version=None).with_error(f"PROXY exception: {str(e)}", False)
