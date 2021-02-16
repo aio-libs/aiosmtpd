@@ -198,6 +198,15 @@ class TestController:
         finally:
             cont.stop()
 
+    def test_testconn_raises(self, mocker: MockFixture):
+        mocker.patch("socket.socket.recv", side_effect=RuntimeError("MockError"))
+        cont = Controller(Sink(), hostname="")
+        try:
+            with pytest.raises(RuntimeError, match="MockError"):
+                cont.start()
+        finally:
+            cont.stop()
+
 
 class TestFactory:
     def test_normal_situation(self):

@@ -6,7 +6,7 @@ import os
 import ssl
 import threading
 from contextlib import ExitStack
-from socket import create_connection
+from socket import create_connection, timeout as socket_timeout
 from typing import Any, Coroutine, Dict, Optional
 from warnings import warn
 
@@ -176,10 +176,13 @@ class Controller:
         # a connection to the server and 'exchange' some traffic.
         try:
             self._testconn()
-        except Exception:
-            # We totally don't care of exceptions experienced by _testconn,
+        except socket_timeout:
+            # We totally don't care of timeout experienced by _testconn,
             # which _will_ happen if factory() experienced problems.
             pass
+        except Exception:
+            # Raise other exceptions though
+            raise
         if not self._factory_invoked.wait(self.ready_timeout):
             raise TimeoutError("SMTP server not responding within allotted time")
         if self._thread_exception is not None:
