@@ -563,7 +563,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.session.proxy_data = await get_proxy(self._reader)
             if self.session.proxy_data:
                 log.info("%r valid PROXY handshake", self.session.peer)
-                status = await self._call_handler_hook("PROXY")
+                status = await self._call_handler_hook("PROXY", self.session.proxy_data)
                 log.debug("%r handle_PROXY returned %r", self.session.peer, status)
             else:
                 log.warning("%r invalid PROXY handshake", self.session.peer)

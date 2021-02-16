@@ -99,10 +99,10 @@ class ProxyPeekerHandler(Sink):
         self.proxy_datas: List[ProxyData] = []
         self.retval = retval
 
-    async def handle_PROXY(self, server, session, envelope):
+    async def handle_PROXY(self, server, session, envelope, proxy_data):
         self.called = True
         self.sessions.append(session)
-        self.proxy_datas.append(session.proxy_data)
+        self.proxy_datas.append(proxy_data)
         return self.retval
 
 
