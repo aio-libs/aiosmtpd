@@ -190,6 +190,14 @@ class TestController:
         controller = contsink(server_hostname="testhost3", server_kwargs=kwargs)
         assert controller.SMTP_kwargs["hostname"] == "testhost3"
 
+    def test_hostname_empty(self):
+        # WARNING: This test _always_ succeeds in Windows.
+        cont = Controller(Sink(), hostname="")
+        try:
+            cont.start()
+        finally:
+            cont.stop()
+
 
 class TestFactory:
     def test_normal_situation(self):

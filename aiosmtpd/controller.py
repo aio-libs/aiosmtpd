@@ -146,8 +146,14 @@ class Controller:
         Context if necessary, and read some data from it to ensure that factory()
         gets invoked.
         """
+        # IMPORTANT: Windows does not need the next line; for some reasons,
+        # create_connection is happy with hostname="" on Windows, but screams murder
+        # in Linux.
+        # At this point, if self.hostname is Falsy, it most likely is "" (bind to all
+        # addresses). In such case, it should be safe to connect to localhost)
+        hostname = self.hostname or "localhost"
         with ExitStack() as stk:
-            s = stk.enter_context(create_connection((self.hostname, self.port), 1.0))
+            s = stk.enter_context(create_connection((hostname, self.port), 1.0))
             if self.ssl_context:
                 s = stk.enter_context(self.ssl_context.wrap_socket(s))
             _ = s.recv(1024)
