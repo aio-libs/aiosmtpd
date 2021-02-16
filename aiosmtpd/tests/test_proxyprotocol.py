@@ -408,7 +408,7 @@ class TestModule:
         assert not reslt.valid
         expect_msg = "PROXY exception: Connection lost while waiting for tail part"
         assert reslt.error == expect_msg
-        expect = ("mail.debug", 30, "PROXY error: " + expect_msg)
+        expect = ("mail.debug", 30, expect_msg)
         assert expect in caplog.record_tuples
 
 

@@ -259,8 +259,18 @@ class ProxyData:
                 pass
         return self._tlv
 
-    def with_error(self, error_msg: str) -> "ProxyData":
-        log.warning(f"PROXY error: {error_msg}")
+    def with_error(self, error_msg: str, log_prefix: bool = True) -> "ProxyData":
+        """
+        Returns a ProxyData with its .error attrib set to error_msg, at the same time
+        sending a log.warning.
+
+        :param error_msg: Error message
+        :param log_prefix: If True, add "PROXY error:" prefix to log message
+        """
+        if log_prefix:
+            log.warning(f"PROXY error: {error_msg}")
+        else:
+            log.warning(error_msg)
         self.error = error_msg
         return self
 
@@ -487,4 +497,4 @@ async def get_proxy(reader_func: AsyncReader) -> ProxyData:
         else:
             return ProxyData(version=None).with_error("PROXY unrecognized signature")
     except Exception as e:  # pragma: nocover
-        return ProxyData(version=None).with_error(f"PROXY exception: {str(e)}")
+        return ProxyData(version=None).with_error(f"PROXY exception: {str(e)}", False)
