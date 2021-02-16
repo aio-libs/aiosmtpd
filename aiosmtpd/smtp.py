@@ -165,16 +165,14 @@ class Session:
     def login_data(self):
         """Legacy login_data, usually containing the username"""
         log.warning(
-            "Session.login_data is deprecated and will be removed in version 2.0",
-            DeprecationWarning
+            "Session.login_data is deprecated and will be removed in version 2.0"
         )
         return self._login_data
 
     @login_data.setter
     def login_data(self, value):
         log.warning(
-            "Session.login_data is deprecated and will be removed in version 2.0",
-            DeprecationWarning
+            "Session.login_data is deprecated and will be removed in version 2.0"
         )
         self._login_data = value
 
