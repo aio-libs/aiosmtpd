@@ -69,7 +69,9 @@ class Controller:
         self.port = port
         self.ssl_context = ssl_context
         self.loop = asyncio.new_event_loop() if loop is None else loop
-        self.ready_timeout = os.getenv("AIOSMTPD_CONTROLLER_TIMEOUT", ready_timeout)
+        self.ready_timeout = float(
+            os.getenv("AIOSMTPD_CONTROLLER_TIMEOUT", ready_timeout)
+        )
         if server_kwargs:
             warn(
                 "server_kwargs will be removed in version 2.0. "
