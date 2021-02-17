@@ -199,6 +199,13 @@ class TestController:
         finally:
             cont.stop()
 
+    def test_hostname_none(self):
+        cont = Controller(Sink())
+        try:
+            cont.start()
+        finally:
+            cont.stop()
+
     def test_testconn_raises(self, mocker: MockFixture):
         mocker.patch("socket.socket.recv", side_effect=RuntimeError("MockError"))
         cont = Controller(Sink(), hostname="")
