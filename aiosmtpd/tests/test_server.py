@@ -24,7 +24,7 @@ class SlowStartController(Controller):
         super().__init__(*args, **kwargs)
 
     def _run(self, ready_event):
-        time.sleep(self.ready_timeout * 1.1)
+        time.sleep(self.ready_timeout * 1.5)
         try:
             super()._run(ready_event)
         except Exception:
