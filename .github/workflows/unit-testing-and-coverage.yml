@@ -1,4 +1,5 @@
 name: "aiosmtpd CI"
+# If you change the name above, also change badge address in README.rst
 
 on:
   # This is for direct commit to master
