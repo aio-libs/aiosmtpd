@@ -390,7 +390,7 @@ class TestModule:
         assert isinstance(reslt, ProxyData)
         assert reslt.valid
 
-    def test_cut_v1(self, caplog, temp_event_loop):
+    def test_get_cut_v1(self, caplog, temp_event_loop):
         caplog.set_level(logging.DEBUG)
         mock_reader = self.MockAsyncReader(GOOD_V1_HANDSHAKE[0:20])
         reslt = temp_event_loop.run_until_complete(get_proxy(mock_reader))
@@ -400,7 +400,7 @@ class TestModule:
         expect = ("mail.debug", 30, "PROXY error: PROXYv1 malformed")
         assert expect in caplog.record_tuples
 
-    def test_cut_v2(self, caplog, temp_event_loop):
+    def test_get_cut_v2(self, caplog, temp_event_loop):
         caplog.set_level(logging.DEBUG)
         mock_reader = self.MockAsyncReader(TEST_V2_DATA1_EXACT[0:20])
         reslt = temp_event_loop.run_until_complete(get_proxy(mock_reader))
@@ -422,7 +422,8 @@ class TestModule:
         expect = ("mail.debug", 30, "PROXY error: " + expect_msg)
         assert expect in caplog.record_tuples
 
-class TestProxyProtocolInit:
+
+class TestSMTPInit:
     @parametrize("value", [int(-1), float(-1.0), int(0), float(0.0)])
     def test_value_error(self, temp_event_loop, value):
         with pytest.raises(ValueError, match=r"proxy_protocol_timeout must be > 0"):
@@ -440,7 +441,7 @@ class TestProxyProtocolInit:
         assert expect not in caplog.record_tuples
 
 
-class TestProxyProtocolV1(_TestProxyProtocolCommon):
+class TestGetV1(_TestProxyProtocolCommon):
     def test_noproxy(self, setup_proxy_protocol):
         setup_proxy_protocol(self)
         data = b"HELO example.org\r\n"
@@ -694,7 +695,7 @@ class TestProxyProtocolV1(_TestProxyProtocolCommon):
         self._assert_invalid(prox_test, "PROXYv1 dst port out of bounds")
 
 
-class TestProxyProtocolV2(_TestProxyProtocolCommon):
+class TestGetV2(_TestProxyProtocolCommon):
     def test_1(self, setup_proxy_protocol):
         setup_proxy_protocol(self)
         self.protocol.data_received(TEST_V2_DATA1_XTRA)
