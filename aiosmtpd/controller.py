@@ -43,6 +43,10 @@ class _FakeServer(asyncio.StreamReaderProtocol):
 
 @public
 class BaseThreadedController(metaclass=ABCMeta):
+    """
+    `Documentation can be found here
+    <https://aiosmtpd.readthedocs.io/en/latest/controller.html>`_.
+    """
     server: Optional[AsyncServer] = None
     server_coro: Optional[Coroutine] = None
     smtpd = None
@@ -61,11 +65,6 @@ class BaseThreadedController(metaclass=ABCMeta):
         server_hostname: Optional[str] = None,
         **SMTP_parameters,
     ):
-        """
-        `Documentation can be found here
-        <http://aiosmtpd.readthedocs.io/en/latest/aiosmtpd\
-/docs/controller.html#controller-api>`_.
-        """
         self.handler = handler
         if loop is None:
             self.loop = asyncio.new_event_loop()
@@ -199,6 +198,10 @@ class BaseThreadedController(metaclass=ABCMeta):
 
 @public
 class Controller(BaseThreadedController):
+    """
+    `Documentation can be found here
+    <https://aiosmtpd.readthedocs.io/en/latest/controller.html>`_.
+    """
     def __init__(
         self,
         handler,
@@ -245,6 +248,10 @@ class Controller(BaseThreadedController):
 
 
 class UnixSocketController(BaseThreadedController):  # pragma: on-win32
+    """
+    `Documentation can be found here
+    <https://aiosmtpd.readthedocs.io/en/latest/controller.html>`_.
+    """
     def __init__(
         self,
         handler,
