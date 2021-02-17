@@ -3,6 +3,15 @@
 ===================
 
 
+1.3.1 (aiosmtpd-next)
+=====================
+
+Fixed/Improved
+==============
+* ``ready_timeout`` now actually enforced, raising ``TimeoutError`` if breached
+* No longer fail with opaque "Unknown Error" if ``hostname=""`` (Fixes #244)
+
+
 1.3.0 (2021-02-09)
 ==================
 
