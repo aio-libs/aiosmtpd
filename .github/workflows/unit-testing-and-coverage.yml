@@ -52,7 +52,8 @@ jobs:
         run: |
           # Required by examples
           pip install dnspython argon2-cffi
-          pip pytype
+          # Install pytype
+          pip install pytype
           pytype --keep-going --jobs auto .
       - name: "Other QA Checks"
         shell: bash
