@@ -3,6 +3,7 @@
 
 """Test other aspects of the server implementation."""
 
+import errno
 import platform
 import socket
 import time
@@ -11,7 +12,7 @@ from functools import partial
 import pytest
 from pytest_mock import MockFixture
 
-from aiosmtpd.controller import Controller, _FakeServer
+from aiosmtpd.controller import Controller, _FakeServer, get_localhost
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
 
@@ -206,6 +207,32 @@ class TestController:
                 cont.start()
         finally:
             cont.stop()
+
+    def test_getlocalhost(self):
+        assert get_localhost() in ("127.0.0.1", "::1")
+
+    def test_getlocalhost_6yes(self, mocker):
+        mocker.patch(
+            "aiosmtpd.controller.create_connection",
+            side_effect=OSError(errno.ECONNREFUSED, "Mock IP6"),
+        )
+        assert get_localhost() == "::1"
+
+    def test_getlocalhost_6no(self, mocker):
+        mocker.patch(
+            "aiosmtpd.controller.create_connection",
+            side_effect=OSError(errno.EADDRNOTAVAIL, "Mock IP4-only"),
+        )
+        assert get_localhost() == "127.0.0.1"
+
+    def test_getlocalhost_error(self, mocker):
+        mocker.patch(
+            "aiosmtpd.controller.create_connection",
+            side_effect=OSError(errno.EAFNOSUPPORT, "Mock Error"),
+        )
+        with pytest.raises(OSError, match="Mock Error") as exc:
+            get_localhost()
+        assert exc.value.errno == errno.EAFNOSUPPORT
 
 
 class TestFactory:

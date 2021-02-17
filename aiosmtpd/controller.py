@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import errno
 import os
 import ssl
 import time
@@ -17,6 +18,17 @@ from public import public
 from aiosmtpd.smtp import SMTP
 
 AsyncServer = asyncio.base_events.Server
+
+
+def get_localhost() -> str:
+    try:
+        create_connection(("::1", 0))
+    except OSError as e:
+        if e.errno == errno.EADDRNOTAVAIL:
+            return "127.0.0.1"
+        if e.errno == errno.ECONNREFUSED:
+            return "::1"
+        raise
 
 
 class _FakeServer(asyncio.StreamReaderProtocol):
@@ -66,7 +78,7 @@ class Controller:
 /docs/controller.html#controller-api>`_.
         """
         self.handler = handler
-        self.hostname = "::1" if hostname is None else hostname
+        self.hostname = get_localhost() if hostname is None else hostname
         self.port = port
         self.ssl_context = ssl_context
         self.loop = asyncio.new_event_loop() if loop is None else loop
@@ -150,7 +162,7 @@ class Controller:
         # in Linux.
         # At this point, if self.hostname is Falsy, it most likely is "" (bind to all
         # addresses). In such case, it should be safe to connect to localhost)
-        hostname = self.hostname or "localhost"
+        hostname = self.hostname or get_localhost()
         with ExitStack() as stk:
             s = stk.enter_context(create_connection((hostname, self.port), 1.0))
             if self.ssl_context:
