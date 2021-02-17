@@ -29,7 +29,9 @@ def get_localhost() -> str:
         # And since it worked, it's clear that IPv6 is supported
         return "::1"
     except OSError as e:
-        if e.errno == errno.EADDRNOTAVAIL:
+        if e.errno == errno.EADDRNOTAVAIL or e.errno == 10049:
+            # 10049 is WSAEADDRNOTAVAIL .. seems to only exist on Windows
+            # So we'll not use an errno constant there.
             return "127.0.0.1"
         if e.errno == errno.ECONNREFUSED:
             return "::1"
