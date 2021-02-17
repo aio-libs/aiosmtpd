@@ -218,7 +218,7 @@ class Controller:
     def _stop(self):
         self.loop.stop()
         try:
-            _all_tasks = asyncio.all_tasks
+            _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
         except AttributeError:  # pragma: py-gt-36
             _all_tasks = asyncio.Task.all_tasks
         for task in _all_tasks(self.loop):
