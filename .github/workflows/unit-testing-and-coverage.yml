@@ -50,7 +50,9 @@ jobs:
       - name: "Static Type Checking"
         # language=bash
         run: |
-          pip install pytype
+          # Required by examples
+          pip install dnspython argon2-cffi
+          pip pytype
           pytype --keep-going --jobs auto .
       - name: "Other QA Checks"
         shell: bash
