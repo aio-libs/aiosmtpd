@@ -411,6 +411,16 @@ class TestModule:
         expect = ("mail.debug", 30, expect_msg)
         assert expect in caplog.record_tuples
 
+    def test_get_invalid_sig(self, caplog, temp_event_loop):
+        caplog.set_level(logging.DEBUG)
+        mock_reader = self.MockAsyncReader(b"PROXI TCP4 1.2.3.4 5.6.7.8 9 10\r\n")
+        reslt = temp_event_loop.run_until_complete(get_proxy(mock_reader))
+        assert isinstance(reslt, ProxyData)
+        assert not reslt.valid
+        expect_msg = "PROXY unrecognized signature"
+        assert reslt.error == expect_msg
+        expect = ("mail.debug", 30, "PROXY error: " + expect_msg)
+        assert expect in caplog.record_tuples
 
 class TestProxyProtocolInit:
     @parametrize("value", [int(-1), float(-1.0), int(0), float(0.0)])
