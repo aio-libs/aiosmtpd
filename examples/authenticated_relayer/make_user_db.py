@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict
 
 
-DB_FILE = "mail.db"
+DB_FILE = "mail.db~"
 USER_AND_PASSWORD: Dict[str, str] = {
     "user1": "not@password",
     "user2": "correctbatteryhorsestaple",

@@ -16,7 +16,7 @@ from smtplib import SMTP as SMTPCLient
 
 
 DEST_PORT = 25
-DB_AUTH = Path("mail.db")
+DB_AUTH = Path("mail.db~")
 
 
 class Authenticator:
@@ -91,7 +91,7 @@ async def amain():
 
 if __name__ == '__main__':
     if not DB_AUTH.exists():
-        print("Please create mail.db first using make_user_db.py")
+        print(f"Please create {DB_AUTH} first using make_user_db.py")
         sys.exit(1)
     logging.basicConfig(level=logging.DEBUG)
     loop = asyncio.get_event_loop()
