@@ -4,6 +4,7 @@
 import asyncio
 import os
 import ssl
+import time
 import threading
 from contextlib import ExitStack
 from socket import create_connection
@@ -165,6 +166,7 @@ class Controller:
         self._thread.daemon = True
         self._thread.start()
         # Wait a while until the server is responding.
+        start = time.monotonic()
         if not ready_event.wait(self.ready_timeout):
             # An exception within self._run will also result in ready_event not set
             # So, we first test for that, before raising TimeoutError
@@ -173,6 +175,7 @@ class Controller:
                 raise self._thread_exception
             else:
                 raise TimeoutError("SMTP server failed to start within allotted time")
+        respond_timeout = self.ready_timeout - (time.monotonic() - start)
 
         # Apparently create_server invokes factory() "lazily", so exceptions in
         # factory() go undetected. To trigger factory() invocation we need to open
@@ -186,7 +189,7 @@ class Controller:
         except Exception:
             # Raise other exceptions though
             raise
-        if not self._factory_invoked.wait(self.ready_timeout):
+        if not self._factory_invoked.wait(respond_timeout):
             raise TimeoutError("SMTP server not responding within allotted time")
         if self._thread_exception is not None:
             raise self._thread_exception
