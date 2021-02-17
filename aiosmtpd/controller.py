@@ -22,7 +22,12 @@ AsyncServer = asyncio.base_events.Server
 
 def get_localhost() -> str:
     try:
-        create_connection(("::1", 0))
+        sock = create_connection(("::1", 0))
+        # It should be impossible... but it worked!
+        # So we need to close it
+        sock.close()
+        # And since it worked, it's clear that IPv6 is supported
+        return "::1"
     except OSError as e:
         if e.errno == errno.EADDRNOTAVAIL:
             return "127.0.0.1"

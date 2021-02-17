@@ -241,6 +241,14 @@ class TestController:
             get_localhost()
         assert exc.value.errno == errno.EAFNOSUPPORT
 
+    def test_getlocalhost_noerr(self, mocker: MockFixture):
+        mocksock = mocker.Mock()
+        mocker.patch(
+            "aiosmtpd.controller.create_connection", return_value=mocksock
+        )
+        assert get_localhost() == "::1"
+        assert mocksock.close.called
+
 
 class TestFactory:
     def test_normal_situation(self):
