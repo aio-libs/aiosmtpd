@@ -218,36 +218,44 @@ class TestController:
     def test_getlocalhost(self):
         assert get_localhost() in ("127.0.0.1", "::1")
 
-    def test_getlocalhost_6yes(self, mocker):
-        mocker.patch(
-            "aiosmtpd.controller.create_connection",
-            side_effect=OSError(errno.ECONNREFUSED, "Mock IP6"),
-        )
+    def test_getlocalhost_noipv6(self, mocker):
+        mock_hasip6 = mocker.patch("aiosmtpd.controller._has_ipv6", return_value=False)
+        assert get_localhost() == "127.0.0.1"
+        assert mock_hasip6.called
+
+    def test_getlocalhost_6yes(self, mocker: MockFixture):
+        mock_sock = mocker.Mock()
+        mock_makesock: mocker.Mock = mocker.patch("aiosmtpd.controller.makesock")
+        mock_makesock.return_value.__enter__.return_value = mock_sock
         assert get_localhost() == "::1"
+        mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
+        assert mock_sock.bind.called
 
     def test_getlocalhost_6no(self, mocker):
-        mocker.patch(
-            "aiosmtpd.controller.create_connection",
+        mock_makesock: mocker.Mock = mocker.patch(
+            "aiosmtpd.controller.makesock",
             side_effect=OSError(errno.EADDRNOTAVAIL, "Mock IP4-only"),
         )
         assert get_localhost() == "127.0.0.1"
+        mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
+
+    def test_getlocalhost_6inuse(self, mocker):
+        mock_makesock: mocker.Mock = mocker.patch(
+            "aiosmtpd.controller.makesock",
+            side_effect=OSError(errno.EADDRINUSE, "Mock IP6 used"),
+        )
+        assert get_localhost() == "::1"
+        mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
 
     def test_getlocalhost_error(self, mocker):
-        mocker.patch(
-            "aiosmtpd.controller.create_connection",
+        mock_makesock: mocker.Mock = mocker.patch(
+            "aiosmtpd.controller.makesock",
             side_effect=OSError(errno.EAFNOSUPPORT, "Mock Error"),
         )
         with pytest.raises(OSError, match="Mock Error") as exc:
             get_localhost()
         assert exc.value.errno == errno.EAFNOSUPPORT
-
-    def test_getlocalhost_noerr(self, mocker: MockFixture):
-        mocksock = mocker.Mock()
-        mocker.patch(
-            "aiosmtpd.controller.create_connection", return_value=mocksock
-        )
-        assert get_localhost() == "::1"
-        assert mocksock.close.called
+        mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
 
 
 class TestFactory:

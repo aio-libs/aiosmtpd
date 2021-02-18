@@ -5,10 +5,11 @@ import asyncio
 import errno
 import os
 import ssl
-import time
 import threading
+import time
 from contextlib import ExitStack
-from socket import create_connection
+from socket import AF_INET6, SOCK_STREAM, create_connection, has_ipv6
+from socket import socket as makesock
 from socket import timeout as socket_timeout
 from typing import Any, Coroutine, Dict, Optional
 from warnings import warn
@@ -20,21 +21,39 @@ from aiosmtpd.smtp import SMTP
 AsyncServer = asyncio.base_events.Server
 
 
+def _has_ipv6():
+    # Helper function to assist in mocking
+    return has_ipv6
+
+
 def get_localhost() -> str:
+    # Ref:
+    #  - https://github.com/urllib3/urllib3/pull/611#issuecomment-100954017
+    #  - https://github.com/python/cpython/blob/ :
+    #    - v3.6.13/Lib/test/support/__init__.py#L745-L758
+    #    - v3.9.1/Lib/test/support/socket_helper.py#L124-L137
+    if not _has_ipv6():
+        # socket.has_ipv6 only tells us of current Python's IPv6 support, not the
+        # system's. But if the current Python does not support IPv6, it's pointless to
+        # explore further.
+        return "127.0.0.1"
     try:
-        sock = create_connection(("::1", 0))
-        # It should be impossible... but it worked!
-        # So we need to close it
-        sock.close()
-        # And since it worked, it's clear that IPv6 is supported
+        with makesock(AF_INET6, SOCK_STREAM) as sock:
+            sock.bind(("::1", 0))
+        # If we reach this point, that means we can successfully bind ::1 (on random
+        # unused port), so IPv6 is definitely supported
         return "::1"
     except OSError as e:
-        if e.errno == errno.EADDRNOTAVAIL or e.errno == 10049:
-            # 10049 is WSAEADDRNOTAVAIL .. seems to only exist on Windows
-            # So we'll not use an errno constant there.
+        # Apparently errno.E* constants adapts to the OS, so on Windows they will
+        # automatically use the WSAE* constants
+        if e.errno == errno.EADDRNOTAVAIL:
+            # Getting (WSA)EADDRNOTAVAIL means IPv6 is not supported
             return "127.0.0.1"
-        if e.errno == errno.ECONNREFUSED:
+        if e.errno == errno.EADDRINUSE:
+            # Getting (WSA)EADDRINUSE means IPv6 *is* supported, but already used.
+            # Shouldn't be possible, but just in case...
             return "::1"
+        # Other kinds of errors MUST be raised so we can inspect
         raise
 
 
