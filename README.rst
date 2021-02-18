@@ -268,6 +268,23 @@ and the cached Python bytecode messes up execution
 will cause problems as Python becomes confused about the locations of the source code).
 
 
+Signing Keys
+============
+
+Starting version 1.3.1,
+files provided through `PyPI`_ or `GitHub Releases`_
+will be signed using one of the following GPG Keys:
+
++-------------------------+----------------+------------------------------+
+| GPG Key ID              | Owner          | Email                        |
++=========================+================+==============================+
+| ``5D60 CE28 9CD7 C258`` | Pandu E POLUAN | pepoluan at gmail period com |
++-------------------------+----------------+------------------------------+
+
+.. _PyPI: https://pypi.org/project/aiosmtpd/
+.. _`GitHub Releases`: https://github.com/aio-libs/aiosmtpd/releases
+
+
 License
 =======
 
