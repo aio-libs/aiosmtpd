@@ -9,10 +9,10 @@
 .. |github license| image:: https://img.shields.io/github/license/aio-libs/aiosmtpd
    :target: https://github.com/aio-libs/aiosmtpd/blob/master/LICENSE
    :alt: Project License on GitHub
+.. .. Fpr |GA badge|, don't forget to check actual workflow name in unit-testing-and-coverage.yml
 .. |GA badge| image:: https://github.com/aio-libs/aiosmtpd/workflows/aiosmtpd%20CI/badge.svg
    :target: https://github.com/aio-libs/aiosmtpd/actions
    :alt: GitHub Actions status
-.. .. Don't forget to check actual workflow name in unit-testing-and-coverage.yml
 .. |codecov| image:: https://codecov.io/github/aio-libs/aiosmtpd/coverage.svg?branch=master
    :target: https://codecov.io/github/aio-libs/aiosmtpd?branch=master
    :alt: Code Coverage
@@ -29,7 +29,7 @@
 .. .. The |Discourse| badge MUST NOT be included in setup.cfg
 .. |Discourse| image:: https://img.shields.io/discourse/status?server=https%3A%2F%2Faio-libs.discourse.group%2F&style=social
    :target: https://aio-libs.discourse.group/
-   :alt: Discourse status
+   :alt: Discourse
 
 The Python standard library includes a basic |SMTP|_ server in the |smtpd|_ module,
 based on the old asynchronous libraries |asyncore|_ and |asynchat|_.
