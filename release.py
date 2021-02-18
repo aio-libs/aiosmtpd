@@ -25,10 +25,8 @@ try:
 except FileNotFoundError:
     print("Please install 'twine' first")
     sys.exit(1)
-result = subprocess.run(
-    ["twine", "verify-upload"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
-)
-if result.returncode == 2:
+result = subprocess.run(["pip", "freeze"], stdout=subprocess.PIPE)
+if b"\ntwine-verify-upload==" not in result.stdout:
     print("*** Package twine-verify-upload is not yet installed.")
     print("*** Consider installing it. It is very useful :)")
     has_verify = False
