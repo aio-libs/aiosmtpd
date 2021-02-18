@@ -21,11 +21,20 @@ from aiosmtpd.smtp import SMTP
 AsyncServer = asyncio.base_events.Server
 
 
+@public
+class IP6_IS:
+    # Apparently errno.E* constants adapts to the OS, so on Windows they will
+    # automatically use the WSAE* constants
+    NO = {errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT}
+    YES = {errno.EADDRINUSE}
+
+
 def _has_ipv6():
     # Helper function to assist in mocking
     return has_ipv6
 
 
+@public
 def get_localhost() -> str:
     # Ref:
     #  - https://github.com/urllib3/urllib3/pull/611#issuecomment-100954017
@@ -44,14 +53,11 @@ def get_localhost() -> str:
         # unused port), so IPv6 is definitely supported
         return "::1"
     except OSError as e:
-        # Apparently errno.E* constants adapts to the OS, so on Windows they will
-        # automatically use the WSAE* constants
-        if e.errno == errno.EADDRNOTAVAIL:
-            # Getting (WSA)EADDRNOTAVAIL means IPv6 is not supported
+        if e.errno in IP6_IS.NO:
             return "127.0.0.1"
-        if e.errno == errno.EADDRINUSE:
-            # Getting (WSA)EADDRINUSE means IPv6 *is* supported, but already used.
-            # Shouldn't be possible, but just in case...
+        if e.errno in IP6_IS.YES:
+            # We shouldn't ever get these errors, but if we do, that means IPv6 is
+            # supported
             return "::1"
         # Other kinds of errors MUST be raised so we can inspect
         raise
