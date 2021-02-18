@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from aiosmtpd import __version__ as version
@@ -87,6 +88,11 @@ try:
     subprocess.run(twine_up, check=True)
 
     if has_verify:
+        print("Waiting for package to be received by PyPI...", end="")
+        for i in range(10, 0, -1):
+            print(i, end=" ")
+            time.sleep(1.0)
+        print()
         twine_verif = ["twine", "verify_upload"] + DISTFILES
         subprocess.run(twine_verif, check=True)
 except subprocess.CalledProcessError as e:
