@@ -25,6 +25,8 @@
 .. |PyPI| image:: https://badge.fury.io/py/aiosmtpd.svg
    :target: https://badge.fury.io/py/aiosmtpd
    :alt: PyPI Package
+.. .. If you edit the above badges, don't forget to edit setup.cfg
+.. .. The |Discourse| badge MUST NOT be included in setup.cfg
 .. |Discourse| image:: https://img.shields.io/discourse/status?server=https%3A%2F%2Faio-libs.discourse.group%2F&style=social
    :target: https://aio-libs.discourse.group/
    :alt: Discourse status
