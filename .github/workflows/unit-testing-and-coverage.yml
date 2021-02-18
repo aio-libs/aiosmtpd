@@ -70,7 +70,7 @@ jobs:
       # If a matrix fail, do NOT stop other matrix, let them run to completion
       fail-fast: false
       matrix:
-        os: [ "ubuntu-18.04", "ubuntu-20.04", "macos-10.15", "windows-latest" ]
+        os: [ "macos-10.15", "ubuntu-18.04", "ubuntu-20.04", "windows-latest" ]
         python-version: [ "3.6", "3.7", "3.8", "3.9", "pypy3" ]
     runs-on: ${{ matrix.os }}
     steps:

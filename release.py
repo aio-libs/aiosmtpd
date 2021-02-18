@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -45,6 +46,19 @@ GPG_SIGNING_ID = {GPG_SIGNING_ID or 'None'}
 choice = input(f"Release aiosmtpd {version} - correct? [y/N]: ")
 if choice.lower() not in ("y", "yes"):
     sys.exit("Release aborted")
+
+newsfile = Path(".") / "aiosmtpd" / "docs" / "NEWS.rst"
+with newsfile.open("rt") as fin:
+    want = re.compile("^" + re.escape(version) + r"\s*\(\d{4}-\d\d-\d\d\)")
+    for ln in fin:
+        m = want.match(ln)
+        if not m:
+            continue
+        break
+    else:
+        print(f"ERROR: I found no datestamped entry for {version} in NEWS.rst!")
+        sys.exit(1)
+
 if not GPG_SIGNING_ID:
     choice = input("You did not specify GPG signing ID! Continue? [y/N]: ")
     if choice.lower() not in ("y", "yes"):
