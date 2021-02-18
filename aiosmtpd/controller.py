@@ -2,11 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import errno
 import os
 import ssl
 import threading
+import time
 from abc import ABCMeta, abstractmethod
 from contextlib import ExitStack
+from socket import AF_INET6, SOCK_STREAM, create_connection, has_ipv6
+from socket import socket as makesock
+from socket import timeout as socket_timeout
+from typing import Any, Coroutine, Dict, Optional
 from pathlib import Path
 from socket import create_connection, socket, SOCK_STREAM
 try:
@@ -21,6 +27,42 @@ from public import public
 from aiosmtpd.smtp import SMTP
 
 AsyncServer = asyncio.base_events.Server
+
+
+def _has_ipv6():
+    # Helper function to assist in mocking
+    return has_ipv6
+
+
+def get_localhost() -> str:
+    # Ref:
+    #  - https://github.com/urllib3/urllib3/pull/611#issuecomment-100954017
+    #  - https://github.com/python/cpython/blob/ :
+    #    - v3.6.13/Lib/test/support/__init__.py#L745-L758
+    #    - v3.9.1/Lib/test/support/socket_helper.py#L124-L137
+    if not _has_ipv6():
+        # socket.has_ipv6 only tells us of current Python's IPv6 support, not the
+        # system's. But if the current Python does not support IPv6, it's pointless to
+        # explore further.
+        return "127.0.0.1"
+    try:
+        with makesock(AF_INET6, SOCK_STREAM) as sock:
+            sock.bind(("::1", 0))
+        # If we reach this point, that means we can successfully bind ::1 (on random
+        # unused port), so IPv6 is definitely supported
+        return "::1"
+    except OSError as e:
+        # Apparently errno.E* constants adapts to the OS, so on Windows they will
+        # automatically use the WSAE* constants
+        if e.errno == errno.EADDRNOTAVAIL:
+            # Getting (WSA)EADDRNOTAVAIL means IPv6 is not supported
+            return "127.0.0.1"
+        if e.errno == errno.EADDRINUSE:
+            # Getting (WSA)EADDRINUSE means IPv6 *is* supported, but already used.
+            # Shouldn't be possible, but just in case...
+            return "::1"
+        # Other kinds of errors MUST be raised so we can inspect
+        raise
 
 
 class _FakeServer(asyncio.StreamReaderProtocol):
@@ -66,6 +108,8 @@ class BaseThreadedController(metaclass=ABCMeta):
         **SMTP_parameters,
     ):
         self.handler = handler
+        self.hostname = get_localhost() if hostname is None else hostname
+        self.port = port
         if loop is None:
             self.loop = asyncio.new_event_loop()
         else:
@@ -143,33 +187,60 @@ class BaseThreadedController(metaclass=ABCMeta):
         self.loop.close()
         self.server = None
 
+    def _testconn(self):
+        """
+        Opens a socket connection to the newly launched server, wrapping in an SSL
+        Context if necessary, and read some data from it to ensure that factory()
+        gets invoked.
+        """
+        # IMPORTANT: Windows does not need the next line; for some reasons,
+        # create_connection is happy with hostname="" on Windows, but screams murder
+        # in Linux.
+        # At this point, if self.hostname is Falsy, it most likely is "" (bind to all
+        # addresses). In such case, it should be safe to connect to localhost)
+        hostname = self.hostname or get_localhost()
+        with ExitStack() as stk:
+            s = stk.enter_context(create_connection((hostname, self.port), 1.0))
+            if self.ssl_context:
+                s = stk.enter_context(self.ssl_context.wrap_socket(s))
+            _ = s.recv(1024)
+
     def start(self):
         assert self._thread is None, "SMTP daemon already running"
-        ready_event = threading.Event()
         self._factory_invoked = threading.Event()
+
+        ready_event = threading.Event()
         self._thread = threading.Thread(target=self._run, args=(ready_event,))
         self._thread.daemon = True
         self._thread.start()
         # Wait a while until the server is responding.
-        ready_event.wait(self.ready_timeout)
-        if self._thread_exception is not None:  # pragma: on-wsl
-            # See comment about WSL1.0 in the _run() method
-            raise self._thread_exception
-        if not ready_event.is_set():
-            raise TimeoutError("SMTP server failed to start within allotted time")
+        start = time.monotonic()
+        if not ready_event.wait(self.ready_timeout):
+            # An exception within self._run will also result in ready_event not set
+            # So, we first test for that, before raising TimeoutError
+            if self._thread_exception is not None:  # pragma: on-wsl
+                # See comment about WSL1.0 in the _run() method
+                raise self._thread_exception
+            else:
+                raise TimeoutError("SMTP server failed to start within allotted time")
+        respond_timeout = self.ready_timeout - (time.monotonic() - start)
+
         # Apparently create_server invokes factory() "lazily", so exceptions in
         # factory() go undetected. To trigger factory() invocation we need to open
         # a connection to the server and 'exchange' some traffic.
         try:
             self._trigger_server()
-        except Exception:
-            # We totally don't care of exceptions experienced by _trigger_server,
-            # which _will_ happen if factory() experienced problems.
+        except socket_timeout:
+            # We totally don't care of timeout experienced by _testconn,
             pass
-        if not self._factory_invoked.wait(self.ready_timeout):
+        except Exception:
+            # Raise other exceptions though
+            raise
+        if not self._factory_invoked.wait(respond_timeout):
             raise TimeoutError("SMTP server not responding within allotted time")
         if self._thread_exception is not None:
             raise self._thread_exception
+
         # Defensive
         if self.smtpd is None:
             raise RuntimeError("Unknown Error, failed to init SMTP server")
@@ -177,7 +248,7 @@ class BaseThreadedController(metaclass=ABCMeta):
     def _stop(self):
         self.loop.stop()
         try:
-            _all_tasks = asyncio.all_tasks
+            _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
         except AttributeError:  # pragma: py-gt-36
             _all_tasks = asyncio.Task.all_tasks
         for task in _all_tasks(self.loop):

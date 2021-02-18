@@ -3,6 +3,7 @@
 
 """Test other aspects of the server implementation."""
 
+import errno
 import platform
 import socket
 import ssl
@@ -16,6 +17,7 @@ from typing import Generator
 import pytest
 from pytest_mock import MockFixture
 
+from aiosmtpd.controller import Controller, _FakeServer, get_localhost
 from aiosmtpd.controller import Controller, _FakeServer, UnixSocketController
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
@@ -29,7 +31,7 @@ class SlowStartController(Controller):
         super().__init__(*args, **kwargs)
 
     def _run(self, ready_event):
-        time.sleep(self.ready_timeout * 1.1)
+        time.sleep(self.ready_timeout * 1.5)
         try:
             super()._run(ready_event)
         except Exception:
@@ -214,6 +216,72 @@ class TestController:
         assert controller.SMTP_kwargs["hostname"] == "testhost2"
         controller = contsink(server_hostname="testhost3", server_kwargs=kwargs)
         assert controller.SMTP_kwargs["hostname"] == "testhost3"
+
+    def test_hostname_empty(self):
+        # WARNING: This test _always_ succeeds in Windows.
+        cont = Controller(Sink(), hostname="")
+        try:
+            cont.start()
+        finally:
+            cont.stop()
+
+    def test_hostname_none(self):
+        cont = Controller(Sink())
+        try:
+            cont.start()
+        finally:
+            cont.stop()
+
+    def test_testconn_raises(self, mocker: MockFixture):
+        mocker.patch("socket.socket.recv", side_effect=RuntimeError("MockError"))
+        cont = Controller(Sink(), hostname="")
+        try:
+            with pytest.raises(RuntimeError, match="MockError"):
+                cont.start()
+        finally:
+            cont.stop()
+
+    def test_getlocalhost(self):
+        assert get_localhost() in ("127.0.0.1", "::1")
+
+    def test_getlocalhost_noipv6(self, mocker):
+        mock_hasip6 = mocker.patch("aiosmtpd.controller._has_ipv6", return_value=False)
+        assert get_localhost() == "127.0.0.1"
+        assert mock_hasip6.called
+
+    def test_getlocalhost_6yes(self, mocker: MockFixture):
+        mock_sock = mocker.Mock()
+        mock_makesock: mocker.Mock = mocker.patch("aiosmtpd.controller.makesock")
+        mock_makesock.return_value.__enter__.return_value = mock_sock
+        assert get_localhost() == "::1"
+        mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
+        assert mock_sock.bind.called
+
+    def test_getlocalhost_6no(self, mocker):
+        mock_makesock: mocker.Mock = mocker.patch(
+            "aiosmtpd.controller.makesock",
+            side_effect=OSError(errno.EADDRNOTAVAIL, "Mock IP4-only"),
+        )
+        assert get_localhost() == "127.0.0.1"
+        mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
+
+    def test_getlocalhost_6inuse(self, mocker):
+        mock_makesock: mocker.Mock = mocker.patch(
+            "aiosmtpd.controller.makesock",
+            side_effect=OSError(errno.EADDRINUSE, "Mock IP6 used"),
+        )
+        assert get_localhost() == "::1"
+        mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
+
+    def test_getlocalhost_error(self, mocker):
+        mock_makesock: mocker.Mock = mocker.patch(
+            "aiosmtpd.controller.makesock",
+            side_effect=OSError(errno.EAFNOSUPPORT, "Mock Error"),
+        )
+        with pytest.raises(OSError, match="Mock Error") as exc:
+            get_localhost()
+        assert exc.value.errno == errno.EAFNOSUPPORT
+        mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
 
     def test_stop_default(self):
         controller = Controller(Sink())

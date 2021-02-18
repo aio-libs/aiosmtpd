@@ -308,6 +308,12 @@ Controller API
 
       The timeout value used to wait for the server to start.
 
+      This will either be the value of
+      the :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` environment variable (converted to float),
+      or the :attr:`ready_timeout` parameter.
+
+      If this timeout is breached, a :class:`TimeoutError` exception will be raised.
+
    .. attribute:: server
 
       This is the server instance returned by
