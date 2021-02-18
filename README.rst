@@ -2,16 +2,17 @@
  aiosmtpd - An asyncio based SMTP server
 =========================================
 
-| |github license| |travis ci| |codecov| |LGTM.com| |readthedocs| |PyPI|
+| |github license| |GA badge| |codecov| |LGTM.com| |readthedocs| |PyPI|
 |
 | |Discourse|
 
 .. |github license| image:: https://img.shields.io/github/license/aio-libs/aiosmtpd
    :target: https://github.com/aio-libs/aiosmtpd/blob/master/LICENSE
    :alt: Project License on GitHub
-.. |travis ci| image:: https://travis-ci.com/aio-libs/aiosmtpd.svg?branch=master
-   :target: https://travis-ci.com/github/aio-libs/aiosmtpd
-   :alt: Travis CI Build Status
+.. |GA badge| image:: https://github.com/aio-libs/aiosmtpd/workflows/aiosmtpd%20CI/badge.svg
+   :target: https://github.com/aio-libs/aiosmtpd/actions
+   :alt: GitHub Actions status
+.. .. Don't forget to check actual workflow name in unit-testing-and-coverage.yml
 .. |codecov| image:: https://codecov.io/github/aio-libs/aiosmtpd/coverage.svg?branch=master
    :target: https://codecov.io/github/aio-libs/aiosmtpd?branch=master
    :alt: Code Coverage

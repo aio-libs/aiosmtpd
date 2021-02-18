@@ -3,18 +3,51 @@
 
 """Test other aspects of the server implementation."""
 
+import errno
 import platform
 import socket
+import time
 from functools import partial
 
 import pytest
 from pytest_mock import MockFixture
 
-from aiosmtpd.controller import Controller, _FakeServer
+from aiosmtpd.controller import Controller, _FakeServer, get_localhost
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
 
 from .conftest import Global
+
+
+class SlowStartController(Controller):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("ready_timeout", 0.5)
+        super().__init__(*args, **kwargs)
+
+    def _run(self, ready_event):
+        time.sleep(self.ready_timeout * 1.5)
+        try:
+            super()._run(ready_event)
+        except Exception:
+            pass
+
+
+class SlowFactoryController(Controller):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("ready_timeout", 0.5)
+        super().__init__(*args, **kwargs)
+
+    def factory(self):
+        time.sleep(self.ready_timeout * 3)
+        return super().factory()
+
+    def _factory_invoker(self):
+        time.sleep(self.ready_timeout * 3)
+        return super()._factory_invoker()
+
+
+def in_win32():
+    return platform.system().casefold() == "windows"
 
 
 def in_wsl():
@@ -55,6 +88,35 @@ class TestServer:
 
 class TestController:
     """Tests for the aiosmtpd.controller.Controller class"""
+
+    @pytest.mark.filterwarnings("ignore")
+    def test_ready_timeout(self):
+        cont = SlowStartController(Sink())
+        expectre = r"SMTP server failed to start within allotted time"
+        try:
+            with pytest.raises(TimeoutError, match=expectre):
+                cont.start()
+        finally:
+            cont.stop()
+
+    @pytest.mark.filterwarnings("ignore")
+    def test_factory_timeout(self):
+        cont = SlowFactoryController(Sink())
+        expectre = r"SMTP server not responding within allotted time"
+        try:
+            with pytest.raises(TimeoutError, match=expectre):
+                cont.start()
+        finally:
+            cont.stop()
+
+    def test_reuse_loop(self, temp_event_loop):
+        cont = Controller(Sink(), loop=temp_event_loop)
+        assert cont.loop is temp_event_loop
+        try:
+            cont.start()
+            assert cont.smtpd.loop is temp_event_loop
+        finally:
+            cont.stop()
 
     @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
     def test_socket_error_dupe(self, plain_controller, client):
@@ -129,6 +191,72 @@ class TestController:
         controller = contsink(server_hostname="testhost3", server_kwargs=kwargs)
         assert controller.SMTP_kwargs["hostname"] == "testhost3"
 
+    def test_hostname_empty(self):
+        # WARNING: This test _always_ succeeds in Windows.
+        cont = Controller(Sink(), hostname="")
+        try:
+            cont.start()
+        finally:
+            cont.stop()
+
+    def test_hostname_none(self):
+        cont = Controller(Sink())
+        try:
+            cont.start()
+        finally:
+            cont.stop()
+
+    def test_testconn_raises(self, mocker: MockFixture):
+        mocker.patch("socket.socket.recv", side_effect=RuntimeError("MockError"))
+        cont = Controller(Sink(), hostname="")
+        try:
+            with pytest.raises(RuntimeError, match="MockError"):
+                cont.start()
+        finally:
+            cont.stop()
+
+    def test_getlocalhost(self):
+        assert get_localhost() in ("127.0.0.1", "::1")
+
+    def test_getlocalhost_noipv6(self, mocker):
+        mock_hasip6 = mocker.patch("aiosmtpd.controller._has_ipv6", return_value=False)
+        assert get_localhost() == "127.0.0.1"
+        assert mock_hasip6.called
+
+    def test_getlocalhost_6yes(self, mocker: MockFixture):
+        mock_sock = mocker.Mock()
+        mock_makesock: mocker.Mock = mocker.patch("aiosmtpd.controller.makesock")
+        mock_makesock.return_value.__enter__.return_value = mock_sock
+        assert get_localhost() == "::1"
+        mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
+        assert mock_sock.bind.called
+
+    def test_getlocalhost_6no(self, mocker):
+        mock_makesock: mocker.Mock = mocker.patch(
+            "aiosmtpd.controller.makesock",
+            side_effect=OSError(errno.EADDRNOTAVAIL, "Mock IP4-only"),
+        )
+        assert get_localhost() == "127.0.0.1"
+        mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
+
+    def test_getlocalhost_6inuse(self, mocker):
+        mock_makesock: mocker.Mock = mocker.patch(
+            "aiosmtpd.controller.makesock",
+            side_effect=OSError(errno.EADDRINUSE, "Mock IP6 used"),
+        )
+        assert get_localhost() == "::1"
+        mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
+
+    def test_getlocalhost_error(self, mocker):
+        mock_makesock: mocker.Mock = mocker.patch(
+            "aiosmtpd.controller.makesock",
+            side_effect=OSError(errno.EAFNOSUPPORT, "Mock Error"),
+        )
+        with pytest.raises(OSError, match="Mock Error") as exc:
+            get_localhost()
+        assert exc.value.errno == errno.EAFNOSUPPORT
+        mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
+
 
 class TestFactory:
     def test_normal_situation(self):
@@ -143,7 +271,7 @@ class TestFactory:
     @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_unknown_args_direct(self, silence_event_loop_closed):
         unknown = "this_is_an_unknown_kwarg"
-        cont = Controller(Sink(), **{unknown: True})
+        cont = Controller(Sink(), ready_timeout=0.3, **{unknown: True})
         expectedre = r"__init__.. got an unexpected keyword argument '" + unknown + r"'"
         try:
             with pytest.raises(TypeError, match=expectedre):
@@ -159,7 +287,7 @@ class TestFactory:
     @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_unknown_args_inkwargs(self, silence_event_loop_closed):
         unknown = "this_is_an_unknown_kwarg"
-        cont = Controller(Sink(), server_kwargs={unknown: True})
+        cont = Controller(Sink(), ready_timeout=0.3, server_kwargs={unknown: True})
         expectedre = r"__init__.. got an unexpected keyword argument '" + unknown + r"'"
         try:
             with pytest.raises(TypeError, match=expectedre):
@@ -173,7 +301,7 @@ class TestFactory:
         # Hypothetical situation where factory() did not raise an Exception
         # but returned None instead
         mocker.patch("aiosmtpd.controller.SMTP", return_value=None)
-        cont = Controller(Sink())
+        cont = Controller(Sink(), ready_timeout=0.3)
         expectedre = r"factory\(\) returned None"
         try:
             with pytest.raises(RuntimeError, match=expectedre):

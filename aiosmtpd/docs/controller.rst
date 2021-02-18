@@ -220,6 +220,8 @@ Controller API
       a float number of seconds,
       which takes precedence over the ``ready_timeout`` argument value.
 
+      If this timeout is breached, a :class:`TimeoutError` exception will be raised.
+
    .. py:attribute:: ssl_context
       :type: ssl.SSLContext
 

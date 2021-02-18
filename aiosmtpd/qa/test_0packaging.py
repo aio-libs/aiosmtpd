@@ -62,7 +62,8 @@ class TestDocs:
                     continue
                 ln1 = ln1.strip()
                 ln2 = ln2.strip()
-                if ln2 != ("=" * len(ln1)):
+                equals = "=" * len(ln1)
+                if not ln2.startswith(equals):
                     continue
                 break
         newsvers = ln1.split()[0]
