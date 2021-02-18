@@ -9,6 +9,7 @@
 Fixed/Improved
 --------------
 * Fixed Documentation Issues that might cause automatic package builders to fail
+* Also consider ``EAFNOSUPPORT`` in IPv6 detection (Closes #244, again)
 
 
 1.3.1 (2021-02-18)
