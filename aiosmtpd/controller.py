@@ -9,12 +9,11 @@ import threading
 import time
 from abc import ABCMeta, abstractmethod
 from contextlib import ExitStack
+from pathlib import Path
 from socket import AF_INET6, SOCK_STREAM, create_connection, has_ipv6
 from socket import socket as makesock
 from socket import timeout as socket_timeout
-from typing import Any, Coroutine, Dict, Optional
-from pathlib import Path
-from socket import create_connection, socket, SOCK_STREAM
+
 try:
     from socket import AF_UNIX
 except ImportError:  # pragma: on-not-win32
@@ -108,8 +107,6 @@ class BaseThreadedController(metaclass=ABCMeta):
         **SMTP_parameters,
     ):
         self.handler = handler
-        self.hostname = get_localhost() if hostname is None else hostname
-        self.port = port
         if loop is None:
             self.loop = asyncio.new_event_loop()
         else:
@@ -186,24 +183,6 @@ class BaseThreadedController(metaclass=ABCMeta):
         self.loop.run_until_complete(self.server.wait_closed())
         self.loop.close()
         self.server = None
-
-    def _testconn(self):
-        """
-        Opens a socket connection to the newly launched server, wrapping in an SSL
-        Context if necessary, and read some data from it to ensure that factory()
-        gets invoked.
-        """
-        # IMPORTANT: Windows does not need the next line; for some reasons,
-        # create_connection is happy with hostname="" on Windows, but screams murder
-        # in Linux.
-        # At this point, if self.hostname is Falsy, it most likely is "" (bind to all
-        # addresses). In such case, it should be safe to connect to localhost)
-        hostname = self.hostname or get_localhost()
-        with ExitStack() as stk:
-            s = stk.enter_context(create_connection((hostname, self.port), 1.0))
-            if self.ssl_context:
-                s = stk.enter_context(self.ssl_context.wrap_socket(s))
-            _ = s.recv(1024)
 
     def start(self):
         assert self._thread is None, "SMTP daemon already running"
@@ -293,7 +272,7 @@ class Controller(BaseThreadedController):
             server_hostname=server_hostname,
             **SMTP_parameters
         )
-        self.hostname = "::1" if hostname is None else hostname
+        self.hostname = get_localhost() if hostname is None else hostname
         self.port = port
         self.ssl_context = ssl_context
 
@@ -311,8 +290,11 @@ class Controller(BaseThreadedController):
         Context if necessary, and read some data from it to ensure that factory()
         gets invoked.
         """
+        # At this point, if self.hostname is Falsy, it most likely is "" (bind to all
+        # addresses). In such case, it should be safe to connect to localhost)
+        hostname = self.hostname or get_localhost()
         with ExitStack() as stk:
-            s = stk.enter_context(create_connection((self.hostname, self.port), 1.0))
+            s = stk.enter_context(create_connection((hostname, self.port), 1.0))
             if self.ssl_context:
                 s = stk.enter_context(self.ssl_context.wrap_socket(s))
             _ = s.recv(1024)
@@ -354,7 +336,7 @@ class UnixSocketController(BaseThreadedController):  # pragma: on-win32
 
     def _trigger_server(self):
         with ExitStack() as stk:
-            s: socket = stk.enter_context(socket(AF_UNIX, SOCK_STREAM))
+            s: makesock = stk.enter_context(makesock(AF_UNIX, SOCK_STREAM))
             s.connect(self.unix_socket)
             if self.ssl_context:
                 s = stk.enter_context(self.ssl_context.wrap_socket(s))
