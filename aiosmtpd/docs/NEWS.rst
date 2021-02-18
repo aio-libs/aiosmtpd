@@ -3,13 +3,15 @@
 ===================
 
 
-1.3.1 (aiosmtpd-next)
+1.3.1 (2021-02-18)
 =====================
 
 Fixed/Improved
 ==============
 * ``ready_timeout`` now actually enforced, raising ``TimeoutError`` if breached
-* No longer fail with opaque "Unknown Error" if ``hostname=""`` (Fixes #244)
+* Hides only expected exceptions raised by ``Controller._testconn()``
+* No longer fail with opaque "Unknown Error" if ``hostname=""`` (Closes #244)
+* No longer hardcode localhost as ``::1`` but perform IPv6 detection first (Closes #244)
 
 
 1.3.0 (2021-02-09)
