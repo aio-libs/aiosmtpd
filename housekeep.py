@@ -72,7 +72,7 @@ def deldir(targ: Path):
             pp.rmdir()
         else:
             raise RuntimeError(f"Don't know how to handle '{pp}'")
-        if (i & 1023) == 0:
+        if (i & 0xFFF) == 0:
             print(".", end="", flush=True)
     targ.rmdir()
 
