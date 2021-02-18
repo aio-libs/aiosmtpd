@@ -90,7 +90,7 @@ try:
     if has_verify:
         print("Waiting for package to be received by PyPI...", end="")
         for i in range(10, 0, -1):
-            print(i, end=" ")
+            print(i, end="..")
             time.sleep(1.0)
         print()
         twine_verif = ["twine", "verify_upload"] + DISTFILES
