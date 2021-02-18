@@ -14,7 +14,6 @@ Added
 Fixed/Improved
 --------------
 * Now uses Sphinx's Doctest facility, which is much more flexible than pytest's doctest
-* :class:`Controller` now actually reacts to timeout
 
 
 1.3.1 (2021-02-18)

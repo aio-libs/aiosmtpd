@@ -17,8 +17,12 @@ from typing import Generator
 import pytest
 from pytest_mock import MockFixture
 
-from aiosmtpd.controller import Controller, _FakeServer, get_localhost
-from aiosmtpd.controller import Controller, _FakeServer, UnixSocketController
+from aiosmtpd.controller import (
+    Controller,
+    UnixSocketController,
+    _FakeServer,
+    get_localhost,
+)
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
 
