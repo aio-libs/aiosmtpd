@@ -3,6 +3,14 @@
 ###################
 
 
+1.4.0 (aiosmtpd-next)
+=====================
+
+Added
+-----
+* Example for authentication
+
+
 1.3.2 (2021-02-20)
 ==================
 
@@ -16,15 +24,6 @@ Fixed/Improved
 * Fixed Documentation Issues that might cause automatic package builders to fail
 * Also consider ``EAFNOSUPPORT`` in IPv6 detection (Closes #244, again)
 * Update PyPI Long Description
-
-
-
-1.4.0 (aiosmtpd-next)
-=====================
-
-Added
------
-* Example for authentication
 
 
 1.3.1 (2021-02-18)
