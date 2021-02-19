@@ -201,8 +201,19 @@ have been configured and tested:
 
 * ``docs``
 
-  Builds HTML documentation using Sphinx. A `pytest doctest`_ will run prior to
-  actual building of the documentation.
+  Builds **HTML documentation** using Sphinx.
+  A `pytest doctest`_ will run prior to actual building of the documentation.
+
+* ``static``
+
+  Performs a **static type checking** using ``pytype``.
+  Please ensure that `all its dependencies`_ have been installed before
+  executing this testenv.
+
+  **Note:** Because ``pytype`` does not run on Windows,
+  This testenv must be invoked explicitly; it will not automatically run.
+
+.. _`all its dependencies`: https://github.com/google/pytype/blob/2021.02.09/CONTRIBUTING.md#pytype-dependencies
 
 
 Environment Variables
