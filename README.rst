@@ -9,10 +9,10 @@
 .. |github license| image:: https://img.shields.io/github/license/aio-libs/aiosmtpd
    :target: https://github.com/aio-libs/aiosmtpd/blob/master/LICENSE
    :alt: Project License on GitHub
+.. .. Fpr |GA badge|, don't forget to check actual workflow name in unit-testing-and-coverage.yml
 .. |GA badge| image:: https://github.com/aio-libs/aiosmtpd/workflows/aiosmtpd%20CI/badge.svg
    :target: https://github.com/aio-libs/aiosmtpd/actions
    :alt: GitHub Actions status
-.. .. Don't forget to check actual workflow name in unit-testing-and-coverage.yml
 .. |codecov| image:: https://codecov.io/github/aio-libs/aiosmtpd/coverage.svg?branch=master
    :target: https://codecov.io/github/aio-libs/aiosmtpd?branch=master
    :alt: Code Coverage
@@ -25,9 +25,11 @@
 .. |PyPI| image:: https://badge.fury.io/py/aiosmtpd.svg
    :target: https://badge.fury.io/py/aiosmtpd
    :alt: PyPI Package
+.. .. If you edit the above badges, don't forget to edit setup.cfg
+.. .. The |Discourse| badge MUST NOT be included in setup.cfg
 .. |Discourse| image:: https://img.shields.io/discourse/status?server=https%3A%2F%2Faio-libs.discourse.group%2F&style=social
    :target: https://aio-libs.discourse.group/
-   :alt: Discourse status
+   :alt: Discourse
 
 The Python standard library includes a basic |SMTP|_ server in the |smtpd|_ module,
 based on the old asynchronous libraries |asyncore|_ and |asynchat|_.
@@ -199,8 +201,19 @@ have been configured and tested:
 
 * ``docs``
 
-  Builds HTML documentation using Sphinx. A `pytest doctest`_ will run prior to
-  actual building of the documentation.
+  Builds **HTML documentation** using Sphinx.
+  A `pytest doctest`_ will run prior to actual building of the documentation.
+
+* ``static``
+
+  Performs a **static type checking** using ``pytype``.
+  Please ensure that `all its dependencies`_ have been installed before
+  executing this testenv.
+
+  **Note:** Because ``pytype`` does not run on Windows,
+  This testenv must be invoked explicitly; it will not automatically run.
+
+.. _`all its dependencies`: https://github.com/google/pytype/blob/2021.02.09/CONTRIBUTING.md#pytype-dependencies
 
 
 Environment Variables
@@ -266,6 +279,23 @@ Or, you're sharing a repo between environments (say, PSCore and Cygwin)
 and the cached Python bytecode messes up execution
 (e.g., sharing the exact same directory between Windows PowerShell and Cygwin
 will cause problems as Python becomes confused about the locations of the source code).
+
+
+Signing Keys
+============
+
+Starting version 1.3.1,
+files provided through `PyPI`_ or `GitHub Releases`_
+will be signed using one of the following GPG Keys:
+
++-------------------------+----------------+------------------------------+
+| GPG Key ID              | Owner          | Email                        |
++=========================+================+==============================+
+| ``5D60 CE28 9CD7 C258`` | Pandu E POLUAN | pepoluan at gmail period com |
++-------------------------+----------------+------------------------------+
+
+.. _PyPI: https://pypi.org/project/aiosmtpd/
+.. _`GitHub Releases`: https://github.com/aio-libs/aiosmtpd/releases
 
 
 License

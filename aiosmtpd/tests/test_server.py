@@ -231,7 +231,13 @@ class TestController:
         mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
         assert mock_sock.bind.called
 
-    def test_getlocalhost_6no(self, mocker):
+    # Apparently errno.E* constants adapts to the OS, so on Windows they will
+    # automatically use the analogous WSAE* constants
+    @pytest.mark.parametrize(
+        "err",
+        [errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT]
+    )
+    def test_getlocalhost_6no(self, mocker, err):
         mock_makesock: mocker.Mock = mocker.patch(
             "aiosmtpd.controller.makesock",
             side_effect=OSError(errno.EADDRNOTAVAIL, "Mock IP4-only"),
@@ -250,11 +256,11 @@ class TestController:
     def test_getlocalhost_error(self, mocker):
         mock_makesock: mocker.Mock = mocker.patch(
             "aiosmtpd.controller.makesock",
-            side_effect=OSError(errno.EAFNOSUPPORT, "Mock Error"),
+            side_effect=OSError(errno.EFAULT, "Mock Error"),
         )
         with pytest.raises(OSError, match="Mock Error") as exc:
             get_localhost()
-        assert exc.value.errno == errno.EAFNOSUPPORT
+        assert exc.value.errno == errno.EFAULT
         mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
 
 
