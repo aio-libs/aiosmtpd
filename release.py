@@ -90,7 +90,7 @@ try:
     if has_verify:
         print("Waiting for package to be received by PyPI...", end="")
         for i in range(10, 0, -1):
-            print(i, end=" ")
+            print(i, end="..", flush=True)
             time.sleep(1.0)
         print()
         twine_verif = ["twine", "verify_upload"] + DISTFILES
@@ -101,8 +101,8 @@ except subprocess.CalledProcessError as e:
 
 # Only tag when we've actually built and uploaded. If something goes wrong
 # we may need the tag somewhere else!
-choice = input("tag and push? [Y/n]: ")
-if choice.lower() not in ("n", "no"):
+choice = input("tag and push? [y/N]: ")
+if choice.lower() not in ("y", "yes"):
     pass
 else:
     # The annotation information should come from the changelog

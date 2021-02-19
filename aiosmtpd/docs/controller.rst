@@ -253,6 +253,32 @@ Controller API
 
 .. py:module:: aiosmtpd.controller
 
+.. class:: IP6_IS
+
+   .. py:attribute:: NO
+      :type: set
+
+      Contains constants from :mod:`errno` that will be raised by `socket.bind()`
+      if IPv6 is not available on the system.
+
+      .. important::
+
+         If your system does not have IPv6 support but :func:`get_localhost`
+         raises an error instead of returning ``"127.0.0.1"``,
+         you can add the error number into this attribute.
+
+   .. py:attribute:: YES
+      :type: set
+
+      Contains constants from :mod:`errno` that will be raised by `socket.bind()`
+      if IPv6 is not available on the system.
+
+.. py:function:: get_localhost
+
+   :return: The numeric address of the loopback interface; ``"::1"`` if IPv6 is supported,
+      ``"127.0.0.1"`` if IPv6 is not supported.
+   :rtype: str
+
 .. class:: BaseThreadedController(\
    handler, \
    loop=None, \
