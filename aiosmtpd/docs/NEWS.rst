@@ -3,13 +3,20 @@
 ###################
 
 
-1.3.2 (2021-02-19)
+1.3.2 (2021-02-20)
 ==================
+
+Added
+-----
+* GPG Signing Key info to ``README.rst`` and PyPI Long Desc
+* Hidden ``static`` test env for static code checking
 
 Fixed/Improved
 --------------
 * Fixed Documentation Issues that might cause automatic package builders to fail
 * Also consider ``EAFNOSUPPORT`` in IPv6 detection (Closes #244, again)
+* Update PyPI Long Description
+
 
 
 1.3.1 (2021-02-18)
