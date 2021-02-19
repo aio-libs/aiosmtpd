@@ -1,6 +1,22 @@
-===================
+###################
  NEWS for aiosmtpd
-===================
+###################
+
+
+1.3.2 (2021-02-20)
+==================
+
+Added
+-----
+* GPG Signing Key info to ``README.rst`` and PyPI Long Desc
+* Hidden ``static`` test env for static code checking
+
+Fixed/Improved
+--------------
+* Fixed Documentation Issues that might cause automatic package builders to fail
+* Also consider ``EAFNOSUPPORT`` in IPv6 detection (Closes #244, again)
+* Update PyPI Long Description
+
 
 
 1.4.0 (aiosmtpd-next)
@@ -15,7 +31,7 @@ Added
 ==================
 
 Fixed/Improved
-==============
+--------------
 * ``ready_timeout`` now actually enforced, raising ``TimeoutError`` if breached
 * Hides only expected exceptions raised by ``Controller._testconn()``
 * No longer fail with opaque "Unknown Error" if ``hostname=""`` (Closes #244)
