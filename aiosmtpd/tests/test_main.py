@@ -193,6 +193,38 @@ class TestParseArgs:
         assert excinfo.value.code == 0
         assert capsys.readouterr().out == f"smtpd {__version__}\n"
 
+    @pytest.mark.parametrize("args", [("--smtpscert", "x"), ("--smtpskey", "x")])
+    def test_smtps(self, capsys, mocker, args):
+        mocker.patch("aiosmtpd.main.PROGRAM", "smtpd")
+        with pytest.raises(SystemExit) as exc:
+            parseargs(args)
+        assert exc.value.code == 2
+        assert (
+            "--smtpscert and --smtpskey must be specified together"
+            in capsys.readouterr().err
+        )
+
+    @pytest.mark.parametrize("args", [("--tlscert", "x"), ("--tlskey", "x")])
+    def test_tls(self, capsys, mocker, args):
+        mocker.patch("aiosmtpd.main.PROGRAM", "smtpd")
+        with pytest.raises(SystemExit) as exc:
+            parseargs(args)
+        assert exc.value.code == 2
+        assert (
+            "--tlscert and --tlskey must be specified together"
+            in capsys.readouterr().err
+        )
+
+    def test_requiretls(self, capsys, mocker):
+        mocker.patch("aiosmtpd.main.PROGRAM", "smtpd")
+        with pytest.raises(SystemExit) as exc:
+            parseargs(("--requiretls",))
+        assert exc.value.code == 2
+        assert (
+            "--requiretls also requires --tlscert and --tlskey"
+            in capsys.readouterr().err
+        )
+
 
 class TestSigint:
     def test_keyboard_interrupt(self, temp_event_loop):

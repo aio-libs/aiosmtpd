@@ -102,6 +102,51 @@ def _parser() -> ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--smtpscert",
+        metavar="CERTFILE",
+        default=None,
+        help=(
+            "The certificate file for implementing SMTPS. If given, the parameter "
+            "--smtpskey must also be specified."
+        ),
+    )
+    parser.add_argument(
+        "--smtpskey",
+        metavar="KEYFILE",
+        default=None,
+        help=(
+            "The key file for implementing SMTPS. If given, the parameter "
+            "--smtpscert must also be specified."
+        ),
+    )
+    parser.add_argument(
+        "--tlscert",
+        metavar="CERTFILE",
+        default=None,
+        help=(
+            "The certificate file for implementing STARTTLS. If given, the parameter "
+            "--tlskey must also be specified."
+        ),
+    )
+    parser.add_argument(
+        "--tlskey",
+        metavar="KEYFILE",
+        default=None,
+        help=(
+            "The key file for implementing STARTTLS. If given, the parameter "
+            "--tlscert must also be specified."
+        ),
+    )
+    parser.add_argument(
+        "--requiretls",
+        default=False,
+        action="store_true",
+        help=(
+            "If specified, activates the require_starttls of the SMTP class. "
+            "Requires both --tlscert and --tlskey to be specified."
+        ),
+    )
+    parser.add_argument(
         "classargs",
         metavar="CLASSARGS",
         nargs="*",
@@ -139,6 +184,15 @@ def parseargs(args=None):
                 parsed.port = int(DEFAULT_PORT if len(port) == 0 else port)
             except ValueError:
                 parser.error("Invalid port number: {}".format(port))
+
+    if bool(parsed.smtpscert) ^ bool(parsed.smtpskey):
+        parser.error("--smtpscert and --smtpskey must be specified together")
+
+    if bool(parsed.tlscert) ^ bool(parsed.tlskey):
+        parser.error("--tlscert and --tlskey must be specified together")
+    if parsed.requiretls and not (parsed.tlscert and parsed.tlskey):
+        parser.error("--requiretls also requires --tlscert and --tlskey")
+
     return parser, parsed
 
 
