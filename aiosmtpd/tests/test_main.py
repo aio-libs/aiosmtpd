@@ -85,9 +85,10 @@ def setuid(mocker):
 # endregion
 
 
-def watch_for_tls(has_tls, req_tls):
+def watch_for_tls(ready_flag, has_tls, req_tls):
     has_tls.value = False
     req_tls.value = False
+    ready_flag.set()
     start = time.monotonic()
     while (time.monotonic() - start) <= AUTOSTOP_DELAY:
         try:
@@ -103,13 +104,15 @@ def watch_for_tls(has_tls, req_tls):
             time.sleep(0.05)
 
 
-def watch_for_smtps(result):
+def watch_for_smtps(ready_flag, has_smtps):
+    has_smtps.value = False
+    ready_flag.set()
     start = time.monotonic()
     while (time.monotonic() - start) <= AUTOSTOP_DELAY:
         try:
             with SMTP_SSL("localhost", 8025) as client:
                 client.ehlo("exemple.org")
-                result.value = True
+                has_smtps.value = True
                 return
         except Exception:
             time.sleep(0.05)
@@ -176,21 +179,33 @@ class TestMain:
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
         assert asyncio.get_event_loop().get_debug()
 
-    def test_tls(self):
+
+class TestMainByWatcher:
+    def test_tls(self, temp_event_loop):
+        ready_flag = MP.Event()
         has_starttls = MP.Value(c_bool)
         require_tls = MP.Value(c_bool)
-        p = MP.Process(target=watch_for_tls, args=(has_starttls, require_tls))
+        p = MP.Process(
+            target=watch_for_tls, args=(ready_flag, has_starttls, require_tls)
+        )
         p.start()
+        ready_flag.wait()
+        temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
         main(("-n", "--tlscert", str(SERVER_CRT), "--tlskey", str(SERVER_KEY)))
         p.join()
         assert has_starttls.value is True
         assert require_tls.value is True
 
-    def test_tls_noreq(self):
+    def test_tls_noreq(self, temp_event_loop):
+        ready_flag = MP.Event()
         has_starttls = MP.Value(c_bool)
         require_tls = MP.Value(c_bool)
-        p = MP.Process(target=watch_for_tls, args=(has_starttls, require_tls))
+        p = MP.Process(
+            target=watch_for_tls, args=(ready_flag, has_starttls, require_tls)
+        )
         p.start()
+        ready_flag.wait()
+        temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
         main(
             (
                 "-n",
@@ -205,10 +220,13 @@ class TestMain:
         assert has_starttls.value is True
         assert require_tls.value is False
 
-    def test_smtps(self):
+    def test_smtps(self, temp_event_loop):
+        ready_flag = MP.Event()
         has_smtps = MP.Value(c_bool)
-        p = MP.Process(target=watch_for_smtps, args=(has_smtps,))
+        p = MP.Process(target=watch_for_smtps, args=(ready_flag, has_smtps))
         p.start()
+        ready_flag.wait()
+        temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
         main(("-n", "--smtpscert", str(SERVER_CRT), "--smtpskey", str(SERVER_KEY)))
         p.join()
         assert has_smtps.value is True
