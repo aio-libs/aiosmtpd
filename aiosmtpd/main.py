@@ -88,7 +88,9 @@ def _parser() -> ArgumentParser:
         "--debug",
         default=0,
         action="count",
-        help="""Increase debugging output.""",
+        help=(
+            "Increase debugging output. Every ``-d`` increases debugging level by one."
+        )
     )
     parser.add_argument(
         "-l",
@@ -109,8 +111,8 @@ def _parser() -> ArgumentParser:
         type=Path,
         default=None,
         help=(
-            "The certificate file for implementing SMTPS. If given, the parameter "
-            "--smtpskey must also be specified."
+            "The certificate file for implementing **SMTPS**. If given, the parameter "
+            "``--smtpskey`` must also be specified."
         ),
     )
     parser.add_argument(
@@ -119,8 +121,8 @@ def _parser() -> ArgumentParser:
         type=Path,
         default=None,
         help=(
-            "The key file for implementing SMTPS. If given, the parameter "
-            "--smtpscert must also be specified."
+            "The key file for implementing **SMTPS**. If given, the parameter "
+            "``--smtpscert`` must also be specified."
         ),
     )
     parser.add_argument(
@@ -129,8 +131,8 @@ def _parser() -> ArgumentParser:
         type=Path,
         default=None,
         help=(
-            "The certificate file for implementing STARTTLS. If given, the parameter "
-            "--tlskey must also be specified."
+            "The certificate file for implementing **STARTTLS**. If given, the "
+            "parameter ``--tlskey`` must also be specified."
         ),
     )
     parser.add_argument(
@@ -139,8 +141,8 @@ def _parser() -> ArgumentParser:
         type=Path,
         default=None,
         help=(
-            "The key file for implementing STARTTLS. If given, the parameter "
-            "--tlscert must also be specified."
+            "The key file for implementing **STARTTLS**. If given, the parameter "
+            "``--tlscert`` must also be specified."
         ),
     )
     parser.add_argument(
@@ -149,9 +151,9 @@ def _parser() -> ArgumentParser:
         default=True,
         action="store_false",
         help=(
-            "If specified, disables require_starttls of the SMTP class. "
-            "(By default, require_starttls is always True.) "
-            "Has no effect if --tlscert and --tlskey not specified."
+            "If specified, disables ``require_starttls`` of the SMTP class. "
+            "(By default, ``require_starttls`` is True.) "
+            "Has no effect if ``--tlscert`` and ``--tlskey`` are not specified."
         ),
     )
     parser.add_argument(
