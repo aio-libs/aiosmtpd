@@ -181,7 +181,7 @@ class TestMain:
         require_tls = MP.Value(c_bool)
         p = MP.Process(target=watch_for_tls, args=(has_starttls, require_tls))
         p.start()
-        main(("-n", "--tlscert", SERVER_CRT, "--tlskey", SERVER_KEY))
+        main(("-n", "--tlscert", str(SERVER_CRT), "--tlskey", str(SERVER_KEY)))
         p.join()
         assert has_starttls.value is True
         assert require_tls.value is True
@@ -191,7 +191,16 @@ class TestMain:
         require_tls = MP.Value(c_bool)
         p = MP.Process(target=watch_for_tls, args=(has_starttls, require_tls))
         p.start()
-        main(("-n", "--tlscert", SERVER_CRT, "--tlskey", SERVER_KEY, "--no-requiretls"))
+        main(
+            (
+                "-n",
+                "--tlscert",
+                str(SERVER_CRT),
+                "--tlskey",
+                str(SERVER_KEY),
+                "--no-requiretls",
+            )
+        )
         p.join()
         assert has_starttls.value is True
         assert require_tls.value is False
@@ -200,7 +209,7 @@ class TestMain:
         has_smtps = MP.Value(c_bool)
         p = MP.Process(target=watch_for_smtps, args=(has_smtps,))
         p.start()
-        main(("-n", "--smtpscert", SERVER_CRT, "--smtpskey", SERVER_KEY))
+        main(("-n", "--smtpscert", str(SERVER_CRT), "--smtpskey", str(SERVER_KEY)))
         p.join()
         assert has_smtps.value is True
 
