@@ -29,7 +29,7 @@ MAIL_LOG = logging.getLogger("mail.log")
 
 # If less than 1.0, might cause intermittent error if test system
 # is too busy/overloaded.
-AUTOSTOP_DELAY = 2.0
+AUTOSTOP_DELAY = 1.0
 
 
 class FromCliHandler:
