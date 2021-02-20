@@ -3,20 +3,20 @@
 
 import asyncio
 import logging
+import multiprocessing as MP
 import os
 import time
 from ctypes import c_bool
 from smtplib import SMTP as SMTPClient
 from smtplib import SMTP_SSL
 from typing import Generator
-import multiprocessing as MP
 
 import pytest
 
-from aiosmtpd.tests.conftest import SERVER_CRT, SERVER_KEY
 from aiosmtpd.handlers import Debugging
 from aiosmtpd.main import main, parseargs
 from aiosmtpd.smtp import __version__
+from aiosmtpd.tests.conftest import SERVER_CRT, SERVER_KEY
 
 try:
     import pwd
@@ -82,6 +82,7 @@ def setuid(mocker):
 
 
 # endregion
+
 
 def watch_for_tls(result):
     start = time.monotonic()
@@ -290,15 +291,13 @@ class TestParseArgs:
         "certfile, keyfile, expect",
         [
             ("x", "x", "Cert file x not found"),
-            ("certs/server.crt", "x", "Key file x not found"),
-            ("x", "certs/server.key", "Cert file x not found"),
+            (SERVER_CRT, "x", "Key file x not found"),
+            ("x", SERVER_KEY, "Cert file x not found"),
         ],
-        ids=["x-x", "cert-x", "x-key"]
+        ids=["x-x", "cert-x", "x-key"],
     )
-    @pytest.mark.parametrize(
-        "meth", ["smtps", "tls"]
-    )
-    def test_ssl_files(self, capsys, mocker, meth, certfile, keyfile, expect):
+    @pytest.mark.parametrize("meth", ["smtps", "tls"])
+    def test_ssl_files_err(self, capsys, mocker, meth, certfile, keyfile, expect):
         mocker.patch("aiosmtpd.main.PROGRAM", "smtpd")
         with pytest.raises(SystemExit) as exc:
             parseargs((f"--{meth}cert", certfile, f"--{meth}key", keyfile))
