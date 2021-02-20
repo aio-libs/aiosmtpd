@@ -52,8 +52,7 @@ jobs:
         # language=bash
         run: |
           # Install the tools
-          pip install bandit pytype
-          bandit -c bandit.yml -r aiosmtpd
+          pip install pytype
           pytype --keep-going --jobs auto .
       - name: "Other QA Checks"
         shell: bash
@@ -92,6 +91,11 @@ jobs:
         pip install colorama coverage[toml] coverage-conditional-plugin packaging pytest pytest-cov pytest-mock
         # Package deps
         python setup.py develop
+    - name: "Security checking"
+      # language=bash
+      run: |
+        pip install bandit
+        bandit -c bandit.yml -r aiosmtpd
     - name: "Execute testing"
       shell: bash
       # language=bash
