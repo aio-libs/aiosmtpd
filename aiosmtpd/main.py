@@ -201,8 +201,6 @@ def parseargs(args=None):
 
     if bool(parsed.tlscert) ^ bool(parsed.tlskey):
         parser.error("--tlscert and --tlskey must be specified together")
-    if parsed.requiretls and not (parsed.tlscert and parsed.tlskey):
-        parser.error("--requiretls also requires --tlscert and --tlskey")
     if parsed.tlscert and not parsed.tlscert.exists():
         parser.error(f"Cert file {parsed.tlscert} not found")
     if parsed.tlskey and not parsed.tlskey.exists():
