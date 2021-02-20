@@ -113,33 +113,33 @@ def _parser() -> ArgumentParser:
 
 def parseargs(args=None):
     parser = _parser()
-    args = parser.parse_args(args)
+    parsed = parser.parse_args(args)
     # Find the handler class.
-    path, dot, name = args.classpath.rpartition(".")
+    path, dot, name = parsed.classpath.rpartition(".")
     module = import_module(path)
     handler_class = getattr(module, name)
     if hasattr(handler_class, "from_cli"):
-        args.handler = handler_class.from_cli(parser, *args.classargs)
+        parsed.handler = handler_class.from_cli(parser, *parsed.classargs)
     else:
-        if len(args.classargs) > 0:
+        if len(parsed.classargs) > 0:
             parser.error(f"Handler class {path} takes no arguments")
-        args.handler = handler_class()
+        parsed.handler = handler_class()
     # Parse the host:port argument.
-    if args.listen is None:
-        args.host = DEFAULT_HOST
-        args.port = DEFAULT_PORT
+    if parsed.listen is None:
+        parsed.host = DEFAULT_HOST
+        parsed.port = DEFAULT_PORT
     else:
-        host, colon, port = args.listen.rpartition(":")
+        host, colon, port = parsed.listen.rpartition(":")
         if len(colon) == 0:
-            args.host = port
-            args.port = DEFAULT_PORT
+            parsed.host = port
+            parsed.port = DEFAULT_PORT
         else:
-            args.host = DEFAULT_HOST if len(host) == 0 else host
+            parsed.host = DEFAULT_HOST if len(host) == 0 else host
             try:
-                args.port = int(DEFAULT_PORT if len(port) == 0 else port)
+                parsed.port = int(DEFAULT_PORT if len(port) == 0 else port)
             except ValueError:
                 parser.error("Invalid port number: {}".format(port))
-    return parser, args
+    return parser, parsed
 
 
 @public
