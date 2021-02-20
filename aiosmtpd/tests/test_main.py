@@ -16,6 +16,7 @@ import pytest
 from aiosmtpd.handlers import Debugging
 from aiosmtpd.main import main, parseargs
 from aiosmtpd.smtp import __version__
+from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from aiosmtpd.tests.conftest import SERVER_CRT, SERVER_KEY
 
 try:
@@ -84,15 +85,20 @@ def setuid(mocker):
 # endregion
 
 
-def watch_for_tls(result):
+def watch_for_tls(has_tls, req_tls):
+    has_tls.value = False
+    req_tls.value = False
     start = time.monotonic()
     while (time.monotonic() - start) <= AUTOSTOP_DELAY:
         try:
             with SMTPClient("localhost", 8025) as client:
+                resp = client.docmd("HELP", "HELO")
+                if resp == S.S530_STARTTLS_FIRST:
+                    req_tls.value = True
                 client.ehlo("exemple.org")
                 if "starttls" in client.esmtp_features:
-                    result.value = True
-                    return
+                    has_tls.value = True
+                return
         except Exception:
             time.sleep(0.05)
 
@@ -172,11 +178,23 @@ class TestMain:
 
     def test_tls(self):
         has_starttls = MP.Value(c_bool)
-        p = MP.Process(target=watch_for_tls, args=(has_starttls,))
+        require_tls = MP.Value(c_bool)
+        p = MP.Process(target=watch_for_tls, args=(has_starttls, require_tls))
         p.start()
         main(("-n", "--tlscert", SERVER_CRT, "--tlskey", SERVER_KEY))
         p.join()
         assert has_starttls.value is True
+        assert require_tls.value is True
+
+    def test_tls_noreq(self):
+        has_starttls = MP.Value(c_bool)
+        require_tls = MP.Value(c_bool)
+        p = MP.Process(target=watch_for_tls, args=(has_starttls, require_tls))
+        p.start()
+        main(("-n", "--tlscert", SERVER_CRT, "--tlskey", SERVER_KEY, "--no-requiretls"))
+        p.join()
+        assert has_starttls.value is True
+        assert require_tls.value is False
 
     def test_smtps(self):
         has_smtps = MP.Value(c_bool)
