@@ -4,10 +4,16 @@
 import asyncio
 import logging
 import os
+import time
+from ctypes import c_bool
+from smtplib import SMTP as SMTPClient
+from smtplib import SMTP_SSL
 from typing import Generator
+import multiprocessing as MP
 
 import pytest
 
+from aiosmtpd.tests.conftest import SERVER_CRT, SERVER_KEY
 from aiosmtpd.handlers import Debugging
 from aiosmtpd.main import main, parseargs
 from aiosmtpd.smtp import __version__
@@ -19,6 +25,10 @@ except ImportError:
 
 HAS_SETUID = hasattr(os, "setuid")
 MAIL_LOG = logging.getLogger("mail.log")
+
+# If less than 1.0, might cause intermittent error if test system
+# is too busy/overloaded.
+AUTOSTOP_DELAY = 1.0
 
 
 class FromCliHandler:
@@ -43,10 +53,7 @@ def autostop_loop(temp_event_loop) -> Generator[asyncio.AbstractEventLoop, None,
     # immediately.  This will allow the calls to main() in these tests to
     # also exit almost immediately.  Otherwise, the foreground test
     # process will hang.
-    #
-    # If less than 1.0, might cause intermittent error if test system
-    # is too busy/overloaded.
-    temp_event_loop.call_later(1.0, temp_event_loop.stop)
+    temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
     #
     yield temp_event_loop
 
@@ -75,6 +82,30 @@ def setuid(mocker):
 
 
 # endregion
+
+def watch_for_tls(result):
+    start = time.monotonic()
+    while (time.monotonic() - start) <= AUTOSTOP_DELAY:
+        try:
+            with SMTPClient("localhost", 8025) as client:
+                client.ehlo("exemple.org")
+                if "starttls" in client.esmtp_features:
+                    result.value = True
+                    return
+        except Exception:
+            time.sleep(0.05)
+
+
+def watch_for_smtps(result):
+    start = time.monotonic()
+    while (time.monotonic() - start) <= AUTOSTOP_DELAY:
+        try:
+            with SMTP_SSL("localhost", 8025) as client:
+                client.ehlo("exemple.org")
+                result.value = True
+                return
+        except Exception:
+            time.sleep(0.05)
 
 
 @pytest.mark.usefixtures("autostop_loop")
@@ -137,6 +168,22 @@ class TestMain:
         main(("-n", "-ddd"))
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
         assert asyncio.get_event_loop().get_debug()
+
+    def test_tls(self):
+        has_starttls = MP.Value(c_bool)
+        p = MP.Process(target=watch_for_tls, args=(has_starttls,))
+        p.start()
+        main(("-n", "--tlscert", SERVER_CRT, "--tlskey", SERVER_KEY))
+        p.join()
+        assert has_starttls.value is True
+
+    def test_smtps(self):
+        has_smtps = MP.Value(c_bool)
+        p = MP.Process(target=watch_for_smtps, args=(has_smtps,))
+        p.start()
+        main(("-n", "--smtpscert", SERVER_CRT, "--smtpskey", SERVER_KEY))
+        p.join()
+        assert has_smtps.value is True
 
 
 class TestParseArgs:

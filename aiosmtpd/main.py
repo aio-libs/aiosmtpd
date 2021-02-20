@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import signal
+import ssl
 import sys
 from argparse import ArgumentParser
 from contextlib import suppress
@@ -229,8 +230,20 @@ def main(args=None):
             )
             sys.exit(1)
 
+    if args.tlscert and args.tlskey:
+        tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        tls_context.check_hostname = False
+        tls_context.load_cert_chain(args.tlscert, args.tlskey)
+    else:
+        tls_context = None
+
     factory = partial(
-        SMTP, args.handler, data_size_limit=args.size, enable_SMTPUTF8=args.smtputf8
+        SMTP,
+        args.handler,
+        data_size_limit=args.size,
+        enable_SMTPUTF8=args.smtputf8,
+        tls_context=tls_context,
+        require_starttls=args.requiretls,
     )
 
     logging.basicConfig(level=logging.ERROR)
@@ -244,10 +257,19 @@ def main(args=None):
     if args.debug > 2:
         loop.set_debug(enabled=True)
 
+    if args.smtpscert and args.smtpskey:
+        smtps_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        smtps_context.check_hostname = False
+        smtps_context.load_cert_chain(args.smtpscert, args.smtpskey)
+    else:
+        smtps_context = None
+
     log.debug("Attempting to start server on %s:%s", args.host, args.port)
     server = server_loop = None
     try:
-        server = loop.create_server(factory, host=args.host, port=args.port)
+        server = loop.create_server(
+            factory, host=args.host, port=args.port, ssl=smtps_context
+        )
         server_loop = loop.run_until_complete(server)
     except RuntimeError:  # pragma: nocover
         raise
