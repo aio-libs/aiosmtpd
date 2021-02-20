@@ -36,7 +36,7 @@ class TestVersion:
         cmd = f"git show {reference}".split()
         try:
             with capsys.disabled():
-                master_smtp = subprocess.check_output(cmd).decode()
+                master_smtp = subprocess.check_output(cmd).decode()  # nosec
         except subprocess.CalledProcessError:
             pytest.skip("Skipping due to git error")
             return
