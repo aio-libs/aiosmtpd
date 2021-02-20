@@ -3,6 +3,14 @@
 ###################
 
 
+1.4.0 (aiosmtpd-next)
+=====================
+
+Added
+-----
+* SSL Support for CLI. See :ref:`the man page <manpage>` for more info. (Closes #172)
+
+
 1.3.2 (2021-02-20)
 ==================
 
