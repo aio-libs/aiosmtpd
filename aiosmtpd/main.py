@@ -10,6 +10,7 @@ from argparse import ArgumentParser
 from contextlib import suppress
 from functools import partial
 from importlib import import_module
+from pathlib import Path
 
 from public import public
 
@@ -104,6 +105,7 @@ def _parser() -> ArgumentParser:
     parser.add_argument(
         "--smtpscert",
         metavar="CERTFILE",
+        type=Path,
         default=None,
         help=(
             "The certificate file for implementing SMTPS. If given, the parameter "
@@ -113,6 +115,7 @@ def _parser() -> ArgumentParser:
     parser.add_argument(
         "--smtpskey",
         metavar="KEYFILE",
+        type=Path,
         default=None,
         help=(
             "The key file for implementing SMTPS. If given, the parameter "
@@ -122,6 +125,7 @@ def _parser() -> ArgumentParser:
     parser.add_argument(
         "--tlscert",
         metavar="CERTFILE",
+        type=Path,
         default=None,
         help=(
             "The certificate file for implementing STARTTLS. If given, the parameter "
@@ -131,6 +135,7 @@ def _parser() -> ArgumentParser:
     parser.add_argument(
         "--tlskey",
         metavar="KEYFILE",
+        type=Path,
         default=None,
         help=(
             "The key file for implementing STARTTLS. If given, the parameter "
@@ -187,11 +192,19 @@ def parseargs(args=None):
 
     if bool(parsed.smtpscert) ^ bool(parsed.smtpskey):
         parser.error("--smtpscert and --smtpskey must be specified together")
+    if parsed.smtpscert and not parsed.smtpscert.exists():
+        parser.error(f"Cert file {parsed.smtpscert} not found")
+    if parsed.smtpskey and not parsed.smtpskey.exists():
+        parser.error(f"Key file {parsed.smtpskey} not found")
 
     if bool(parsed.tlscert) ^ bool(parsed.tlskey):
         parser.error("--tlscert and --tlskey must be specified together")
     if parsed.requiretls and not (parsed.tlscert and parsed.tlskey):
         parser.error("--requiretls also requires --tlscert and --tlskey")
+    if parsed.tlscert and not parsed.tlscert.exists():
+        parser.error(f"Cert file {parsed.tlscert} not found")
+    if parsed.tlskey and not parsed.tlskey.exists():
+        parser.error(f"Key file {parsed.tlskey} not found")
 
     return parser, parsed
 

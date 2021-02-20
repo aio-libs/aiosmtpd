@@ -225,6 +225,25 @@ class TestParseArgs:
             in capsys.readouterr().err
         )
 
+    @pytest.mark.parametrize(
+        "certfile, keyfile, expect",
+        [
+            ("x", "x", "Cert file x not found"),
+            ("certs/server.crt", "x", "Key file x not found"),
+            ("x", "certs/server.key", "Cert file x not found"),
+        ],
+        ids=["x-x", "cert-x", "x-key"]
+    )
+    @pytest.mark.parametrize(
+        "meth", ["smtps", "tls"]
+    )
+    def test_ssl_files(self, capsys, mocker, meth, certfile, keyfile, expect):
+        mocker.patch("aiosmtpd.main.PROGRAM", "smtpd")
+        with pytest.raises(SystemExit) as exc:
+            parseargs((f"--{meth}cert", certfile, f"--{meth}key", keyfile))
+        assert exc.value.code == 2
+        assert expect in capsys.readouterr().err
+
 
 class TestSigint:
     def test_keyboard_interrupt(self, temp_event_loop):
