@@ -235,7 +235,7 @@ def main(args=None):
     if args.tlscert and args.tlskey:
         tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         tls_context.check_hostname = False
-        tls_context.load_cert_chain(args.tlscert, args.tlskey)
+        tls_context.load_cert_chain(str(args.tlscert), str(args.tlskey))
     else:
         tls_context = None
 
@@ -262,7 +262,7 @@ def main(args=None):
     if args.smtpscert and args.smtpskey:
         smtps_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         smtps_context.check_hostname = False
-        smtps_context.load_cert_chain(args.smtpscert, args.smtpskey)
+        smtps_context.load_cert_chain(str(args.smtpscert), str(args.smtpskey))
     else:
         smtps_context = None
 
