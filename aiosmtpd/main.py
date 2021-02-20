@@ -143,12 +143,14 @@ def _parser() -> ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--requiretls",
-        default=False,
-        action="store_true",
+        "--no-requiretls",
+        dest="requiretls",
+        default=True,
+        action="store_false",
         help=(
-            "If specified, activates the require_starttls of the SMTP class. "
-            "Requires both --tlscert and --tlskey to be specified."
+            "If specified, disables require_starttls of the SMTP class. "
+            "(By default, require_starttls is always True.) "
+            "Has no effect if --tlscert and --tlskey not specified."
         ),
     )
     parser.add_argument(

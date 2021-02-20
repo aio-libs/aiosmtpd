@@ -215,15 +215,10 @@ class TestParseArgs:
             in capsys.readouterr().err
         )
 
-    def test_requiretls(self, capsys, mocker):
+    def test_norequiretls(self, capsys, mocker):
         mocker.patch("aiosmtpd.main.PROGRAM", "smtpd")
-        with pytest.raises(SystemExit) as exc:
-            parseargs(("--requiretls",))
-        assert exc.value.code == 2
-        assert (
-            "--requiretls also requires --tlscert and --tlskey"
-            in capsys.readouterr().err
-        )
+        parser, args = parseargs(("--no-requiretls",))
+        assert args.requiretls is False
 
     @pytest.mark.parametrize(
         "certfile, keyfile, expect",
