@@ -8,6 +8,7 @@ from typing import Generator
 
 import pytest
 
+from aiosmtpd.handlers import Debugging
 from aiosmtpd.main import main, parseargs
 from aiosmtpd.smtp import __version__
 
@@ -139,6 +140,24 @@ class TestMain:
 
 
 class TestParseArgs:
+    def test_defaults(self):
+        parser, args = parseargs(tuple())
+        assert args.classargs == tuple()
+        assert args.classpath == "aiosmtpd.handlers.Debugging"
+        assert args.debug == 0
+        assert isinstance(args.handler, Debugging)
+        assert args.host == "localhost"
+        assert args.listen is None
+        assert args.port == 8025
+        assert args.setuid is True
+        assert args.size is None
+        assert args.smtputf8 is False
+        assert args.smtpscert is None
+        assert args.smtpskey is None
+        assert args.tlscert is None
+        assert args.tlskey is None
+        assert args.requiretls is True
+
     def test_handler_from_cli(self):
         parser, args = parseargs(
             ("-c", "aiosmtpd.tests.test_main.FromCliHandler", "--", "FOO")
