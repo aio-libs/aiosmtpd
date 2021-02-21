@@ -3,6 +3,17 @@
 ###################
 
 
+1.4.0 (aiosmtpd-next)
+=====================
+
+Added
+-----
+* Support for |PROXY Protocol|_ (Closes #174)
+
+.. _`PROXY Protocol`: https://www.haproxy.com/blog/using-haproxy-with-the-proxy-protocol-to-better-secure-your-database/
+.. |PROXY Protocol| replace:: **PROXY Protocol**
+
+
 1.3.2 (2021-02-20)
 ==================
 
@@ -16,7 +27,6 @@ Fixed/Improved
 * Fixed Documentation Issues that might cause automatic package builders to fail
 * Also consider ``EAFNOSUPPORT`` in IPv6 detection (Closes #244, again)
 * Update PyPI Long Description
-
 
 
 1.3.1 (2021-02-18)
@@ -51,7 +61,7 @@ Fixed/Improved
   (It gets reimported to ``aiosmtpd.smtp``,
   so programs relying on ``aiosmtpd.smtp.__version__`` should still work.)
   (Closes #241)
-* Uses pure ``pytest`` for all test cases
+* Uses pure ``pytest`` for all test cases (Closes #198)
 
 
 1.2.4 (2021-01-24)

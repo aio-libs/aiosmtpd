@@ -8,8 +8,8 @@ from typing import Generator
 
 import pytest
 
+from aiosmtpd import __version__
 from aiosmtpd.main import main, parseargs
-from aiosmtpd.smtp import __version__
 
 try:
     import pwd
