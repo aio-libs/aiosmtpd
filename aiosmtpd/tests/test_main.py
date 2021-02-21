@@ -13,9 +13,9 @@ from typing import Generator
 
 import pytest
 
+from aiosmtpd import __version__
 from aiosmtpd.handlers import Debugging
 from aiosmtpd.main import main, parseargs
-from aiosmtpd.smtp import __version__
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from aiosmtpd.tests.conftest import SERVER_CRT, SERVER_KEY
 

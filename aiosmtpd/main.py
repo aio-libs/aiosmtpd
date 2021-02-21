@@ -15,7 +15,8 @@ from pathlib import Path
 
 from public import public
 
-from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP, __version__
+from aiosmtpd import __version__
+from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP
 
 try:
     import pwd

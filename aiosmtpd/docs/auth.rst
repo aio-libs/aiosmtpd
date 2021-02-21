@@ -194,3 +194,8 @@ AuthResult API
       This is to cater for possible backward-compatibility requirements,
       where legacy handlers might be looking for ``session.login_data`` for some reasons.
 
+
+Example
+=======
+
+An example is provided in ``examples/authenticated_relayer``.

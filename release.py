@@ -21,12 +21,10 @@ DISTFILES = [
     f"dist/aiosmtpd-{version}-py3-none-any.whl",
 ]
 
-try:
-    subprocess.run(["twine", "--version"], stdout=subprocess.PIPE)
-except FileNotFoundError:
-    print("Please install 'twine' first")
-    sys.exit(1)
 result = subprocess.run(["pip", "freeze"], stdout=subprocess.PIPE)
+if b"\ntwine==" not in result.stdout:
+    print("ERROR: twine not installed. Please install 'twine' first")
+    sys.exit(1)
 if b"\ntwine-verify-upload==" not in result.stdout:
     print("*** Package twine-verify-upload is not yet installed.")
     print("*** Consider installing it. It is very useful :)")

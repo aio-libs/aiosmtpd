@@ -52,7 +52,9 @@ jobs:
       - name: "Static Code Checking"
         # language=bash
         run: |
-          # Install the tools
+          # Required by examples
+          pip install dnspython argon2-cffi
+          # Install pytype
           pip install pytype
           pytype --keep-going --jobs auto .
       - name: "Other QA Checks"
