@@ -75,7 +75,7 @@ def deldir(targ: Path, verbose: bool = True):
             pp.rmdir()
         else:
             raise RuntimeError(f"Don't know how to handle '{pp}'")
-        if verbose and (i & 0x1FF) == 0:
+        if verbose and ((i & 0x3FF) == 0):
             print(".", end="", flush=True)
     targ.rmdir()
 
@@ -122,11 +122,11 @@ def pycache_clean(verbose=False):
     """Cleanup __pycache__ dirs & bytecode files (if any)"""
     aiosmtpdpath = Path(".")
     for i, f in enumerate(aiosmtpdpath.rglob("*.py[co]"), start=1):
-        if verbose and (i % 0x3FF) == 0:
+        if verbose and ((i & 0xFF) == 0):
             print(".", end="", flush=True)
         f.unlink()
-    for d in aiosmtpdpath.rglob("__pycache__"):
-        if verbose:
+    for i, d in enumerate(aiosmtpdpath.rglob("__pycache__"), start=1):
+        if verbose and ((i & 0x7) == 0):
             print(".", end="", flush=True)
         deldir(d, verbose)
     if verbose:
