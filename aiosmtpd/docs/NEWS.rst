@@ -8,7 +8,11 @@
 
 Added
 -----
+* Support for |PROXY Protocol|_ (Closes #174)
 * Example for authentication
+
+.. _`PROXY Protocol`: https://www.haproxy.com/blog/using-haproxy-with-the-proxy-protocol-to-better-secure-your-database/
+.. |PROXY Protocol| replace:: **PROXY Protocol**
 
 
 1.3.2 (2021-02-20)
@@ -58,7 +62,7 @@ Fixed/Improved
   (It gets reimported to ``aiosmtpd.smtp``,
   so programs relying on ``aiosmtpd.smtp.__version__`` should still work.)
   (Closes #241)
-* Uses pure ``pytest`` for all test cases
+* Uses pure ``pytest`` for all test cases (Closes #198)
 
 
 1.2.4 (2021-01-24)

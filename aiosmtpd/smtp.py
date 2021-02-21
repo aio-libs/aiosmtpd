@@ -12,6 +12,7 @@ import re
 import socket
 import ssl
 from aiosmtpd import __version__
+from aiosmtpd.proxy_protocol import get_proxy, ProxyData
 from base64 import b64decode, b64encode
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
@@ -145,6 +146,9 @@ class Session:
         self.extended_smtp = False
         self.loop = loop
 
+        self.proxy_data: Optional[ProxyData] = None
+        """Data from PROXY Protocol handshake"""
+
         self._login_data = None
 
         self.auth_data = None
@@ -161,14 +165,14 @@ class Session:
     def login_data(self):
         """Legacy login_data, usually containing the username"""
         log.warning(
-            "Session.login_data is deprecated and will be removed in version 2.0",
+            "Session.login_data is deprecated and will be removed in version 2.0"
         )
         return self._login_data
 
     @login_data.setter
     def login_data(self, value):
         log.warning(
-            "Session.login_data is deprecated and will be removed in version 2.0",
+            "Session.login_data is deprecated and will be removed in version 2.0"
         )
         self._login_data = value
 
@@ -278,23 +282,27 @@ class SMTP(asyncio.StreamReaderProtocol):
     AuthLoginUsernameChallenge = "User Name\x00"
     AuthLoginPasswordChallenge = "Password\x00"
 
-    def __init__(self, handler,
-                 *,
-                 data_size_limit=DATA_SIZE_DEFAULT,
-                 enable_SMTPUTF8=False,
-                 decode_data=False,
-                 hostname=None,
-                 ident=None,
-                 tls_context: Optional[ssl.SSLContext] = None,
-                 require_starttls=False,
-                 timeout=300,
-                 auth_required=False,
-                 auth_require_tls=True,
-                 auth_exclude_mechanism: Optional[Iterable[str]] = None,
-                 auth_callback: AuthCallbackType = None,
-                 command_call_limit: Union[int, Dict[str, int], None] = None,
-                 authenticator: AuthenticatorType = None,
-                 loop=None):
+    def __init__(
+            self,
+            handler,
+            *,
+            data_size_limit=DATA_SIZE_DEFAULT,
+            enable_SMTPUTF8=False,
+            decode_data=False,
+            hostname=None,
+            ident=None,
+            tls_context: Optional[ssl.SSLContext] = None,
+            require_starttls=False,
+            timeout=300,
+            auth_required=False,
+            auth_require_tls=True,
+            auth_exclude_mechanism: Optional[Iterable[str]] = None,
+            auth_callback: AuthCallbackType = None,
+            command_call_limit: Union[int, Dict[str, int], None] = None,
+            authenticator: AuthenticatorType = None,
+            proxy_protocol_timeout: Optional[Union[int, float]] = None,
+            loop=None
+    ):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
         super().__init__(
@@ -327,8 +335,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._tls_handshake_okay = True
         self._tls_protocol = None
         self._original_transport = None
-        self.session = None
-        self.envelope = None
+        self.session: Optional[Session] = None
+        self.envelope: Optional[Envelope] = None
         self.transport = None
         self._handler_coroutine = None
         if not auth_require_tls and auth_required:
@@ -336,6 +344,13 @@ class SMTP(asyncio.StreamReaderProtocol):
                  "can lead to security vulnerabilities!")
             log.warning("auth_required == True but auth_require_tls == False")
         self._auth_require_tls = auth_require_tls
+
+        if proxy_protocol_timeout is not None:
+            if proxy_protocol_timeout <= 0:
+                raise ValueError("proxy_protocol_timeout must be > 0")
+            elif proxy_protocol_timeout < 3.0:
+                log.warning("proxy_protocol_timeout < 3.0")
+        self._proxy_timeout = proxy_protocol_timeout
 
         self._authenticator: Optional[AuthenticatorType]
         self._auth_callback: Optional[AuthCallbackType]
@@ -489,12 +504,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             return False
         return super().eof_received()
 
-    def _reset_timeout(self):
+    def _reset_timeout(self, duration=None):
         if self._timeout_handle is not None:
             self._timeout_handle.cancel()
-
         self._timeout_handle = self.loop.call_later(
-            self._timeout_duration, self._timeout_cb)
+            duration or self._timeout_duration, self._timeout_cb
+        )
 
     def _timeout_cb(self):
         log.info('%r connection timeout', self.session.peer)
@@ -541,6 +556,24 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     async def _handle_client(self):
         log.info('%r handling connection', self.session.peer)
+
+        if self._proxy_timeout is not None:
+            self._reset_timeout(self._proxy_timeout)
+            log.debug("%r waiting PROXY handshake", self.session.peer)
+            self.session.proxy_data = await get_proxy(self._reader)
+            if self.session.proxy_data:
+                log.info("%r valid PROXY handshake", self.session.peer)
+                status = await self._call_handler_hook("PROXY", self.session.proxy_data)
+                log.debug("%r handle_PROXY returned %r", self.session.peer, status)
+            else:
+                log.warning("%r invalid PROXY handshake", self.session.peer)
+                status = False
+            if status is MISSING or not status:
+                log.info("%r rejected by handle_PROXY", self.session.peer)
+                self.transport.close()
+                return
+            self._reset_timeout()
+
         await self.push('220 {} {}'.format(self.hostname, self.__ident__))
         if self._enforce_call_limit:
             call_limit = collections.defaultdict(
@@ -551,10 +584,11 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Not used, but this silences code inspection tools
             call_limit = {}
         bogus_budget = BOGUS_LIMIT
+
         while self.transport is not None:   # pragma: nobranch
             try:
                 try:
-                    line = await self._reader.readuntil()
+                    line: bytes = await self._reader.readuntil()
                 except asyncio.LimitOverrunError as error:
                     # Line too long. Read until end of line before sending 500.
                     await self._reader.read(error.consumed)
