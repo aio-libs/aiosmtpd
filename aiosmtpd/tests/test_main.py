@@ -32,6 +32,9 @@ MAIL_LOG = logging.getLogger("mail.log")
 AUTOSTOP_DELAY = 1.0
 
 
+# region ##### Custom Handlers ########################################################
+
+
 class FromCliHandler:
     def __init__(self, called):
         self.called = called
@@ -45,7 +48,9 @@ class NullHandler:
     pass
 
 
-# region ##### Fixtures #######################################################
+# endregion
+
+# region ##### Fixtures ###############################################################
 
 
 @pytest.fixture
@@ -84,6 +89,8 @@ def setuid(mocker):
 
 # endregion
 
+# region ##### Helper Funcs ###########################################################
+
 
 def watch_for_tls(ready_flag, has_tls, req_tls):
     has_tls.value = False
@@ -116,6 +123,13 @@ def watch_for_smtps(ready_flag, has_smtps):
                 return
         except Exception:
             time.sleep(0.05)
+
+
+def main_n(*args):
+    main(("-n",) + args)
+
+
+# endregion
 
 
 @pytest.mark.usefixtures("autostop_loop")
@@ -153,7 +167,7 @@ class TestMain:
 
     def test_n(self, setuid):
         with pytest.raises(RuntimeError):
-            main(("-n",))
+            main_n()
 
     def test_nosetuid(self, setuid):
         with pytest.raises(RuntimeError):
@@ -163,19 +177,19 @@ class TestMain:
         # For this test, the test runner likely has already set the log level
         # so it may not be logging.ERROR.
         default_level = MAIL_LOG.getEffectiveLevel()
-        main(("-n",))
+        main_n()
         assert MAIL_LOG.getEffectiveLevel() == default_level
 
     def test_debug_1(self):
-        main(("-n", "-d"))
+        main_n("-d")
         assert MAIL_LOG.getEffectiveLevel() == logging.INFO
 
     def test_debug_2(self):
-        main(("-n", "-dd"))
+        main_n("-dd")
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
 
     def test_debug_3(self):
-        main(("-n", "-ddd"))
+        main_n("-ddd")
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
         assert asyncio.get_event_loop().get_debug()
 
@@ -191,7 +205,7 @@ class TestMainByWatcher:
         p.start()
         ready_flag.wait()
         temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
-        main(("-n", "--tlscert", str(SERVER_CRT), "--tlskey", str(SERVER_KEY)))
+        main_n("--tlscert", str(SERVER_CRT), "--tlskey", str(SERVER_KEY))
         p.join()
         assert has_starttls.value is True
         assert require_tls.value is True
@@ -206,15 +220,8 @@ class TestMainByWatcher:
         p.start()
         ready_flag.wait()
         temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
-        main(
-            (
-                "-n",
-                "--tlscert",
-                str(SERVER_CRT),
-                "--tlskey",
-                str(SERVER_KEY),
-                "--no-requiretls",
-            )
+        main_n(
+            "--tlscert", str(SERVER_CRT), "--tlskey", str(SERVER_KEY), "--no-requiretls"
         )
         p.join()
         assert has_starttls.value is True
@@ -227,7 +234,7 @@ class TestMainByWatcher:
         p.start()
         ready_flag.wait()
         temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
-        main(("-n", "--smtpscert", str(SERVER_CRT), "--smtpskey", str(SERVER_KEY)))
+        main_n("--smtpscert", str(SERVER_CRT), "--smtpskey", str(SERVER_KEY))
         p.join()
         assert has_smtps.value is True
 
@@ -359,7 +366,7 @@ class TestSigint:
 
         temp_event_loop.call_later(1.0, interrupt)
         try:
-            main(("-n",))
+            main_n()
         except Exception:
             pytest.fail("main() should've closed cleanly without exceptions!")
         else:
