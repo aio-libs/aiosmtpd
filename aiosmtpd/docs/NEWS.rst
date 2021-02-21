@@ -9,6 +9,7 @@
 Added
 -----
 * Support for |PROXY Protocol|_ (Closes #174)
+* Example for authentication
 
 .. _`PROXY Protocol`: https://www.haproxy.com/blog/using-haproxy-with-the-proxy-protocol-to-better-secure-your-database/
 .. |PROXY Protocol| replace:: **PROXY Protocol**

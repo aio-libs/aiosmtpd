@@ -215,10 +215,12 @@ def get_opts(argv):
         "--force", "-F", action="store_true", help="Force action even if in CI"
     )
     parser.add_argument(
+        "-A",
         "--afterbar",
-        default=False,
-        action="store_true",
-        help="Print horizontal bar after action",
+        dest="afterbar",
+        default=0,
+        action="count",
+        help="Print horizontal bar after action. Repeat this option for more bars.",
     )
 
     # From: https://stackoverflow.com/a/49999185/149900
@@ -262,7 +264,7 @@ if __name__ == "__main__":
     )
     dispatcher = globals().get(f"dispatch_{opts.cmd}")
     dispatcher()
-    if opts.afterbar:
+    for _ in range(opts.afterbar):
         print(Fore.CYAN + ("\u2550" * (TERM_WIDTH - 1)))
     # Defensive reset
     print(Style.RESET_ALL, end="", flush=True)
