@@ -13,7 +13,6 @@
 # serve to show the default.
 
 import datetime
-import re
 import sphinx_rtd_theme  # noqa: F401 # pytype: disable=import-error
 import sys
 
@@ -26,9 +25,6 @@ try:
     colorama_init()
 except ImportError:
     colorama_init = None
-
-
-RE__VERSION = re.compile(r"""__version__ = (['"])(?P<ver>[^'"]+)(\1)""")
 
 
 # If extensions (or modules to document with autodoc) are in another directory,
