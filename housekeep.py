@@ -258,7 +258,7 @@ if __name__ == "__main__":
         else:
             print(f"{Fore.YELLOW}We're in CI but --force is specified")
     print(
-        f"{Fore.GREEN}\u25B7\u25B7\u25B7 "
+        f"{Fore.GREEN}>>> "
         f"{Path(__file__).name} {opts.cmd}{Style.RESET_ALL}",
         flush=True,
     )
