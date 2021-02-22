@@ -10,6 +10,7 @@ Added
 -----
 * Support for |PROXY Protocol|_ (Closes #174)
 * Example for authentication
+* SSL Support for CLI. See :ref:`the man page <manpage>` for more info. (Closes #172)
 
 .. _`PROXY Protocol`: https://www.haproxy.com/blog/using-haproxy-with-the-proxy-protocol-to-better-secure-your-database/
 .. |PROXY Protocol| replace:: **PROXY Protocol**

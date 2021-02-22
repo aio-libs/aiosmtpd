@@ -25,6 +25,15 @@ except ImportError:
     HAS_PROACTOR = False
 
 
+__all__ = [
+    "controller_data",
+    "handler_data",
+    "Global",
+    "SERVER_CRT",
+    "SERVER_KEY",
+]
+
+
 # region #### Aliases #################################################################
 
 controller_data = pytest.mark.controller_data
@@ -54,6 +63,9 @@ class Global:
     def set_addr_from(cls, contr: Controller):
         cls.SrvAddr = HostPort(contr.hostname, contr.port)
 
+
+SERVER_CRT = resource_filename("aiosmtpd.tests.certs", "server.crt")
+SERVER_KEY = resource_filename("aiosmtpd.tests.certs", "server.key")
 
 # endregion
 
@@ -281,10 +293,7 @@ def ssl_context_server() -> Generator[ssl.SSLContext, None, None]:
     """
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     context.check_hostname = False
-    context.load_cert_chain(
-        resource_filename("aiosmtpd.tests.certs", "server.crt"),
-        resource_filename("aiosmtpd.tests.certs", "server.key"),
-    )
+    context.load_cert_chain(SERVER_CRT, SERVER_KEY)
     #
     yield context
 
@@ -296,9 +305,7 @@ def ssl_context_client() -> Generator[ssl.SSLContext, None, None]:
     """
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
     context.check_hostname = False
-    context.load_verify_locations(
-        resource_filename("aiosmtpd.tests.certs", "server.crt")
-    )
+    context.load_verify_locations(SERVER_CRT)
     #
     yield context
 

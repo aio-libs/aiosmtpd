@@ -3,13 +3,21 @@
 
 import asyncio
 import logging
+import multiprocessing as MP
 import os
+import time
+from ctypes import c_bool
+from smtplib import SMTP as SMTPClient
+from smtplib import SMTP_SSL
 from typing import Generator
 
 import pytest
 
 from aiosmtpd import __version__
+from aiosmtpd.handlers import Debugging
 from aiosmtpd.main import main, parseargs
+from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
+from aiosmtpd.tests.conftest import SERVER_CRT, SERVER_KEY
 
 try:
     import pwd
@@ -18,6 +26,13 @@ except ImportError:
 
 HAS_SETUID = hasattr(os, "setuid")
 MAIL_LOG = logging.getLogger("mail.log")
+
+# If less than 1.0, might cause intermittent error if test system
+# is too busy/overloaded.
+AUTOSTOP_DELAY = 1.0
+
+
+# region ##### Custom Handlers ########################################################
 
 
 class FromCliHandler:
@@ -33,7 +48,9 @@ class NullHandler:
     pass
 
 
-# region ##### Fixtures #######################################################
+# endregion
+
+# region ##### Fixtures ###############################################################
 
 
 @pytest.fixture
@@ -42,10 +59,7 @@ def autostop_loop(temp_event_loop) -> Generator[asyncio.AbstractEventLoop, None,
     # immediately.  This will allow the calls to main() in these tests to
     # also exit almost immediately.  Otherwise, the foreground test
     # process will hang.
-    #
-    # If less than 1.0, might cause intermittent error if test system
-    # is too busy/overloaded.
-    temp_event_loop.call_later(1.0, temp_event_loop.stop)
+    temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
     #
     yield temp_event_loop
 
@@ -71,6 +85,48 @@ def setuid(mocker):
     mocker.patch("aiosmtpd.main.partial", side_effect=RuntimeError)
     #
     yield
+
+
+# endregion
+
+# region ##### Helper Funcs ###########################################################
+
+
+def watch_for_tls(ready_flag, has_tls, req_tls):
+    has_tls.value = False
+    req_tls.value = False
+    ready_flag.set()
+    start = time.monotonic()
+    while (time.monotonic() - start) <= AUTOSTOP_DELAY:
+        try:
+            with SMTPClient("localhost", 8025) as client:
+                resp = client.docmd("HELP", "HELO")
+                if resp == S.S530_STARTTLS_FIRST:
+                    req_tls.value = True
+                client.ehlo("exemple.org")
+                if "starttls" in client.esmtp_features:
+                    has_tls.value = True
+                return
+        except Exception:
+            time.sleep(0.05)
+
+
+def watch_for_smtps(ready_flag, has_smtps):
+    has_smtps.value = False
+    ready_flag.set()
+    start = time.monotonic()
+    while (time.monotonic() - start) <= AUTOSTOP_DELAY:
+        try:
+            with SMTP_SSL("localhost", 8025) as client:
+                client.ehlo("exemple.org")
+                has_smtps.value = True
+                return
+        except Exception:
+            time.sleep(0.05)
+
+
+def main_n(*args):
+    main(("-n",) + args)
 
 
 # endregion
@@ -111,7 +167,7 @@ class TestMain:
 
     def test_n(self, setuid):
         with pytest.raises(RuntimeError):
-            main(("-n",))
+            main_n()
 
     def test_nosetuid(self, setuid):
         with pytest.raises(RuntimeError):
@@ -121,24 +177,87 @@ class TestMain:
         # For this test, the test runner likely has already set the log level
         # so it may not be logging.ERROR.
         default_level = MAIL_LOG.getEffectiveLevel()
-        main(("-n",))
+        main_n()
         assert MAIL_LOG.getEffectiveLevel() == default_level
 
     def test_debug_1(self):
-        main(("-n", "-d"))
+        main_n("-d")
         assert MAIL_LOG.getEffectiveLevel() == logging.INFO
 
     def test_debug_2(self):
-        main(("-n", "-dd"))
+        main_n("-dd")
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
 
     def test_debug_3(self):
-        main(("-n", "-ddd"))
+        main_n("-ddd")
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
         assert asyncio.get_event_loop().get_debug()
 
 
+class TestMainByWatcher:
+    def test_tls(self, temp_event_loop):
+        ready_flag = MP.Event()
+        has_starttls = MP.Value(c_bool)
+        require_tls = MP.Value(c_bool)
+        p = MP.Process(
+            target=watch_for_tls, args=(ready_flag, has_starttls, require_tls)
+        )
+        p.start()
+        ready_flag.wait()
+        temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
+        main_n("--tlscert", str(SERVER_CRT), "--tlskey", str(SERVER_KEY))
+        p.join()
+        assert has_starttls.value is True
+        assert require_tls.value is True
+
+    def test_tls_noreq(self, temp_event_loop):
+        ready_flag = MP.Event()
+        has_starttls = MP.Value(c_bool)
+        require_tls = MP.Value(c_bool)
+        p = MP.Process(
+            target=watch_for_tls, args=(ready_flag, has_starttls, require_tls)
+        )
+        p.start()
+        ready_flag.wait()
+        temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
+        main_n(
+            "--tlscert", str(SERVER_CRT), "--tlskey", str(SERVER_KEY), "--no-requiretls"
+        )
+        p.join()
+        assert has_starttls.value is True
+        assert require_tls.value is False
+
+    def test_smtps(self, temp_event_loop):
+        ready_flag = MP.Event()
+        has_smtps = MP.Value(c_bool)
+        p = MP.Process(target=watch_for_smtps, args=(ready_flag, has_smtps))
+        p.start()
+        ready_flag.wait()
+        temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
+        main_n("--smtpscert", str(SERVER_CRT), "--smtpskey", str(SERVER_KEY))
+        p.join()
+        assert has_smtps.value is True
+
+
 class TestParseArgs:
+    def test_defaults(self):
+        parser, args = parseargs(tuple())
+        assert args.classargs == tuple()
+        assert args.classpath == "aiosmtpd.handlers.Debugging"
+        assert args.debug == 0
+        assert isinstance(args.handler, Debugging)
+        assert args.host == "localhost"
+        assert args.listen is None
+        assert args.port == 8025
+        assert args.setuid is True
+        assert args.size is None
+        assert args.smtputf8 is False
+        assert args.smtpscert is None
+        assert args.smtpskey is None
+        assert args.tlscert is None
+        assert args.tlskey is None
+        assert args.requiretls is True
+
     def test_handler_from_cli(self):
         parser, args = parseargs(
             ("-c", "aiosmtpd.tests.test_main.FromCliHandler", "--", "FOO")
@@ -193,6 +312,50 @@ class TestParseArgs:
         assert excinfo.value.code == 0
         assert capsys.readouterr().out == f"smtpd {__version__}\n"
 
+    @pytest.mark.parametrize("args", [("--smtpscert", "x"), ("--smtpskey", "x")])
+    def test_smtps(self, capsys, mocker, args):
+        mocker.patch("aiosmtpd.main.PROGRAM", "smtpd")
+        with pytest.raises(SystemExit) as exc:
+            parseargs(args)
+        assert exc.value.code == 2
+        assert (
+            "--smtpscert and --smtpskey must be specified together"
+            in capsys.readouterr().err
+        )
+
+    @pytest.mark.parametrize("args", [("--tlscert", "x"), ("--tlskey", "x")])
+    def test_tls(self, capsys, mocker, args):
+        mocker.patch("aiosmtpd.main.PROGRAM", "smtpd")
+        with pytest.raises(SystemExit) as exc:
+            parseargs(args)
+        assert exc.value.code == 2
+        assert (
+            "--tlscert and --tlskey must be specified together"
+            in capsys.readouterr().err
+        )
+
+    def test_norequiretls(self, capsys, mocker):
+        mocker.patch("aiosmtpd.main.PROGRAM", "smtpd")
+        parser, args = parseargs(("--no-requiretls",))
+        assert args.requiretls is False
+
+    @pytest.mark.parametrize(
+        "certfile, keyfile, expect",
+        [
+            ("x", "x", "Cert file x not found"),
+            (SERVER_CRT, "x", "Key file x not found"),
+            ("x", SERVER_KEY, "Cert file x not found"),
+        ],
+        ids=["x-x", "cert-x", "x-key"],
+    )
+    @pytest.mark.parametrize("meth", ["smtps", "tls"])
+    def test_ssl_files_err(self, capsys, mocker, meth, certfile, keyfile, expect):
+        mocker.patch("aiosmtpd.main.PROGRAM", "smtpd")
+        with pytest.raises(SystemExit) as exc:
+            parseargs((f"--{meth}cert", certfile, f"--{meth}key", keyfile))
+        assert exc.value.code == 2
+        assert expect in capsys.readouterr().err
+
 
 class TestSigint:
     def test_keyboard_interrupt(self, temp_event_loop):
@@ -203,7 +366,7 @@ class TestSigint:
 
         temp_event_loop.call_later(1.0, interrupt)
         try:
-            main(("-n",))
+            main_n()
         except Exception:
             pytest.fail("main() should've closed cleanly without exceptions!")
         else:

@@ -5,11 +5,13 @@ import asyncio
 import logging
 import os
 import signal
+import ssl
 import sys
 from argparse import ArgumentParser
 from contextlib import suppress
 from functools import partial
 from importlib import import_module
+from pathlib import Path
 
 from public import public
 
@@ -87,7 +89,9 @@ def _parser() -> ArgumentParser:
         "--debug",
         default=0,
         action="count",
-        help="""Increase debugging output.""",
+        help=(
+            "Increase debugging output. Every ``-d`` increases debugging level by one."
+        )
     )
     parser.add_argument(
         "-l",
@@ -103,6 +107,57 @@ def _parser() -> ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--smtpscert",
+        metavar="CERTFILE",
+        type=Path,
+        default=None,
+        help=(
+            "The certificate file for implementing **SMTPS**. If given, the parameter "
+            "``--smtpskey`` must also be specified."
+        ),
+    )
+    parser.add_argument(
+        "--smtpskey",
+        metavar="KEYFILE",
+        type=Path,
+        default=None,
+        help=(
+            "The key file for implementing **SMTPS**. If given, the parameter "
+            "``--smtpscert`` must also be specified."
+        ),
+    )
+    parser.add_argument(
+        "--tlscert",
+        metavar="CERTFILE",
+        type=Path,
+        default=None,
+        help=(
+            "The certificate file for implementing **STARTTLS**. If given, the "
+            "parameter ``--tlskey`` must also be specified."
+        ),
+    )
+    parser.add_argument(
+        "--tlskey",
+        metavar="KEYFILE",
+        type=Path,
+        default=None,
+        help=(
+            "The key file for implementing **STARTTLS**. If given, the parameter "
+            "``--tlscert`` must also be specified."
+        ),
+    )
+    parser.add_argument(
+        "--no-requiretls",
+        dest="requiretls",
+        default=True,
+        action="store_false",
+        help=(
+            "If specified, disables ``require_starttls`` of the SMTP class. "
+            "(By default, ``require_starttls`` is True.) "
+            "Has no effect if ``--tlscert`` and ``--tlskey`` are not specified."
+        ),
+    )
+    parser.add_argument(
         "classargs",
         metavar="CLASSARGS",
         nargs="*",
@@ -114,33 +169,48 @@ def _parser() -> ArgumentParser:
 
 def parseargs(args=None):
     parser = _parser()
-    args = parser.parse_args(args)
+    parsed = parser.parse_args(args)
     # Find the handler class.
-    path, dot, name = args.classpath.rpartition(".")
+    path, dot, name = parsed.classpath.rpartition(".")
     module = import_module(path)
     handler_class = getattr(module, name)
     if hasattr(handler_class, "from_cli"):
-        args.handler = handler_class.from_cli(parser, *args.classargs)
+        parsed.handler = handler_class.from_cli(parser, *parsed.classargs)
     else:
-        if len(args.classargs) > 0:
+        if len(parsed.classargs) > 0:
             parser.error(f"Handler class {path} takes no arguments")
-        args.handler = handler_class()
+        parsed.handler = handler_class()
     # Parse the host:port argument.
-    if args.listen is None:
-        args.host = DEFAULT_HOST
-        args.port = DEFAULT_PORT
+    if parsed.listen is None:
+        parsed.host = DEFAULT_HOST
+        parsed.port = DEFAULT_PORT
     else:
-        host, colon, port = args.listen.rpartition(":")
+        host, colon, port = parsed.listen.rpartition(":")
         if len(colon) == 0:
-            args.host = port
-            args.port = DEFAULT_PORT
+            parsed.host = port
+            parsed.port = DEFAULT_PORT
         else:
-            args.host = DEFAULT_HOST if len(host) == 0 else host
+            parsed.host = DEFAULT_HOST if len(host) == 0 else host
             try:
-                args.port = int(DEFAULT_PORT if len(port) == 0 else port)
+                parsed.port = int(DEFAULT_PORT if len(port) == 0 else port)
             except ValueError:
                 parser.error("Invalid port number: {}".format(port))
-    return parser, args
+
+    if bool(parsed.smtpscert) ^ bool(parsed.smtpskey):
+        parser.error("--smtpscert and --smtpskey must be specified together")
+    if parsed.smtpscert and not parsed.smtpscert.exists():
+        parser.error(f"Cert file {parsed.smtpscert} not found")
+    if parsed.smtpskey and not parsed.smtpskey.exists():
+        parser.error(f"Key file {parsed.smtpskey} not found")
+
+    if bool(parsed.tlscert) ^ bool(parsed.tlskey):
+        parser.error("--tlscert and --tlskey must be specified together")
+    if parsed.tlscert and not parsed.tlscert.exists():
+        parser.error(f"Cert file {parsed.tlscert} not found")
+    if parsed.tlskey and not parsed.tlskey.exists():
+        parser.error(f"Key file {parsed.tlskey} not found")
+
+    return parser, parsed
 
 
 @public
@@ -163,8 +233,20 @@ def main(args=None):
             )
             sys.exit(1)
 
+    if args.tlscert and args.tlskey:
+        tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        tls_context.check_hostname = False
+        tls_context.load_cert_chain(str(args.tlscert), str(args.tlskey))
+    else:
+        tls_context = None
+
     factory = partial(
-        SMTP, args.handler, data_size_limit=args.size, enable_SMTPUTF8=args.smtputf8
+        SMTP,
+        args.handler,
+        data_size_limit=args.size,
+        enable_SMTPUTF8=args.smtputf8,
+        tls_context=tls_context,
+        require_starttls=args.requiretls,
     )
 
     logging.basicConfig(level=logging.ERROR)
@@ -178,10 +260,19 @@ def main(args=None):
     if args.debug > 2:
         loop.set_debug(enabled=True)
 
+    if args.smtpscert and args.smtpskey:
+        smtps_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        smtps_context.check_hostname = False
+        smtps_context.load_cert_chain(str(args.smtpscert), str(args.smtpskey))
+    else:
+        smtps_context = None
+
     log.debug("Attempting to start server on %s:%s", args.host, args.port)
     server = server_loop = None
     try:
-        server = loop.create_server(factory, host=args.host, port=args.port)
+        server = loop.create_server(
+            factory, host=args.host, port=args.port, ssl=smtps_context
+        )
         server_loop = loop.run_until_complete(server)
     except RuntimeError:  # pragma: nocover
         raise

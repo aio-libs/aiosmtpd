@@ -195,25 +195,41 @@ have been configured and tested:
   is pre-prepared, such as Travis CI or |GitHub Actions|_; this will definitely
   save some time during tox's testenv prepping.
 
+  For all testenv combinations except diffcov,
+  |bandit|_ security check will also be run prior to running pytest.
+
+.. _bandit: https://github.com/PyCQA/bandit
+.. |bandit| replace:: ``bandit``
+
+
 * ``qa``
 
-  Perform ``flake8`` code style checking
+  Performs |flake8|_ code style checking,
+  and |flake8-bugbear|_ design checking.
+
+  In addition, some tests to help ensure that ``aiosmtpd`` is *releasable* to PyPI are also run.
+
+.. _flake8: https://flake8.pycqa.org/en/latest/
+.. |flake8| replace:: ``flake8``
+.. _flake8-bugbear: https://github.com/PyCQA/flake8-bugbear
+.. |flake8-bugbear| replace:: ``flake8-bugbear``
 
 * ``docs``
 
-  Builds **HTML documentation** using Sphinx.
+  Builds **HTML documentation** and **manpage** using Sphinx.
   A `pytest doctest`_ will run prior to actual building of the documentation.
 
 * ``static``
 
   Performs a **static type checking** using ``pytype``.
-  Please ensure that `all its dependencies`_ have been installed before
+
+  **Note 1:** Please ensure that `all pytype dependencies`_ have been installed before
   executing this testenv.
 
-  **Note:** Because ``pytype`` does not run on Windows,
+  **Note 2:** Because ``pytype`` does not run on Windows,
   This testenv must be invoked explicitly; it will not automatically run.
 
-.. _`all its dependencies`: https://github.com/google/pytype/blob/2021.02.09/CONTRIBUTING.md#pytype-dependencies
+.. _`all pytype dependencies`: https://github.com/google/pytype/blob/2021.02.09/CONTRIBUTING.md#pytype-dependencies
 
 
 Environment Variables
