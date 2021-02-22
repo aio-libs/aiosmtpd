@@ -15,6 +15,11 @@ Added
 .. _`PROXY Protocol`: https://www.haproxy.com/blog/using-haproxy-with-the-proxy-protocol-to-better-secure-your-database/
 .. |PROXY Protocol| replace:: **PROXY Protocol**
 
+Fixed/Improved
+--------------
+* ``pypy3`` testenv for tox can now run on Windows
+* ``static`` testenv now auto-skipped on Windows
+
 
 1.3.2 (2021-02-20)
 ==================
