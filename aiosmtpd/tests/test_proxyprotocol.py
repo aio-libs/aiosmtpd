@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import errno
 import logging
 import operator
 import random
@@ -1003,11 +1004,23 @@ class TestWithController:
             # Try resending the handshake. Should also fail (because connection has
             # been closed by the server.
             # noinspection PyTypeChecker
-            with pytest.raises(ConnectionError):
+            with pytest.raises(OSError) as exc_info:
                 sock.send(handshake)
                 resp = sock.recv(4096)
                 if resp == b"":
                     raise ConnectionAbortedError
+            # MacOS sometimes raises EPROTOTYPE, which won't result in ConnectionError
+            # but in OSError(errno=EPROTOTYPE). Let's check that here.
+            # Refs:
+            #   - https://github.com/racitup/static-ranges/issues/1
+            #   - https://github.com/benoitc/gunicorn/issues/1487
+            #   - http://erickt.github.io/blog/2014/11/19/adventures-in-debugging-\
+            #     a-potential-osx-kernel-bug/
+            exc = exc_info.value
+            if isinstance(exc, ConnectionError):
+                pass
+            else:
+                assert exc.errno in (errno.EPROTOTYPE, errno.EPIPE)
         # Assert that we can connect properly afterwards (that is, server is not
         # terminated)
         self._okay(handshake)
@@ -1028,11 +1041,23 @@ class TestWithController:
             # Try resending the handshake. Should also fail (because connection has
             # been closed by the server.
             # noinspection PyTypeChecker
-            with pytest.raises(ConnectionError):
+            with pytest.raises(OSError) as exc_info:
                 sock.send(handshake)
                 resp = sock.recv(4096)
                 if resp == b"":
                     raise ConnectionError
+            # MacOS sometimes raises EPROTOTYPE, which won't result in ConnectionError
+            # but in OSError(errno=EPROTOTYPE). Let's check that here.
+            # Refs:
+            #   - https://github.com/racitup/static-ranges/issues/1
+            #   - https://github.com/benoitc/gunicorn/issues/1487
+            #   - http://erickt.github.io/blog/2014/11/19/adventures-in-debugging-\
+            #     a-potential-osx-kernel-bug/
+            exc = exc_info.value
+            if isinstance(exc, ConnectionError):
+                pass
+            else:
+                assert exc.errno in (errno.EPROTOTYPE, errno.EPIPE)
         # Assert that we can connect properly afterwards (that is, server is not
         # terminated)
         self._okay(handshake)
