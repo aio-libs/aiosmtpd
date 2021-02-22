@@ -31,6 +31,7 @@ except ImportError:
         RESET_ALL = "\x1b[0m"
 
 
+DUMP_DIR = "_dump"
 TOX_ENV_NAME = os.environ.get("TOX_ENV_NAME", None)
 
 WORKDIRS = (
@@ -39,7 +40,7 @@ WORKDIRS = (
     ".pytest-cache",
     ".pytest_cache",
     ".tox",
-    "_dynamic",
+    DUMP_DIR,
     "aiosmtpd.egg-info",
     "build",
     "dist",
@@ -87,8 +88,9 @@ def deldir(targ: Path, verbose: bool = True):
 
 
 def dump_env():
-    os.makedirs("_dynamic", exist_ok=True)
-    with open(f"_dynamic/ENV.{TOX_ENV_NAME}", "wt") as fout:
+    dumpdir = Path(DUMP_DIR)
+    dumpdir.mkdir(exist_ok=True)
+    with (dumpdir / f"ENV.{TOX_ENV_NAME}").open("wt") as fout:
         pprint.pprint(dict(os.environ), stream=fout)
 
 
