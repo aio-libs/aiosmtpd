@@ -59,7 +59,7 @@ You need **at least Python 3.6** to use this library.
 Supported Platforms
 -----------------------
 
-``aiosmtpd`` has been tested on **CPython** and **PyPy3.7**
+``aiosmtpd`` has been tested on **CPython** and |PyPy3.7|_
 for the following platforms (in alphabetical order):
 
 * Cygwin (on Windows 10) [1]
@@ -69,11 +69,14 @@ for the following platforms (in alphabetical order):
 * Ubuntu 20.04
 * Windows 10
 
-  | [1] Supported only with Cygwin-provided Python version
+  | [1] Supported only with Cygwin-provided CPython versions
   | [2] Supported only on the latest minor release
 
 ``aiosmtpd`` *probably* can run on platforms not listed above,
 but we cannot provide support for unlisted platforms.
+
+.. |PyPy3.7| replace:: **PyPy3.7**
+.. _`PyPy3.7`: https://www.pypy.org/
 
 
 Installation
