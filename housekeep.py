@@ -50,6 +50,7 @@ WORKDIRS = (
 
 WORKFILES = (
     ".coverage",
+    ".coverage.*",
     "coverage.xml",
     "diffcov.html",
     "coverage-*.xml",
