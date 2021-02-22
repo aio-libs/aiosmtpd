@@ -92,6 +92,7 @@ def dump_env():
     dumpdir = Path(DUMP_DIR)
     dumpdir.mkdir(exist_ok=True)
     with (dumpdir / f"ENV.{TOX_ENV_NAME}.py").open("wt") as fout:
+        print("ENV = \\", file=fout)
         pprint.pprint(dict(os.environ), stream=fout)
 
 
