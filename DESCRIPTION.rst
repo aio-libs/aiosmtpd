@@ -30,13 +30,15 @@
    :alt: Supported Python Versions
 .. .. Do NOT include the Discourse badge!
 
-This is a server for SMTP and related protocols, similar in utility to the
-standard library's ``smtpd.py module``, but rewritten to be based on ``asyncio`` for
-Python 3.6+.
+This is a server for SMTP and related MTA protocols,
+similar in utility to the standard library's |smtpd.py|_ module,
+but rewritten to be based on ``asyncio`` for Python 3.6+.
 
 Please visit the `Project Homepage`_ for more information.
 
 .. _`Project Homepage`: https://aiosmtpd.readthedocs.io/
+.. |smtpd.py| replace:: ``smtpd.py``
+.. _`smtpd.py`: https://docs.python.org/3/library/smtpd.html
 
 
 Signing Keys
