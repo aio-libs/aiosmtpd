@@ -2,14 +2,15 @@
  aiosmtpd - An asyncio based SMTP server
 =========================================
 
-| |github license| |GA badge| |codecov| |LGTM.com| |readthedocs| |PyPI|
+| |github license| |PyPI| |PyPI Python|
+| |GA badge| |codecov| |LGTM.com| |readthedocs|
 |
 | |Discourse|
 
 .. |github license| image:: https://img.shields.io/github/license/aio-libs/aiosmtpd
    :target: https://github.com/aio-libs/aiosmtpd/blob/master/LICENSE
    :alt: Project License on GitHub
-.. .. Fpr |GA badge|, don't forget to check actual workflow name in unit-testing-and-coverage.yml
+.. .. For |GA badge|, don't forget to check actual workflow name in unit-testing-and-coverage.yml
 .. |GA badge| image:: https://github.com/aio-libs/aiosmtpd/workflows/aiosmtpd%20CI/badge.svg
    :target: https://github.com/aio-libs/aiosmtpd/actions
    :alt: GitHub Actions status
@@ -25,6 +26,9 @@
 .. |PyPI| image:: https://badge.fury.io/py/aiosmtpd.svg
    :target: https://badge.fury.io/py/aiosmtpd
    :alt: PyPI Package
+.. |PyPI Python| image:: https://img.shields.io/pypi/pyversions/aiosmtpd.svg
+   :target: https://pypi.org/project/aiosmtpd/
+   :alt: Supported Python Versions
 .. .. If you edit the above badges, don't forget to edit setup.cfg
 .. .. The |Discourse| badge MUST NOT be included in setup.cfg
 .. |Discourse| image:: https://img.shields.io/discourse/status?server=https%3A%2F%2Faio-libs.discourse.group%2F&style=social

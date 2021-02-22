@@ -2,7 +2,8 @@
  aiosmtpd - asyncio based SMTP server
 ######################################
 
-| |github license| |GA badge| |codecov| |LGTM.com| |readthedocs| |PyPI|
+| |github license| |PyPI| |PyPI Python|
+| |GA badge| |codecov| |LGTM.com| |readthedocs|
 |
 
 .. |github license| image:: https://img.shields.io/github/license/aio-libs/aiosmtpd
@@ -24,6 +25,9 @@
 .. |PyPI| image:: https://badge.fury.io/py/aiosmtpd.svg
    :target: https://badge.fury.io/py/aiosmtpd
    :alt: PyPI Package
+.. |PyPI Python| image:: https://img.shields.io/pypi/pyversions/aiosmtpd.svg
+   :target: https://pypi.org/project/aiosmtpd/
+   :alt: Supported Python Versions
 .. .. Do NOT include the Discourse badge!
 
 This is a server for SMTP and related protocols, similar in utility to the
