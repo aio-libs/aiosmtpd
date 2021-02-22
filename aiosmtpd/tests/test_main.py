@@ -97,7 +97,8 @@ def watch_for_tls(ready_flag, retq: MP.Queue):
     req_tls = False
     ready_flag.set()
     start = time.monotonic()
-    while (time.monotonic() - start) <= AUTOSTOP_DELAY:
+    delay = AUTOSTOP_DELAY * 1.5
+    while (time.monotonic() - start) <= delay:
         try:
             with SMTPClient("localhost", 8025) as client:
                 resp = client.docmd("HELP", "HELO")
@@ -117,7 +118,8 @@ def watch_for_smtps(ready_flag, retq: MP.Queue):
     has_smtps = False
     ready_flag.set()
     start = time.monotonic()
-    while (time.monotonic() - start) <= AUTOSTOP_DELAY:
+    delay = AUTOSTOP_DELAY * 1.5
+    while (time.monotonic() - start) <= delay:
         try:
             with SMTP_SSL("localhost", 8025) as client:
                 client.ehlo("exemple.org")
