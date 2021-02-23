@@ -11,6 +11,8 @@ markers = [
     "handler_data",
 ]
 
+# region #### coverage.py settings ###########################################
+
 [tool.coverage.run]
 branch = true
 parallel = true
@@ -58,6 +60,8 @@ title = "aiosmtpd coverage for ${TOX_ENV_NAME}"
 
 [tool.coverage.xml]
 output = "_dump/coverage-${INTERP}.xml"
+
+# endregion
 
 [tool.check-manifest]
 ignore = [
