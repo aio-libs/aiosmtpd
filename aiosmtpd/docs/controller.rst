@@ -161,7 +161,7 @@ with some differences:
 **Rather than specifying a hostname:port to listen on, you specify the Socket's filepath:**
 
 .. doctest:: unix_socket
-    :skipif: in_win32
+    :skipif: in_win32 or in_cygwin
 
     >>> from aiosmtpd.controller import UnixSocketController
     >>> from aiosmtpd.handlers import Sink
@@ -173,7 +173,7 @@ Python's :class:`smtplib.SMTP` sadly cannot connect to a Unix Socket,
 so we need to handle it on our own here:
 
 .. doctest:: unix_socket
-    :skipif: in_win32
+    :skipif: in_win32 or in_cygwin
 
     >>> import socket
     >>> sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -185,7 +185,7 @@ so we need to handle it on our own here:
 Try sending something, don't forget to end with ``"\r\n"``:
 
 .. doctest:: unix_socket
-    :skipif: in_win32
+    :skipif: in_win32 or in_cygwin
 
     >>> sock.send(b"HELO example.org\r\n")
     18
@@ -196,7 +196,7 @@ Try sending something, don't forget to end with ``"\r\n"``:
 And close everything when done:
 
 .. doctest:: unix_socket
-    :skipif: in_win32
+    :skipif: in_win32 or in_cygwin
 
     >>> sock.send(b"QUIT\r\n")
     6

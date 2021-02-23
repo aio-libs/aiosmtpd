@@ -151,8 +151,9 @@ intersphinx_mapping = {
 }
 
 doctest_global_setup = """
-import platform
-in_win32 = platform.system() == "Windows"
+import sys
+in_win32 = sys.platform == "win32"
+in_cygwin = sys.platform == "cygwin"
 """
 
 # endregion

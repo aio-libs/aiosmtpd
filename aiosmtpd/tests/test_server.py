@@ -67,6 +67,10 @@ def in_wsl():
     return "microsoft" in platform.release().casefold()
 
 
+def in_cygwin():
+    return platform.system().casefold().startswith("cygwin")
+
+
 @pytest.fixture(scope="module")
 def safe_socket_dir() -> Generator[Path, None, None]:
     # See:
@@ -305,6 +309,7 @@ class TestController:
         controller.stop(no_assert=True)
 
 
+@pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
 @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
 class TestUnixSocketController:
     sockfile: Path = None

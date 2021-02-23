@@ -306,7 +306,7 @@ class Controller(BaseThreadedController):
             _ = s.recv(1024)
 
 
-class UnixSocketController(BaseThreadedController):  # pragma: on-win32
+class UnixSocketController(BaseThreadedController):  # pragma: on-win32 on-cygwin
     """
     `Documentation can be found here
     <https://aiosmtpd.readthedocs.io/en/latest/controller.html>`_.
