@@ -36,10 +36,7 @@ class SlowStartController(Controller):
 
     def _run(self, ready_event):
         time.sleep(self.ready_timeout * 1.5)
-        try:
-            super()._run(ready_event)
-        except Exception:
-            pass
+        super()._run(ready_event)
 
 
 class SlowFactoryController(Controller):

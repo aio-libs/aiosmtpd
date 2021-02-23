@@ -46,11 +46,15 @@ jobs:
         # language=bash
         run: |
           pip install colorama pytest pytest-mock sphinx sphinx-autofixture sphinx_rtd_theme
-          sphinx-build -b doctest -d build/.doctree aiosmtpd/docs build/doctest
-          sphinx-build -b html    -d build/.doctree aiosmtpd/docs build/html
-      - name: "Static Type Checking"
+          sphinx-build --color -b doctest -d build/.doctree aiosmtpd/docs build/doctest
+          sphinx-build --color -b html    -d build/.doctree aiosmtpd/docs build/html
+          sphinx-build --color -b man     -d build/.doctree aiosmtpd/docs build/man
+      - name: "Static Code Checking"
         # language=bash
         run: |
+          # Required by examples
+          pip install dnspython argon2-cffi
+          # Install pytype
           pip install pytype
           pytype --keep-going --jobs auto .
       - name: "Other QA Checks"
@@ -90,6 +94,11 @@ jobs:
         pip install colorama coverage[toml] coverage-conditional-plugin packaging pytest pytest-cov pytest-mock
         # Package deps
         python setup.py develop
+    - name: "Security checking"
+      # language=bash
+      run: |
+        pip install bandit
+        bandit -c bandit.yml -r aiosmtpd
     - name: "Execute testing"
       shell: bash
       # language=bash

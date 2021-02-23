@@ -15,6 +15,7 @@ Contents
    lmtp
    handlers
    auth
+   proxyprotocol
    migrating
    testing
    manpage

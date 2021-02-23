@@ -7,6 +7,7 @@ import argparse
 import inspect
 import os
 import pprint
+import shutil
 import sys
 from pathlib import Path
 
@@ -54,6 +55,8 @@ WORKFILES = (
     "diffcov-*.html",
 )
 
+TERM_WIDTH, TERM_HEIGHT = shutil.get_terminal_size()
+
 
 # region #### Helper funcs ############################################################
 
@@ -72,7 +75,7 @@ def deldir(targ: Path, verbose: bool = True):
             pp.rmdir()
         else:
             raise RuntimeError(f"Don't know how to handle '{pp}'")
-        if verbose and (i & 0x1FF) == 0:
+        if verbose and ((i & 0x3FF) == 0):
             print(".", end="", flush=True)
     targ.rmdir()
 
@@ -89,7 +92,7 @@ def dump_env():
         pprint.pprint(dict(os.environ), stream=fout)
 
 
-def move_prof():
+def move_prof(verbose: bool = False):
     """Move profiling files to per-testenv dirs"""
     profpath = Path("prof")
     # fmt: off
@@ -102,43 +105,49 @@ def move_prof():
     if not prof_files:
         return
     targpath = profpath / TOX_ENV_NAME
+    if verbose:
+        print(f"Gathering to {targpath} ...", end="", flush=True)
     os.makedirs(targpath, exist_ok=True)
     for f in targpath.glob("*"):
         f.unlink()
     for f in prof_files:
+        if verbose:
+            print(".", end="", flush=True)
         f.rename(targpath / f.name)
+    if verbose:
+        print(flush=True)
 
 
 def pycache_clean(verbose=False):
     """Cleanup __pycache__ dirs & bytecode files (if any)"""
     aiosmtpdpath = Path(".")
     for i, f in enumerate(aiosmtpdpath.rglob("*.py[co]"), start=1):
-        if verbose and (i % 0x3FF) == 0:
+        if verbose and ((i & 0xFF) == 0):
             print(".", end="", flush=True)
         f.unlink()
-    for d in aiosmtpdpath.rglob("__pycache__"):
-        if verbose:
+    for i, d in enumerate(aiosmtpdpath.rglob("__pycache__"), start=1):
+        if verbose and ((i & 0x7) == 0):
             print(".", end="", flush=True)
         deldir(d, verbose)
     if verbose:
-        print()
+        print(flush=True)
 
 
 def rm_work():
     """Remove work dirs & files. They are .gitignore'd anyways."""
-    print(f"{Style.BRIGHT}Removing work dirs ... ", end="")
+    print(f"{Style.BRIGHT}Removing work dirs ... ", end="", flush=True)
     # The reason we list WORKDIRS explicitly is because we don't want to accidentally
     # bork IDE workdirs such as .idea/ or .vscode/
     for dd in WORKDIRS:
         print(dd, end="", flush=True)
         deldir(Path(dd))
         print(" ", end="", flush=True)
-    print(f"\n{Style.BRIGHT}Removing work files ...", end="")
+    print(f"\n{Style.BRIGHT}Removing work files ...", end="", flush=True)
     for fnglob in WORKFILES:
         for fp in Path(".").glob(fnglob):
             print(".", end="", flush=True)
             fp.exists() and fp.unlink()
-    print()
+    print(flush=True)
 
 
 # endregion
@@ -205,6 +214,14 @@ def get_opts(argv):
     parser.add_argument(
         "--force", "-F", action="store_true", help="Force action even if in CI"
     )
+    parser.add_argument(
+        "-A",
+        "--afterbar",
+        dest="afterbar",
+        default=0,
+        action="count",
+        help="Print horizontal bar after action. Repeat this option for more bars.",
+    )
 
     # From: https://stackoverflow.com/a/49999185/149900
     parser.add_argument(
@@ -218,7 +235,7 @@ def get_opts(argv):
 
 
 def python_interp_details():
-    print(f"{Fore.CYAN}Python interpreter details:")
+    print(f"{Fore.CYAN}\u259E\u259E\u259E Python interpreter details:")
     details = sys.version.splitlines() + sys.executable.splitlines()
     for ln in details:
         print(f"    {Fore.CYAN}{ln}")
@@ -240,8 +257,14 @@ if __name__ == "__main__":
             sys.exit(0)
         else:
             print(f"{Fore.YELLOW}We're in CI but --force is specified")
-    print(f"{Fore.GREEN}{Path(__file__).name} {opts.cmd}{Style.RESET_ALL}")
+    print(
+        f"{Fore.GREEN}>>> "
+        f"{Path(__file__).name} {opts.cmd}{Style.RESET_ALL}",
+        flush=True,
+    )
     dispatcher = globals().get(f"dispatch_{opts.cmd}")
     dispatcher()
+    for _ in range(opts.afterbar):
+        print(Fore.CYAN + ("\u2550" * (TERM_WIDTH - 1)))
     # Defensive reset
     print(Style.RESET_ALL, end="", flush=True)

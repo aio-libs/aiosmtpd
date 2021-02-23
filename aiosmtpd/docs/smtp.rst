@@ -156,7 +156,9 @@ aiosmtpd.smtp
    decode_data=False, hostname=None, ident=None, tls_context=None, \
    require_starttls=False, timeout=300, auth_required=False, \
    auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, \
-   authenticator=None, command_call_limit=None, loop=None)
+   authenticator=None, command_call_limit=None, \
+   proxy_protocol_timeout=None, \
+   loop=None)
 
    |
    | :part:`Parameters`
@@ -340,6 +342,28 @@ aiosmtpd.smtp
       **This will change in version 2.0**.
 
       .. versionadded:: 1.2.3
+
+   .. py:attribute:: proxy_protocol_timeout
+      :type: Optional[Union[int, float]]
+      :value: None
+
+      If given (not ``None``), activates support for **PROXY Protocol**.
+
+      Please read the `PROXY Protocol Support documentation <ProxyProtocol>`_
+      for a more in-depth explanation.
+
+      If not given (or ``None``), disables support for PROXY Protocol.
+
+      .. warning::
+
+         When PROXY protocol support is activated,
+         :class:`SMTP`'s behavior changes:
+         It no longer immediately sends ``220`` greeting upon client connection,
+         but instead it will wait for client to first send the PROXY protocol header.
+
+         This is in accordance to the PROXY Protocol standard.
+
+      .. versionadded:: 1.4
 
    .. py:attribute:: loop
       :noindex:

@@ -13,7 +13,7 @@
 # serve to show the default.
 
 import datetime
-import sphinx_rtd_theme  # noqa: F401
+import sphinx_rtd_theme  # noqa: F401 # pytype: disable=import-error
 import sys
 
 from pathlib import Path
@@ -103,6 +103,7 @@ language = "en"
 # today = ''
 # Else, today_fmt is used as the format for a strftime call.
 # today_fmt = '%B %d, %Y'
+today_fmt = "%Y-%m-%d"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -289,7 +290,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ("manpage", "aiosmtpd", "aiosmtpd Documentation", ["aiosmtpd hackers"], 1),
+    ("manpage", "aiosmtpd", "asyncio based SMTP server", [author], 1),
 ]
 
 # If true, show URL addresses after external links.
