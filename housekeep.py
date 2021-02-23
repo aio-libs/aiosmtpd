@@ -31,24 +31,29 @@ except ImportError:
         RESET_ALL = "\x1b[0m"
 
 
+DUMP_DIR = "_dump"
 TOX_ENV_NAME = os.environ.get("TOX_ENV_NAME", None)
 
+# These dirs will be processed if exists, so no need to remove old entries.
+# I suggest keeping them to clean up old artefacts just in case.
 WORKDIRS = (
     ".mypy_cache",
     ".pytype",
-    ".pytest-cache",
-    ".pytest_cache",
+    ".pytest-cache",  # <-+-- One of these is a typo
+    ".pytest_cache",  # <-+   Keep them both just in case
     ".tox",
-    "_dynamic",
+    DUMP_DIR,
+    "_dynamic",  # Pre 1.4.0a4
     "aiosmtpd.egg-info",
     "build",
     "dist",
     "htmlcov",
-    "prof",
+    "prof",  # Only if "profile" testenv ran
 )
 
 WORKFILES = (
     ".coverage",
+    ".coverage.*",
     "coverage.xml",
     "diffcov.html",
     "coverage-*.xml",
@@ -87,8 +92,10 @@ def deldir(targ: Path, verbose: bool = True):
 
 
 def dump_env():
-    os.makedirs("_dynamic", exist_ok=True)
-    with open(f"_dynamic/ENV.{TOX_ENV_NAME}", "wt") as fout:
+    dumpdir = Path(DUMP_DIR)
+    dumpdir.mkdir(exist_ok=True)
+    with (dumpdir / f"ENV.{TOX_ENV_NAME}.py").open("wt") as fout:
+        print("ENV = \\", file=fout)
         pprint.pprint(dict(os.environ), stream=fout)
 
 

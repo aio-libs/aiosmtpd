@@ -57,7 +57,7 @@ directory = "htmlcov/${TOX_ENV_NAME}"
 title = "aiosmtpd coverage for ${TOX_ENV_NAME}"
 
 [tool.coverage.xml]
-output = "coverage-${INTERP}.xml"
+output = "_dump/coverage-${INTERP}.xml"
 
 [tool.check-manifest]
 ignore = [
