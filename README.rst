@@ -178,7 +178,10 @@ have been configured and tested:
   - ``profile`` = no coverage testing, but code profiling instead.
     This must be **invoked manually** using the ``-e`` parameter
 
-  **Note:** It is also possible to use whatever Python version is used when
+  **Note 1:** As of 2021-02-23,
+  only the ``{py36,py38}-{nocov,cov}`` combinations work on **Cygwin**.
+
+  **Note 2:** It is also possible to use whatever Python version is used when
   invoking ``tox`` by using the ``py`` target, but you must explicitly include
   the type of testing you want. For example::
 
@@ -223,6 +226,8 @@ have been configured and tested:
 
   **Note 2:** This testenv will be _SKIPPED_ on Windows,
   because ``pytype`` currently cannot run on Windows.
+
+  **Note 3:** This testenv does NOT work on **Cygwin**.
 
 .. _`all pytype dependencies`: https://github.com/google/pytype/blob/2021.02.09/CONTRIBUTING.md#pytype-dependencies
 
