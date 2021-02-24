@@ -475,7 +475,7 @@ class TestGetV1(_TestProxyProtocolCommon):
         assert self.transport.close.called
 
     @parametrize("patt", PUBLIC_V1_PATTERNS.values(), ids=PUBLIC_V1_PATTERNS.keys())
-    def test_valid_patterns(self, setup_proxy_protocol, patt: bytes):
+    def test_valid_patterns(self, setup_proxy_protocol: Callable, patt: bytes):
         if not patt.endswith(b"\r\n"):
             patt += b"\r\n"
         setup_proxy_protocol(self)
