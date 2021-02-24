@@ -286,10 +286,8 @@ def main(args: Optional[Sequence[str]] = None) -> None:
         loop.add_signal_handler(signal.SIGINT, loop.stop)
 
     log.debug("Starting asyncio loop")
-    try:
+    with suppress(KeyboardInterrupt):
         loop.run_forever()
-    except KeyboardInterrupt:
-        pass
     server_loop.close()
     log.debug("Completed asyncio loop")
     loop.run_until_complete(server_loop.wait_closed())

@@ -1,6 +1,7 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
+import contextlib
 import logging
 import re
 import struct
@@ -305,10 +306,8 @@ class ProxyData:
     @property
     def tlv(self) -> Optional[ProxyTLV]:
         if self._tlv is None:
-            try:
+            with contextlib.suppress(MalformedTLV):
                 self._tlv = ProxyTLV.from_raw(self.rest)
-            except MalformedTLV:
-                pass
         return self._tlv
 
     def with_error(self, error_msg: str, log_prefix: bool = True) -> "ProxyData":

@@ -65,7 +65,9 @@ class TestStatusCodes:
                 f"{key}: First digit of Enhanced Status Code different from "
                 f"first digit of Standard Status Code"
             )
-            total_correct += 1
+            # Can't use enumerate(); total_correct does not increase in lockstep with
+            # the loop (there are several "continue"s above)
+            total_correct += 1  # noqa: SIM113
         assert total_correct > 0
 
     def test_commands(self):

@@ -10,7 +10,7 @@ import socket
 import struct
 import time
 from base64 import b64decode
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from functools import partial
 from ipaddress import IPv4Address, IPv6Address
 from smtplib import SMTP as SMTPClient
@@ -138,10 +138,8 @@ def setup_proxy_protocol(
 
         def runner(stop_after: float = DEFAULT_AUTOCANCEL):
             loop.call_later(stop_after, protocol._handler_coroutine.cancel)
-            try:
+            with suppress(asyncio.CancelledError):
                 loop.run_until_complete(protocol._handler_coroutine)
-            except asyncio.CancelledError:
-                pass
 
         test_obj.protocol = protocol
         test_obj.runner = runner
@@ -1120,8 +1118,7 @@ class TestHandlerAcceptReject:
             sock.sendall(handshake)
             resp = sock.recv(4096)
             assert oper(resp, b"")
-            with expect:
-                with SMTPClient() as client:
-                    client.sock = sock
-                    code, mesg = client.ehlo("example.org")
-                    assert code == 250
+            with expect, SMTPClient() as client:
+                client.sock = sock
+                code, mesg = client.ehlo("example.org")
+                assert code == 250

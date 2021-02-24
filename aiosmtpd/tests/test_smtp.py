@@ -62,10 +62,7 @@ MAIL_LOG.setLevel(logging.DEBUG)
 
 
 def auth_callback(mechanism, login, password) -> bool:
-    if login and login.decode() == "goodlogin":
-        return True
-    else:
-        return False
+    return login and login.decode() == "goodlogin"
 
 
 def assert_nopassleak(passwd: str, record_tuples: List[Tuple[str, int, str]]):
@@ -434,10 +431,8 @@ class TestProtocol:
                 ]
             )
         )
-        try:
+        with suppress(asyncio.CancelledError):
             temp_event_loop.run_until_complete(protocol._handler_coroutine)
-        except asyncio.CancelledError:
-            pass
         _, responses = transport_resp
         assert responses[5] == S.S250_OK.to_bytes() + b"\r\n"
         assert len(handler.box) == 1
@@ -458,10 +453,8 @@ class TestProtocol:
                 ]
             )
         )
-        try:
+        with suppress(asyncio.CancelledError):
             temp_event_loop.run_until_complete(protocol._handler_coroutine)
-        except asyncio.CancelledError:
-            pass
         _, responses = transport_resp
         assert responses[5] == S.S250_OK.to_bytes() + b"\r\n"
         assert len(handler.box) == 1

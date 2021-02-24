@@ -97,8 +97,7 @@ def scan_programs(
 
         for cmd, sub in choices:
             if isinstance(sub, argparse.ArgumentParser):
-                for program in scan_programs(sub, command + [cmd], maxdepth, depth + 1):
-                    yield program
+                yield from scan_programs(sub, command + [cmd], maxdepth, depth + 1)
 
 
 def scan_options(actions: list):
@@ -321,8 +320,7 @@ def render_rst(
         yield ("!" if is_subgroup else "?") * len(title)
         yield ""
 
-    for line in (description or "").splitlines():
-        yield line
+    yield from (description or "").splitlines()
     yield ""
 
     if usage is None:
