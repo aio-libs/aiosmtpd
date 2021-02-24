@@ -730,7 +730,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                         self.transport.close()
                         continue
                     await self.push(
-                        '500 Error: command "%s" not recognized' % command)
+                        f'500 Error: command "{command}" not recognized'
+                    )
                     continue
 
                 # Received a valid command, reset the timer.
@@ -816,9 +817,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         response = []
         self._set_rset_state()
         self.session.extended_smtp = True
-        response.append('250-%s' % self.hostname)
+        response.append('250-' + self.hostname)
         if self.data_size_limit:
-            response.append('250-SIZE %s' % self.data_size_limit)
+            response.append(f'250-SIZE {self.data_size_limit}')
             self.command_size_limits['MAIL'] += 26
         if not self._decode_data:
             response.append('250-8BITMIME')
@@ -1206,7 +1207,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg:
             address, params = self._getaddr(arg)
             if address is None:
-                await self.push('502 Could not VRFY %s' % arg)
+                await self.push('502 Could not VRFY ' + arg)
             else:
                 status = await self._call_handler_hook('VRFY', address)
                 await self.push(

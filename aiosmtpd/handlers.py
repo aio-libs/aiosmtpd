@@ -123,7 +123,7 @@ class Proxy:
                 ending = line
                 break
         peer = session.peer[0].encode("ascii")
-        lines.insert(_i, b"X-Peer: %s%s" % (peer, ending))
+        lines.insert(_i, b"X-Peer: " + peer + ending)
         data = EMPTYBYTES.join(lines)
         refused = self._deliver(envelope.mail_from, envelope.rcpt_tos, data)
         # TBD: what to do with refused addresses?
