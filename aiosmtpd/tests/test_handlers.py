@@ -66,7 +66,7 @@ class DataHandler:
     original_content: bytes = None
 
     async def handle_DATA(
-            self, server: Server, session: ServerSession, envelope: Envelope
+        self, server: Server, session: ServerSession, envelope: Envelope
     ) -> str:
         self.content = envelope.content
         self.original_content = envelope.original_content
@@ -219,7 +219,7 @@ def temp_maildir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def mailbox_controller(
-        temp_maildir, get_controller
+    temp_maildir, get_controller
 ) -> Generator[Controller, None, None]:
     handler = Mailbox(temp_maildir)
     controller = get_controller(handler)
@@ -803,13 +803,13 @@ class TestHooks:
 
     def test_hook_EHLO_deprecated_warning(self):
         with pytest.warns(
-                DeprecationWarning,
-                match=(
-                    # Is a regex; escape regex special chars if necessary
-                    r"Use the 5-argument handle_EHLO\(\) hook instead of the "
-                    r"4-argument handle_EHLO\(\) hook; support for the 4-argument "
-                    r"handle_EHLO\(\) hook will be removed in version 2.0"
-                )
+            DeprecationWarning,
+            match=(
+                # Is a regex; escape regex special chars if necessary
+                r"Use the 5-argument handle_EHLO\(\) hook instead of the "
+                r"4-argument handle_EHLO\(\) hook; support for the 4-argument "
+                r"handle_EHLO\(\) hook will be removed in version 2.0"
+            ),
         ):
             _ = Server(EHLOHandlerDeprecated())
 
