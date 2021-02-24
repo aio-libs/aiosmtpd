@@ -90,8 +90,6 @@ def cache_fqdn(session_mocker: MockFixture):
     the DNS server thinking it was an attack or something.
     """
     session_mocker.patch("socket.getfqdn", return_value=Global.FQDN)
-    #
-    yield
 
 
 # endregion
@@ -308,7 +306,7 @@ def client(request: pytest.FixtureRequest) -> Generator[SMTPClient, None, None]:
 
 
 @pytest.fixture
-def ssl_context_server() -> Generator[ssl.SSLContext, None, None]:
+def ssl_context_server() -> ssl.SSLContext:
     """
     Provides a server-side SSL Context
     """
@@ -316,11 +314,11 @@ def ssl_context_server() -> Generator[ssl.SSLContext, None, None]:
     context.check_hostname = False
     context.load_cert_chain(SERVER_CRT, SERVER_KEY)
     #
-    yield context
+    return context
 
 
 @pytest.fixture
-def ssl_context_client() -> Generator[ssl.SSLContext, None, None]:
+def ssl_context_client() -> ssl.SSLContext:
     """
     Provides a client-side SSL Context
     """
@@ -328,7 +326,7 @@ def ssl_context_client() -> Generator[ssl.SSLContext, None, None]:
     context.check_hostname = False
     context.load_verify_locations(SERVER_CRT)
     #
-    yield context
+    return context
 
 
 # Please keep the scope as "module"; setting it as "function" (the default) somehow

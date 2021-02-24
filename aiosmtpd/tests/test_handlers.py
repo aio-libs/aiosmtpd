@@ -10,7 +10,7 @@ from pathlib import Path
 from smtplib import SMTPDataError, SMTPRecipientsRefused
 from textwrap import dedent
 from types import SimpleNamespace
-from typing import AnyStr, Generator, Type, TypeVar, Union
+from typing import AnyStr, Callable, Generator, Type, TypeVar, Union
 
 import pytest
 
@@ -212,9 +212,9 @@ def debugging_controller(get_controller) -> Generator[Controller, None, None]:
 
 
 @pytest.fixture
-def temp_maildir(tmp_path: Path) -> Generator[Path, None, None]:
+def temp_maildir(tmp_path: Path) -> Path:
     maildir_path = tmp_path / "maildir"
-    yield maildir_path
+    return maildir_path
 
 
 @pytest.fixture
@@ -232,7 +232,7 @@ def mailbox_controller(
 
 
 @pytest.fixture
-def with_fake_parser():
+def with_fake_parser() -> Callable:
     """
     Gets a function that will instantiate a handler_class using the class's
     from_cli() @classmethod, using FakeParser as the parser.
@@ -253,7 +253,7 @@ def with_fake_parser():
             handler = SimpleNamespace(fparser=parser, exception=type(e))
         return handler
 
-    yield handler_initer
+    return handler_initer
 
 
 @pytest.fixture
@@ -766,7 +766,6 @@ class TestProxyMocked:
     def patch_smtp_oserror(self, mocker):
         mock = mocker.patch("aiosmtpd.handlers.smtplib.SMTP")
         mock().sendmail.side_effect = OSError
-        yield
 
     def test_oserror(
         self, caplog, patch_smtp_oserror, proxy_decoding_controller, client

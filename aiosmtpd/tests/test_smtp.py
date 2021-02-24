@@ -9,6 +9,7 @@ import logging
 import socket
 import time
 import warnings
+from asyncio.transports import Transport
 from base64 import b64encode
 from contextlib import suppress
 from smtplib import (
@@ -19,7 +20,7 @@ from smtplib import (
     SMTPServerDisconnected,
 )
 from textwrap import dedent
-from typing import Any, AnyStr, Callable, Generator, List, Tuple
+from typing import cast, Any, AnyStr, Callable, Generator, List, Tuple
 
 import pytest
 from pytest_mock import MockFixture
@@ -288,19 +289,19 @@ class CustomIdentController(Controller):
 
 
 @pytest.fixture
-def transport_resp(mocker: MockFixture):
+def transport_resp(mocker: MockFixture) -> Tuple[Transport, list]:
     responses = []
     mocked = mocker.Mock()
     mocked.write = responses.append
     #
-    yield mocked, responses
+    return cast(Transport, mocked), responses
 
 
 @pytest.fixture
 def get_protocol(
     temp_event_loop: asyncio.AbstractEventLoop,
     transport_resp: Any,
-) -> Generator[Callable[..., Server], None, None]:
+) -> Callable[..., Server]:
     transport, _ = transport_resp
 
     def getter(*args, **kwargs) -> Server:
@@ -308,7 +309,7 @@ def get_protocol(
         proto.connection_made(transport)
         return proto
 
-    yield getter
+    return getter
 
 
 # region #### Fixtures: Controllers ##################################################
@@ -996,19 +997,19 @@ class TestAuthMechanisms(_CommonMethods):
     @pytest.fixture
     def do_auth_plain1(
         self, client
-    ) -> Generator[Callable[[str], Tuple[int, bytes]], None, None]:
+    ) -> Callable[[str], Tuple[int, bytes]]:
         self._ehlo(client)
 
         def do(param: str) -> Tuple[int, bytes]:
             return client.docmd("AUTH PLAIN " + param)
 
         do.client = client
-        yield do
+        return do
 
     @pytest.fixture
     def do_auth_login3(
         self, client
-    ) -> Generator[Callable[[str], Tuple[int, bytes]], None, None]:
+    ) -> Callable[[str], Tuple[int, bytes]]:
         self._ehlo(client)
         resp = client.docmd("AUTH LOGIN")
         assert resp == S.S334_AUTH_USERNAME
@@ -1017,7 +1018,7 @@ class TestAuthMechanisms(_CommonMethods):
             return client.docmd(param)
 
         do.client = client
-        yield do
+        return do
 
     def test_ehlo(self, client):
         code, mesg = client.ehlo("example.com")
@@ -1129,11 +1130,11 @@ class TestAuthMechanisms(_CommonMethods):
         assert_nopassleak(PW, caplog.record_tuples)
 
     @pytest.fixture
-    def client_auth_plain2(self, client) -> Generator[SMTPClient, None, None]:
+    def client_auth_plain2(self, client) -> SMTPClient:
         self._ehlo(client)
         resp = client.docmd("AUTH PLAIN")
         assert resp == S.S334_AUTH_EMPTYPROMPT
-        yield client
+        return client
 
     def test_plain2_good_credentials(
         self, caplog, auth_peeker_controller, client_auth_plain2
@@ -1975,7 +1976,8 @@ class TestAuthArgs:
         ],
     )
     def test_authmechname_decorator_badname(self, name):
-        with pytest.raises(ValueError):
+        expectre = r"Invalid AUTH mechanism name"
+        with pytest.raises(ValueError, match=expectre):
             auth_mechanism(name)
 
 

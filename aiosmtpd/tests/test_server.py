@@ -208,8 +208,9 @@ class TestController:
         contr2 = Controller(
             Sink(), hostname=Global.SrvAddr.host, port=Global.SrvAddr.port
         )
+        expectedre = r"error while attempting to bind on address"
         try:
-            with pytest.raises(socket.error):
+            with pytest.raises(socket.error, match=expectedre):
                 contr2.start()
         finally:
             contr2.stop()

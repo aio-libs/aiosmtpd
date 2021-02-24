@@ -145,7 +145,7 @@ def setup_proxy_protocol(
         test_obj.runner = runner
         test_obj.transport = transport
 
-    yield getter
+    return getter
 
 
 class _TestProxyProtocolCommon:
@@ -1028,7 +1028,7 @@ class TestWithController:
             # Try resending the handshake. Should also fail (because connection has
             # been closed by the server.
             # noinspection PyTypeChecker
-            with pytest.raises(OSError) as exc_info:
+            with pytest.raises(OSError) as exc_info:  # noqa: PT011
                 sock.send(handshake)
                 resp = sock.recv(4096)
                 if resp == b"":
@@ -1065,7 +1065,7 @@ class TestWithController:
             # Try resending the handshake. Should also fail (because connection has
             # been closed by the server.
             # noinspection PyTypeChecker
-            with pytest.raises(OSError) as exc_info:
+            with pytest.raises(OSError) as exc_info:  # noqa: PT011
                 sock.send(handshake)
                 resp = sock.recv(4096)
                 if resp == b"":

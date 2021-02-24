@@ -70,8 +70,6 @@ def setuid(mocker: MockFixture):
     mocker.patch("aiosmtpd.main.pwd", None)
     mocker.patch("os.setuid", side_effect=PermissionError)
     mocker.patch("aiosmtpd.main.partial", side_effect=RuntimeError)
-    #
-    yield
 
 
 # endregion
@@ -277,7 +275,7 @@ class TestParseArgs:
         )
 
     @pytest.mark.parametrize(
-        "args, exp_host, exp_port",
+        ("args", "exp_host", "exp_port"),
         [
             ((), "localhost", 8025),
             (("-l", "foo:25"), "foo", 25),
@@ -334,7 +332,7 @@ class TestParseArgs:
         assert args.requiretls is False
 
     @pytest.mark.parametrize(
-        "certfile, keyfile, expect",
+        ("certfile", "keyfile", "expect"),
         [
             ("x", "x", "Cert file x not found"),
             (SERVER_CRT, "x", "Key file x not found"),
