@@ -55,7 +55,8 @@ You need **at least Python 3.6** to use this library.
 Supported Platforms
 -----------------------
 
-``aiosmtpd`` has been tested on the following platforms (in alphabetical order):
+``aiosmtpd`` has been tested on **CPython** and **PyPy3.7**
+for the following platforms (in alphabetical order):
 
 * Cygwin (on Windows 10) [1]
 * FreeBSD 12 [2]
@@ -177,11 +178,8 @@ have been configured and tested:
   - ``profile`` = no coverage testing, but code profiling instead.
     This must be **invoked manually** using the ``-e`` parameter
 
-  **Note 1:** Due to possible 'complications' when setting up PyPy on
-  systems without pyenv, ``pypy3`` tests also will not be automatically
-  run; you must invoke them manually. For example::
-
-    $ tox -e pypy3-nocov
+  **Note 1:** As of 2021-02-23,
+  only the ``{py36,py38}-{nocov,cov}`` combinations work on **Cygwin**.
 
   **Note 2:** It is also possible to use whatever Python version is used when
   invoking ``tox`` by using the ``py`` target, but you must explicitly include
@@ -226,8 +224,10 @@ have been configured and tested:
   **Note 1:** Please ensure that `all pytype dependencies`_ have been installed before
   executing this testenv.
 
-  **Note 2:** Because ``pytype`` does not run on Windows,
-  This testenv must be invoked explicitly; it will not automatically run.
+  **Note 2:** This testenv will be _SKIPPED_ on Windows,
+  because ``pytype`` currently cannot run on Windows.
+
+  **Note 3:** This testenv does NOT work on **Cygwin**.
 
 .. _`all pytype dependencies`: https://github.com/google/pytype/blob/2021.02.09/CONTRIBUTING.md#pytype-dependencies
 

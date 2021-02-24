@@ -6,7 +6,7 @@ import logging
 import multiprocessing as MP
 import os
 import time
-from ctypes import c_bool
+from contextlib import contextmanager
 from smtplib import SMTP as SMTPClient
 from smtplib import SMTP_SSL
 from typing import Generator
@@ -92,41 +92,57 @@ def setuid(mocker):
 # region ##### Helper Funcs ###########################################################
 
 
-def watch_for_tls(ready_flag, has_tls, req_tls):
-    has_tls.value = False
-    req_tls.value = False
+def watch_for_tls(ready_flag, retq: MP.Queue):
+    has_tls = False
+    req_tls = False
     ready_flag.set()
     start = time.monotonic()
-    while (time.monotonic() - start) <= AUTOSTOP_DELAY:
+    delay = AUTOSTOP_DELAY * 1.5
+    while (time.monotonic() - start) <= delay:
         try:
             with SMTPClient("localhost", 8025) as client:
                 resp = client.docmd("HELP", "HELO")
                 if resp == S.S530_STARTTLS_FIRST:
-                    req_tls.value = True
+                    req_tls = True
                 client.ehlo("exemple.org")
                 if "starttls" in client.esmtp_features:
-                    has_tls.value = True
-                return
+                    has_tls = True
+                break
         except Exception:
             time.sleep(0.05)
+    retq.put(has_tls)
+    retq.put(req_tls)
 
 
-def watch_for_smtps(ready_flag, has_smtps):
-    has_smtps.value = False
+def watch_for_smtps(ready_flag, retq: MP.Queue):
+    has_smtps = False
     ready_flag.set()
     start = time.monotonic()
-    while (time.monotonic() - start) <= AUTOSTOP_DELAY:
+    delay = AUTOSTOP_DELAY * 1.5
+    while (time.monotonic() - start) <= delay:
         try:
             with SMTP_SSL("localhost", 8025) as client:
                 client.ehlo("exemple.org")
-                has_smtps.value = True
-                return
+                has_smtps = True
+                break
         except Exception:
             time.sleep(0.05)
+    retq.put(has_smtps)
 
 
 def main_n(*args):
     main(("-n",) + args)
+
+
+@contextmanager
+def watcher_process(func):
+    redy = MP.Event()
+    retq = MP.Queue()
+    proc = MP.Process(target=func, args=(redy, retq))
+    proc.start()
+    redy.wait()
+    yield retq
+    proc.join()
 
 
 # endregion
@@ -196,47 +212,35 @@ class TestMain:
 
 class TestMainByWatcher:
     def test_tls(self, temp_event_loop):
-        ready_flag = MP.Event()
-        has_starttls = MP.Value(c_bool)
-        require_tls = MP.Value(c_bool)
-        p = MP.Process(
-            target=watch_for_tls, args=(ready_flag, has_starttls, require_tls)
-        )
-        p.start()
-        ready_flag.wait()
-        temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
-        main_n("--tlscert", str(SERVER_CRT), "--tlskey", str(SERVER_KEY))
-        p.join()
-        assert has_starttls.value is True
-        assert require_tls.value is True
+        with watcher_process(watch_for_tls) as retq:
+            temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
+            main_n("--tlscert", str(SERVER_CRT), "--tlskey", str(SERVER_KEY))
+        has_starttls = retq.get()
+        assert has_starttls is True
+        require_tls = retq.get()
+        assert require_tls is True
 
     def test_tls_noreq(self, temp_event_loop):
-        ready_flag = MP.Event()
-        has_starttls = MP.Value(c_bool)
-        require_tls = MP.Value(c_bool)
-        p = MP.Process(
-            target=watch_for_tls, args=(ready_flag, has_starttls, require_tls)
-        )
-        p.start()
-        ready_flag.wait()
-        temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
-        main_n(
-            "--tlscert", str(SERVER_CRT), "--tlskey", str(SERVER_KEY), "--no-requiretls"
-        )
-        p.join()
-        assert has_starttls.value is True
-        assert require_tls.value is False
+        with watcher_process(watch_for_tls) as retq:
+            temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
+            main_n(
+                "--tlscert",
+                str(SERVER_CRT),
+                "--tlskey",
+                str(SERVER_KEY),
+                "--no-requiretls",
+            )
+        has_starttls = retq.get()
+        assert has_starttls is True
+        require_tls = retq.get()
+        assert require_tls is False
 
     def test_smtps(self, temp_event_loop):
-        ready_flag = MP.Event()
-        has_smtps = MP.Value(c_bool)
-        p = MP.Process(target=watch_for_smtps, args=(ready_flag, has_smtps))
-        p.start()
-        ready_flag.wait()
-        temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
-        main_n("--smtpscert", str(SERVER_CRT), "--smtpskey", str(SERVER_KEY))
-        p.join()
-        assert has_smtps.value is True
+        with watcher_process(watch_for_smtps) as retq:
+            temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
+            main_n("--smtpscert", str(SERVER_CRT), "--smtpskey", str(SERVER_KEY))
+        has_smtps = retq.get()
+        assert has_smtps is True
 
 
 class TestParseArgs:
