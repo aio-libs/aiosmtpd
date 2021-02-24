@@ -588,11 +588,8 @@ class TestMailbox:
         # Check the messages in the mailbox.
         mailbox = Maildir(temp_maildir)
         messages = sorted(mailbox, key=itemgetter("message-id"))
-        assert list(message["message-id"] for message in messages) == [
-            "<ant>",
-            "<bee>",
-            "<cat>",
-        ]
+        expect = ["<ant>", "<bee>", "<cat>"]
+        assert [message["message-id"] for message in messages] == expect
 
     def test_mailbox_reset(self, temp_maildir, mailbox_controller, client):
         client.sendmail(

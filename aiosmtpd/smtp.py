@@ -688,9 +688,11 @@ class SMTP(asyncio.StreamReaderProtocol):
                             await self.push('500 Error: strict ASCII mode')
                             # Should we await self.handle_exception()?
                             continue
-                max_sz = (self.command_size_limits[command]
-                          if self.session.extended_smtp
-                          else self.command_size_limit)
+                max_sz = (
+                    self.command_size_limits[command]
+                    if self.session.extended_smtp
+                    else self.command_size_limit
+                )
                 if len(line) > max_sz:
                     await self.push('500 Command line too long')
                     continue

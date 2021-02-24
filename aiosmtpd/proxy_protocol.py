@@ -74,9 +74,10 @@ V2_PARSE_ADDR_FAMPRO = {
 """Family & Proto combinations that need address parsing"""
 
 
-__all__ = [
+__all__ = ["struct", "partial", "IPv4Address", "IPv6Address"]
+__all__.extend(
     k for k in globals().keys() if k.startswith("V1_") or k.startswith("V2_")
-] + ["struct", "partial", "IPv4Address", "IPv6Address"]
+)
 
 
 _NOT_FOUND = object()
