@@ -3,6 +3,7 @@
 
 import logging
 import sys
+from email.message import Message
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
@@ -73,9 +74,9 @@ class DataHandler:
 
 
 class AsyncMessageHandler(AsyncMessage):
-    handled_message = None
+    handled_message: Message = None
 
-    async def handle_message(self, message: AnyStr) -> None:
+    async def handle_message(self, message: Message) -> None:
         self.handled_message = message
 
 
