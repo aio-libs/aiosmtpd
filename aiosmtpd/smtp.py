@@ -351,7 +351,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.tls_context = tls_context
         if tls_context:
             if (tls_context.verify_mode
-                    not in {ssl.CERT_NONE, ssl.CERT_OPTIONAL}):
+                    not in {ssl.CERT_NONE, ssl.CERT_OPTIONAL}):  # noqa: DUO122
                 log.warning("tls_context.verify_mode not in {CERT_NONE, "
                             "CERT_OPTIONAL}; this might cause client "
                             "connection problems")

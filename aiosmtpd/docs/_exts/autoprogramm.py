@@ -158,7 +158,7 @@ def import_object(import_name: str) -> Any:
                 with open(f[0]) as fobj:
                     codestring = fobj.read()
                 foo = imp.new_module("foo")
-                exec(codestring, foo.__dict__)  # nosec
+                exec(codestring, foo.__dict__)  # noqa: DUO105  # nosec
 
                 sys.modules["foo"] = foo
                 mod = __import__("foo")
@@ -170,7 +170,7 @@ def import_object(import_name: str) -> Any:
     globals_ = builtins
     if not isinstance(globals_, dict):
         globals_ = globals_.__dict__
-    return eval(expr, globals_, mod.__dict__)  # nosec
+    return eval(expr, globals_, mod.__dict__)  # noqa: DUO104  # nosec
 
 
 class AutoprogrammDirective(Directive):

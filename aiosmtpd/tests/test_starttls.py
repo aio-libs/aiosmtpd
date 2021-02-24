@@ -359,7 +359,7 @@ class TestRequireTLSAUTH:
 class TestTLSContext:
     def test_verify_mode_nochange(self, ssl_context_server):
         context = ssl_context_server
-        for mode in (ssl.CERT_NONE, ssl.CERT_OPTIONAL):
+        for mode in (ssl.CERT_NONE, ssl.CERT_OPTIONAL):  # noqa: DUO122
             context.verify_mode = mode
             _ = Server(Sink(), tls_context=context)
             assert context.verify_mode == mode
@@ -375,10 +375,10 @@ class TestTLSContext:
 
     def test_nocertreq_chkhost_warn(self, caplog, ssl_context_server):
         context = ssl_context_server
-        context.verify_mode = ssl.CERT_OPTIONAL
+        context.verify_mode = ssl.CERT_OPTIONAL  # noqa: DUO122
         context.check_hostname = True
         _ = Server(Sink(), tls_context=context)
-        assert context.verify_mode == ssl.CERT_OPTIONAL
+        assert context.verify_mode == ssl.CERT_OPTIONAL  # noqa: DUO122
         logmsg = caplog.record_tuples[0][-1]
         assert "tls_context.check_hostname == True" in logmsg
         assert "might cause client connection problems" in logmsg
