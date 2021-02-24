@@ -213,8 +213,7 @@ def debugging_controller(get_controller) -> Generator[Controller, None, None]:
 
 @pytest.fixture
 def temp_maildir(tmp_path: Path) -> Path:
-    maildir_path = tmp_path / "maildir"
-    return maildir_path
+    return tmp_path / "maildir"
 
 
 @pytest.fixture

@@ -278,8 +278,7 @@ class CustomIdentController(Controller):
     ident: bytes = b"Identifying SMTP v2112"
 
     def factory(self):
-        server = Server(self.handler, ident=self.ident.decode())
-        return server
+        return Server(self.handler, ident=self.ident.decode())
 
 
 # endregion
