@@ -24,7 +24,9 @@ from typing import (
     List,
     NamedTuple,
     Optional,
+    Sequence,
     Tuple,
+    TypeVar,
     Union,
 )
 from warnings import warn
@@ -39,7 +41,7 @@ from aiosmtpd.proxy_protocol import ProxyData, get_proxy
 # region #### Custom Data Types #######################################################
 
 class _Missing:
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "MISSING"
 
 
@@ -58,6 +60,9 @@ AuthCallbackType = Callable[[str, bytes, bytes], bool]
 AuthenticatorType = Callable[["SMTP", "Session", "Envelope", str, Any], "AuthResult"]
 AuthMechanismType = Callable[["SMTP", List[str]], Awaitable[Any]]
 _TriStateType = Union[None, _Missing, bytes]
+
+RT = TypeVar("RT")  # "ReturnType"
+DecoratorType = Callable[[Callable[..., RT]], Callable[..., RT]]
 
 
 # endregion
@@ -149,7 +154,7 @@ class LoginPassword(NamedTuple):
 
 @public
 class Session:
-    def __init__(self, loop):
+    def __init__(self, loop: asyncio.AbstractEventLoop):
         self.peer = None
         self.ssl = None
         self.host_name = None
@@ -172,7 +177,7 @@ class Session:
         self.authenticated = None
 
     @property
-    def login_data(self):
+    def login_data(self) -> Any:
         """Legacy login_data, usually containing the username"""
         log.warning(
             "Session.login_data is deprecated and will be removed in version 2.0"
@@ -180,7 +185,7 @@ class Session:
         return self._login_data
 
     @login_data.setter
-    def login_data(self, value):
+    def login_data(self, value: Any) -> None:
         log.warning(
             "Session.login_data is deprecated and will be removed in version 2.0"
         )
@@ -189,7 +194,7 @@ class Session:
 
 @public
 class Envelope:
-    def __init__(self):
+    def __init__(self) -> None:
         self.mail_from = None
         self.mail_options = []
         self.smtp_utf8 = False
@@ -202,12 +207,14 @@ class Envelope:
 # This is here to enable debugging output when the -E option is given to the
 # unit test suite.  In that case, this function is mocked to set the debug
 # level on the loop (as if PYTHONASYNCIODEBUG=1 were set).
-def make_loop():
+def make_loop() -> asyncio.AbstractEventLoop:
     return asyncio.get_event_loop()
 
 
 @public
-def syntax(text, extended=None, when: Optional[str] = None):
+def syntax(
+        text: str, extended: str = None, when: Optional[str] = None
+) -> DecoratorType:
     """
     A @decorator that provides helptext for (E)SMTP HELP.
     Applies for smtp_* methods only!
@@ -217,7 +224,7 @@ def syntax(text, extended=None, when: Optional[str] = None):
     :param when: The name of the attribute of SMTP class to check; if the value
         of the attribute is false-y then HELP will not be available for the command
     """
-    def decorator(f):
+    def decorator(f: Callable[..., RT]) -> Callable[..., RT]:
         f.__smtp_syntax__ = text
         f.__smtp_syntax_extended__ = extended
         f.__smtp_syntax_when__ = when
@@ -226,7 +233,7 @@ def syntax(text, extended=None, when: Optional[str] = None):
 
 
 @public
-def auth_mechanism(actual_name: str):
+def auth_mechanism(actual_name: str) -> DecoratorType:
     """
     A @decorator to explicitly specifies the name of the AUTH mechanism implemented by
     the function/method this decorates
@@ -234,9 +241,10 @@ def auth_mechanism(actual_name: str):
     :param actual_name: Name of AUTH mechanism. Must consists of [A-Z0-9_-] only.
         Will be converted to uppercase
     """
-    def decorator(f):
+    def decorator(f: Callable[..., RT]) -> Callable[..., RT]:
         f.__auth_mechanism_name__ = actual_name
         return f
+
     actual_name = actual_name.upper()
     if not VALID_AUTHMECH.match(actual_name):
         raise ValueError(f"Invalid AUTH mechanism name: {actual_name}")
@@ -249,7 +257,7 @@ def login_always_fail(
     return False
 
 
-def is_int(o):
+def is_int(o: Any) -> bool:
     return isinstance(o, int)
 
 
@@ -267,7 +275,7 @@ def sanitize(text: bytes) -> bytes:
 
 
 @public
-def sanitized_log(func: Callable, msg: AnyStr, *args, **kwargs):
+def sanitized_log(func: Callable[..., None], msg: AnyStr, *args, **kwargs) -> None:
     """
     Sanitize args before passing to a logging function.
     """
@@ -305,24 +313,24 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     def __init__(
             self,
-            handler,
+            handler: Any,
             *,
-            data_size_limit=DATA_SIZE_DEFAULT,
-            enable_SMTPUTF8=False,
-            decode_data=False,
-            hostname=None,
-            ident=None,
+            data_size_limit: int = DATA_SIZE_DEFAULT,
+            enable_SMTPUTF8: bool = False,
+            decode_data: bool = False,
+            hostname: str = None,
+            ident: str = None,
             tls_context: Optional[ssl.SSLContext] = None,
-            require_starttls=False,
-            timeout=300,
-            auth_required=False,
-            auth_require_tls=True,
+            require_starttls: bool = False,
+            timeout: float = 300,
+            auth_required: bool = False,
+            auth_require_tls: bool = True,
             auth_exclude_mechanism: Optional[Iterable[str]] = None,
             auth_callback: AuthCallbackType = None,
             command_call_limit: Union[int, Dict[str, int], None] = None,
             authenticator: AuthenticatorType = None,
             proxy_protocol_timeout: Optional[Union[int, float]] = None,
-            loop=None
+            loop: asyncio.AbstractEventLoop = None
     ):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
@@ -452,13 +460,13 @@ class SMTP(asyncio.StreamReaderProtocol):
             else:
                 raise TypeError("command_call_limit must be int or Dict[str, int]")
 
-    def _create_session(self):
+    def _create_session(self) -> Session:
         return Session(self.loop)
 
-    def _create_envelope(self):
+    def _create_envelope(self) -> Envelope:
         return Envelope()
 
-    async def _call_handler_hook(self, command, *args):
+    async def _call_handler_hook(self, command: str, *args) -> Any:
         hook = self._handle_hooks.get(command)
         if hook is None:
             return MISSING
@@ -466,7 +474,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         return status
 
     @property
-    def max_command_size_limit(self):
+    def max_command_size_limit(self) -> int:
         try:
             return max(self.command_size_limits.values())
         except ValueError:
@@ -484,7 +492,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if closed.done() and not closed.cancelled():
             closed.exception()
 
-    def connection_made(self, transport):
+    def connection_made(self, transport: asyncio.transports.Transport) -> None:
         # Reset state due to rfc3207 part 4.2.
         self._set_rset_state()
         self.session = self._create_session()
@@ -513,7 +521,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._handler_coroutine = self.loop.create_task(
                 self._handle_client())
 
-    def connection_lost(self, error):
+    def connection_lost(self, error: Optional[Exception]) -> None:
         log.info('%r connection lost', self.session.peer)
         self._timeout_handle.cancel()
         # If STARTTLS was issued, then our transport is the SSL protocol
@@ -527,7 +535,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._handler_coroutine.cancel()
         self.transport = None
 
-    def eof_received(self):
+    def eof_received(self) -> bool:
         log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
         if self.session.ssl is not None:
@@ -537,7 +545,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return False
         return super().eof_received()
 
-    def _reset_timeout(self, duration=None):
+    def _reset_timeout(self, duration: float = None) -> None:
         if self._timeout_handle is not None:
             self._timeout_handle.cancel()
         self._timeout_handle = self.loop.call_later(
@@ -552,7 +560,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         # up state.
         self.transport.close()
 
-    def _client_connected_cb(self, reader, writer):
+    def _client_connected_cb(
+            self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ):
         # This is redundant since we subclass StreamReaderProtocol, but I like
         # the shorter names.
         self._reader = reader
@@ -577,7 +587,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         log.debug("%r << %r", self.session.peer, response)
         await self._writer.drain()
 
-    async def handle_exception(self, error):
+    async def handle_exception(self, error: Exception) -> str:
         if hasattr(self.event_handler, 'handle_exception'):
             status = await self.event_handler.handle_exception(error)
             return status
@@ -785,7 +795,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     # SMTP and ESMTP commands
     @syntax('HELO hostname')
-    async def smtp_HELO(self, hostname):
+    async def smtp_HELO(self, hostname: str):
         if not hostname:
             await self.push('501 Syntax: HELO hostname')
             return
@@ -798,7 +808,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push(status)
 
     @syntax('EHLO hostname')
-    async def smtp_EHLO(self, hostname):
+    async def smtp_EHLO(self, hostname: str):
         if not hostname:
             await self.push('501 Syntax: EHLO hostname')
             return
@@ -848,12 +858,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push(r)
 
     @syntax('NOOP [ignored]')
-    async def smtp_NOOP(self, arg):
+    async def smtp_NOOP(self, arg: str):
         status = await self._call_handler_hook('NOOP', arg)
         await self.push('250 OK' if status is MISSING else status)
 
     @syntax('QUIT')
-    async def smtp_QUIT(self, arg):
+    async def smtp_QUIT(self, arg: str):
         if arg:
             await self.push('501 Syntax: QUIT')
         else:
@@ -863,7 +873,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.transport.close()
 
     @syntax('STARTTLS', when='tls_context')
-    async def smtp_STARTTLS(self, arg):
+    async def smtp_STARTTLS(self, arg: str):
         if arg:
             await self.push('501 Syntax: STARTTLS')
             return
@@ -1032,7 +1042,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             encode_to_b64=False,
         )
 
-    def _authenticate(self, mechanism, auth_data) -> AuthResult:
+    def _authenticate(self, mechanism: str, auth_data: Any) -> AuthResult:
         if self._authenticator is not None:
             # self.envelope is likely still empty, but we'll pass it anyways to
             # make the invocation similar to the one in _call_handler_hook
@@ -1093,7 +1103,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         assert password is not None
         return self._authenticate("PLAIN", LoginPassword(login, password))
 
-    async def auth_LOGIN(self, _, args: List[str]):
+    async def auth_LOGIN(self, _, args: List[str]) -> AuthResult:
         login: _TriStateType
         if len(args) == 1:
             # Client sent only "AUTH LOGIN"
@@ -1117,13 +1127,13 @@ class SMTP(asyncio.StreamReaderProtocol):
 
         return self._authenticate("LOGIN", LoginPassword(login, password))
 
-    def _strip_command_keyword(self, keyword, arg):
+    def _strip_command_keyword(self, keyword: str, arg: str) -> Optional[str]:
         keylen = len(keyword)
         if arg[:keylen].upper() == keyword:
             return arg[keylen:].strip()
         return None
 
-    def _getaddr(self, arg) -> Tuple[Optional[str], Optional[str]]:
+    def _getaddr(self, arg: str) -> Tuple[Optional[str], Optional[str]]:
         """
         Try to parse address given in SMTP command.
 
@@ -1145,7 +1155,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             return None, None
         return address, rest
 
-    def _getparams(self, params):
+    def _getparams(
+            self, params: Sequence[str]
+    ) -> Optional[Dict[str, Union[str, bool]]]:
         # Return params as dictionary. Return None if not all parameters
         # appear to be syntactically valid according to RFC 1869.
         result = {}
@@ -1156,7 +1168,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             result[param] = value if eq else True
         return result
 
-    def _syntax_available(self, method):
+    # noinspection PyUnresolvedReferences
+    def _syntax_available(self, method: Callable) -> bool:
         if not hasattr(method, '__smtp_syntax__'):
             return False
         if method.__smtp_syntax_when__:
@@ -1314,7 +1327,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push(status)
 
     @syntax('RSET')
-    async def smtp_RSET(self, arg):
+    async def smtp_RSET(self, arg: str):
         if arg:
             await self.push('501 Syntax: RSET')
             return
@@ -1458,5 +1471,5 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push('250 OK' if status is MISSING else status)
 
     # Commands that have not been implemented.
-    async def smtp_EXPN(self, arg):
+    async def smtp_EXPN(self, arg: str):
         await self.push('502 EXPN not implemented')

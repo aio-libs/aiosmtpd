@@ -12,7 +12,7 @@ import time
 from smtplib import SMTP as SMTP_Client
 from typing import List
 
-from aiosmtpd.smtp import Envelope
+from aiosmtpd.smtp import Envelope, Session, SMTP
 
 ASYNCIO_CATCHUP_DELAY = float(os.environ.get("ASYNCIO_CATCHUP_DELAY", 0.1))
 """
@@ -52,12 +52,14 @@ class ReceivingHandler:
     def __init__(self):
         self.box = []
 
-    async def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(
+            self, server: SMTP, session: Session, envelope: Envelope
+    ) -> str:
         self.box.append(envelope)
         return "250 OK"
 
 
-def catchup_delay(delay=ASYNCIO_CATCHUP_DELAY):
+def catchup_delay(delay: float = ASYNCIO_CATCHUP_DELAY):
     """
     Sleep for awhile to give asyncio's event loop time to catch up.
     """
@@ -65,7 +67,7 @@ def catchup_delay(delay=ASYNCIO_CATCHUP_DELAY):
 
 
 def send_recv(
-    sock: socket.socket, data: bytes, end: bytes = b"\r\n", timeout=0.1
+    sock: socket.socket, data: bytes, end: bytes = b"\r\n", timeout: float = 0.1
 ) -> bytes:
     sock.send(data + end)
     slist = [sock]

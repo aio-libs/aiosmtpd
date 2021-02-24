@@ -7,11 +7,12 @@ import os
 import signal
 import ssl
 import sys
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from contextlib import suppress
 from functools import partial
 from importlib import import_module
 from pathlib import Path
+from typing import Optional, Sequence, Tuple
 
 from public import public
 
@@ -167,7 +168,7 @@ def _parser() -> ArgumentParser:
     return parser
 
 
-def parseargs(args=None):
+def parseargs(args: Optional[Sequence[str]] = None) -> Tuple[ArgumentParser, Namespace]:
     parser = _parser()
     parsed = parser.parse_args(args)
     # Find the handler class.
@@ -214,7 +215,7 @@ def parseargs(args=None):
 
 
 @public
-def main(args=None):
+def main(args: Optional[Sequence[str]] = None) -> None:
     parser, args = parseargs(args=args)
 
     if args.setuid:  # pragma: on-win32

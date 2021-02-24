@@ -12,6 +12,7 @@ import pytest
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
+from aiosmtpd.smtp import Envelope
 from aiosmtpd.smtp import Session as Sess_
 from aiosmtpd.smtp import TLSSetupException
 from aiosmtpd.testing.helpers import ReceivingHandler, catchup_delay
@@ -31,14 +32,18 @@ class EOFingHandler:
     ssl_existed = None
     result = None
 
-    async def handle_NOOP(self, server: Server, session: Sess_, envelope, arg):
+    async def handle_NOOP(
+        self, server: Server, session: Sess_, envelope: Envelope, arg: str
+    ) -> str:
         self.ssl_existed = session.ssl is not None
         self.result = server.eof_received()
         return "250 OK"
 
 
 class HandshakeFailingHandler:
-    def handle_STARTTLS(self, server, session, envelope):
+    def handle_STARTTLS(
+            self, server: Server, session: Sess_, envelope: Envelope
+    ) -> bool:
         return False
 
 
@@ -198,7 +203,7 @@ class TestStartTLS:
 class ExceptionCaptureHandler:
     error = None
 
-    async def handle_exception(self, error):
+    async def handle_exception(self, error: Exception) -> str:
         self.error = error
         return "500 ExceptionCaptureHandler handling error"
 

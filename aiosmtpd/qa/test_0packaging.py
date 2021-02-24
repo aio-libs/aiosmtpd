@@ -23,14 +23,16 @@ def aiosmtpd_version() -> version.Version:
 
 
 class TestVersion:
-    def test_pep440(self, aiosmtpd_version):
+    def test_pep440(self, aiosmtpd_version: version.Version):
         """Ensure version number compliance to PEP-440"""
         assert isinstance(
             aiosmtpd_version, version.Version
         ), "Version number must comply with PEP-440"
 
     # noinspection PyUnboundLocalVariable
-    def test_ge_master(self, aiosmtpd_version, capsys):
+    def test_ge_master(
+        self, aiosmtpd_version: version.Version, capsys: pytest.CaptureFixture
+    ):
         """Ensure version is monotonically increasing"""
         reference = "master:aiosmtpd/__init__.py"
         cmd = f"git show {reference}".split()
@@ -51,7 +53,7 @@ class TestVersion:
 
 
 class TestDocs:
-    def test_NEWS_version(self, aiosmtpd_version):
+    def test_NEWS_version(self, aiosmtpd_version: version.Version):
         news_rst = next(Path("..").rglob("*/NEWS.rst"))
         with open(news_rst, "rt") as fin:
             # pairwise() from https://docs.python.org/3/library/itertools.html

@@ -32,6 +32,7 @@ import argparse
 import builtins
 import collections
 import os
+import sphinx
 
 from docutils import nodes
 from docutils.parsers.rst import Directive
@@ -39,13 +40,13 @@ from docutils.parsers.rst.directives import unchanged
 from docutils.statemachine import StringList
 from functools import reduce
 from sphinx.util.nodes import nested_parse_with_titles
-from typing import List
+from typing import Any, Dict, List, Optional, Tuple
 
 
 __all__ = ("AutoprogrammDirective", "import_object", "scan_programs", "setup")
 
 
-def get_subparser_action(parser):
+def get_subparser_action(parser: argparse.ArgumentParser) -> argparse._SubParsersAction:
     neg1_action = parser._actions[-1]
 
     if isinstance(neg1_action, argparse._SubParsersAction):
@@ -56,7 +57,13 @@ def get_subparser_action(parser):
             return a
 
 
-def scan_programs(parser, command=None, maxdepth=0, depth=0, groups=False):
+def scan_programs(
+    parser: argparse.ArgumentParser,
+    command: List[str] = None,
+    maxdepth: int = 0,
+    depth: int = 0,
+    groups: bool = False,
+):
     if command is None:
         command = []
 
@@ -79,6 +86,7 @@ def scan_programs(parser, command=None, maxdepth=0, depth=0, groups=False):
         subp_action = get_subparser_action(parser)
 
         if subp_action:
+            # noinspection PyUnresolvedReferences
             choices = subp_action.choices.items()
 
         if not (
@@ -93,7 +101,7 @@ def scan_programs(parser, command=None, maxdepth=0, depth=0, groups=False):
                     yield program
 
 
-def scan_options(actions):
+def scan_options(actions: list):
     for arg in actions:
         if not (arg.option_strings or isinstance(arg, argparse._SubParsersAction)):
             yield format_positional_argument(arg)
@@ -103,13 +111,13 @@ def scan_options(actions):
             yield format_option(arg)
 
 
-def format_positional_argument(arg):
+def format_positional_argument(arg: argparse.Action) -> Tuple[List[str], str]:
     desc = (arg.help or "") % {"default": arg.default}
     name = arg.metavar or arg.dest
     return [name], desc
 
 
-def format_option(arg):
+def format_option(arg: argparse.Action) -> Tuple[List[str], str]:
     desc = (arg.help or "") % {"default": arg.default}
 
     if not isinstance(arg, (argparse._StoreAction, argparse._AppendAction)):
@@ -131,7 +139,7 @@ def format_option(arg):
     return names, desc
 
 
-def import_object(import_name):
+def import_object(import_name: str) -> Any:
     module_name, expr = import_name.split(":", 1)
     try:
         mod = __import__(module_name)
@@ -204,13 +212,16 @@ class AutoprogrammDirective(Directive):
 
         if start_command:
 
-            def get_start_cmd_parser(p):
+            def get_start_cmd_parser(
+                p: argparse.ArgumentParser,
+            ) -> argparse.ArgumentParser:
                 looking_for = start_command.pop(0)
                 action = get_subparser_action(p)
 
                 if not action:
                     raise ValueError("No actions for command " + looking_for)
 
+                # noinspection PyUnresolvedReferences
                 subp = action.choices[looking_for]
 
                 if start_command:
@@ -263,7 +274,7 @@ class AutoprogrammDirective(Directive):
                 options_adornment=options_adornment,
             )
 
-    def run(self):
+    def run(self) -> list:
         node = nodes.section()
         node.document = self.state.document
         result = StringList()
@@ -274,17 +285,17 @@ class AutoprogrammDirective(Directive):
 
 
 def render_rst(
-    title,
-    options,
-    is_program,
-    is_subgroup,
-    description,
-    usage,
-    usage_strip,
-    usage_codeblock,
-    epilog,
-    options_title,
-    options_adornment,
+    title: str,
+    options: List[Tuple[List[str], str]],
+    is_program: bool,
+    is_subgroup: bool,
+    description: str,
+    usage: Optional[str],
+    usage_strip: bool,
+    usage_codeblock: bool,
+    epilog: str,
+    options_title: str,
+    options_adornment: str,
 ):
     if usage_strip:
         to_strip = title.rsplit(" ", 1)[0]
@@ -340,7 +351,7 @@ def render_rst(
         yield line or ""
 
 
-def setup(app):
+def setup(app: sphinx.application.Sphinx) -> Dict[str, Any]:
     app.add_directive("autoprogramm", AutoprogrammDirective)
     return {
         "version": "0.2a0",

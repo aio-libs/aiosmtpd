@@ -331,5 +331,5 @@ texinfo_documents = [
 # endregion
 
 
-def setup(app):
+def setup(app):  # noqa: ANN001
     app.add_css_file("aiosmtpd.css")

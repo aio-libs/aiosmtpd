@@ -18,6 +18,7 @@ from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
 from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.smtp import Session as ServerSession
+from aiosmtpd.smtp import Envelope
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from aiosmtpd.testing.statuscodes import StatusCode
 
@@ -54,7 +55,7 @@ class FakeParser:
 
     message: AnyStr = None
 
-    def error(self, message):
+    def error(self, message: AnyStr):
         self.message = message
         raise SystemExit
 
@@ -63,7 +64,9 @@ class DataHandler:
     content: AnyStr = None
     original_content: bytes = None
 
-    async def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(
+            self, server: Server, session: ServerSession, envelope: Envelope
+    ) -> str:
         self.content = envelope.content
         self.original_content = envelope.original_content
         return S.S250_OK.to_str()
@@ -72,7 +75,7 @@ class DataHandler:
 class AsyncMessageHandler(AsyncMessage):
     handled_message = None
 
-    async def handle_message(self, message):
+    async def handle_message(self, message: AnyStr) -> None:
         self.handled_message = message
 
 

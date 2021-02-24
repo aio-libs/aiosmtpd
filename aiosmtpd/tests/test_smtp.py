@@ -87,7 +87,7 @@ class UndescribableError(Exception):
 class ErrorSMTP(Server):
     exception_type = ValueError
 
-    async def smtp_HELO(self, hostname):
+    async def smtp_HELO(self, hostname: str):
         raise self.exception_type("test")
 
 
@@ -136,8 +136,13 @@ class PeekerHandler:
             return AuthResult(success=True, auth_data=login_data)
 
     async def handle_MAIL(
-        self, server, session: SMTPSession, envelope, address, mail_options
-    ):
+        self,
+        server: Server,
+        session: SMTPSession,
+        envelope: SMTPEnvelope,
+        address: str,
+        mail_options: dict,
+    ) -> str:
         self.sess = session
         return S.S250_OK.to_str()
 
@@ -157,7 +162,7 @@ class PeekerHandler:
     async def auth_DONT(self, server, args):
         return MISSING
 
-    async def auth_WITH_UNDERSCORE(self, server: Server, args):
+    async def auth_WITH_UNDERSCORE(self, server: Server, args) -> str:
         """
         Be careful when using this AUTH mechanism; log_client_response is set to
         True, and this will raise some severe warnings.
@@ -180,7 +185,9 @@ class StoreEnvelopeOnVRFYHandler:
 
     envelope = None
 
-    async def handle_VRFY(self, server, session, envelope, addr):
+    async def handle_VRFY(
+        self, server: Server, session: SMTPSession, envelope: SMTPEnvelope, addr: str
+    ) -> str:
         self.envelope = envelope
         return S.S250_OK.to_str()
 
@@ -189,10 +196,10 @@ class ErroringHandler:
     error = None
     custom_response = False
 
-    async def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope) -> str:
         return "499 Could not accept the message"
 
-    async def handle_exception(self, error):
+    async def handle_exception(self, error) -> str:
         self.error = error
         if not self.custom_response:
             return "500 ErroringHandler handling error"
@@ -215,7 +222,7 @@ class ErroringHandlerConnectionLost:
 class ErroringErrorHandler:
     error = None
 
-    async def handle_exception(self, error):
+    async def handle_exception(self, error: Exception):
         self.error = error
         raise ValueError("ErroringErrorHandler test")
 
@@ -223,13 +230,19 @@ class ErroringErrorHandler:
 class UndescribableErrorHandler:
     error = None
 
-    async def handle_exception(self, error):
+    async def handle_exception(self, error: Exception):
         self.error = error
         raise UndescribableError()
 
 
 class SleepingHeloHandler:
-    async def handle_HELO(self, server, session, envelope, hostname):
+    async def handle_HELO(
+        self,
+        server: Server,
+        session: SMTPSession,
+        envelope: SMTPEnvelope,
+        hostname: str,
+    ) -> str:
         await asyncio.sleep(0.01)
         session.host_name = hostname
         return "250 {}".format(server.hostname)
@@ -288,7 +301,8 @@ def transport_resp(mocker: MockFixture):
 
 @pytest.fixture
 def get_protocol(
-    temp_event_loop, transport_resp
+    temp_event_loop: asyncio.AbstractEventLoop,
+    transport_resp: Any,
 ) -> Generator[Callable[..., Server], None, None]:
     transport, _ = transport_resp
 
@@ -304,7 +318,9 @@ def get_protocol(
 
 
 @pytest.fixture
-def auth_peeker_controller(get_controller) -> Generator[Controller, None, None]:
+def auth_peeker_controller(
+    get_controller: Callable[..., Controller]
+) -> Generator[Controller, None, None]:
     handler = PeekerHandler()
     controller = get_controller(
         handler,
@@ -324,7 +340,7 @@ def auth_peeker_controller(get_controller) -> Generator[Controller, None, None]:
 
 @pytest.fixture
 def authenticator_peeker_controller(
-    get_controller,
+    get_controller: Callable[..., Controller]
 ) -> Generator[Controller, None, None]:
     handler = PeekerHandler()
     controller = get_controller(
@@ -345,7 +361,8 @@ def authenticator_peeker_controller(
 
 @pytest.fixture
 def decoding_authnotls_controller(
-    get_handler, get_controller
+    get_handler: Callable,
+    get_controller: Callable[..., Controller]
 ) -> Generator[Controller, None, None]:
     handler = get_handler()
     controller = get_controller(
@@ -368,7 +385,7 @@ def decoding_authnotls_controller(
 
 
 @pytest.fixture
-def error_controller(get_handler) -> Generator[ErrorController, None, None]:
+def error_controller(get_handler: Callable) -> Generator[ErrorController, None, None]:
     handler = get_handler()
     controller = ErrorController(handler)
     controller.start()

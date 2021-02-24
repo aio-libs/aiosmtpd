@@ -85,7 +85,7 @@ class _FakeServer(asyncio.StreamReaderProtocol):
     factory() failed to instantiate an SMTP instance.
     """
 
-    def __init__(self, loop):
+    def __init__(self, loop: asyncio.AbstractEventLoop):
         # Imitate what SMTP does
         super().__init__(
             asyncio.StreamReader(loop=loop),
@@ -93,7 +93,9 @@ class _FakeServer(asyncio.StreamReaderProtocol):
             loop=loop,
         )
 
-    def _client_connected_cb(self, reader, writer):
+    def _client_connected_cb(
+            self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
         pass
 
 
@@ -143,7 +145,7 @@ class BaseController(metaclass=ABCMeta):
         """Subclasses can override this to customize the handler/server creation."""
         return SMTP(self.handler, **self.SMTP_kwargs)
 
-    def _factory_invoker(self):
+    def _factory_invoker(self) -> Union[SMTP, _FakeServer]:
         """Wraps factory() to catch exceptions during instantiation"""
         try:
             self.smtpd = self.factory()
@@ -223,7 +225,7 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def _run(self, ready_event: threading.Event):
+    def _run(self, ready_event: threading.Event) -> None:
         asyncio.set_event_loop(self.loop)
         try:
             # Need to do two-step assignments here to ensure IDEs can properly
