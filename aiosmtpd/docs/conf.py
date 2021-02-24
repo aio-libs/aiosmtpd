@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
-#
-# aiosmtpd documentation build configuration file, created by
+# Copyright 2014-2021 The aiosmtpd Developers
+# SPDX-License-Identifier: Apache-2.0
+
+# aiosmtpd documentation build configuration file, originally created by
 # sphinx-quickstart on Fri Oct 16 12:18:52 2015.
 #
 # This file is execfile()d with the current directory set to its
