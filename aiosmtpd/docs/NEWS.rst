@@ -19,6 +19,8 @@ Added
 
 Fixed/Improved
 --------------
+* ``pypy3`` testenv for tox can now run on Windows
+* ``static`` testenv now auto-skipped on Windows
 * Now uses Sphinx's Doctest facility, which is much more flexible than pytest's doctest
 
 
