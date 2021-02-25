@@ -431,7 +431,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                      "support for the 4-argument handle_EHLO() hook will be "
                      "removed in version 2.0",
                      DeprecationWarning)
-            elif len(ehlo_hook_params) == 5:  # noqa: SIM106
+            elif len(ehlo_hook_params) == 5:
                 self._ehlo_hook_ver = "new"
             else:
                 raise RuntimeError("Unsupported EHLO Hook")
@@ -450,7 +450,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             if isinstance(command_call_limit, int):
                 self._call_limit_base = {}
                 self._call_limit_default = command_call_limit
-            elif isinstance(command_call_limit, dict):  # noqa: SIM106
+            elif isinstance(command_call_limit, dict):
                 if not all(map(is_int, command_call_limit.values())):
                     raise TypeError("All command_call_limit values must be int")
                 self._call_limit_base = command_call_limit
