@@ -20,7 +20,7 @@ import sys
 from abc import ABCMeta, abstractmethod
 from argparse import ArgumentParser
 from email import message_from_bytes, message_from_string
-from email.message import Message
+from email.message import Message as Em_Message
 from typing import AnyStr, Dict, List, Tuple, Type, TypeVar
 
 from public import public
@@ -167,7 +167,7 @@ class Sink:
 
 @public
 class Message(metaclass=ABCMeta):
-    def __init__(self, message_class: Type[Message] = None):
+    def __init__(self, message_class: Type[Em_Message] = None):
         self.message_class = message_class
 
     async def handle_DATA(
@@ -177,24 +177,27 @@ class Message(metaclass=ABCMeta):
         self.handle_message(message)
         return "250 OK"
 
-    def prepare_message(self, session: SMTPSession, envelope: SMTPEnvelope) -> Message:
+    def prepare_message(
+        self, session: SMTPSession, envelope: SMTPEnvelope
+    ) -> Em_Message:
         # If the server was created with decode_data True, then data will be a
         # str, otherwise it will be bytes.
         data = envelope.content
+        message: Em_Message
         if isinstance(data, bytes):
             message = message_from_bytes(data, self.message_class)
-        else:
-            assert isinstance(data, str), "Expected str or bytes, got {}".format(
-                type(data)
-            )
+        elif isinstance(data, str):
             message = message_from_string(data, self.message_class)
+        else:
+            raise TypeError(f"Expected str or bytes, got {type(data)}")
+        assert isinstance(message, Em_Message)
         message["X-Peer"] = str(session.peer)
         message["X-MailFrom"] = envelope.mail_from
         message["X-RcptTo"] = COMMASPACE.join(envelope.rcpt_tos)
         return message
 
     @abstractmethod
-    def handle_message(self, message: Message) -> None:
+    def handle_message(self, message: Em_Message) -> None:
         raise NotImplementedError
 
 
@@ -202,7 +205,7 @@ class Message(metaclass=ABCMeta):
 class AsyncMessage(Message, metaclass=ABCMeta):
     def __init__(
         self,
-        message_class: Type[Message] = None,
+        message_class: Type[Em_Message] = None,
         *,
         loop: asyncio.AbstractEventLoop = None
     ):
@@ -217,18 +220,18 @@ class AsyncMessage(Message, metaclass=ABCMeta):
         return "250 OK"
 
     @abstractmethod
-    async def handle_message(self, message: Message) -> None:
+    async def handle_message(self, message: Em_Message) -> None:
         raise NotImplementedError
 
 
 @public
 class Mailbox(Message):
-    def __init__(self, mail_dir: os.PathLike, message_class: Type[Message] = None):
+    def __init__(self, mail_dir: os.PathLike, message_class: Type[Em_Message] = None):
         self.mailbox = mailbox.Maildir(mail_dir)
         self.mail_dir = mail_dir
         super().__init__(message_class)
 
-    def handle_message(self, message: Message) -> None:
+    def handle_message(self, message: Em_Message) -> None:
         self.mailbox.add(message)
 
     def reset(self) -> None:
