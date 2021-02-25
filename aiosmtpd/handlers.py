@@ -19,8 +19,8 @@ import smtplib
 import sys
 from abc import ABCMeta, abstractmethod
 from argparse import ArgumentParser
-from email import message_from_bytes, message_from_string
 from email.message import Message as Em_Message
+from email.parser import BytesParser, Parser
 from typing import AnyStr, Dict, List, Tuple, Type, TypeVar
 
 from public import public
@@ -42,6 +42,14 @@ def _format_peer(peer: str) -> str:
     # This is a separate function mostly so the test suite can craft a
     # reproducible output.
     return "X-Peer: {!r}".format(peer)
+
+
+def message_from_bytes(s, *args, **kws):
+    return BytesParser(*args, **kws).parsebytes(s)
+
+
+def message_from_string(s, *args, **kws):
+    return Parser(*args, **kws).parsestr(s)
 
 
 @public
@@ -207,7 +215,7 @@ class AsyncMessage(Message, metaclass=ABCMeta):
         self,
         message_class: Type[Em_Message] = None,
         *,
-        loop: asyncio.AbstractEventLoop = None
+        loop: asyncio.AbstractEventLoop = None,
     ):
         super().__init__(message_class)
         self.loop = loop or asyncio.get_event_loop()
