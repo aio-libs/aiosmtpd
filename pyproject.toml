@@ -3,12 +3,15 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
-addopts = """--doctest-glob="*.rst" --strict-markers -rfEX"""
+# addopts = """--doctest-glob="*.rst" --strict-markers -rfEX"""
+addopts = """--strict-markers -rfEX"""
 markers = [
     "client_data",
     "controller_data",
     "handler_data",
 ]
+
+# region #### coverage.py settings ###########################################
 
 [tool.coverage.run]
 branch = true
@@ -42,6 +45,8 @@ on-wsl = "'Microsoft' in platform_release"
     # On Windows, platform.release() returns the Windows version (e.g., "7" or "10")
     # On Linux (incl. WSL), platform.release() returns the kernel version.
     # As of 2021-02-07, only WSL has a kernel with "Microsoft" in the version.
+on-not-win32 = "sys_platform != 'win32'"
+on-cygwin = "sys_platform == 'cygwin'"
 
 [tool.coverage.report]
 exclude_lines = [
@@ -56,6 +61,8 @@ title = "aiosmtpd coverage for ${TOX_ENV_NAME}"
 
 [tool.coverage.xml]
 output = "_dump/coverage-${INTERP}.xml"
+
+# endregion
 
 [tool.check-manifest]
 ignore = [

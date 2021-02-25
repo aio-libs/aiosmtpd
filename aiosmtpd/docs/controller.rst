@@ -25,8 +25,18 @@ dialog.
 Using the controller
 ====================
 
+.. _tcpserver:
+
+TCP-based Server
+----------------
+
+The :class:`Controller` class creates a TCP-based server,
+listening on an Internet endpoint (i.e., ``ip_address:port`` pair).
+
 Say you want to receive email for ``example.com`` and print incoming mail data
-to the console.  Start by implementing a handler as follows::
+to the console.  Start by implementing a handler as follows:
+
+.. doctest::
 
     >>> import asyncio
     >>> class ExampleHandler:
@@ -47,7 +57,9 @@ to the console.  Start by implementing a handler as follows::
     ...         return '250 Message accepted for delivery'
 
 Pass an instance of your ``ExampleHandler`` class to the ``Controller``, and
-then start it::
+then start it:
+
+.. doctest::
 
     >>> from aiosmtpd.controller import Controller
     >>> controller = Controller(ExampleHandler())
@@ -60,7 +72,9 @@ the :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` environment variable or by passing a
 different ``ready_timeout`` duration to the Controller's constructor.
 
 Connect to the server and send a message, which then gets printed by
-``ExampleHandler``::
+``ExampleHandler``:
+
+.. doctest::
 
     >>> from smtplib import SMTP as Client
     >>> client = Client(controller.hostname, controller.port)
@@ -98,7 +112,9 @@ valid recipients to the ``rcpt_tos`` attribute of the envelope and to return a
 successful status.
 
 Thus, if we try to send a message to a recipient not inside ``example.com``,
-it is rejected::
+it is rejected:
+
+.. doctest::
 
     >>> client.sendmail('aperson@example.com', ['cperson@example.net'], """\
     ... From: Anne Person <anne@example.com>
@@ -114,9 +130,13 @@ it is rejected::
 
 When you're done with the SMTP server, stop it via the controller.
 
+.. doctest::
+
     >>> controller.stop()
 
 The server is guaranteed to be stopped.
+
+.. doctest::
 
     >>> client.connect(controller.hostname, controller.port)
     Traceback (most recent call last):
@@ -128,6 +148,65 @@ use to do some common tasks, and it's easy to write your own handler.  For a
 full overview of the methods that handler classes may implement, see the
 section on :ref:`handler hooks <hooks>`.
 
+Unix Socket-based Server
+------------------------
+
+The :class:`UnixSocketController` class creates a server listening to
+a Unix Socket (i.e., a special file that can act as a 'pipe' for interprocess
+communication).
+
+Usage is identical with the example described in the :ref:`tcpserver` section above,
+with some differences:
+
+**Rather than specifying a hostname:port to listen on, you specify the Socket's filepath:**
+
+.. doctest:: unix_socket
+    :skipif: in_win32 or in_cygwin
+
+    >>> from aiosmtpd.controller import UnixSocketController
+    >>> from aiosmtpd.handlers import Sink
+    >>> controller = UnixSocketController(Sink(), unix_socket="smtp_socket~")
+    >>> controller.start()
+
+**Rather than connecting to IP:port, you connect to the Socket file.**
+Python's :class:`smtplib.SMTP` sadly cannot connect to a Unix Socket,
+so we need to handle it on our own here:
+
+.. doctest:: unix_socket
+    :skipif: in_win32 or in_cygwin
+
+    >>> import socket
+    >>> sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    >>> sock.connect("smtp_socket~")
+    >>> resp = sock.recv(1024)
+    >>> resp[0:4]
+    b'220 '
+
+Try sending something, don't forget to end with ``"\r\n"``:
+
+.. doctest:: unix_socket
+    :skipif: in_win32 or in_cygwin
+
+    >>> sock.send(b"HELO example.org\r\n")
+    18
+    >>> resp = sock.recv(1024)
+    >>> resp[0:4]
+    b'250 '
+
+And close everything when done:
+
+.. doctest:: unix_socket
+    :skipif: in_win32 or in_cygwin
+
+    >>> sock.send(b"QUIT\r\n")
+    6
+    >>> resp = sock.recv(1024)
+    >>> resp[0:4]
+    b'221 '
+    >>> sock.close()
+    >>> controller.stop()
+
+
 .. _enablesmtputf8:
 
 Enabling SMTPUTF8
@@ -137,18 +216,22 @@ It's very common to want to enable the ``SMTPUTF8`` ESMTP option, therefore
 this is the default for the ``Controller`` constructor.  For backward
 compatibility reasons, this is *not* the default for the ``SMTP`` class
 though.  If you want to disable this in the ``Controller``, you can pass this
-argument into the constructor::
+argument into the constructor:
+
+.. doctest::
 
     >>> from aiosmtpd.handlers import Sink
     >>> controller = Controller(Sink(), enable_SMTPUTF8=False)
     >>> controller.start()
-
+    >>>
     >>> client = Client(controller.hostname, controller.port)
     >>> code, message = client.ehlo('me')
     >>> code
     250
 
 The EHLO response does not include the ``SMTPUTF8`` ESMTP option.
+
+.. doctest::
 
     >>> lines = message.decode('utf-8').splitlines()
     >>> # Don't print the server host name line, since that's variable.
@@ -157,6 +240,10 @@ The EHLO response does not include the ``SMTPUTF8`` ESMTP option.
     SIZE 33554432
     8BITMIME
     HELP
+
+Stop the controller if we're done experimenting:
+
+.. doctest::
 
     >>> controller.stop()
 
@@ -192,113 +279,41 @@ Controller API
       ``"127.0.0.1"`` if IPv6 is not supported.
    :rtype: str
 
-.. class:: Controller(\
-   handler, loop=None, hostname=None, port=8025, \
+.. class:: BaseThreadedController(\
+   handler, \
+   loop=None, \
    *, \
    ready_timeout=1.0, \
    ssl_context=None, \
    server_hostname=None, server_kwargs=None, **SMTP_parameters)
 
-   |
-   | :part:`Parameters`
+   :param handler: Handler object
+   :param loop: The asyncio event loop in which the server will run.
+      If not given, :func:`asyncio.new_event_loop` will be called to create the event loop.
+   :param ready_timeout: How long to wait until server starts.
+      The :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` takes precedence over this parameter.
+   :type ready_timeout: float
+   :param ssl_context: SSL Context to wrap the socket in.
+       Will be passed-through to  :meth:`~asyncio.loop.create_server` method
+   :type ssl_context: ssl.SSLContext
+   :param server_hostname: Server's hostname,
+      will be passed-through as ``hostname`` parameter of :class:`~aiosmtpd.smtp.SMTP`
+   :type server_hostname: Optional[str]
+   :param server_kwargs: (DEPRECATED) A dict that
+     will be passed-through as keyword arguments of :class:`~aiosmtpd.smtp.SMTP`.
+     Explicitly listed keyword arguments going into ``**SMTP_parameters``
+     will take precedence over this parameter
+   :type server_kwargs: Dict[str, Any]
+   :param SMTP_parameters: Optional keyword arguments that
+     will be passed-through as keyword arguments of :class:`~aiosmtpd.smtp.SMTP`
 
-   .. py:attribute:: handler
+   .. important::
 
-      An instance of a :ref:`handler <handlers>` class.
+      Usually, setting the ``ssl_context`` parameter will switch the protocol to ``SMTPS`` mode,
+      implying unconditional encryption of the connection,
+      and preventing the use of the ``STARTTLS`` mechanism.
 
-   .. py:attribute:: loop
-
-      The asyncio event loop to use.
-      If not given,
-      :func:`asyncio.new_event_loop` will be called to create the event loop.
-
-   .. py:attribute:: hostname
-      :type: str
-
-      This parameter will be passed to the event loop's
-      :meth:`~asyncio.loop.create_server` method as the ``host`` parameter,
-      except ``None`` (default) is translated to ``::1``.
-
-      To bind dual-stack locally, use ``localhost``.
-
-      To bind `dual-stack`_ on all interfaces, use ``""`` (empty string).
-
-      .. important::
-
-         This parameter does NOT get passed through to the SMTP instance;
-         if you want to give the SMTP instance a custom hostname
-         (e.g., for use in HELO/EHLO greeting),
-         you must pass it through the :attr:`server_hostname` parameter.
-
-   .. py:attribute:: port
-      :type: int
-
-      This parameter will be passed directly to the event loop's
-      :meth:`~asyncio.loop.create_server` method.
-
-   .. py:attribute:: ready_timeout
-      :type: float
-
-      This is the number of seconds that the controller will wait in
-      :meth:`Controller.start` for the subthread to start its server.
-
-      You can also set the :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` environment variable to
-      a float number of seconds,
-      which takes precedence over the ``ready_timeout`` argument value.
-
-      If this timeout is breached, a :class:`TimeoutError` exception will be raised.
-
-   .. py:attribute:: ssl_context
-      :type: ssl.SSLContext
-
-      This is an ``SSLContext`` that will be used by the loop's server.
-      It is passed directly to the :meth:`~asyncio.loop.create_server` method.
-
-      .. note::
-
-         Note that this switches the protocol to ``SMTPS`` mode,
-         implying unconditional encryption of the connection,
-         and preventing the use of the ``STARTTLS`` mechanism.
-
-   .. py:attribute:: server_hostname
-      :type: str
-
-      This will be passed through as the :attr:`hostname <SMTP.hostname>` argument
-      to the server's class during server creation in the :meth:`Controller.factory` method.
-
-   .. py:attribute:: **SMTP_parameters
-
-      These are *optional* keyword arguments that will be passed as-is to the :class:`SMTP` constructor.
-
-      Please see the documentation for the :class:`SMTP` class for a list of accepted keyword arguments.
-
-      .. important::
-
-         Explicitly defined keyword arguments will override keyword arguments of the
-         same names defined in the (deprecated) ``server_kwargs`` argument.
-
-         >>> from aiosmtpd.handlers import Sink
-         >>> controller = Controller(Sink(), timeout=200, server_kwargs=dict(timeout=400))
-         >>> controller.SMTP_kwargs["timeout"]
-         200
-
-      One example is the ``enable_SMTPUTF8`` flag described in the
-      :ref:`Enabling SMTPUTF8 section <enablesmtputf8>` above.
-
-   .. py:attribute:: server_kwargs
-
-      :deprecated: Use :attr:`**SMTP_Parameters` instead
-
-      This is a dict that will be passed through as keyword arguments
-      to the server's class during server creation in the :meth:`Controller.factory`
-      method.
-
-      Please see the documentation for the :class:`SMTP` class for a list of accepted keyword arguments.
-
-      .. deprecated:: 1.3
-
-         The ``server_kwargs`` parameter **will be removed in version 2.0**
-
+      Actual behavior depends on the subclass's implementation.
 
    |
    | :part:`Attributes`
@@ -313,15 +328,6 @@ Controller API
 
       The event loop being used.
 
-      This will either be the given :attr:`loop` parameter,
-      or a new event loop created during ``Controller`` instantiation.
-
-   .. attribute:: hostname: str
-                  port: int
-      :noindex:
-
-      The values of the *hostname* and *port* arguments.
-
    .. attribute:: ready_timeout
       :type: float
       :noindex:
@@ -332,10 +338,12 @@ Controller API
       the :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` environment variable (converted to float),
       or the :attr:`ready_timeout` parameter.
 
+      If this timeout is breached, a :class:`TimeoutError` exception will be raised.
+
    .. attribute:: server
 
       This is the server instance returned by
-      :meth:`asyncio.loop.create_server` after the server has started.
+      :meth:`_create_server` after the server has started.
 
    .. py:attribute:: smtpd
       :type: aiosmtpd.smtp.SMTP
@@ -343,7 +351,34 @@ Controller API
       The server instance (of class SMTP) created by :meth:`factory` after
       the controller is started.
 
-   .. method:: start()
+   |
+   | :part:`Methods`
+
+   .. py:method:: _create_server() -> Coroutine
+      :abstractmethod:
+
+      This method will be called by :meth:`_run` during :meth:`start` procedure.
+
+      It must return a ``Coroutine`` object which will be executed by the asyncio event loop.
+
+   .. py:method:: _trigger_server() -> None
+      :abstractmethod:
+
+      The :meth:`asyncio.loop.create_server` method (or its parallel)
+      invokes :meth:`factory` "lazily",
+      so exceptions in :meth:`factory` can go undetected during :meth:`start`.
+
+      This method will create a connection to the started server and 'exchange' some traffic,
+      thus triggering :meth:`factory` invocation,
+      allowing the Controller to catch exceptions during initialization.
+
+   .. method:: start() -> None
+
+      :raises TimeoutError: if the server takes too long to get ready,
+         exceeding the ``ready_timeout`` parameter.
+      :raises RuntimeError: if an unrecognized & unhandled error happened,
+         resulting in non-creation of a server object
+         (:attr:`smtpd` remains ``None``)
 
       Start the server in the subthread.
       The subthread is always a :class:`daemon thread <threading.Thread>`
@@ -356,13 +391,14 @@ Controller API
       .. important::
 
          If :meth:`start` raises an Exception,
-         :class:`Controller` does not automatically perform cleanup,
+         cleanup is not performed automatically,
          to support deep inspection post-exception (if you wish to do so.)
          Cleanup must still be performed manually by calling :meth:`stop`
 
          For example::
 
-             controller = Controller(handler)
+             # Assume SomeController is a concrete subclass of BaseThreadedController
+             controller = SomeController(handler)
              try:
                  controller.start()
              except ...:
@@ -370,7 +406,9 @@ Controller API
              finally:
                  controller.stop()
 
-   .. method:: stop()
+   .. method:: stop() -> None
+
+      :raises AssertionError: if :meth:`stop` is called before :meth:`start` is called successfully
 
       Stop the server and the event loop, and cancel all tasks.
 
@@ -384,6 +422,91 @@ Controller API
 
       Examples of why you would want to override this method include
       creating an :ref:`LMTP <LMTP>` server instance instead of the standard ``SMTP`` server.
+
+
+
+.. class:: Controller(\
+   handler, \
+   hostname=None, port=8025, \
+   loop=None, \
+   *, \
+   ready_timeout=1.0, \
+   ssl_context=None, \
+   server_hostname=None, server_kwargs=None, **SMTP_parameters)
+
+   :param hostname: Will be given to the event loop's :meth:`~asyncio.loop.create_server` method
+      as the ``host`` parameter, with a slight processing (see below)
+   :type hostname: Optional[str]
+   :param port: Will be passed-through to  :meth:`~asyncio.loop.create_server` method
+   :type port: int
+
+   .. note::
+
+      The ``hostname`` parameter will be passed to the event loop's
+      :meth:`~asyncio.loop.create_server` method as the ``host`` parameter,
+      :boldital:`except` ``None`` (default) will be translated to ``::1``.
+
+        * To bind `dual-stack`_ locally, use ``localhost``.
+
+        * To bind `dual-stack`_ on all interfaces, use ``""`` (empty string).
+
+   .. important::
+
+      The ``hostname`` parameter does NOT get passed through to the SMTP instance;
+      if you want to give the SMTP instance a custom hostname
+      (e.g., for use in HELO/EHLO greeting),
+      you must pass it through the :attr:`server_hostname` parameter.
+
+   .. important::
+
+      Explicitly defined SMTP keyword arguments will override keyword arguments of the
+      same names defined in the (deprecated) ``server_kwargs`` argument.
+
+      >>> from aiosmtpd.handlers import Sink
+      >>> controller = Controller(Sink(), timeout=200, server_kwargs=dict(timeout=400))
+      >>> controller.SMTP_kwargs["timeout"]
+      200
+
+      One example is the ``enable_SMTPUTF8`` flag described in the
+      :ref:`Enabling SMTPUTF8 section <enablesmtputf8>` above.
+
+   |
+   | :part:`Attributes`
+
+   .. attribute:: hostname: str
+                  port: int
+      :noindex:
+
+      The values of the *hostname* and *port* arguments.
+
+   Other parameters, attributes, and methods are identical to :class:`BaseThreadedController`
+   and thus are not repeated nor explained here.
+
+
+.. class:: UnixSocketController(\
+   handler, \
+   unix_socket, \
+   loop=None, \
+   *, \
+   ready_timeout=1.0, \
+   ssl_context=None, \
+   server_hostname=None,\
+   **SMTP_parameters)
+
+   :param unix_socket: Socket file,
+      will be passed-through to :meth:`asyncio.loop.create_unix_server`
+   :type unix_socket: Union[str, pathlib.Path]
+
+   |
+   | :part:`Attributes`
+
+   .. py:attribute:: unix_socket
+      :type: str
+
+      The stringified version of the ``unix_socket`` parameter
+
+   Other parameters, attributes, and methods are identical to :class:`BaseThreadedController`
+   and thus are not repeated nor explained here.
 
 
 .. _`asyncio event loop`: https://docs.python.org/3/library/asyncio-eventloop.html

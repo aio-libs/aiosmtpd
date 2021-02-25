@@ -40,15 +40,15 @@ jobs:
       - name: "flake8 Style Checking"
         # language=bash
         run: |
-          pip install colorama flake8
+          pip install colorama flake8 flake8-bugbear
           python -m flake8 aiosmtpd setup.py housekeep.py release.py
       - name: "Docs Checking"
         # language=bash
         run: |
           pip install colorama pytest pytest-mock sphinx sphinx-autofixture sphinx_rtd_theme
-          pytest -v aiosmtpd/docs
-          sphinx-build --color -b html -d build/.doctree aiosmtpd/docs build/html
-          sphinx-build --color -b man  -d build/.doctree aiosmtpd/docs build/man
+          sphinx-build --color -b doctest -d build/.doctree aiosmtpd/docs build/doctest
+          sphinx-build --color -b html    -d build/.doctree aiosmtpd/docs build/html
+          sphinx-build --color -b man     -d build/.doctree aiosmtpd/docs build/man
       - name: "Static Code Checking"
         # language=bash
         run: |
@@ -61,11 +61,25 @@ jobs:
         shell: bash
         # language=bash
         run: |
-          pip install pytest pytest-mock check-manifest
-          # Fetch master if needed because some test cases need its existence
+          # Strip the "__version__ = " part and the containing quotes (single or double), print,
+          # delete everything else
+          ver_sed='s/^__version__ = (["'"'"'])(.*)\1/\2/p;d'
+          verfile="aiosmtpd/__init__.py"
           if [[ $GITHUB_REF != refs/heads/master ]]; then
+            # We're not in master
+            # Fetch master because some test cases need its existence
             git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin master:master
+            # Verify version in current commit different from master's
+            now_ver=$(sed -r -e "$ver_sed" $verfile)
+            master_ver=$(git show master:$verfile | sed -r -e "$ver_sed")
+            if [[ $now_ver == $master_ver ]]; then
+              echo "### FAIL : Version in PR must be different from version in master!"
+              exit 1
+            else
+              echo "### SUCCESS : Version in PR different from version in master."
+            fi
           fi
+          pip install pytest pytest-mock check-manifest
           pytest -v aiosmtpd/qa
           check-manifest -v
   testing:

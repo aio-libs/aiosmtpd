@@ -270,6 +270,10 @@ def sanitized_log(func: Callable, msg: AnyStr, *args, **kwargs):
 
 @public
 class SMTP(asyncio.StreamReaderProtocol):
+    """
+    `Documentation can be found here
+    <https://aiosmtpd.readthedocs.io/en/latest/smtp.html>`_
+    """
     command_size_limit = 512
     command_size_limits: Dict[str, int] = collections.defaultdict(
         lambda x=command_size_limit: x)

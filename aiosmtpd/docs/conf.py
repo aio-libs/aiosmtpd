@@ -47,7 +47,8 @@ syspath_insert(repo_root / "aiosmtpd")
 
 # autoprogramm needs Sphinx>=1.2.2
 # :classmethod: needs Sphinx>=2.1
-needs_sphinx = "2.1"
+# :noindex: needs Sphinx>=3.2
+needs_sphinx = "3.2"
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -55,13 +56,14 @@ needs_sphinx = "2.1"
 extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.autodoc",
+    "sphinx.ext.doctest",
     "sphinx_autofixture",
     "autoprogramm",
     "sphinx_rtd_theme"
 ]
 # IMPORTANT: If you edit this, also edit the following:
 #   - aiosmtpd/docs/RTD-requirements.txt
-#   -
+#   - tox.ini
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -147,6 +149,12 @@ rst_prolog = f"""
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
 }
+
+doctest_global_setup = """
+import sys
+in_win32 = sys.platform == "win32"
+in_cygwin = sys.platform == "cygwin"
+"""
 
 # endregion
 

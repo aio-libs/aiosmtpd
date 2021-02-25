@@ -6,13 +6,23 @@
 import errno
 import platform
 import socket
+import ssl
 import time
+from contextlib import ExitStack
 from functools import partial
+from pathlib import Path
+from tempfile import mkdtemp
+from typing import Generator
 
 import pytest
 from pytest_mock import MockFixture
 
-from aiosmtpd.controller import Controller, _FakeServer, get_localhost
+from aiosmtpd.controller import (
+    Controller,
+    UnixSocketController,
+    _FakeServer,
+    get_localhost,
+)
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
 
@@ -55,6 +65,30 @@ def in_wsl():
     # On Linux (incl. WSL), platform.release() returns the kernel version.
     # As of 2021-02-07, only WSL has a kernel with "Microsoft" in the version.
     return "microsoft" in platform.release().casefold()
+
+
+def in_cygwin():
+    return platform.system().casefold().startswith("cygwin")
+
+
+@pytest.fixture(scope="module")
+def safe_socket_dir() -> Generator[Path, None, None]:
+    # See:
+    #   - https://github.com/aio-libs/aiohttp/issues/3572
+    #   - https://github.com/aio-libs/aiohttp/pull/3832/files
+    #   - https://unix.stackexchange.com/a/367012/5589
+    tmpdir = Path(mkdtemp()).absolute()
+    assert len(str(tmpdir)) <= 87  # 92 (max on HP-UX) minus 5 (allow 4-char fn)
+    #
+    yield tmpdir
+    #
+    plist = [p for p in tmpdir.rglob("*")]
+    for p in reversed(plist):
+        if p.is_dir():
+            p.rmdir()
+        else:
+            p.unlink()
+    tmpdir.rmdir()
 
 
 class TestServer:
@@ -259,6 +293,82 @@ class TestController:
             get_localhost()
         assert exc.value.errno == errno.EFAULT
         mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
+
+    def test_stop_default(self):
+        controller = Controller(Sink())
+        with pytest.raises(AssertionError, match="SMTP daemon not running"):
+            controller.stop()
+
+    def test_stop_assert(self):
+        controller = Controller(Sink())
+        with pytest.raises(AssertionError, match="SMTP daemon not running"):
+            controller.stop(no_assert=False)
+
+    def test_stop_noassert(self):
+        controller = Controller(Sink())
+        controller.stop(no_assert=True)
+
+
+@pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
+@pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
+class TestUnixSocketController:
+    sockfile: Path = None
+
+    def _assert_good_server(self, ssl_context: ssl.SSLContext = None):
+        # Note: all those time.sleep()s are necessary
+        # Remember that we're running in "Threaded" mode, and there's the GIL...
+        # The time.sleep()s lets go of the GIL allowing the asyncio loop to move
+        # forward
+        assert self.sockfile.exists()
+        with ExitStack() as stk:
+            sock: socket.socket = stk.enter_context(
+                socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            )
+            sock.connect(str(self.sockfile))
+            if ssl_context:
+                sock = stk.enter_context(ssl_context.wrap_socket(sock))
+                time.sleep(0.1)
+            resp = sock.recv(1024)
+            assert resp.startswith(b"220 ")
+            assert resp.endswith(b"\r\n")
+            sock.send(b"EHLO socket.test\r\n")
+            # We need to "build" resparr because, especially when socket is wrapped
+            # in SSL, the SMTP server takes it sweet time responding with the list
+            # of ESMTP features ...
+            resparr = bytearray()
+            while not resparr.endswith(b"250 HELP\r\n"):
+                time.sleep(0.1)
+                resp = sock.recv(1024)
+                if not resp:
+                    break
+                resparr += resp
+            assert resparr.endswith(b"250 HELP\r\n")
+            sock.send(b"QUIT\r\n")
+            time.sleep(0.1)
+            resp = sock.recv(1024)
+            assert resp.startswith(b"221")
+
+    def test_server_creation(self, safe_socket_dir):
+        self.sockfile = safe_socket_dir / "smtp"
+        cont = UnixSocketController(Sink(), unix_socket=self.sockfile)
+        try:
+            cont.start()
+            self._assert_good_server()
+        finally:
+            cont.stop()
+
+    def test_server_creation_ssl(self, safe_socket_dir, ssl_context_server):
+        self.sockfile = safe_socket_dir / "smtp"
+        cont = UnixSocketController(
+            Sink(), unix_socket=self.sockfile, ssl_context=ssl_context_server
+        )
+        try:
+            cont.start()
+            # Allow additional time for SSL to kick in
+            time.sleep(0.1)
+            self._assert_good_server(ssl_context_server)
+        finally:
+            cont.stop()
 
 
 class TestFactory:

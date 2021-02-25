@@ -11,6 +11,8 @@ Added
 * Support for |PROXY Protocol|_ (Closes #174)
 * Example for authentication
 * SSL Support for CLI. See :ref:`the man page <manpage>` for more info. (Closes #172)
+* New :class:`UnixSocketController` class to implement Unix socket-based SMTP server
+  (Closes #114)
 
 .. _`PROXY Protocol`: https://www.haproxy.com/blog/using-haproxy-with-the-proxy-protocol-to-better-secure-your-database/
 .. |PROXY Protocol| replace:: **PROXY Protocol**
@@ -19,6 +21,7 @@ Fixed/Improved
 --------------
 * ``pypy3`` testenv for tox can now run on Windows
 * ``static`` testenv now auto-skipped on Windows
+* Now uses Sphinx's Doctest facility, which is much more flexible than pytest's doctest
 
 
 1.3.2 (2021-02-20)
