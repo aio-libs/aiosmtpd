@@ -17,6 +17,7 @@ import pytest
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
+from aiosmtpd.handlers import Message as MessageHandler
 from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.smtp import Session as ServerSession
 from aiosmtpd.smtp import Envelope
@@ -438,6 +439,43 @@ class TestDebugging:
 
 
 class TestMessage:
+    @pytest.mark.parametrize(
+        "content",
+        [
+            b"",
+            bytearray(),
+            "",
+        ],
+        ids=["bytes", "bytearray", "str"]
+    )
+    def test_prepare_message(self, temp_event_loop, content):
+        sess_ = ServerSession(temp_event_loop)
+        enve_ = Envelope()
+        handler = MessageHandler()
+        enve_.content = content
+        msg = handler.prepare_message(sess_, enve_)
+        assert isinstance(msg, Message)
+        assert msg.keys() == ['X-Peer', 'X-MailFrom', 'X-RcptTo']
+        assert msg.get_payload() == ""
+
+    @pytest.mark.parametrize(
+        ("content", "expectre"),
+        [
+            (None, r"Expected str or bytes, got <class 'NoneType'>"),
+            ([], r"Expected str or bytes, got <class 'list'>"),
+            ({}, r"Expected str or bytes, got <class 'dict'>"),
+            ((), r"Expected str or bytes, got <class 'tuple'>"),
+        ],
+        ids=("None", "List", "Dict", "Tuple")
+    )
+    def test_prepare_message_err(self, temp_event_loop, content, expectre):
+        sess_ = ServerSession(temp_event_loop)
+        enve_ = Envelope()
+        handler = MessageHandler()
+        enve_.content = content
+        with pytest.raises(TypeError, match=expectre):
+            _ = handler.prepare_message(sess_, enve_)
+
     @handler_data(class_=DataHandler)
     def test_message(self, plain_controller, client):
         handler = plain_controller.handler

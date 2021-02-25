@@ -192,7 +192,7 @@ class Message(metaclass=ABCMeta):
         # str, otherwise it will be bytes.
         data = envelope.content
         message: Em_Message
-        if isinstance(data, bytes):
+        if isinstance(data, (bytes, bytearray)):
             message = message_from_bytes(data, self.message_class)
         elif isinstance(data, str):
             message = message_from_string(data, self.message_class)
