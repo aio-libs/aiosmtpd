@@ -2,14 +2,15 @@
  aiosmtpd - An asyncio based SMTP server
 =========================================
 
-| |github license| |GA badge| |codecov| |LGTM.com| |readthedocs| |PyPI|
+| |github license| |PyPI| |PyPI Python|
+| |GA badge| |codecov| |LGTM.com| |readthedocs|
 |
 | |Discourse|
 
 .. |github license| image:: https://img.shields.io/github/license/aio-libs/aiosmtpd
    :target: https://github.com/aio-libs/aiosmtpd/blob/master/LICENSE
    :alt: Project License on GitHub
-.. .. Fpr |GA badge|, don't forget to check actual workflow name in unit-testing-and-coverage.yml
+.. .. For |GA badge|, don't forget to check actual workflow name in unit-testing-and-coverage.yml
 .. |GA badge| image:: https://github.com/aio-libs/aiosmtpd/workflows/aiosmtpd%20CI/badge.svg
    :target: https://github.com/aio-libs/aiosmtpd/actions
    :alt: GitHub Actions status
@@ -25,6 +26,9 @@
 .. |PyPI| image:: https://badge.fury.io/py/aiosmtpd.svg
    :target: https://badge.fury.io/py/aiosmtpd
    :alt: PyPI Package
+.. |PyPI Python| image:: https://img.shields.io/pypi/pyversions/aiosmtpd.svg
+   :target: https://pypi.org/project/aiosmtpd/
+   :alt: Supported Python Versions
 .. .. If you edit the above badges, don't forget to edit setup.cfg
 .. .. The |Discourse| badge MUST NOT be included in setup.cfg
 .. |Discourse| image:: https://img.shields.io/discourse/status?server=https%3A%2F%2Faio-libs.discourse.group%2F&style=social
@@ -55,7 +59,7 @@ You need **at least Python 3.6** to use this library.
 Supported Platforms
 -----------------------
 
-``aiosmtpd`` has been tested on **CPython** and **PyPy3.7**
+``aiosmtpd`` has been tested on **CPython** and |PyPy3.7|_
 for the following platforms (in alphabetical order):
 
 * Cygwin (on Windows 10) [1]
@@ -65,11 +69,14 @@ for the following platforms (in alphabetical order):
 * Ubuntu 20.04
 * Windows 10
 
-  | [1] Supported only with Cygwin-provided Python version
+  | [1] Supported only with Cygwin-provided CPython versions
   | [2] Supported only on the latest minor release
 
 ``aiosmtpd`` *probably* can run on platforms not listed above,
 but we cannot provide support for unlisted platforms.
+
+.. |PyPy3.7| replace:: **PyPy3.7**
+.. _`PyPy3.7`: https://www.pypy.org/
 
 
 Installation
