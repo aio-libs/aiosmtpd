@@ -61,11 +61,19 @@ jobs:
         shell: bash
         # language=bash
         run: |
-          pip install pytest pytest-mock check-manifest
+          ver_re="^__version__"
+          verfile="aiosmtpd/__init__.py"
           # Fetch master if needed because some test cases need its existence
           if [[ $GITHUB_REF != refs/heads/master ]]; then
             git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin master:master
+            now_ver=$(grep "$ver_re" $verfile)
+            master_ver=$(git show master:$verfile | grep "$ver_re")
+            if [[ $now_ver != $master_ver ]]; then
+              echo "### FAIL : Version in PR must be different from version in master!"
+              exit 1
+            fi
           fi
+          pip install pytest pytest-mock check-manifest
           pytest -v aiosmtpd/qa
           check-manifest -v
   testing:
