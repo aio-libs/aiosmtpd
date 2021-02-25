@@ -89,7 +89,7 @@ def safe_socket_dir() -> Generator[Path, None, None]:
     #
     yield tmpdir
     #
-    plist = [p for p in tmpdir.rglob("*")]
+    plist = list(tmpdir.rglob("*"))
     for p in reversed(plist):
         if p.is_dir():
             p.rmdir()
