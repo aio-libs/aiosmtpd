@@ -7,6 +7,7 @@ import multiprocessing as MP
 import os
 import time
 from contextlib import contextmanager
+from multiprocessing.synchronize import Event as MP_Event
 from smtplib import SMTP as SMTPClient
 from smtplib import SMTP_SSL
 from typing import Generator
@@ -77,7 +78,7 @@ def setuid(mocker: MockFixture):
 # region ##### Helper Funcs ###########################################################
 
 
-def watch_for_tls(ready_flag: MP.Event, retq: MP.Queue):
+def watch_for_tls(ready_flag: MP_Event, retq: MP.Queue):
     has_tls = False
     req_tls = False
     ready_flag.set()
@@ -99,7 +100,7 @@ def watch_for_tls(ready_flag: MP.Event, retq: MP.Queue):
     retq.put(req_tls)
 
 
-def watch_for_smtps(ready_flag: MP.Event, retq: MP.Queue):
+def watch_for_smtps(ready_flag: MP_Event, retq: MP.Queue):
     has_smtps = False
     ready_flag.set()
     start = time.monotonic()
