@@ -76,7 +76,7 @@ def deldir(targ: Path, verbose: bool = True):
         elif pp.is_file():
             pp.chmod(0o600)
             pp.unlink()
-        elif pp.is_dir():  # noqa: SIM106
+        elif pp.is_dir():
             pp.chmod(0o700)
             pp.rmdir()
         else:
