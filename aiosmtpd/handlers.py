@@ -15,6 +15,7 @@ import mailbox
 import re
 import smtplib
 import sys
+from abc import ABCMeta, abstractmethod
 from email import message_from_bytes, message_from_string
 
 from public import public
@@ -148,7 +149,7 @@ class Sink:
 
 
 @public
-class Message:
+class Message(metaclass=ABCMeta):
     def __init__(self, message_class=None):
         self.message_class = message_class
 
@@ -172,12 +173,13 @@ class Message:
         message['X-RcptTo'] = COMMASPACE.join(envelope.rcpt_tos)
         return message
 
+    @abstractmethod
     def handle_message(self, message):
-        raise NotImplementedError                   # pragma: nocover
+        raise NotImplementedError
 
 
 @public
-class AsyncMessage(Message):
+class AsyncMessage(Message, metaclass=ABCMeta):
     def __init__(self, message_class=None, *, loop=None):
         super().__init__(message_class)
         self.loop = loop or asyncio.get_event_loop()
@@ -187,8 +189,9 @@ class AsyncMessage(Message):
         await self.handle_message(message)
         return '250 OK'
 
+    @abstractmethod
     async def handle_message(self, message):
-        raise NotImplementedError                   # pragma: nocover
+        raise NotImplementedError
 
 
 @public
