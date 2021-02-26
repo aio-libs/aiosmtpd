@@ -347,6 +347,11 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         server_hostname: Optional[str] = None,
         **SMTP_parameters,
     ):
+        """
+        `Documentation can be found here
+        <http://aiosmtpd.readthedocs.io/en/latest/aiosmtpd\
+/docs/controller.html#controller-api>`_.
+        """
         super().__init__(
             handler,
             loop,
