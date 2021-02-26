@@ -8,9 +8,13 @@ import re
 import subprocess
 import sys
 import time
+from functools import partial
 from pathlib import Path
 
 from aiosmtpd import __version__ as version
+
+printfl = partial(print, flush=True)
+run_hidden = partial(subprocess.run, stdout=subprocess.PIPE)
 
 TWINE_CONFIG = Path(os.environ.get("TWINE_CONFIG", "~/.pypirc")).expanduser()
 TWINE_REPO = os.environ.get("TWINE_REPOSITORY", "aiosmtpd")
@@ -21,10 +25,15 @@ DISTFILES = [
     f"dist/aiosmtpd-{version}-py3-none-any.whl",
 ]
 
-result = subprocess.run(["pip", "freeze"], stdout=subprocess.PIPE)
-if b"\ntwine==" not in result.stdout:
-    print("ERROR: twine not installed. Please install 'twine' first")
-    sys.exit(1)
+printfl("Updating release toolkit first...", end="")
+run_hidden(
+    [sys.executable] + "-m pip install -U setuptools wheel twine".split()
+)
+print()
+
+printfl("Checking extra toolkit...", end="")
+result = run_hidden([sys.executable] + "-m pip freeze".split())
+print()
 if b"\ntwine-verify-upload==" not in result.stdout:
     print("*** Package twine-verify-upload is not yet installed.")
     print("*** Consider installing it. It is very useful :)")
@@ -62,8 +71,19 @@ if not GPG_SIGNING_ID:
         sys.exit("Release aborted")
 
 choice = input("Run tox first? [y/N]: ")
-if choice.lower() in ("y", "yes"):
-    subprocess.run("tox")
+if choice.casefold() in ("y", "yes"):
+    choice = input("  All testenvs? [y/N]: ")
+    try:
+        if choice.lower() in ("y", "yes"):
+            printfl("Running tox, all testenvs. This will take some time...", end="")
+            run_hidden("tox")
+        else:
+            printfl("Running 'tox -e qa,docs', please wait...", end="")
+            run_hidden("tox -e qa,docs".split())
+        print()
+    except subprocess.CalledProcessError:
+        print("ERROR: tox failed. Please run all tests")
+        sys.exit(1)
 
 # We're probably already in the right place
 os.chdir(Path(__file__).absolute().parent)
@@ -88,7 +108,7 @@ try:
     if has_verify:
         print("Waiting for package to be received by PyPI...", end="")
         for i in range(10, 0, -1):
-            print(i, end="..", flush=True)
+            printfl(i, end="..")
             time.sleep(1.0)
         print()
         twine_verif = ["twine", "verify_upload"] + DISTFILES
