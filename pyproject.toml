@@ -47,10 +47,14 @@ on-wsl = "'Microsoft' in platform_release"
     # As of 2021-02-07, only WSL has a kernel with "Microsoft" in the version.
 on-not-win32 = "sys_platform != 'win32'"
 on-cygwin = "sys_platform == 'cygwin'"
+no-unixsock = "sys_platform in {'win32', 'cygwin'}"
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: nocover",
+    "pragma: no cover",
+    "@abstract",
+    'class \S+\(Protocol\):'
 ]
 fail_under = 100
 show_missing = true
