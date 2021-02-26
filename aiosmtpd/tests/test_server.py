@@ -105,21 +105,12 @@ def assert_smtp_socket(controller: UnixSocketMixin):
         sock: socket.socket = stk.enter_context(
             socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         )
-        sock.settimeout(0.1)
+        sock.settimeout(AUTOSTOP_DELAY)
         sock.connect(str(sockfile))
         if ssl_context:
             sock = stk.enter_context(ssl_context.wrap_socket(sock))
-            time.sleep(0.1)
-        start = time.monotonic()
-        while (time.monotonic() - start) < AUTOSTOP_DELAY:
-            try:
-                resp = sock.recv(1024)
-                if resp:
-                    break
-            except socket.timeout:
-                time.sleep(0.05)
-        else:
-            resp = b""
+        time.sleep(0.1)
+        resp = sock.recv(1024)
         assert resp.startswith(b"220 ")
         assert resp.endswith(b"\r\n")
         sock.send(b"EHLO socket.test\r\n")
