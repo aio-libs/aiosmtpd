@@ -131,7 +131,7 @@ class BaseController(metaclass=ABCMeta):
         self._factory_invoked = threading.Event()
 
     def factory(self):
-        """Allow subclasses to customize the handler/server creation."""
+        """Subclasses can override this to customize the handler/server creation."""
         return SMTP(self.handler, **self.SMTP_kwargs)
 
     def _factory_invoker(self):
@@ -149,6 +149,10 @@ class BaseController(metaclass=ABCMeta):
 
     @abstractmethod
     def _create_server(self) -> Coroutine:
+        """
+        Overridden by subclasses to actually perform the async binding to the
+        listener endpoint.
+        """
         raise NotImplementedError
 
     def _cleanup(self):
@@ -161,11 +165,6 @@ class BaseController(metaclass=ABCMeta):
 
 @public
 class BaseThreadedController(BaseController, metaclass=ABCMeta):
-    """
-    `Documentation can be found here
-    <https://aiosmtpd.readthedocs.io/en/latest/controller.html>`_.
-    """
-
     _thread: Optional[threading.Thread] = None
     _thread_exception: Optional[Exception] = None
 
@@ -193,6 +192,10 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
 
     @abstractmethod
     def _trigger_server(self):
+        """
+        Overridden by subclasses to trigger asyncio to actually initialize the SMTP
+        class (it's lazy initialization, done only on initial connection).
+        """
         raise NotImplementedError
 
     def _run(self, ready_event: threading.Event):
@@ -217,12 +220,17 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
             return
         self.loop.call_soon(ready_event.set)
         self.loop.run_forever()
+        # We reach this point when loop is ended (by external code)
+        # Perform some stoppages to ensure endpoint no longer bound.
         self.server.close()
         self.loop.run_until_complete(self.server.wait_closed())
         self.loop.close()
         self.server = None
 
     def start(self):
+        """
+        Start a thread and run the asyncio event loop in that thread
+        """
         assert self._thread is None, "SMTP daemon already running"
         self._factory_invoked.clear()
 
@@ -273,6 +281,9 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
             task.cancel()
 
     def stop(self, no_assert: bool = False):
+        """
+        Stop the loop, the tasks in the loop, and terminate the thread as well.
+        """
         assert no_assert or self._thread is not None, "SMTP daemon not running"
         self.loop.call_soon_threadsafe(self._cancel_tasks)
         if self._thread is not None:
@@ -405,10 +416,6 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
 
 @public
 class Controller(InetMixin, BaseThreadedController):
-    """
-    `Documentation can be found here
-    <https://aiosmtpd.readthedocs.io/en/latest/controller.html>`_.
-    """
     pass
 
 
@@ -416,10 +423,6 @@ class Controller(InetMixin, BaseThreadedController):
 class UnixSocketController(  # pragma: no-unixsock
     UnixSocketMixin, BaseThreadedController
 ):
-    """
-    `Documentation can be found here
-    <https://aiosmtpd.readthedocs.io/en/latest/controller.html>`_.
-    """
     pass
 
 
