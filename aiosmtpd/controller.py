@@ -331,9 +331,9 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         self.server.close()
         self.server_coro.close()
         if not self.loop.is_running():
-            # We only do wait_closed if loop has been stopeed externally, thus
-            # ensuring that we clean up fully
             self.loop.run_until_complete(self.server.wait_closed())
+        else:
+            self.loop.create_task(self.server.wait_closed())
         # If loop is still running, then the responsibility to wait until the server
         # closes is with the calling code, not in here.
         self._cleanup()
