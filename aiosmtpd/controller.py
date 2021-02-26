@@ -165,7 +165,7 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
     def __init__(
         self,
         handler: Any,
-        loop=None,
+        loop: asyncio.AbstractEventLoop = None,
         *,
         ready_timeout: float = 1.0,
         ssl_context: Optional[ssl.SSLContext] = None,
@@ -188,7 +188,7 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
     def _trigger_server(self):
         raise NotImplementedError
 
-    def _run(self, ready_event):
+    def _run(self, ready_event: threading.Event):
         asyncio.set_event_loop(self.loop)
         try:
             # Need to do two-step assignments here to ensure IDEs can properly
@@ -264,7 +264,7 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         for task in _all_tasks(self.loop):
             task.cancel()
 
-    def stop(self, no_assert=False):
+    def stop(self, no_assert: bool = False):
         assert no_assert or self._thread is not None, "SMTP daemon not running"
         self.loop.call_soon_threadsafe(self._stop)
         if self._thread is not None:
@@ -282,7 +282,7 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
     def __init__(
         self,
         handler: Any,
-        loop=None,
+        loop: asyncio.AbstractEventLoop = None,
         *,
         ssl_context: Optional[ssl.SSLContext] = None,
         # SMTP parameters
@@ -326,7 +326,7 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
 class InetMixin(BaseController, metaclass=ABCMeta):
     def __init__(
         self,
-        handler,
+        handler: Any,
         hostname: Optional[str] = None,
         port: int = 8025,
         loop: asyncio.AbstractEventLoop = None,
@@ -369,9 +369,9 @@ class InetMixin(BaseController, metaclass=ABCMeta):
 class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
     def __init__(
         self,
-        handler,
+        handler: Any,
         unix_socket: Union[str, Path],
-        loop=None,
+        loop: asyncio.AbstractEventLoop = None,
         **kwargs,
     ):
         super().__init__(
