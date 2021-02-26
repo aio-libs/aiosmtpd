@@ -30,6 +30,7 @@ from aiosmtpd.controller import (
 )
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
+from aiosmtpd.testing.helpers import catchup_delay
 
 from .conftest import Global, AUTOSTOP_DELAY
 
@@ -108,7 +109,7 @@ def assert_smtp_socket(controller: UnixSocketMixin):
         sock.connect(str(sockfile))
         if ssl_context:
             sock = stk.enter_context(ssl_context.wrap_socket(sock))
-        time.sleep(0.1)
+        catchup_delay()
         resp = sock.recv(1024)
         assert resp.startswith(b"220 ")
         assert resp.endswith(b"\r\n")
@@ -118,14 +119,14 @@ def assert_smtp_socket(controller: UnixSocketMixin):
         # of ESMTP features ...
         resparr = bytearray()
         while not resparr.endswith(b"250 HELP\r\n"):
-            time.sleep(0.1)
+            catchup_delay()
             resp = sock.recv(1024)
             if not resp:
                 break
             resparr += resp
         assert resparr.endswith(b"250 HELP\r\n")
         sock.send(b"QUIT\r\n")
-        time.sleep(0.1)
+        catchup_delay()
         resp = sock.recv(1024)
         assert resp.startswith(b"221")
 
@@ -365,7 +366,7 @@ class TestUnixSocketController:
         try:
             cont.start()
             # Allow additional time for SSL to kick in
-            time.sleep(0.1)
+            catchup_delay()
             assert_smtp_socket(cont)
         finally:
             cont.stop()
@@ -417,6 +418,7 @@ class TestFactory:
         cont = Controller(Sink())
         try:
             cont.start()
+            catchup_delay()
             assert cont.smtpd is not None
             assert cont._thread_exception is None
         finally:
