@@ -3,6 +3,7 @@
 
 """Test other aspects of the server implementation."""
 
+import asyncio
 import errno
 import platform
 import socket
@@ -11,7 +12,9 @@ import time
 from contextlib import ExitStack
 from functools import partial
 from pathlib import Path
+from smtplib import SMTP as SMTPClient
 from tempfile import mkdtemp
+from threading import Thread
 from typing import Generator
 
 import pytest
@@ -20,13 +23,15 @@ from pytest_mock import MockFixture
 from aiosmtpd.controller import (
     Controller,
     UnixSocketController,
+    UnthreadedController,
+    UnixSocketUnthreadedController,
     _FakeServer,
     get_localhost,
 )
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
 
-from .conftest import Global
+from .conftest import Global, AUTOSTOP_DELAY
 
 
 class SlowStartController(Controller):
@@ -295,10 +300,7 @@ class TestController:
 
     # Apparently errno.E* constants adapts to the OS, so on Windows they will
     # automatically use the analogous WSAE* constants
-    @pytest.mark.parametrize(
-        "err",
-        [errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT]
-    )
+    @pytest.mark.parametrize("err", [errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT])
     def test_getlocalhost_6no(self, mocker, err):
         mock_makesock: mocker.Mock = mocker.patch(
             "aiosmtpd.controller.makesock",
@@ -364,6 +366,47 @@ class TestUnixSocketController:
             assert_smtp_socket(sockfile)
         finally:
             cont.stop()
+
+
+class TestUnthreaded:
+    def _runner(self, loop: asyncio.AbstractEventLoop):
+        loop.run_forever()
+
+    @pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
+    @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
+    def test_unixsocket(self, safe_socket_dir, autostop_loop):
+        sockfile = safe_socket_dir / "smtp"
+        cont = UnixSocketUnthreadedController(
+            Sink(), unix_socket=sockfile, loop=autostop_loop
+        )
+        cont.prep()
+        assert autostop_loop.is_running() is False
+        thread = Thread(target=self._runner, args=(autostop_loop,))
+        thread.start()
+        assert autostop_loop.is_running() is True
+        assert_smtp_socket(sockfile)
+        thread.join()
+        assert autostop_loop.is_running() is False
+        assert autostop_loop.is_closed() is False
+        cont.stop()
+        assert autostop_loop.is_closed() is False
+
+    def test_inet(self, autostop_loop):
+        cont = UnthreadedController(Sink(), loop=autostop_loop)
+        cont.prep()
+        assert autostop_loop.is_running() is False
+        thread = Thread(target=self._runner, args=(autostop_loop,))
+        # with watcher_process(watch_for_smtp_inet) as retq:
+        thread.start()
+        assert autostop_loop.is_running() is True
+        with SMTPClient(cont.hostname, cont.port, timeout=AUTOSTOP_DELAY) as client:
+            code, _ = client.helo("example.org")
+            assert code == 250
+        thread.join()
+        assert autostop_loop.is_running() is False
+        assert autostop_loop.is_closed() is False
+        cont.stop()
+        assert autostop_loop.is_closed() is False
 
 
 class TestFactory:
