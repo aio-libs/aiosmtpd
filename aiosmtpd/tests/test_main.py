@@ -19,6 +19,8 @@ from aiosmtpd.main import main, parseargs
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from aiosmtpd.tests.conftest import SERVER_CRT, SERVER_KEY
 
+from .conftest import AUTOSTOP_DELAY
+
 try:
     import pwd
 except ImportError:
@@ -26,10 +28,6 @@ except ImportError:
 
 HAS_SETUID = hasattr(os, "setuid")
 MAIL_LOG = logging.getLogger("mail.log")
-
-# If less than 1.0, might cause intermittent error if test system
-# is too busy/overloaded.
-AUTOSTOP_DELAY = 1.0
 
 
 # region ##### Custom Handlers ########################################################
@@ -51,17 +49,6 @@ class NullHandler:
 # endregion
 
 # region ##### Fixtures ###############################################################
-
-
-@pytest.fixture
-def autostop_loop(temp_event_loop) -> Generator[asyncio.AbstractEventLoop, None, None]:
-    # Create a new event loop, and arrange for that loop to end almost
-    # immediately.  This will allow the calls to main() in these tests to
-    # also exit almost immediately.  Otherwise, the foreground test
-    # process will hang.
-    temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
-    #
-    yield temp_event_loop
 
 
 @pytest.fixture
