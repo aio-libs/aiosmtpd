@@ -20,6 +20,8 @@ from aiosmtpd.testing.helpers import catchup_delay
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from aiosmtpd.tests.conftest import AUTOSTOP_DELAY, SERVER_CRT, SERVER_KEY
 
+from .conftest import AUTOSTOP_DELAY
+
 try:
     import pwd
 except ImportError:
