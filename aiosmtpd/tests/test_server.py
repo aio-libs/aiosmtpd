@@ -91,6 +91,37 @@ def safe_socket_dir() -> Generator[Path, None, None]:
     tmpdir.rmdir()
 
 
+def assert_smtp_socket(sockfile: Path, ssl_context: ssl.SSLContext = None):
+    assert sockfile.exists()
+    with ExitStack() as stk:
+        sock: socket.socket = stk.enter_context(
+            socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        )
+        sock.connect(str(sockfile))
+        if ssl_context:
+            sock = stk.enter_context(ssl_context.wrap_socket(sock))
+            time.sleep(0.1)
+        resp = sock.recv(1024)
+        assert resp.startswith(b"220 ")
+        assert resp.endswith(b"\r\n")
+        sock.send(b"EHLO socket.test\r\n")
+        # We need to "build" resparr because, especially when socket is wrapped
+        # in SSL, the SMTP server takes it sweet time responding with the list
+        # of ESMTP features ...
+        resparr = bytearray()
+        while not resparr.endswith(b"250 HELP\r\n"):
+            time.sleep(0.1)
+            resp = sock.recv(1024)
+            if not resp:
+                break
+            resparr += resp
+        assert resparr.endswith(b"250 HELP\r\n")
+        sock.send(b"QUIT\r\n")
+        time.sleep(0.1)
+        resp = sock.recv(1024)
+        assert resp.startswith(b"221")
+
+
 class TestServer:
     """Tests for the aiosmtpd.smtp.SMTP class"""
 
@@ -312,61 +343,25 @@ class TestController:
 @pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
 @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
 class TestUnixSocketController:
-    sockfile: Path = None
-
-    def _assert_good_server(self, ssl_context: ssl.SSLContext = None):
-        # Note: all those time.sleep()s are necessary
-        # Remember that we're running in "Threaded" mode, and there's the GIL...
-        # The time.sleep()s lets go of the GIL allowing the asyncio loop to move
-        # forward
-        assert self.sockfile.exists()
-        with ExitStack() as stk:
-            sock: socket.socket = stk.enter_context(
-                socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            )
-            sock.connect(str(self.sockfile))
-            if ssl_context:
-                sock = stk.enter_context(ssl_context.wrap_socket(sock))
-                time.sleep(0.1)
-            resp = sock.recv(1024)
-            assert resp.startswith(b"220 ")
-            assert resp.endswith(b"\r\n")
-            sock.send(b"EHLO socket.test\r\n")
-            # We need to "build" resparr because, especially when socket is wrapped
-            # in SSL, the SMTP server takes it sweet time responding with the list
-            # of ESMTP features ...
-            resparr = bytearray()
-            while not resparr.endswith(b"250 HELP\r\n"):
-                time.sleep(0.1)
-                resp = sock.recv(1024)
-                if not resp:
-                    break
-                resparr += resp
-            assert resparr.endswith(b"250 HELP\r\n")
-            sock.send(b"QUIT\r\n")
-            time.sleep(0.1)
-            resp = sock.recv(1024)
-            assert resp.startswith(b"221")
-
     def test_server_creation(self, safe_socket_dir):
-        self.sockfile = safe_socket_dir / "smtp"
-        cont = UnixSocketController(Sink(), unix_socket=self.sockfile)
+        sockfile = safe_socket_dir / "smtp"
+        cont = UnixSocketController(Sink(), unix_socket=sockfile)
         try:
             cont.start()
-            self._assert_good_server()
+            assert_smtp_socket(sockfile)
         finally:
             cont.stop()
 
     def test_server_creation_ssl(self, safe_socket_dir, ssl_context_server):
-        self.sockfile = safe_socket_dir / "smtp"
+        sockfile = safe_socket_dir / "smtp"
         cont = UnixSocketController(
-            Sink(), unix_socket=self.sockfile, ssl_context=ssl_context_server
+            Sink(), unix_socket=sockfile, ssl_context=ssl_context_server
         )
         try:
             cont.start()
             # Allow additional time for SSL to kick in
             time.sleep(0.1)
-            self._assert_good_server(ssl_context_server)
+            assert_smtp_socket(sockfile)
         finally:
             cont.stop()
 
