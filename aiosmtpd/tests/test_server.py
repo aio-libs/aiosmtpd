@@ -394,16 +394,27 @@ class TestUnthreaded:
             Sink(), unix_socket=sockfile, loop=autostop_loop
         )
         cont.begin()
+        # Make sure event loop is not running (will be started in thread)
         assert autostop_loop.is_running() is False
         thread = Thread(target=self._runner, args=(autostop_loop,))
         thread.start()
+        catchup_delay()
+        # Make sure event loop is up and running (started within thread)
         assert autostop_loop.is_running() is True
+        # Check we can connect
         assert_smtp_socket(cont)
-        thread.join()
+        # Wait until thread ends, which it will be when the loop autostops
+        thread.join(timeout=AUTOSTOP_DELAY)
+        assert thread.is_alive() is False
+        catchup_delay()
         assert autostop_loop.is_running() is False
-        assert autostop_loop.is_closed() is False
+        # At this point, the loop _has_ stopped, but the task is still listening
+        # TODO: Verify
+        # Stop the task
         cont.end()
-        assert autostop_loop.is_closed() is False
+        catchup_delay()
+        # Now the listener has gone away
+        # TODO: Verify
 
     def test_inet_loopstop(self, autostop_loop):
         """
@@ -416,14 +427,15 @@ class TestUnthreaded:
         thread = Thread(target=self._runner, args=(autostop_loop,))
         thread.start()
         catchup_delay()
-        # Make sure event loop is up and running
+        # Make sure event loop is up and running (started within thread)
         assert autostop_loop.is_running() is True
         # Check we can connect
         with SMTPClient(cont.hostname, cont.port, timeout=AUTOSTOP_DELAY) as client:
             code, _ = client.helo("example.org")
             assert code == 250
         # Wait until thread ends, which it will be when the loop autostops
-        thread.join()
+        thread.join(timeout=AUTOSTOP_DELAY)
+        assert thread.is_alive() is False
         catchup_delay()
         assert autostop_loop.is_running() is False
         # At this point, the loop _has_ stopped, but the task is still listening,
@@ -431,11 +443,12 @@ class TestUnthreaded:
         # SMTPServerDisconnected
         with pytest.raises(SMTPServerDisconnected):
             SMTPClient(cont.hostname, cont.port, timeout=0.1)
-        # Stop the task
         cont.end()
         catchup_delay()
         # Now the listener has gone away, and thus we will end up with socket.timeout
-        with pytest.raises(socket.timeout):
+        # or ConnectionError (depending on OS)
+        # noinspection PyTypeChecker
+        with pytest.raises((socket.timeout, ConnectionError)):
             SMTPClient(cont.hostname, cont.port, timeout=0.1)
 
     def test_inet_contstop(self, temp_event_loop):
@@ -460,15 +473,17 @@ class TestUnthreaded:
         catchup_delay()
         assert temp_event_loop.is_running() is True
         # Because we've called .stop() there, the server listener should've gone away,
-        # so we should end up with a socket.timeout
-        with pytest.raises(socket.timeout):
+        # so we should end up with a socket.timeout or ConnectionError (depending on OS)
+        # noinspection PyTypeChecker
+        with pytest.raises((socket.timeout, ConnectionError)):
             SMTPClient(cont.hostname, cont.port, timeout=0.1)
         # Cleanup, or else we'll hang
         temp_event_loop.call_soon_threadsafe(self._cancel_tasks, temp_event_loop)
         catchup_delay()
+        thread.join(AUTOSTOP_DELAY)
+        assert thread.is_alive() is False
         assert temp_event_loop.is_running() is False
         assert temp_event_loop.is_closed() is False
-        thread.join()
 
 
 class TestFactory:
