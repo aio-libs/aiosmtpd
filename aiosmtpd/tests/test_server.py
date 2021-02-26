@@ -24,6 +24,7 @@ from aiosmtpd.controller import (
     Controller,
     UnixSocketController,
     UnthreadedController,
+    UnixSocketMixin,
     UnixSocketUnthreadedController,
     _FakeServer,
     get_localhost,
@@ -96,17 +97,29 @@ def safe_socket_dir() -> Generator[Path, None, None]:
     tmpdir.rmdir()
 
 
-def assert_smtp_socket(sockfile: Path, ssl_context: ssl.SSLContext = None):
-    assert sockfile.exists()
+def assert_smtp_socket(controller: UnixSocketMixin):
+    assert Path(controller.unix_socket).exists()
+    sockfile = controller.unix_socket
+    ssl_context = controller.ssl_context
     with ExitStack() as stk:
         sock: socket.socket = stk.enter_context(
             socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         )
+        sock.settimeout(0.1)
         sock.connect(str(sockfile))
         if ssl_context:
             sock = stk.enter_context(ssl_context.wrap_socket(sock))
             time.sleep(0.1)
-        resp = sock.recv(1024)
+        start = time.monotonic()
+        while (time.monotonic() - start) < AUTOSTOP_DELAY:
+            try:
+                resp = sock.recv(1024)
+                if resp:
+                    break
+            except socket.timeout:
+                time.sleep(0.05)
+        else:
+            resp = b""
         assert resp.startswith(b"220 ")
         assert resp.endswith(b"\r\n")
         sock.send(b"EHLO socket.test\r\n")
@@ -350,7 +363,7 @@ class TestUnixSocketController:
         cont = UnixSocketController(Sink(), unix_socket=sockfile)
         try:
             cont.start()
-            assert_smtp_socket(sockfile)
+            assert_smtp_socket(cont)
         finally:
             cont.stop()
 
@@ -363,7 +376,7 @@ class TestUnixSocketController:
             cont.start()
             # Allow additional time for SSL to kick in
             time.sleep(0.1)
-            assert_smtp_socket(sockfile)
+            assert_smtp_socket(cont)
         finally:
             cont.stop()
 
@@ -384,7 +397,7 @@ class TestUnthreaded:
         thread = Thread(target=self._runner, args=(autostop_loop,))
         thread.start()
         assert autostop_loop.is_running() is True
-        assert_smtp_socket(sockfile)
+        assert_smtp_socket(cont)
         thread.join()
         assert autostop_loop.is_running() is False
         assert autostop_loop.is_closed() is False
