@@ -319,7 +319,7 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
     def stop(self):
         self.server.close()
         self.server_coro.close()
-        if self.loop.is_running():
+        if not self.loop.is_running():
             self.loop.run_until_complete(self.server.wait_closed())
         self._cleanup()
 
