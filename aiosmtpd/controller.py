@@ -36,7 +36,7 @@ class IP6_IS:
     YES = {errno.EADDRINUSE}
 
 
-def _has_ipv6():
+def _has_ipv6() -> bool:
     # Helper function to assist in mocking
     return has_ipv6
 
@@ -89,24 +89,17 @@ class _FakeServer(asyncio.StreamReaderProtocol):
 
 
 @public
-class BaseThreadedController(metaclass=ABCMeta):
-    """
-    `Documentation can be found here
-    <https://aiosmtpd.readthedocs.io/en/latest/controller.html>`_.
-    """
+class BaseController(metaclass=ABCMeta):
+    smtpd = None
     server: Optional[AsyncServer] = None
     server_coro: Optional[Coroutine] = None
-    smtpd = None
-    _factory_invoked: Optional[threading.Event] = None
-    _thread: Optional[threading.Thread] = None
-    _thread_exception: Optional[Exception] = None
+    _factory_invoked: threading.Event = None
 
     def __init__(
         self,
-        handler,
-        loop=None,
+        handler: Any,
+        loop: asyncio.AbstractEventLoop = None,
         *,
-        ready_timeout: float = 1.0,
         ssl_context: Optional[ssl.SSLContext] = None,
         # SMTP parameters
         server_hostname: Optional[str] = None,
@@ -117,9 +110,6 @@ class BaseThreadedController(metaclass=ABCMeta):
             self.loop = asyncio.new_event_loop()
         else:
             self.loop = loop
-        self.ready_timeout = float(
-            os.getenv("AIOSMTPD_CONTROLLER_TIMEOUT", ready_timeout)
-        )
         self.ssl_context = ssl_context
         self.SMTP_kwargs: Dict[str, Any] = {}
         if "server_kwargs" in SMTP_parameters:
@@ -137,6 +127,8 @@ class BaseThreadedController(metaclass=ABCMeta):
         # It actually conflicts with SMTP class's default, but the reasoning is
         # discussed in the docs.
         self.SMTP_kwargs.setdefault("enable_SMTPUTF8", True)
+        #
+        self._factory_invoked = threading.Event()
 
     def factory(self):
         """Allow subclasses to customize the handler/server creation."""
@@ -157,11 +149,44 @@ class BaseThreadedController(metaclass=ABCMeta):
 
     @abstractmethod
     def _create_server(self) -> Coroutine:
-        raise NotImplementedError  # pragma: nocover
+        raise NotImplementedError
+
+
+@public
+class BaseThreadedController(BaseController, metaclass=ABCMeta):
+    """
+    `Documentation can be found here
+    <https://aiosmtpd.readthedocs.io/en/latest/controller.html>`_.
+    """
+
+    _thread: Optional[threading.Thread] = None
+    _thread_exception: Optional[Exception] = None
+
+    def __init__(
+        self,
+        handler: Any,
+        loop=None,
+        *,
+        ready_timeout: float = 1.0,
+        ssl_context: Optional[ssl.SSLContext] = None,
+        # SMTP parameters
+        server_hostname: Optional[str] = None,
+        **SMTP_parameters,
+    ):
+        super().__init__(
+            handler,
+            loop,
+            ssl_context=ssl_context,
+            server_hostname=server_hostname,
+            **SMTP_parameters,
+        )
+        self.ready_timeout = float(
+            os.getenv("AIOSMTPD_CONTROLLER_TIMEOUT", ready_timeout)
+        )
 
     @abstractmethod
     def _trigger_server(self):
-        raise NotImplementedError  # pragma: nocover
+        raise NotImplementedError
 
     def _run(self, ready_event):
         asyncio.set_event_loop(self.loop)
@@ -192,7 +217,7 @@ class BaseThreadedController(metaclass=ABCMeta):
 
     def start(self):
         assert self._thread is None, "SMTP daemon already running"
-        self._factory_invoked = threading.Event()
+        self._factory_invoked.clear()
 
         ready_event = threading.Event()
         self._thread = threading.Thread(target=self._run, args=(ready_event,))
@@ -246,41 +271,75 @@ class BaseThreadedController(metaclass=ABCMeta):
             self._thread.join()
             self._thread = None
         self._thread_exception = None
-        self._factory_invoked = None
+        self._factory_invoked.clear()
         self.server_coro = None
         self.server = None
         self.smtpd = None
 
 
 @public
-class Controller(BaseThreadedController):
-    """
-    `Documentation can be found here
-    <https://aiosmtpd.readthedocs.io/en/latest/controller.html>`_.
-    """
+class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
+    def __init__(
+        self,
+        handler: Any,
+        loop=None,
+        *,
+        ssl_context: Optional[ssl.SSLContext] = None,
+        # SMTP parameters
+        server_hostname: Optional[str] = None,
+        **SMTP_parameters,
+    ):
+        """
+        `Documentation can be found here
+        <http://aiosmtpd.readthedocs.io/en/latest/aiosmtpd\
+/docs/controller.html#controller-api>`_.
+        """
+        super().__init__(
+            handler,
+            loop,
+            ssl_context=ssl_context,
+            server_hostname=server_hostname,
+            **SMTP_parameters,
+        )
+
+    def prep(self):
+        asyncio.set_event_loop(self.loop)
+        # Need to do two-step assignments here to ensure IDEs can properly
+        # detect the types of the vars. Cannot use `assert isinstance`, because
+        # Python 3.6 in asyncio debug mode has a bug wherein CoroWrapper is not
+        # an instance of Coroutine
+        self.server_coro = self._create_server()
+        srv: AsyncServer = self.loop.run_until_complete(self.server_coro)
+        self.server = srv
+
+    def stop(self):
+        self.loop.stop()
+        try:
+            _all_tasks = asyncio.all_tasks
+        except AttributeError:  # pragma: py-gt-36
+            _all_tasks = asyncio.Task.all_tasks
+        for task in _all_tasks(self.loop):
+            task.cancel()
+
+
+@public
+class InetMixin(BaseController, metaclass=ABCMeta):
     def __init__(
         self,
         handler,
         hostname: Optional[str] = None,
         port: int = 8025,
-        loop=None,
-        *,
-        ready_timeout: float = 1.0,
-        ssl_context: ssl.SSLContext = None,
-        # SMTP parameters
-        server_hostname: Optional[str] = None,
-        **SMTP_parameters,
+        loop: asyncio.AbstractEventLoop = None,
+        **kwargs,
     ):
         super().__init__(
             handler,
             loop,
-            ready_timeout=ready_timeout,
-            server_hostname=server_hostname,
-            **SMTP_parameters
+            **kwargs,
         )
-        self.hostname = get_localhost() if hostname is None else hostname
+        self._localhost = get_localhost()
+        self.hostname = self._localhost if hostname is None else hostname
         self.port = port
-        self.ssl_context = ssl_context
 
     def _create_server(self) -> Coroutine:
         return self.loop.create_server(
@@ -298,38 +357,27 @@ class Controller(BaseThreadedController):
         """
         # At this point, if self.hostname is Falsy, it most likely is "" (bind to all
         # addresses). In such case, it should be safe to connect to localhost)
-        hostname = self.hostname or get_localhost()
+        hostname = self.hostname or self._localhost
         with ExitStack() as stk:
             s = stk.enter_context(create_connection((hostname, self.port), 1.0))
             if self.ssl_context:
                 s = stk.enter_context(self.ssl_context.wrap_socket(s))
-            _ = s.recv(1024)
+            s.recv(1024)
 
 
-class UnixSocketController(BaseThreadedController):  # pragma: on-win32 on-cygwin
-    """
-    `Documentation can be found here
-    <https://aiosmtpd.readthedocs.io/en/latest/controller.html>`_.
-    """
+@public
+class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
     def __init__(
         self,
         handler,
-        unix_socket: Optional[Union[str, Path]],
+        unix_socket: Union[str, Path],
         loop=None,
-        *,
-        ready_timeout=1.0,
-        ssl_context=None,
-        # SMTP parameters
-        server_hostname: str = None,
-        **SMTP_parameters,
+        **kwargs,
     ):
         super().__init__(
             handler,
             loop,
-            ready_timeout=ready_timeout,
-            ssl_context=ssl_context,
-            server_hostname=server_hostname,
-            **SMTP_parameters
+            **kwargs,
         )
         self.unix_socket = str(unix_socket)
 
@@ -346,4 +394,36 @@ class UnixSocketController(BaseThreadedController):  # pragma: on-win32 on-cygwi
             s.connect(self.unix_socket)
             if self.ssl_context:
                 s = stk.enter_context(self.ssl_context.wrap_socket(s))
-            _ = s.recv(1024)
+            s.recv(1024)
+
+
+@public
+class Controller(InetMixin, BaseThreadedController):
+    """
+    `Documentation can be found here
+    <https://aiosmtpd.readthedocs.io/en/latest/controller.html>`_.
+    """
+    pass
+
+
+@public
+class UnixSocketController(  # pragma: no-unixsock
+    UnixSocketMixin, BaseThreadedController
+):
+    """
+    `Documentation can be found here
+    <https://aiosmtpd.readthedocs.io/en/latest/controller.html>`_.
+    """
+    pass
+
+
+@public
+class UnthreadedController(InetMixin, BaseUnthreadedController):
+    pass
+
+
+@public
+class UnixSocketUnthreadedController(  # pragma: no-unixsock
+    UnixSocketMixin, BaseUnthreadedController
+):
+    pass
