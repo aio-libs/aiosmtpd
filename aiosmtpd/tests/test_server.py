@@ -7,7 +7,6 @@ import asyncio
 import errno
 import platform
 import socket
-import ssl
 import time
 from contextlib import ExitStack
 from functools import partial
