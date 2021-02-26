@@ -151,6 +151,13 @@ class BaseController(metaclass=ABCMeta):
     def _create_server(self) -> Coroutine:
         raise NotImplementedError
 
+    def _cleanup(self):
+        self._thread_exception = None
+        self._factory_invoked.clear()
+        self.server_coro = None
+        self.server = None
+        self.smtpd = None
+
 
 @public
 class BaseThreadedController(BaseController, metaclass=ABCMeta):
@@ -255,26 +262,19 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         if self.smtpd is None:
             raise RuntimeError("Unknown Error, failed to init SMTP server")
 
-    def _stop(self):
-        self.loop.stop()
+    def stop(self, no_assert: bool = False):
+        assert no_assert or self._thread is not None, "SMTP daemon not running"
+        self.loop.call_soon_threadsafe(self.loop.stop)
         try:
             _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
         except AttributeError:  # pragma: py-gt-36
             _all_tasks = asyncio.Task.all_tasks
         for task in _all_tasks(self.loop):
             task.cancel()
-
-    def stop(self, no_assert: bool = False):
-        assert no_assert or self._thread is not None, "SMTP daemon not running"
-        self.loop.call_soon_threadsafe(self._stop)
         if self._thread is not None:
             self._thread.join()
             self._thread = None
-        self._thread_exception = None
-        self._factory_invoked.clear()
-        self.server_coro = None
-        self.server = None
-        self.smtpd = None
+        self._cleanup()
 
 
 @public
@@ -313,13 +313,11 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         self.server = srv
 
     def stop(self):
-        self.loop.stop()
-        try:
-            _all_tasks = asyncio.all_tasks
-        except AttributeError:  # pragma: py-gt-36
-            _all_tasks = asyncio.Task.all_tasks
-        for task in _all_tasks(self.loop):
-            task.cancel()
+        self.server.close()
+        self.server_coro.close()
+        if self.loop.is_running():
+            self.loop.run_until_complete(self.server.wait_closed())
+        self._cleanup()
 
 
 @public
