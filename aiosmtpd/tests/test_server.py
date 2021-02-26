@@ -393,7 +393,7 @@ class TestUnthreaded:
         cont = UnixSocketUnthreadedController(
             Sink(), unix_socket=sockfile, loop=autostop_loop
         )
-        cont.prep()
+        cont.begin()
         assert autostop_loop.is_running() is False
         thread = Thread(target=self._runner, args=(autostop_loop,))
         thread.start()
@@ -402,7 +402,7 @@ class TestUnthreaded:
         thread.join()
         assert autostop_loop.is_running() is False
         assert autostop_loop.is_closed() is False
-        cont.stop()
+        cont.end()
         assert autostop_loop.is_closed() is False
 
     def test_inet_loopstop(self, autostop_loop):
@@ -410,7 +410,7 @@ class TestUnthreaded:
         Verify behavior when the loop is stopped before controller is stopped
         """
         cont = UnthreadedController(Sink(), loop=autostop_loop)
-        cont.prep()
+        cont.begin()
         # Make sure event loop is not running (will be started in thread)
         assert autostop_loop.is_running() is False
         thread = Thread(target=self._runner, args=(autostop_loop,))
@@ -432,7 +432,7 @@ class TestUnthreaded:
         with pytest.raises(SMTPServerDisconnected):
             SMTPClient(cont.hostname, cont.port, timeout=0.1)
         # Stop the task
-        cont.stop()
+        cont.end()
         catchup_delay()
         # Now the listener has gone away, and thus we will end up with socket.timeout
         with pytest.raises(socket.timeout):
@@ -443,7 +443,7 @@ class TestUnthreaded:
         Verify behavior when the controller is stopped before loop is stopped
         """
         cont = UnthreadedController(Sink(), loop=temp_event_loop)
-        cont.prep()
+        cont.begin()
         # Make sure event loop is not running (will be started in thread)
         assert temp_event_loop.is_running() is False
         thread = Thread(target=self._runner, args=(temp_event_loop,))
@@ -456,7 +456,7 @@ class TestUnthreaded:
             code, _ = client.helo("example.org")
             assert code == 250
         # Now stop the controller, but let the loop keep running
-        cont.stop()
+        cont.end()
         catchup_delay()
         assert temp_event_loop.is_running() is True
         # Because we've called .stop() there, the server listener should've gone away,

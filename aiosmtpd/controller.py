@@ -306,7 +306,7 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
             **SMTP_parameters,
         )
 
-    def prep(self):
+    def begin(self):
         asyncio.set_event_loop(self.loop)
         # Need to do two-step assignments here to ensure IDEs can properly
         # detect the types of the vars. Cannot use `assert isinstance`, because
@@ -316,7 +316,7 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         srv: AsyncServer = self.loop.run_until_complete(self.server_coro)
         self.server = srv
 
-    def stop(self):
+    def end(self):
         self.server.close()
         self.server_coro.close()
         if not self.loop.is_running():
