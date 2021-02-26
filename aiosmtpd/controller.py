@@ -262,15 +262,19 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         if self.smtpd is None:
             raise RuntimeError("Unknown Error, failed to init SMTP server")
 
-    def stop(self, no_assert: bool = False):
-        assert no_assert or self._thread is not None, "SMTP daemon not running"
-        self.loop.call_soon_threadsafe(self.loop.stop)
+    def _stop(self):
+        self.loop.stop()
         try:
             _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
         except AttributeError:  # pragma: py-gt-36
             _all_tasks = asyncio.Task.all_tasks
         for task in _all_tasks(self.loop):
+            # This needs to be invoked in a thread-safe way
             task.cancel()
+
+    def stop(self, no_assert: bool = False):
+        assert no_assert or self._thread is not None, "SMTP daemon not running"
+        self.loop.call_soon_threadsafe(self._stop)
         if self._thread is not None:
             self._thread.join()
             self._thread = None
