@@ -11,7 +11,7 @@ import time
 from contextlib import ExitStack
 from functools import partial
 from pathlib import Path
-from smtplib import SMTP as SMTPClient
+from smtplib import SMTP as SMTPClient, SMTPServerDisconnected
 from tempfile import mkdtemp
 from threading import Thread
 from typing import Generator
@@ -376,6 +376,16 @@ class TestUnthreaded:
     def _runner(self, loop: asyncio.AbstractEventLoop):
         loop.run_forever()
 
+    def _cancel_tasks(self, loop):
+        loop.stop()
+        try:
+            _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
+        except AttributeError:  # pragma: py-gt-36
+            _all_tasks = asyncio.Task.all_tasks
+        for task in _all_tasks(loop):
+            # This needs to be invoked in a thread-safe way
+            task.cancel()
+
     @pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
     @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
     def test_unixsocket(self, safe_socket_dir, autostop_loop):
@@ -395,22 +405,70 @@ class TestUnthreaded:
         cont.stop()
         assert autostop_loop.is_closed() is False
 
-    def test_inet(self, autostop_loop):
+    def test_inet_loopstop(self, autostop_loop):
+        """
+        Verify behavior when the loop is stopped before controller is stopped
+        """
         cont = UnthreadedController(Sink(), loop=autostop_loop)
         cont.prep()
+        # Make sure event loop is not running (will be started in thread)
         assert autostop_loop.is_running() is False
         thread = Thread(target=self._runner, args=(autostop_loop,))
-        # with watcher_process(watch_for_smtp_inet) as retq:
         thread.start()
+        catchup_delay()
+        # Make sure event loop is up and running
         assert autostop_loop.is_running() is True
+        # Check we can connect
         with SMTPClient(cont.hostname, cont.port, timeout=AUTOSTOP_DELAY) as client:
             code, _ = client.helo("example.org")
             assert code == 250
+        # Wait until thread ends, which it will be when the loop autostops
         thread.join()
+        catchup_delay()
         assert autostop_loop.is_running() is False
-        assert autostop_loop.is_closed() is False
+        # At this point, the loop _has_ stopped, but the task is still listening,
+        # so rather than socket.timeout, we'll get a refusal instead, thus causing
+        # SMTPServerDisconnected
+        with pytest.raises(SMTPServerDisconnected):
+            SMTPClient(cont.hostname, cont.port, timeout=0.1)
+        # Stop the task
         cont.stop()
-        assert autostop_loop.is_closed() is False
+        catchup_delay()
+        # Now the listener has gone away, and thus we will end up with socket.timeout
+        with pytest.raises(socket.timeout):
+            SMTPClient(cont.hostname, cont.port, timeout=0.1)
+
+    def test_inet_contstop(self, temp_event_loop):
+        """
+        Verify behavior when the controller is stopped before loop is stopped
+        """
+        cont = UnthreadedController(Sink(), loop=temp_event_loop)
+        cont.prep()
+        # Make sure event loop is not running (will be started in thread)
+        assert temp_event_loop.is_running() is False
+        thread = Thread(target=self._runner, args=(temp_event_loop,))
+        thread.start()
+        catchup_delay()
+        # Make sure event loop is up and running
+        assert temp_event_loop.is_running() is True
+        # Check that we can connect
+        with SMTPClient(cont.hostname, cont.port, timeout=AUTOSTOP_DELAY) as client:
+            code, _ = client.helo("example.org")
+            assert code == 250
+        # Now stop the controller, but let the loop keep running
+        cont.stop()
+        catchup_delay()
+        assert temp_event_loop.is_running() is True
+        # Because we've called .stop() there, the server listener should've gone away,
+        # so we should end up with a socket.timeout
+        with pytest.raises(socket.timeout):
+            SMTPClient(cont.hostname, cont.port, timeout=0.1)
+        # Cleanup, or else we'll hang
+        temp_event_loop.call_soon_threadsafe(self._cancel_tasks, temp_event_loop)
+        catchup_delay()
+        assert temp_event_loop.is_running() is False
+        assert temp_event_loop.is_closed() is False
+        thread.join()
 
 
 class TestFactory:
