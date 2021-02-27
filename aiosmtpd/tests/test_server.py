@@ -430,7 +430,9 @@ class TestUnthreaded:
         cont.end()
         catchup_delay()
         # Now the listener has gone away
-        assert assert_smtp_socket(cont) is False
+        # noinspection PyTypeChecker
+        with pytest.raises((socket.timeout, ConnectionError)):
+            assert_smtp_socket(cont)
 
     @pytest.mark.filterwarnings(
         "ignore::pytest.PytestUnraisableExceptionWarning"
