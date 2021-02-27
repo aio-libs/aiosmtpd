@@ -165,19 +165,17 @@ class BaseController(metaclass=ABCMeta):
 
     def cancel_tasks(self):
         """
-        Convenience method to help cancel all aiosmtpd tasks.
-        Use loop.call_soon_threadsafe() to invoke this
+        Convenience method to stop the loop and cancel all tasks.
+        Use loop.call_soon_threadsafe() to invoke this.
         """
         self.loop.stop()
         try:
             _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
         except AttributeError:  # pragma: py-gt-36
             _all_tasks = asyncio.Task.all_tasks
-        tasklist = _all_tasks(self.loop)
-        for task in tasklist:
+        for task in _all_tasks(self.loop):
             # This needs to be invoked in a thread-safe way
             task.cancel()
-        asyncio.gather(tasklist)
 
 
 @public
