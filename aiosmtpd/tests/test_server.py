@@ -110,7 +110,12 @@ def assert_smtp_socket(controller: UnixSocketMixin):
         if ssl_context:
             sock = stk.enter_context(ssl_context.wrap_socket(sock))
         catchup_delay()
-        resp = sock.recv(1024)
+        try:
+            resp = sock.recv(1024)
+        except socket.timeout:
+            return False
+        if not resp:
+            return False
         assert resp.startswith(b"220 ")
         assert resp.endswith(b"\r\n")
         sock.send(b"EHLO socket.test\r\n")
@@ -401,7 +406,7 @@ class TestUnthreaded:
 
     @pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
     @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
-    def test_unixsocket(self, safe_socket_dir, autostop_loop):
+    def test_unixsocket(self, safe_socket_dir, autostop_loop, runner):
         sockfile = safe_socket_dir / "smtp"
         cont = UnixSocketUnthreadedController(
             Sink(), unix_socket=sockfile, loop=autostop_loop
@@ -409,25 +414,23 @@ class TestUnthreaded:
         cont.begin()
         # Make sure event loop is not running (will be started in thread)
         assert autostop_loop.is_running() is False
-        thread = Thread(target=self._runner, args=(autostop_loop,))
-        thread.start()
-        catchup_delay()
+        runner(autostop_loop)
         # Make sure event loop is up and running (started within thread)
         assert autostop_loop.is_running() is True
         # Check we can connect
         assert_smtp_socket(cont)
         # Wait until thread ends, which it will be when the loop autostops
-        thread.join(timeout=AUTOSTOP_DELAY)
-        assert thread.is_alive() is False
+        runner.join(timeout=AUTOSTOP_DELAY)
+        assert runner.is_alive() is False
         catchup_delay()
         assert autostop_loop.is_running() is False
         # At this point, the loop _has_ stopped, but the task is still listening
-        # TODO: Verify
+        assert assert_smtp_socket(cont) is False
         # Stop the task
         cont.end()
         catchup_delay()
         # Now the listener has gone away
-        # TODO: Verify
+        assert assert_smtp_socket(cont) is False
 
     @pytest.mark.filterwarnings(
         "ignore::pytest.PytestUnraisableExceptionWarning"
