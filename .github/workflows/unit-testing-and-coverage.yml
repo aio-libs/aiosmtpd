@@ -61,23 +61,12 @@ jobs:
         shell: bash
         # language=bash
         run: |
-          # Strip the "__version__ = " part and the containing quotes (single or double), print,
-          # delete everything else
+          # Final checks before launching the runners
           ver_sed='s/^__version__ = (["'"'"'])(.*)\1/\2/p;d'
           verfile="aiosmtpd/__init__.py"
           if [[ $GITHUB_REF != refs/heads/master ]]; then
-            # We're not in master
             # Fetch master because some test cases need its existence
             git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin master:master
-            # Verify version in current commit different from master's
-            now_ver=$(sed -r -e "$ver_sed" $verfile)
-            master_ver=$(git show master:$verfile | sed -r -e "$ver_sed")
-            if [[ $now_ver == $master_ver ]]; then
-              echo "### FAIL : Version in PR must be different from version in master!"
-              exit 1
-            else
-              echo "### SUCCESS : Version in PR different from version in master."
-            fi
           fi
           pip install pytest pytest-mock check-manifest
           pytest -v aiosmtpd/qa
