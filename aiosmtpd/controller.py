@@ -450,7 +450,7 @@ class Controller(InetMixin, BaseThreadedController):
 class UnixSocketController(  # pragma: no-unixsock
     UnixSocketMixin, BaseThreadedController
 ):
-    def _trigger_server(self):
+    def _trigger_server(self):  # pragma: no-unixsock
         # Prevent confusion on which _trigger_server() to invoke.
         # Or so LGTM.com claimed
         UnixSocketMixin._trigger_server(self)
