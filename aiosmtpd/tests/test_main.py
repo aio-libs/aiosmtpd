@@ -16,10 +16,9 @@ import pytest
 from aiosmtpd import __version__
 from aiosmtpd.handlers import Debugging
 from aiosmtpd.main import main, parseargs
+from aiosmtpd.testing.helpers import catchup_delay
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-from aiosmtpd.tests.conftest import SERVER_CRT, SERVER_KEY
-
-from .conftest import AUTOSTOP_DELAY
+from aiosmtpd.tests.conftest import AUTOSTOP_DELAY, SERVER_CRT, SERVER_KEY
 
 try:
     import pwd
@@ -84,10 +83,10 @@ def watch_for_tls(ready_flag, retq: MP.Queue):
     req_tls = False
     ready_flag.set()
     start = time.monotonic()
-    delay = AUTOSTOP_DELAY * 1.5
+    delay = AUTOSTOP_DELAY * 4
     while (time.monotonic() - start) <= delay:
         try:
-            with SMTPClient("localhost", 8025) as client:
+            with SMTPClient("localhost", 8025, timeout=0.1) as client:
                 resp = client.docmd("HELP", "HELO")
                 if resp == S.S530_STARTTLS_FIRST:
                     req_tls = True
@@ -108,7 +107,7 @@ def watch_for_smtps(ready_flag, retq: MP.Queue):
     delay = AUTOSTOP_DELAY * 1.5
     while (time.monotonic() - start) <= delay:
         try:
-            with SMTP_SSL("localhost", 8025) as client:
+            with SMTP_SSL("localhost", 8025, timeout=0.1) as client:
                 client.ehlo("exemple.org")
                 has_smtps = True
                 break
@@ -202,6 +201,7 @@ class TestMainByWatcher:
         with watcher_process(watch_for_tls) as retq:
             temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
             main_n("--tlscert", str(SERVER_CRT), "--tlskey", str(SERVER_KEY))
+            catchup_delay()
         has_starttls = retq.get()
         assert has_starttls is True
         require_tls = retq.get()
@@ -217,6 +217,7 @@ class TestMainByWatcher:
                 str(SERVER_KEY),
                 "--no-requiretls",
             )
+            catchup_delay()
         has_starttls = retq.get()
         assert has_starttls is True
         require_tls = retq.get()
@@ -226,6 +227,7 @@ class TestMainByWatcher:
         with watcher_process(watch_for_smtps) as retq:
             temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
             main_n("--smtpscert", str(SERVER_CRT), "--smtpskey", str(SERVER_KEY))
+            catchup_delay()
         has_smtps = retq.get()
         assert has_smtps is True
 
