@@ -163,12 +163,13 @@ class BaseController(metaclass=ABCMeta):
         self.server = None
         self.smtpd = None
 
-    def cancel_tasks(self):
+    def cancel_tasks(self, stop_loop: bool = True):
         """
         Convenience method to stop the loop and cancel all tasks.
         Use loop.call_soon_threadsafe() to invoke this.
         """
-        self.loop.stop()
+        if stop_loop:  # pragma: nobranch
+            self.loop.stop()
         try:
             _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
         except AttributeError:  # pragma: py-gt-36
