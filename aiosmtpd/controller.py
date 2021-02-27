@@ -323,6 +323,7 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
             server_hostname=server_hostname,
             **SMTP_parameters,
         )
+        self.ended = threading.Event()
 
     def begin(self):
         asyncio.set_event_loop(self.loop)
@@ -334,16 +335,27 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         srv: AsyncServer = self.loop.run_until_complete(self.server_coro)
         self.server = srv
 
-    def end(self):
-        self.server.close()
+    async def finalize(self):
+        """
+        Perform orderly closing of the server listener.
+        NOTE: This is an async method; await this from an async or use
+        loop.create_task() (if loop is still running), or
+        loop.run_until_complete() (if loop has stopped)
+        """
+        self.ended.clear()
+        server = self.server
+        server.close()
+        await server.wait_closed()
         self.server_coro.close()
-        if not self.loop.is_running():
-            self.loop.run_until_complete(self.server.wait_closed())
-        else:
-            self.loop.create_task(self.server.wait_closed())
-        # If loop is still running, then the responsibility to wait until the server
-        # closes is with the calling code, not in here.
         self._cleanup()
+        self.ended.set()
+
+    def end(self):
+        """Convenience method to asynchronously invoke finalize()"""
+        if self.loop.is_running():
+            self.loop.create_task(self.finalize())
+        else:
+            self.loop.run_until_complete(self.finalize())
 
 
 @public
