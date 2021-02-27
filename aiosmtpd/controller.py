@@ -440,14 +440,20 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
 
 @public
 class Controller(InetMixin, BaseThreadedController):
-    pass
+    def _trigger_server(self):
+        # Prevent confusion on which _trigger_server() to invoke.
+        # Or so LGTM.com claimed
+        InetMixin._trigger_server(self)
 
 
 @public
 class UnixSocketController(  # pragma: no-unixsock
     UnixSocketMixin, BaseThreadedController
 ):
-    pass
+    def _trigger_server(self):
+        # Prevent confusion on which _trigger_server() to invoke.
+        # Or so LGTM.com claimed
+        UnixSocketMixin._trigger_server(self)
 
 
 @public
