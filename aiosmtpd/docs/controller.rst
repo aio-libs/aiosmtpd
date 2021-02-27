@@ -207,6 +207,103 @@ And close everything when done:
     >>> controller.stop()
 
 
+Unthreaded Controllers
+----------------------
+
+In addition to the **threaded** controllers,
+``aiosmtpd`` also provides the following **UNthreaded** controllers:
+
+* :class:`UnthreadedController` -- the unthreaded version of :class:`Controller`
+* :class:`UnixSocketUnthreadedController` -- the unthreaded version of :class:`UnixSocketController`
+
+These classes are considered *advanced* classes,
+because you'll have to manage the event loop yourself.
+
+For example, to start an unthreaded controller, you'll have to do something similar to this:
+
+.. doctest:: unthreaded
+
+    >>> import asyncio
+    >>> from aiosmtpd.controller import UnthreadedController
+    >>> from aiosmtpd.handlers import Sink
+    >>> loop = asyncio.get_event_loop()  # This is optional
+    >>> controller = UnthreadedController(Sink(), loop=loop)
+    >>> controller.begin()
+
+Note that unlike the threaded counterparts,
+the method used to start the controller is named ``begin()``.
+And unlike the method in the threaded version,
+``begin()`` does NOT start the asyncio event loop;
+you'll have to start it yourself.
+
+For the purposes of trying this,
+let's create a thread and have it schedule an autostop:
+
+.. doctest:: unthreaded
+
+    >>> def runner():
+    ...     loop.call_later(3.0, loop.stop)
+    ...     loop.run_forever()
+    >>> import threading
+    >>> thread = threading.Thread(target=runner)
+    >>> thread.setDaemon(True)
+    >>> thread.start()
+    >>> import time
+    >>> time.sleep(0.1)  # Allow the loop to begin
+
+At this point in time, the server would be listening:
+
+.. doctest:: unthreaded
+
+    >>> from smtplib import SMTP as Client
+    >>> client = Client(controller.hostname, controller.port)
+    >>> client.helo("example.com")
+    (250, ...)
+    >>> client.quit()
+    (221, b'Bye')
+
+The complex thing will be to end it;
+that is why we're marking these classes as "advanced".
+
+For our example here,
+since we have created an "autostop loop",
+all we have to do is wait for the runner thread to end:
+
+.. doctest:: unthreaded
+
+    >>> thread.join()
+    >>> loop.is_running()
+    False
+
+We still need to do some cleanup to fully release the bound port.
+Since the loop has ended, we can simply call the :meth:`end` method:
+
+.. doctest:: unthreaded
+
+    >>> controller.end()
+
+If you want to end the controller *but* keep the loop running,
+you'll have to do it like this::
+
+    loop.call_soon_threadsafe(controller.end)
+    # If you want to ensure that controller has stopped, you can wait() here:
+    controller.ended.wait(10.0)  # Optional
+
+You must remember to cleanup the canceled tasks yourself.
+We have provided a convenience method::
+
+    # WARNING: Will also stop the loop!
+    loop.call_soon_threadsafe(controller.cancel_tasks)
+
+(If you invoke ``cancel_tasks`` with the parameter ``stop_loop=False``,
+then loop will NOT be stopped.
+That is a much too-advanced topic and we will not discuss it further in this documentation.)
+
+The Unix Socket variant, ``UnixSocketUnthreadedController``, works in the same way.
+The difference is only in how to access the server, i.e., through a Unix Socket instead of TCP/IP.
+We'll leave out the details for you to figure it out yourself.
+
+
 .. _enablesmtputf8:
 
 Enabling SMTPUTF8
