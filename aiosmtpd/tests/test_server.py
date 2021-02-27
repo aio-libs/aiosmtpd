@@ -394,10 +394,12 @@ class TestUnthreaded:
 
         def joiner(timeout: float = None):
             nonlocal thread
+            assert isinstance(thread, Thread)
             thread.join(timeout=timeout)
 
         def is_alive():
             nonlocal thread
+            assert isinstance(thread, Thread)
             return thread.is_alive()
 
         starter.join = joiner
