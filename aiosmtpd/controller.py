@@ -349,7 +349,13 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         self.ended.set()
 
     def end(self):
-        """Convenience method to asynchronously invoke finalize()"""
+        """
+        Convenience method to asynchronously invoke finalize().
+        Consider using loop.call_soon_threadsafe to invoke this method, especially
+        if your loop is running in a different thread. You can afterwards .wait() on
+        ended attribute (a threading.Event) to check for completion, if needed.
+        """
+        self.ended.clear()
         if self.loop.is_running():
             self.loop.create_task(self.finalize())
         else:
