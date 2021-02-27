@@ -156,6 +156,7 @@ class BaseController(metaclass=ABCMeta):
         raise NotImplementedError
 
     def _cleanup(self):
+        """Reset internal variables to prevent contamination"""
         self._thread_exception = None
         self._factory_invoked.clear()
         self.server_coro = None
