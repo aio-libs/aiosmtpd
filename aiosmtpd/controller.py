@@ -162,6 +162,22 @@ class BaseController(metaclass=ABCMeta):
         self.server = None
         self.smtpd = None
 
+    def cancel_tasks(self):
+        """
+        Convenience method to help cancel all aiosmtpd tasks.
+        Use loop.call_soon_threadsafe() to invoke this
+        """
+        self.loop.stop()
+        try:
+            _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
+        except AttributeError:  # pragma: py-gt-36
+            _all_tasks = asyncio.Task.all_tasks
+        tasklist = _all_tasks(self.loop)
+        for task in tasklist:
+            # This needs to be invoked in a thread-safe way
+            task.cancel()
+        asyncio.gather(tasklist)
+
 
 @public
 class BaseThreadedController(BaseController, metaclass=ABCMeta):
@@ -270,22 +286,12 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         if self.smtpd is None:
             raise RuntimeError("Unknown Error, failed to init SMTP server")
 
-    def _cancel_tasks(self):
-        self.loop.stop()
-        try:
-            _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
-        except AttributeError:  # pragma: py-gt-36
-            _all_tasks = asyncio.Task.all_tasks
-        for task in _all_tasks(self.loop):
-            # This needs to be invoked in a thread-safe way
-            task.cancel()
-
     def stop(self, no_assert: bool = False):
         """
         Stop the loop, the tasks in the loop, and terminate the thread as well.
         """
         assert no_assert or self._thread is not None, "SMTP daemon not running"
-        self.loop.call_soon_threadsafe(self._cancel_tasks)
+        self.loop.call_soon_threadsafe(self.cancel_tasks)
         if self._thread is not None:
             self._thread.join()
             self._thread = None
