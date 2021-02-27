@@ -14,7 +14,7 @@ from pathlib import Path
 from smtplib import SMTP as SMTPClient, SMTPServerDisconnected
 from tempfile import mkdtemp
 from threading import Thread
-from typing import Generator
+from typing import Generator, Optional
 
 import pytest
 from pytest_mock import MockFixture
@@ -373,18 +373,31 @@ class TestUnixSocketController:
 
 
 class TestUnthreaded:
-    def _runner(self, loop: asyncio.AbstractEventLoop):
-        loop.run_forever()
+    @pytest.fixture
+    def runner(self):
+        thread: Optional[Thread] = None
 
-    def _cancel_tasks(self, loop):
-        loop.stop()
-        try:
-            _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
-        except AttributeError:  # pragma: py-gt-36
-            _all_tasks = asyncio.Task.all_tasks
-        for task in _all_tasks(loop):
-            # This needs to be invoked in a thread-safe way
-            task.cancel()
+        def _runner(loop: asyncio.AbstractEventLoop):
+            loop.run_forever()
+
+        def starter(loop: asyncio.AbstractEventLoop):
+            nonlocal thread
+            thread = Thread(target=_runner, args=(loop,))
+            thread.setDaemon(True)
+            thread.start()
+            catchup_delay()
+
+        def joiner(timeout: float = None):
+            nonlocal thread
+            thread.join(timeout=timeout)
+
+        def is_alive():
+            nonlocal thread
+            return thread.is_alive()
+
+        starter.join = joiner
+        starter.is_alive = is_alive
+        return starter
 
     @pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
     @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
@@ -416,17 +429,19 @@ class TestUnthreaded:
         # Now the listener has gone away
         # TODO: Verify
 
-    def test_inet_loopstop(self, autostop_loop):
+    @pytest.mark.filterwarnings(
+        "ignore::pytest.PytestUnraisableExceptionWarning"
+    )
+    def test_inet_loopstop(self, autostop_loop, runner):
         """
         Verify behavior when the loop is stopped before controller is stopped
         """
+        autostop_loop.set_debug(True)
         cont = UnthreadedController(Sink(), loop=autostop_loop)
         cont.begin()
         # Make sure event loop is not running (will be started in thread)
         assert autostop_loop.is_running() is False
-        thread = Thread(target=self._runner, args=(autostop_loop,))
-        thread.start()
-        catchup_delay()
+        runner(autostop_loop)
         # Make sure event loop is up and running (started within thread)
         assert autostop_loop.is_running() is True
         # Check we can connect
@@ -434,8 +449,8 @@ class TestUnthreaded:
             code, _ = client.helo("example.org")
             assert code == 250
         # Wait until thread ends, which it will be when the loop autostops
-        thread.join(timeout=AUTOSTOP_DELAY)
-        assert thread.is_alive() is False
+        runner.join(timeout=AUTOSTOP_DELAY)
+        assert runner.is_alive() is False
         catchup_delay()
         assert autostop_loop.is_running() is False
         # At this point, the loop _has_ stopped, but the task is still listening,
@@ -445,13 +460,17 @@ class TestUnthreaded:
             SMTPClient(cont.hostname, cont.port, timeout=0.1)
         cont.end()
         catchup_delay()
+        cont.ended.wait()
         # Now the listener has gone away, and thus we will end up with socket.timeout
         # or ConnectionError (depending on OS)
         # noinspection PyTypeChecker
         with pytest.raises((socket.timeout, ConnectionError)):
             SMTPClient(cont.hostname, cont.port, timeout=0.1)
 
-    def test_inet_contstop(self, temp_event_loop):
+    @pytest.mark.filterwarnings(
+        "ignore::pytest.PytestUnraisableExceptionWarning"
+    )
+    def test_inet_contstop(self, temp_event_loop, runner):
         """
         Verify behavior when the controller is stopped before loop is stopped
         """
@@ -459,29 +478,35 @@ class TestUnthreaded:
         cont.begin()
         # Make sure event loop is not running (will be started in thread)
         assert temp_event_loop.is_running() is False
-        thread = Thread(target=self._runner, args=(temp_event_loop,))
-        thread.start()
-        catchup_delay()
+        runner(temp_event_loop)
         # Make sure event loop is up and running
         assert temp_event_loop.is_running() is True
-        # Check that we can connect
-        with SMTPClient(cont.hostname, cont.port, timeout=AUTOSTOP_DELAY) as client:
-            code, _ = client.helo("example.org")
-            assert code == 250
-        # Now stop the controller, but let the loop keep running
-        cont.end()
-        catchup_delay()
-        assert temp_event_loop.is_running() is True
-        # Because we've called .stop() there, the server listener should've gone away,
-        # so we should end up with a socket.timeout or ConnectionError (depending on OS)
-        # noinspection PyTypeChecker
-        with pytest.raises((socket.timeout, ConnectionError)):
-            SMTPClient(cont.hostname, cont.port, timeout=0.1)
-        # Cleanup, or else we'll hang
-        temp_event_loop.call_soon_threadsafe(self._cancel_tasks, temp_event_loop)
-        catchup_delay()
-        thread.join(AUTOSTOP_DELAY)
-        assert thread.is_alive() is False
+        try:
+            # Check that we can connect
+            with SMTPClient(cont.hostname, cont.port, timeout=AUTOSTOP_DELAY) as client:
+                code, _ = client.helo("example.org")
+                assert code == 250
+                client.quit()
+            catchup_delay()
+            cont.end()
+            for i in range(10):  # 10 is arbitrary
+                catchup_delay()  # effectively yield to other threads/event loop
+                if cont.ended.wait(1.0):
+                    break
+            assert temp_event_loop.is_running() is True
+            # Because we've called .end() there, the server listener should've gone
+            # away, so we should end up with a socket.timeout or ConnectionError or
+            # SMTPServerDisconnected (depending on lotsa factors)
+            expect_errs = (socket.timeout, ConnectionError, SMTPServerDisconnected)
+            # noinspection PyTypeChecker
+            with pytest.raises(expect_errs):
+                SMTPClient(cont.hostname, cont.port, timeout=0.1)
+        finally:
+            # Wrap up, or else we'll hang
+            temp_event_loop.call_soon_threadsafe(cont.cancel_tasks)
+            catchup_delay()
+            runner.join()
+        assert runner.is_alive() is False
         assert temp_event_loop.is_running() is False
         assert temp_event_loop.is_closed() is False
 
