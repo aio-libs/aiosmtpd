@@ -494,7 +494,7 @@ class TestUnthreaded:
                 client.quit()
             catchup_delay()
             temp_event_loop.call_soon_threadsafe(cont.end)
-            for i in range(10):  # 10 is arbitrary
+            for _ in range(10):  # 10 is arbitrary
                 catchup_delay()  # effectively yield to other threads/event loop
                 if cont.ended.wait(1.0):
                     break
