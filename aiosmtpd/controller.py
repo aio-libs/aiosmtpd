@@ -43,6 +43,7 @@ def _has_ipv6() -> bool:
 
 @public
 def get_localhost() -> str:
+    """Returns numeric address to localhost depending on IPv6 availability"""
     # Ref:
     #  - https://github.com/urllib3/urllib3/pull/611#issuecomment-100954017
     #  - https://github.com/python/cpython/blob/ :
@@ -150,8 +151,8 @@ class BaseController(metaclass=ABCMeta):
     @abstractmethod
     def _create_server(self) -> Coroutine:
         """
-        Overridden by subclasses to actually perform the async binding to the
-        listener endpoint.
+        Overridden by subclasses to actually perform the async binding to the listener endpoint.
+        When overridden, MUST refer the _factory_invoker() method.
         """
         raise NotImplementedError
 
@@ -310,11 +311,6 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         server_hostname: Optional[str] = None,
         **SMTP_parameters,
     ):
-        """
-        `Documentation can be found here
-        <http://aiosmtpd.readthedocs.io/en/latest/aiosmtpd\
-/docs/controller.html#controller-api>`_.
-        """
         super().__init__(
             handler,
             loop,
@@ -325,6 +321,10 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         self.ended = threading.Event()
 
     def begin(self):
+        """
+        Sets up the asyncio server task and inject it into the asyncio event loop.
+        Does NOT actually start the event loop itself.
+        """
         asyncio.set_event_loop(self.loop)
         # Need to do two-step assignments here to ensure IDEs can properly
         # detect the types of the vars. Cannot use `assert isinstance`, because
@@ -383,6 +383,11 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         self.port = port
 
     def _create_server(self) -> Coroutine:
+        """
+        Creates a 'server task' that listens on an INET host:port.
+        Does NOT actually start the protocol object itself;
+        _factory_invoker() is only called upon fist connection attempt.
+        """
         return self.loop.create_server(
             self._factory_invoker,
             host=self.hostname,
@@ -423,6 +428,11 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
         self.unix_socket = str(unix_socket)
 
     def _create_server(self) -> Coroutine:
+        """
+        Creates a 'server task' that listens on a Unix Socket file.
+        Does NOT actually start the protocol object itself;
+        _factory_invoker() is only called upon fist connection attempt.
+        """
         return self.loop.create_unix_server(
             self._factory_invoker,
             path=self.unix_socket,
@@ -430,6 +440,11 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
         )
 
     def _trigger_server(self):
+        """
+        Opens a socket connection to the newly launched server, wrapping in an SSL
+        Context if necessary, and read some data from it to ensure that factory()
+        gets invoked.
+        """
         with ExitStack() as stk:
             s: makesock = stk.enter_context(makesock(AF_UNIX, SOCK_STREAM))
             s.connect(self.unix_socket)
@@ -440,6 +455,7 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
 
 @public
 class Controller(InetMixin, BaseThreadedController):
+    """Provides a multithreaded controller that listens on an INET endpoint"""
     def _trigger_server(self):
         # Prevent confusion on which _trigger_server() to invoke.
         # Or so LGTM.com claimed
@@ -450,6 +466,7 @@ class Controller(InetMixin, BaseThreadedController):
 class UnixSocketController(  # pragma: no-unixsock
     UnixSocketMixin, BaseThreadedController
 ):
+    """Provides a multithreaded controller that listens on a Unix Socket file"""
     def _trigger_server(self):  # pragma: no-unixsock
         # Prevent confusion on which _trigger_server() to invoke.
         # Or so LGTM.com claimed
@@ -458,6 +475,7 @@ class UnixSocketController(  # pragma: no-unixsock
 
 @public
 class UnthreadedController(InetMixin, BaseUnthreadedController):
+    """Provides an unthreaded controller that listens on an INET endpoint"""
     pass
 
 
@@ -465,4 +483,5 @@ class UnthreadedController(InetMixin, BaseUnthreadedController):
 class UnixSocketUnthreadedController(  # pragma: no-unixsock
     UnixSocketMixin, BaseUnthreadedController
 ):
+    """Provides an unthreaded controller that listens on a Unix Socket file"""
     pass
