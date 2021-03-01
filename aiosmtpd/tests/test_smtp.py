@@ -489,6 +489,7 @@ class TestSMTP(_CommonMethods):
         "customer/department=shipping@example.com",
         "$A12345@example.com",
         "!def!xyz%abc@example.com",
+        "a" * 65 + "@example.com",  # local-part > 64 chars -- see Issue#257
     ]
 
     valid_rcptto_addresses = valid_mailfrom_addresses + [
@@ -498,7 +499,6 @@ class TestSMTP(_CommonMethods):
 
     invalid_email_addresses = [
         "<@example.com>",  # no local part
-        "a" * 65 + "@example.com",  # local-part > 64 chars
     ]
 
     @pytest.mark.parametrize("data", [b"\x80FAIL\r\n", b"\x80 FAIL\r\n"])
@@ -1658,6 +1658,13 @@ class TestCustomization(_CommonMethods):
         client.ehlo("example.com")
         resp = client.docmd("MAIL FROM: <anne@example.com> BODY=FOOBAR")
         assert resp == S.S501_MAIL_BODY
+
+    def test_limitlocalpart(self, plain_controller, client):
+        plain_controller.smtpd.local_part_limit = 64
+        client.ehlo("example.com")
+        locpart = "a" * 65
+        resp = client.docmd(f"MAIL FROM: {locpart}@example.com")
+        assert resp == S.S553_MALFORMED
 
 
 class TestClientCrash(_CommonMethods):
