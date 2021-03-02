@@ -14,6 +14,7 @@ Fixed/Improved
 --------------
 * All Controllers now have more rationale design, as they are now composited from a Base + a Mixin
 * A whole bunch of annotations
+* A whole bunch of annotations
 
 
 1.4.4 (2023-01-17)
