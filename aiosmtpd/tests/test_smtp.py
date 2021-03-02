@@ -2089,3 +2089,28 @@ class TestSanitize:
         expect = "AuthResult(success=True, handled=True, message=None, auth_data=...)"
         assert repr(ar) == expect
         assert str(ar) == expect
+
+
+class TestClass:
+    def test_handlernone(self):
+        with pytest.raises(TypeError, match="handler must be an object with hooks"):
+            Server(None)
+        smtpd = Server(Sink())
+        with pytest.raises(TypeError, match="handler must be an object with hooks"):
+            smtpd.event_handler = None
+
+    def test_handlerchange(self, caplog):
+        h1 = Sink()
+        h2 = Sink()
+        assert h1 is not h2
+        smtpd = Server(h1)
+        smtpd.event_handler = h2
+        logmsg = caplog.record_tuples[-1][-1]
+        assert logmsg == "event_handler is changing"
+
+    @pytest.mark.parametrize(
+        "tstval", ["a", b"b", ["c"]], ids=["string", "bytes", "list"]
+    )
+    def test_datasizelimit(self, tstval):
+        with pytest.raises(TypeError, match="data_size_limit must be None or int"):
+            Server(Sink(), data_size_limit="a")
