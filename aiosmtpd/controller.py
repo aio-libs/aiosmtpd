@@ -151,8 +151,8 @@ class BaseController(metaclass=ABCMeta):
     @abstractmethod
     def _create_server(self) -> Coroutine:
         """
-        Overridden by subclasses to actually perform the async binding to the listener endpoint.
-        When overridden, MUST refer the _factory_invoker() method.
+        Overridden by subclasses to actually perform the async binding to the
+        listener endpoint. When overridden, MUST refer the _factory_invoker() method.
         """
         raise NotImplementedError
 
