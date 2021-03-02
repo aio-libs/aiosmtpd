@@ -311,6 +311,18 @@ class SMTP(asyncio.StreamReaderProtocol):
     AuthLoginUsernameChallenge = "User Name\x00"
     AuthLoginPasswordChallenge = "Password\x00"
 
+    # Internal states
+    _event_handler: Any = None
+    _tls_context: Optional[ssl.SSLContext] = MISSING
+    _req_starttls: bool = False
+
+    _auth_mechs: Dict[str, _AuthMechAttr] = {}
+    _auth_excludes: Optional[Iterable[str]] = None
+    _handle_hooks: Dict[str, Callable] = None
+    _ehlo_hook_ver: Optional[str] = None
+
+    _handler_coroutine: Optional[asyncio.Task] = None
+
     def __init__(
             self,
             handler: Any,
@@ -349,16 +361,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         else:
             self.hostname = socket.getfqdn()
         self.tls_context = tls_context
-        if tls_context:
-            if (tls_context.verify_mode
-                    not in {ssl.CERT_NONE, ssl.CERT_OPTIONAL}):  # noqa: DUO122
-                log.warning("tls_context.verify_mode not in {CERT_NONE, "
-                            "CERT_OPTIONAL}; this might cause client "
-                            "connection problems")
-            elif tls_context.check_hostname:
-                log.warning("tls_context.check_hostname == True; "
-                            "this might cause client connection problems")
-        self.require_starttls = tls_context and require_starttls
+        self._req_starttls = require_starttls
         self._timeout_duration = timeout
         self._timeout_handle = None
         self._tls_handshake_okay = True
@@ -367,7 +370,6 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.session: Optional[Session] = None
         self.envelope: Optional[Envelope] = None
         self.transport = None
-        self._handler_coroutine = None
         if not auth_require_tls and auth_required:
             warn("Requiring AUTH while not requiring TLS "
                  "can lead to security vulnerabilities!")
@@ -389,34 +391,51 @@ class SMTP(asyncio.StreamReaderProtocol):
         else:
             self._auth_callback = auth_callback or login_always_fail
             self._authenticator = None
-
         self._auth_required = auth_required
+        self._auth_excludes = auth_exclude_mechanism
 
-        # Get hooks & methods to significantly speedup getattr's
-        self._auth_methods: Dict[str, _AuthMechAttr] = {
-            getattr(
-                mfunc, "__auth_mechanism_name__",
-                mname.replace("auth_", "").replace("__", "-")
-            ): _AuthMechAttr(mfunc, obj is self)
-            for obj in (self, handler)
-            for mname, mfunc in inspect.getmembers(obj)
-            if mname.startswith("auth_")
+        self.event_handler = handler
+
+        self._smtp_methods: Dict[str, Any] = {
+            m.replace("smtp_", ""): getattr(self, m)
+            for m in dir(self)
+            if m.startswith("smtp_")
         }
-        for m in (auth_exclude_mechanism or []):
-            self._auth_methods.pop(m, None)
-        log.info(
-            "Available AUTH mechanisms: "
-            + " ".join(
-                m + "(builtin)" if impl.is_builtin else m
-                for m, impl in sorted(self._auth_methods.items())
-            )
-        )
+
+        self._call_limit_default: int
+        if command_call_limit is None:
+            self._enforce_call_limit = False
+        else:
+            self._enforce_call_limit = True
+            if isinstance(command_call_limit, int):
+                self._call_limit_base = {}
+                self._call_limit_default = command_call_limit
+            elif isinstance(command_call_limit, dict):
+                if not all(map(is_int, command_call_limit.values())):
+                    raise TypeError("All command_call_limit values must be int")
+                self._call_limit_base = command_call_limit
+                self._call_limit_default = command_call_limit.get(
+                    "*", CALL_LIMIT_DEFAULT
+                )
+            else:
+                raise TypeError("command_call_limit must be int or Dict[str, int]")
+
+    @property
+    def event_handler(self) -> Any:
+        return self._event_handler
+
+    @event_handler.setter
+    def event_handler(self, value: Any):
+        if not value:
+            raise TypeError("handler must be an object with hooks")
+        if self._event_handler and value != self._event_handler:
+            log.warning("event_handler is changing")
+        self._event_handler = value
         self._handle_hooks: Dict[str, Callable] = {
-            m.replace("handle_", ""): getattr(handler, m)
-            for m in dir(handler)
+            m.replace("handle_", ""): getattr(value, m)
+            for m in dir(value)
             if m.startswith("handle_")
         }
-
         # When we've deprecated the 4-arg form of handle_EHLO,
         # we can -- and should -- remove this whole code block
         ehlo_hook = self._handle_hooks.get("EHLO", None)
@@ -435,30 +454,72 @@ class SMTP(asyncio.StreamReaderProtocol):
                 self._ehlo_hook_ver = "new"
             else:
                 raise RuntimeError("Unsupported EHLO Hook")
-
-        self._smtp_methods: Dict[str, Any] = {
-            m.replace("smtp_", ""): getattr(self, m)
-            for m in dir(self)
-            if m.startswith("smtp_")
-        }
-
-        self._call_limit_default: int
-        if command_call_limit is None:
-            self._enforce_call_limit = False
-        else:
-            self._enforce_call_limit = True
-            if isinstance(command_call_limit, int):
-                self._call_limit_base = {}
-                self._call_limit_default = command_call_limit
-            elif isinstance(command_call_limit, dict):  # noqa: SIM106
-                if not all(map(is_int, command_call_limit.values())):
-                    raise TypeError("All command_call_limit values must be int")
-                self._call_limit_base = command_call_limit
-                self._call_limit_default = command_call_limit.get(
-                    "*", CALL_LIMIT_DEFAULT
+        self._auth_mechs.clear()
+        if self.methods_auth:
+            log.info(
+                "Available AUTH mechanisms: "
+                + " ".join(
+                    m + "(builtin)" if impl.is_builtin else m
+                    for m, impl in sorted(self.methods_auth.items())
                 )
+            )
+
+    @property
+    def tls_context(self) -> Optional[ssl.SSLContext]:
+        return self._tls_context
+
+    @tls_context.setter
+    def tls_context(self, value: Optional[ssl.SSLContext]):
+        if self._tls_context is not MISSING:
+            if value is None:
+                if self._tls_context is None:
+                    return
+                log.warning("tls_context changed to None")
             else:
-                raise TypeError("command_call_limit must be int or Dict[str, int]")
+                if self._tls_context is None:
+                    log.warning("tls_context is being set")
+                else:
+                    log.warning("tls_context is being replaced")
+        self._tls_context = value
+        if value:
+            if value.verify_mode not in {ssl.CERT_NONE, ssl.CERT_OPTIONAL}:
+                log.warning(
+                    "tls_context.verify_mode not in {CERT_NONE, CERT_OPTIONAL}; "
+                    "this might cause client connection problems"
+                )
+            elif value.check_hostname:
+                log.warning(
+                    "tls_context.check_hostname == True; "
+                    "this might cause client connection problems"
+                )
+
+    @property
+    def require_starttls(self) -> bool:
+        return self._req_starttls and bool(self.tls_context)
+
+    @require_starttls.setter
+    def require_starttls(self, value: bool):
+        self._req_starttls = value
+
+    @property
+    def methods_auth(self) -> Dict[str, _AuthMechAttr]:
+        if not self._auth_mechs:
+            self._auth_mechs = {}
+            for obj in (self, self.event_handler):
+                for mname in dir(obj):
+                    if not mname.startswith("auth_"):
+                        continue
+                    mfunc = getattr(obj, mname)
+                    mname = getattr(
+                        mfunc, "__auth_mechanism_name__",
+                        mname.replace("auth_", "").replace("__", "-")
+                    )
+                    self._auth_mechs[mname] = _AuthMechAttr(
+                        method=mfunc, is_builtin=obj is self
+                    )
+            for m in (self._auth_excludes or []):
+                self._auth_mechs.pop(m, None)
+        return self._auth_mechs
 
     def _create_session(self) -> Session:
         return Session(self.loop)
@@ -837,7 +898,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             response.append('250-STARTTLS')
         if not self._auth_require_tls or self._tls_protocol:
             response.append(
-                "250-AUTH " + " ".join(sorted(self._auth_methods.keys()))
+                "250-AUTH " + " ".join(sorted(self.methods_auth.keys()))
             )
 
         if hasattr(self, 'ehlo_hook'):
@@ -936,7 +997,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return await self.push('501 Too many values')
 
         mechanism = args[0]
-        if mechanism not in self._auth_methods:
+        if mechanism not in self.methods_auth:
             return await self.push('504 5.5.4 Unrecognized authentication type')
 
         CODE_SUCCESS = "235 2.7.0 Authentication successful"
