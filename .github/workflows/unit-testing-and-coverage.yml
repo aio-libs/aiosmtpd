@@ -38,9 +38,17 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python setup.py develop
       - name: "flake8 Style Checking"
+        shell: bash
         # language=bash
         run: |
-          pip install colorama flake8 flake8-bugbear
+          # A bunch of flake8 plugins...
+          grab_f8_plugins=(
+            "from configparser import ConfigParser;"
+            "config = ConfigParser();"
+            "config.read('tox.ini');"
+            "print(config['flake8_plugins']['deps']);"
+          )
+          pip install colorama flake8 $(python -c "${grab_f8_plugins[*]}")
           python -m flake8 aiosmtpd setup.py housekeep.py release.py
       - name: "Docs Checking"
         # language=bash
