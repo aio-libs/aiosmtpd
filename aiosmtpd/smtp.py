@@ -455,6 +455,18 @@ class SMTP(asyncio.StreamReaderProtocol):
         except ValueError:
             return self.command_size_limit
 
+    def __del__(self):  # pragma: nocover
+        # This is nocover-ed because the contents *totally* does NOT affect function-
+        # ality, and in addition this comes directly from StreamReaderProtocol.__del__()
+        # but with a getattr()+check addition to stop the annoying (but harmless)
+        # "exception ignored" messages caused by AttributeError when self._closed is
+        # missing (which seems to happen randomly).
+        closed = getattr(self, "_closed", None)
+        if closed is None:
+            return
+        if closed.done() and not closed.cancelled():
+            closed.exception()
+
     def connection_made(self, transport):
         # Reset state due to rfc3207 part 4.2.
         self._set_rset_state()
