@@ -373,6 +373,18 @@ class TestTLSContext:
         assert "tls_context.verify_mode not in" in logmsg
         assert "might cause client connection problems" in logmsg
 
+    def test_certreq_warn_prop(self, caplog, ssl_context_server):
+        context = ssl_context_server
+        context.verify_mode = ssl.CERT_REQUIRED
+        smtpd = Server(Sink())
+        smtpd.tls_context = context
+        assert context.verify_mode == ssl.CERT_REQUIRED
+        logmsg = caplog.record_tuples[-2][-1]
+        assert logmsg == "tls_context is being set"
+        logmsg = caplog.record_tuples[-1][-1]
+        assert "tls_context.verify_mode not in" in logmsg
+        assert "might cause client connection problems" in logmsg
+
     def test_nocertreq_chkhost_warn(self, caplog, ssl_context_server):
         context = ssl_context_server
         context.verify_mode = ssl.CERT_OPTIONAL  # noqa: DUO122
@@ -382,3 +394,46 @@ class TestTLSContext:
         logmsg = caplog.record_tuples[0][-1]
         assert "tls_context.check_hostname == True" in logmsg
         assert "might cause client connection problems" in logmsg
+
+    def test_nocertreq_chkhost_warn_prop(self, caplog, ssl_context_server):
+        context = ssl_context_server
+        context.verify_mode = ssl.CERT_OPTIONAL
+        context.check_hostname = True
+        smtpd = Server(Sink())
+        smtpd.tls_context = context
+        assert context.verify_mode == ssl.CERT_OPTIONAL
+        logmsg = caplog.record_tuples[-2][-1]
+        assert logmsg == "tls_context is being set"
+        logmsg = caplog.record_tuples[-1][-1]
+        assert "tls_context.check_hostname == True" in logmsg
+        assert "might cause client connection problems" in logmsg
+
+    def test_certchg(self, caplog, ssl_context_server):
+        context = ssl_context_server
+        context.verify_mode = ssl.CERT_OPTIONAL
+        smtpd = Server(Sink(), tls_context=context)
+        smtpd.tls_context = context
+        logmsg = caplog.record_tuples[-1][-1]
+        assert logmsg == "tls_context is being replaced"
+
+    def test_certchg_to_none(self, caplog, ssl_context_server):
+        context = ssl_context_server
+        context.verify_mode = ssl.CERT_OPTIONAL
+        smtpd = Server(Sink(), tls_context=context)
+        smtpd.tls_context = None
+        logmsg = caplog.record_tuples[-1][-1]
+        assert logmsg == "tls_context changed to None"
+
+    def test_certchg_from_none(self, caplog, ssl_context_server):
+        context = ssl_context_server
+        context.verify_mode = ssl.CERT_OPTIONAL
+        smtpd = Server(Sink())
+        smtpd.tls_context = context
+        logmsg = caplog.record_tuples[-1][-1]
+        assert logmsg == "tls_context is being set"
+
+    def test_certchg_none_none(self, caplog, ssl_context_server):
+        context = ssl_context_server
+        context.verify_mode = ssl.CERT_OPTIONAL
+        smtpd = Server(Sink())
+        smtpd.tls_context = None
