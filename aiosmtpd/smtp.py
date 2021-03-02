@@ -327,14 +327,15 @@ class SMTP(asyncio.StreamReaderProtocol):
             self,
             handler: Any,
             *,
+            loop: Optional[asyncio.AbstractEventLoop] = None,
+            hostname: Optional[str] = None,
+            ident: Optional[str] = None,
+            timeout: float = 300,
             data_size_limit: int = DATA_SIZE_DEFAULT,
             enable_SMTPUTF8: bool = False,
             decode_data: bool = False,
-            hostname: Optional[str] = None,
-            ident: Optional[str] = None,
             tls_context: Optional[ssl.SSLContext] = None,
             require_starttls: bool = False,
-            timeout: float = 300,
             auth_required: bool = False,
             auth_require_tls: bool = True,
             auth_exclude_mechanism: Optional[Iterable[str]] = None,
@@ -342,7 +343,6 @@ class SMTP(asyncio.StreamReaderProtocol):
             command_call_limit: Union[int, Dict[str, int], None] = None,
             authenticator: Optional[AuthenticatorType] = None,
             proxy_protocol_timeout: Optional[Union[int, float]] = None,
-            loop: Optional[asyncio.AbstractEventLoop] = None
     ):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
@@ -350,16 +350,13 @@ class SMTP(asyncio.StreamReaderProtocol):
             asyncio.StreamReader(loop=self.loop, limit=self.line_length_limit),
             client_connected_cb=self._cb_client_connected,
             loop=self.loop)
-        self.event_handler = handler
-        assert data_size_limit is None or isinstance(data_size_limit, int)
+        if data_size_limit is not None and not isinstance(data_size_limit, int):
+            raise TypeError("data_size_limit must be None or int")
         self.data_size_limit = data_size_limit
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self._decode_data = decode_data
         self.command_size_limits.clear()
-        if hostname:
-            self.hostname = hostname
-        else:
-            self.hostname = socket.getfqdn()
+        self.hostname = hostname or socket.getfqdn()
         self.tls_context = tls_context
         self._req_starttls = require_starttls
         self._timeout_duration = timeout
