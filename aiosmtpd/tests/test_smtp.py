@@ -2045,7 +2045,7 @@ class TestLimits(_CommonMethods):
     def test_different_limits_custom_default(self, plain_controller, client):
         # Important: make sure default_max > CALL_LIMIT_DEFAULT
         # Others can be set small to cut down on testing time, but must be different
-        assert plain_controller.smtpd._call_limit_default > CALL_LIMIT_DEFAULT
+        assert plain_controller.smtpd._call_limit["*"] > CALL_LIMIT_DEFAULT
         srv_ip_port = plain_controller.hostname, plain_controller.port
 
         self._consume_budget(client, 7, "noop")
@@ -2066,7 +2066,7 @@ class TestLimits(_CommonMethods):
 
     @controller_data(command_call_limit=7)
     def test_limit_bogus(self, plain_controller, client):
-        assert plain_controller.smtpd._call_limit_default > BOGUS_LIMIT
+        assert plain_controller.smtpd._call_limit["*"] > BOGUS_LIMIT
         code, mesg = client.ehlo("example.com")
         assert code == 250
         for i in range(0, BOGUS_LIMIT - 1):
@@ -2105,8 +2105,10 @@ class TestClass:
         assert h1 is not h2
         smtpd = Server(h1)
         smtpd.event_handler = h2
-        logmsg = caplog.record_tuples[-1][-1]
+        logmsg = caplog.record_tuples[-2][-1]
         assert logmsg == "event_handler is changing"
+        logmsg = caplog.record_tuples[-1][-1]
+        assert logmsg.startswith("Available AUTH mechanisms:")
 
     @pytest.mark.parametrize(
         "tstval", ["a", b"b", ["c"]], ids=["string", "bytes", "list"]
