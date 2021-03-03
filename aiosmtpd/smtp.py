@@ -40,7 +40,7 @@ from aiosmtpd import __version__, _get_or_new_eventloop
 from aiosmtpd.proxy_protocol import ProxyData, get_proxy
 
 if sys.version_info >= (3, 8):
-    from typing import Protocol
+    from typing import Protocol  # pragma: py-lt-38
 else:  # pragma: py-ge-38
     from typing_extensions import Protocol
 

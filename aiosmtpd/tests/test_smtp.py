@@ -2115,4 +2115,5 @@ class TestClass:
     )
     def test_datasizelimit(self, tstval):
         with pytest.raises(TypeError, match="data_size_limit must be None or int"):
+            # noinspection PyTypeChecker
             Server(Sink(), data_size_limit="a")
