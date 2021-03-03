@@ -11,9 +11,11 @@ import logging
 import re
 import socket
 import ssl
+import sys
 from base64 import b64decode, b64encode
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
+from functools import partial
 from typing import (
     Any,
     AnyStr,
@@ -37,6 +39,11 @@ from public import public
 from aiosmtpd import __version__, _get_or_new_eventloop
 from aiosmtpd.proxy_protocol import ProxyData, get_proxy
 
+if sys.version_info >= (3, 8):
+    from typing import Protocol
+else:  # pragma: py-ge-38
+    from typing_extensions import Protocol
+
 
 # region #### Custom Data Types #######################################################
 
@@ -56,9 +63,16 @@ class _DataState(enum.Enum):
     TOO_MUCH = enum.auto()
 
 
+class HasSMTPAttribs(Protocol):
+    __smtp_syntax__: str
+    __smtp_syntax_extended__: str
+    __smtp_syntax_when__: str
+
+
 AuthCallbackType = Callable[[str, bytes, bytes], bool]
 AuthenticatorType = Callable[["SMTP", "Session", "Envelope", str, Any], "AuthResult"]
 AuthMechanismType = Callable[["SMTP", List[str]], Awaitable[Any]]
+SmtpMethodType = Union[Callable[[str], Awaitable], HasSMTPAttribs]
 _TriStateType = Union[None, _Missing, bytes]
 
 RT = TypeVar("RT")  # "ReturnType"
@@ -257,10 +271,6 @@ def login_always_fail(
     return False
 
 
-def is_int(o: Any) -> bool:
-    return isinstance(o, int)
-
-
 @public
 class TLSSetupException(Exception):
     pass
@@ -311,17 +321,29 @@ class SMTP(asyncio.StreamReaderProtocol):
     AuthLoginUsernameChallenge = "User Name\x00"
     AuthLoginPasswordChallenge = "Password\x00"
 
-    # Internal states
+    # Exposed states
+    session: Optional[Session] = None
+    envelope: Optional[Envelope] = None
+
+    # Protected states
+    _loop: asyncio.AbstractEventLoop = None
     _event_handler: Any = None
+    _smtp_methods: Dict[str, SmtpMethodType] = {}
+    _handle_hooks: Dict[str, Callable] = None
+    _ehlo_hook_ver: Optional[str] = None
+    _handler_coroutine: Optional[asyncio.Task] = None
+    _timeout_handle: Optional[asyncio.TimerHandle] = None
+
     _tls_context: Optional[ssl.SSLContext] = MISSING
     _req_starttls: bool = False
+    _tls_handshake_okay: bool = True
+    _tls_protocol: Optional[sslproto.SSLProtocol] = None
+    _original_transport: Optional[asyncio.BaseTransport] = None
 
     _auth_mechs: Dict[str, _AuthMechAttr] = {}
     _auth_excludes: Optional[Iterable[str]] = None
-    _handle_hooks: Dict[str, Callable] = None
-    _ehlo_hook_ver: Optional[str] = None
-
-    _handler_coroutine: Optional[asyncio.Task] = None
+    _authenticator: Optional[AuthenticatorType] = None
+    _auth_callback: Optional[AuthCallbackType] = None
 
     def __init__(
             self,
@@ -345,11 +367,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             proxy_protocol_timeout: Optional[Union[int, float]] = None,
     ):
         self.__ident__ = ident or __ident__
-        self.loop = loop if loop else make_loop()
+        self._loop = loop if loop else make_loop()
         super().__init__(
             asyncio.StreamReader(loop=self.loop, limit=self.line_length_limit),
             client_connected_cb=self._cb_client_connected,
-            loop=self.loop)
+            loop=self.loop
+        )
         if data_size_limit is not None and not isinstance(data_size_limit, int):
             raise TypeError("data_size_limit must be None or int")
         self.data_size_limit = data_size_limit
@@ -357,16 +380,12 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._decode_data = decode_data
         self.command_size_limits.clear()
         self.hostname = hostname or socket.getfqdn()
+        self.transport: Optional[asyncio.BaseTransport] = None
+
         self.tls_context = tls_context
-        self._req_starttls = require_starttls
+        self.require_starttls = require_starttls
+
         self._timeout_duration = timeout
-        self._timeout_handle = None
-        self._tls_handshake_okay = True
-        self._tls_protocol = None
-        self._original_transport = None
-        self.session: Optional[Session] = None
-        self.envelope: Optional[Envelope] = None
-        self.transport = None
         if not auth_require_tls and auth_required:
             warn("Requiring AUTH while not requiring TLS "
                  "can lead to security vulnerabilities!")
@@ -380,8 +399,6 @@ class SMTP(asyncio.StreamReaderProtocol):
                 log.warning("proxy_protocol_timeout < 3.0")
         self._proxy_timeout = proxy_protocol_timeout
 
-        self._authenticator: Optional[AuthenticatorType]
-        self._auth_callback: Optional[AuthCallbackType]
         if authenticator is not None:
             self._authenticator = authenticator
             self._auth_callback = None
@@ -393,29 +410,39 @@ class SMTP(asyncio.StreamReaderProtocol):
 
         self.event_handler = handler
 
-        self._smtp_methods: Dict[str, Any] = {
-            m.replace("smtp_", ""): getattr(self, m)
-            for m in dir(self)
-            if m.startswith("smtp_")
-        }
-
-        self._call_limit_default: int
+        self._call_limit: Dict[str, int] = {}
         if command_call_limit is None:
             self._enforce_call_limit = False
         else:
             self._enforce_call_limit = True
             if isinstance(command_call_limit, int):
-                self._call_limit_base = {}
-                self._call_limit_default = command_call_limit
+                self._call_limit = {"*": command_call_limit}
             elif isinstance(command_call_limit, dict):
-                if not all(map(is_int, command_call_limit.values())):
+                if not all(
+                        map(lambda x: isinstance(x, int), command_call_limit.values())
+                ):
                     raise TypeError("All command_call_limit values must be int")
-                self._call_limit_base = command_call_limit
-                self._call_limit_default = command_call_limit.get(
-                    "*", CALL_LIMIT_DEFAULT
-                )
+                self._call_limit = command_call_limit
+                self._call_limit.setdefault("*", CALL_LIMIT_DEFAULT)
             else:
                 raise TypeError("command_call_limit must be int or Dict[str, int]")
+
+    @property
+    def loop(self) -> asyncio.AbstractEventLoop:
+        return self._loop
+
+    @property
+    def methods_smtp(self) -> Dict[str, SmtpMethodType]:
+        if not self._smtp_methods:
+            self._smtp_methods: Dict[str, Any] = {
+                m.replace("smtp_", ""): getattr(self, m)
+                for m in dir(self)
+                if m.startswith("smtp_")
+            }
+        log.info(
+            "Available SMTP methods: " + " ".join(sorted(self._smtp_methods.keys()))
+        )
+        return self._smtp_methods
 
     @property
     def event_handler(self) -> Any:
@@ -678,8 +705,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push('220 {} {}'.format(self.hostname, self.__ident__))
         if self._enforce_call_limit:
             call_limit = collections.defaultdict(
-                lambda x=self._call_limit_default: x,
-                self._call_limit_base
+                partial(int, self._call_limit["*"]),
+                self._call_limit
             )
         else:
             # Not used, but this silences code inspection tools
@@ -778,7 +805,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                         continue
                     call_limit[command] = budget - 1
 
-                method = self._smtp_methods.get(command)
+                method = self.methods_smtp.get(command)
                 if method is None:
                     log.warning("%r unrecognised: %s", self.session.peer, command)
                     bogus_budget -= 1
@@ -1249,7 +1276,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         code = 250
         if arg:
-            method = self._smtp_methods.get(arg.upper())
+            method = self.methods_smtp.get(arg.upper())
             if method and self._syntax_available(method):
                 help_str = method.__smtp_syntax__
                 if (self.session.extended_smtp
@@ -1259,7 +1286,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 return
             code = 501
         commands = []
-        for name, method in self._smtp_methods.items():
+        for name, method in self.methods_smtp.items():
             if self._syntax_available(method):
                 commands.append(name)
         commands.sort()
