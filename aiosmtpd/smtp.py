@@ -506,7 +506,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                     log.warning("tls_context is being replaced")
         self._tls_context = value
         if value:
-            if value.verify_mode not in {ssl.CERT_NONE, ssl.CERT_OPTIONAL}:
+            problem = {ssl.CERT_NONE, ssl.CERT_OPTIONAL}  # noqa: DUO122
+            if value.verify_mode not in problem:
                 log.warning(
                     "tls_context.verify_mode not in {CERT_NONE, CERT_OPTIONAL}; "
                     "this might cause client connection problems"
