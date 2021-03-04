@@ -277,11 +277,18 @@ class SMTP(asyncio.StreamReaderProtocol):
     command_size_limit = 512
     command_size_limits: Dict[str, int] = collections.defaultdict(
         lambda x=command_size_limit: x)
+
     line_length_limit = 1001
     """Maximum line length according to RFC 5321 s 4.5.3.1.6"""
     # The number comes from this calculation:
     # (RFC 5322 s 2.1.1 + RFC 6532 s 3.4) 998 octets + CRLF = 1000 octets
     # (RFC 5321 s 4.5.3.1.6) 1000 octets + "transparent dot" = 1001 octets
+
+    local_part_limit: int = 0
+    """
+    Maximum local part length. (RFC 5321 § 4.5.3.1.1 specifies 64, but lenient)
+    If 0 or Falsey, local part length is unlimited.
+    """
 
     AuthLoginUsernameChallenge = "User Name\x00"
     AuthLoginPasswordChallenge = "Password\x00"
@@ -454,6 +461,18 @@ class SMTP(asyncio.StreamReaderProtocol):
             return max(self.command_size_limits.values())
         except ValueError:
             return self.command_size_limit
+
+    def __del__(self):  # pragma: nocover
+        # This is nocover-ed because the contents *totally* does NOT affect function-
+        # ality, and in addition this comes directly from StreamReaderProtocol.__del__()
+        # but with a getattr()+check addition to stop the annoying (but harmless)
+        # "exception ignored" messages caused by AttributeError when self._closed is
+        # missing (which seems to happen randomly).
+        closed = getattr(self, "_closed", None)
+        if closed is None:
+            return
+        if closed.done() and not closed.cancelled():
+            closed.exception()
 
     def connection_made(self, transport):
         # Reset state due to rfc3207 part 4.2.
@@ -1112,10 +1131,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             return None, None
         address = address.addr_spec
         localpart, atsign, domainpart = address.rpartition("@")
-        if len(localpart) > 64:  # RFC 5321 § 4.5.3.1.1
+        if self.local_part_limit and len(localpart) > self.local_part_limit:
             return None, None
-        else:
-            return address, rest
+        return address, rest
 
     def _getparams(self, params):
         # Return params as dictionary. Return None if not all parameters

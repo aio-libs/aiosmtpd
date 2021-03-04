@@ -489,16 +489,21 @@ class TestSMTP(_CommonMethods):
         "customer/department=shipping@example.com",
         "$A12345@example.com",
         "!def!xyz%abc@example.com",
+        "a" * 65 + "@example.com",  # local-part > 64 chars -- see Issue#257
+        "b" * 488 + "@example.com",  # practical longest for MAIL FROM
+        "c" * 500,  # practical longest domainless for MAIL FROM
     ]
 
     valid_rcptto_addresses = valid_mailfrom_addresses + [
         # Postmaster -- RFC5321 § 4.1.1.3
         "<Postmaster>",
+        "b" * 490 + "@example.com",  # practical longest for RCPT TO
+        "c" * 502,  # practical longest domainless for RCPT TO
     ]
 
     invalid_email_addresses = [
-        "<@example.com>",  # no local part
-        "a" * 65 + "@example.com",  # local-part > 64 chars
+        "<@example.com>",  # null local part
+        "<johnathon@>",  # null domain part
     ]
 
     @pytest.mark.parametrize("data", [b"\x80FAIL\r\n", b"\x80 FAIL\r\n"])
@@ -1658,6 +1663,16 @@ class TestCustomization(_CommonMethods):
         client.ehlo("example.com")
         resp = client.docmd("MAIL FROM: <anne@example.com> BODY=FOOBAR")
         assert resp == S.S501_MAIL_BODY
+
+    def test_limitlocalpart(self, plain_controller, client):
+        plain_controller.smtpd.local_part_limit = 64
+        client.ehlo("example.com")
+        locpart = "a" * 64
+        resp = client.docmd(f"MAIL FROM: {locpart}@example.com")
+        assert resp == S.S250_OK
+        locpart = "b" * 65
+        resp = client.docmd(f"RCPT TO: {locpart}@example.com")
+        assert resp == S.S553_MALFORMED
 
 
 class TestClientCrash(_CommonMethods):
