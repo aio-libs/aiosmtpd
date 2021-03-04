@@ -3,7 +3,7 @@
 
 import logging
 import sys
-from email.message import Message
+from email.message import Message, Message as Em_Message
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
@@ -17,7 +17,7 @@ import pytest
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
-from aiosmtpd.handlers import Message as MessageHandler
+from aiosmtpd.handlers import Message as AbstractMessageHandler
 from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.smtp import Session as ServerSession
 from aiosmtpd.smtp import Envelope
@@ -72,6 +72,11 @@ class DataHandler:
         self.content = envelope.content
         self.original_content = envelope.original_content
         return S.S250_OK.to_str()
+
+
+class MessageHandler(AbstractMessageHandler):
+    def handle_message(self, message: Em_Message) -> None:
+        pass
 
 
 class AsyncMessageHandler(AsyncMessage):
