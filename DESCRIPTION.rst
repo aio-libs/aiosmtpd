@@ -4,7 +4,7 @@
 
 | |github license| |_| |PyPI Version| |PyPI Python|
 | |GA badge| |codecov| |_| |LGTM.com| |readthedocs| |_|
-| |PullRequests| |_| |LastCommit|
+| |GH Release| |_| |PullRequests| |_| |LastCommit|
 |
 
 .. |_| unicode:: 0xA0
@@ -33,6 +33,9 @@
    :alt: Supported Python Versions
 .. .. Do NOT include the Discourse badge!
 .. .. Below are badges just for PyPI
+.. |GH Release| image:: https://img.shields.io/github/v/release/aio-libs/aiosmtpd?logo=github
+   :target: https://github.com/aio-libs/aiosmtpd/releases
+   :alt: GitHub latest release
 .. |PullRequests| image:: https://img.shields.io/github/issues-pr/aio-libs/aiosmtpd?logo=GitHub
    :target: https://github.com/aio-libs/aiosmtpd/pulls
    :alt: GitHub pull requests
