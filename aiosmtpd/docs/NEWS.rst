@@ -15,6 +15,15 @@ Fixed/Improved
 * All Controllers now have more rationale design, as they are now composited from a Base + a Mixin
 
 
+1.4.1 (2021-03-04)
+==================
+
+Fixed/Improved
+--------------
+* Maximum length of email address local part is customizable, defaults to no limit. (Closes #257)
+
+
+
 1.4.0 (2021-02-26)
 ==================
 

@@ -396,6 +396,16 @@ aiosmtpd.smtp
          :attr:`line_length_limit` to ``2**16`` *before* instantiating the
          :class:`SMTP` class.
 
+   .. py:attribute:: local_part_limit
+
+      The maximum lengh (in octets) of the local part of email addresses.
+
+      :rfc:`RFC 5321 § 4.5.3.1.1 <5321#section-4.5.3.1.1>` specifies a maximum length of 64 octets,
+      but this requirement is flexible and can be relaxed at the server's discretion
+      (see :rfc:`§ 4.5.3.1 <5321#section-4.5.3.1>`).
+
+      Setting this to `0` (the default) disables this limit completely.
+
    .. py:attribute:: AuthLoginUsernameChallenge
 
       A ``str`` containing the base64-encoded challenge to be sent as the first challenge

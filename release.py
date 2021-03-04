@@ -26,9 +26,7 @@ DISTFILES = [
 ]
 
 printfl("Updating release toolkit first...", end="")
-run_hidden(
-    [sys.executable] + "-m pip install -U setuptools wheel twine".split()
-)
+run_hidden([sys.executable] + "-m pip install -U setuptools wheel twine".split())
 print()
 
 printfl("Checking extra toolkit...", end="")
@@ -90,12 +88,15 @@ os.chdir(Path(__file__).absolute().parent)
 
 try:
     # Let's use *this* python to build, please
+    print("### setup.py sdist")
     subprocess.run([sys.executable, "setup.py", "sdist"], check=True)
+    print("### setup.py sdist")
     subprocess.run([sys.executable, "setup.py", "bdist_wheel"], check=True)
     for f in DISTFILES:
         assert Path(f).exists(), f"{f} is missing!"
 
     # Assuming twine is installed.
+    print("### twine check")
     subprocess.run(["twine", "check"] + DISTFILES, check=True)
 
     # You should have an aiosmtpd bit setup in your ~/.pypirc - for twine
@@ -103,19 +104,31 @@ try:
     if GPG_SIGNING_ID:
         twine_up.extend(["--sign", "--identity", GPG_SIGNING_ID])
     twine_up.extend(DISTFILES)
+    print("### twine upload")
     subprocess.run(twine_up, check=True)
-
-    if has_verify:
-        print("Waiting for package to be received by PyPI...", end="")
-        for i in range(10, 0, -1):
-            printfl(i, end="..")
-            time.sleep(1.0)
-        print()
-        twine_verif = ["twine", "verify_upload"] + DISTFILES
-        subprocess.run(twine_verif, check=True)
 except subprocess.CalledProcessError as e:
     print("ERROR: Last step returned exitcode != 0")
     sys.exit(e.returncode)
+
+if has_verify:
+    print("Waiting for package to be received by PyPI...", end="")
+    for i in range(10, 0, -1):
+        printfl(i, end="..")
+        time.sleep(1.0)
+    print()
+    twine_verif = ["twine", "verify_upload"] + DISTFILES
+    while True:
+        try:
+            print("### twine verify_upload")
+            subprocess.run(twine_verif, check=True)
+            break
+        except subprocess.CalledProcessError as e:
+            choice = input(
+                f"\nverify_upload returned {e.returncode}. Retry/abort? [R/a]: "
+            )
+            if choice.casefold() in ("a", "abort"):
+                print("Aborted")
+                sys.exit(1)
 
 # Only tag when we've actually built and uploaded. If something goes wrong
 # we may need the tag somewhere else!
