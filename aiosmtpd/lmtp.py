@@ -10,7 +10,7 @@ from aiosmtpd.smtp import SMTP, syntax
 class LMTP(SMTP):
     show_smtp_greeting: bool = False
 
-    @syntax('LHLO hostname')
+    @syntax("LHLO hostname")
     async def smtp_LHLO(self, arg: str) -> None:
         """The LMTP greeting, used instead of HELO/EHLO."""
         await super().smtp_EHLO(arg)

@@ -91,7 +91,7 @@ def _parser() -> ArgumentParser:
         action="count",
         help=(
             "Increase debugging output. Every ``-d`` increases debugging level by one."
-        )
+        ),
     )
     parser.add_argument(
         "-l",
