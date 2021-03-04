@@ -334,7 +334,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     _handler_coroutine: Optional[asyncio.Task] = None
     _timeout_handle: Optional[asyncio.TimerHandle] = None
 
-    _tls_context: Optional[ssl.SSLContext] = MISSING
+    _tls_context: Optional[Union[ssl.SSLContext, _Missing]] = MISSING
     _req_starttls: bool = False
     _tls_handshake_okay: bool = True
     _tls_protocol: Optional[sslproto.SSLProtocol] = None
