@@ -98,7 +98,7 @@ def safe_socket_dir() -> Generator[Path, None, None]:
     tmpdir.rmdir()
 
 
-def assert_smtp_socket(controller: UnixSocketMixin):
+def assert_smtp_socket(controller: UnixSocketMixin) -> bool:
     assert Path(controller.unix_socket).exists()
     sockfile = controller.unix_socket
     ssl_context = controller.ssl_context
@@ -135,6 +135,7 @@ def assert_smtp_socket(controller: UnixSocketMixin):
         catchup_delay()
         resp = sock.recv(1024)
         assert resp.startswith(b"221")
+    return True
 
 
 class TestServer:

@@ -211,19 +211,21 @@ def temp_event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
 
 
 @pytest.fixture
-def autostop_loop(temp_event_loop) -> Generator[asyncio.AbstractEventLoop, None, None]:
+def autostop_loop(
+    temp_event_loop: asyncio.AbstractEventLoop,
+) -> asyncio.AbstractEventLoop:
     # Create a new event loop, and arrange for that loop to end almost
     # immediately.  This will allow the calls to main() in these tests to
     # also exit almost immediately.  Otherwise, the foreground test
     # process will hang.
     temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
     #
-    yield temp_event_loop
+    return temp_event_loop
 
 
 @pytest.fixture
 def plain_controller(
-        get_handler: Callable, get_controller: Callable
+    get_handler: Callable, get_controller: Callable
 ) -> Generator[Controller, None, None]:
     """
     Returns a Controller that, by default, gets invoked with no optional args.
