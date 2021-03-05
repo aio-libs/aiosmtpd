@@ -283,7 +283,7 @@ Controller API
    handler, \
    loop=None, \
    *, \
-   ready_timeout=1.0, \
+   ready_timeout, \
    ssl_context=None, \
    server_hostname=None, server_kwargs=None, **SMTP_parameters)
 
@@ -292,6 +292,7 @@ Controller API
       If not given, :func:`asyncio.new_event_loop` will be called to create the event loop.
    :param ready_timeout: How long to wait until server starts.
       The :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` takes precedence over this parameter.
+      See :attr:`ready_timeout` for more information.
    :type ready_timeout: float
    :param ssl_context: SSL Context to wrap the socket in.
        Will be passed-through to  :meth:`~asyncio.loop.create_server` method
@@ -330,13 +331,17 @@ Controller API
 
    .. attribute:: ready_timeout
       :type: float
-      :noindex:
 
       The timeout value used to wait for the server to start.
 
       This will either be the value of
       the :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` environment variable (converted to float),
       or the :attr:`ready_timeout` parameter.
+
+      Setting this to a high value will NOT slow down controller startup,
+      because it's a timeout limit rather than a sleep delay.
+      However, you may want to reduce the default value to something 'just enough'
+      so you don't have to wait too long for an exception, if problem arises.
 
       If this timeout is breached, a :class:`TimeoutError` exception will be raised.
 
@@ -430,7 +435,7 @@ Controller API
    hostname=None, port=8025, \
    loop=None, \
    *, \
-   ready_timeout=1.0, \
+   ready_timeout=3.0, \
    ssl_context=None, \
    server_hostname=None, server_kwargs=None, **SMTP_parameters)
 
@@ -488,7 +493,7 @@ Controller API
    unix_socket, \
    loop=None, \
    *, \
-   ready_timeout=1.0, \
+   ready_timeout=3.0, \
    ssl_context=None, \
    server_hostname=None,\
    **SMTP_parameters)

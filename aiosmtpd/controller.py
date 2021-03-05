@@ -106,7 +106,7 @@ class BaseThreadedController(metaclass=ABCMeta):
         handler,
         loop=None,
         *,
-        ready_timeout: float = 1.0,
+        ready_timeout: float,
         ssl_context: Optional[ssl.SSLContext] = None,
         # SMTP parameters
         server_hostname: Optional[str] = None,
@@ -207,7 +207,11 @@ class BaseThreadedController(metaclass=ABCMeta):
                 # See comment about WSL1.0 in the _run() method
                 raise self._thread_exception
             else:
-                raise TimeoutError("SMTP server failed to start within allotted time")
+                raise TimeoutError(
+                    "SMTP server failed to start within allotted time. "
+                    "This might happen if the system is too busy. "
+                    "Try increasing the `ready_timeout` parameter."
+                )
         respond_timeout = self.ready_timeout - (time.monotonic() - start)
 
         # Apparently create_server invokes factory() "lazily", so exceptions in
@@ -222,7 +226,11 @@ class BaseThreadedController(metaclass=ABCMeta):
             # Raise other exceptions though
             raise
         if not self._factory_invoked.wait(respond_timeout):
-            raise TimeoutError("SMTP server not responding within allotted time")
+            raise TimeoutError(
+                "SMTP server started, but not responding within allotted time. "
+                "This might happen if the system is too busy. "
+                "Try increasing the `ready_timeout` parameter."
+            )
         if self._thread_exception is not None:
             raise self._thread_exception
 
@@ -265,7 +273,7 @@ class Controller(BaseThreadedController):
         port: int = 8025,
         loop=None,
         *,
-        ready_timeout: float = 1.0,
+        ready_timeout: float = 5.0,
         ssl_context: ssl.SSLContext = None,
         # SMTP parameters
         server_hostname: Optional[str] = None,
@@ -317,8 +325,8 @@ class UnixSocketController(BaseThreadedController):  # pragma: on-win32 on-cygwi
         unix_socket: Optional[Union[str, Path]],
         loop=None,
         *,
-        ready_timeout=1.0,
-        ssl_context=None,
+        ready_timeout: float = 5.0,
+        ssl_context: ssl.SSLContext = None,
         # SMTP parameters
         server_hostname: str = None,
         **SMTP_parameters,
