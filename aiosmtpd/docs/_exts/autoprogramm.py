@@ -158,6 +158,7 @@ def import_object(import_name: str) -> Any:
                 with open(f[0]) as fobj:
                     codestring = fobj.read()
                 foo = imp.new_module("foo")
+                # noinspection BuiltinExec
                 exec(codestring, foo.__dict__)  # noqa: DUO105  # nosec
 
                 sys.modules["foo"] = foo
