@@ -529,6 +529,7 @@ class TestUnthreaded:
         assert temp_event_loop.is_closed() is False
 
 
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 class TestFactory:
     def test_normal_situation(self):
         cont = Controller(Sink())
@@ -540,7 +541,6 @@ class TestFactory:
         finally:
             cont.stop()
 
-    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_unknown_args_direct(self, silence_event_loop_closed: bool):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), ready_timeout=0.3, **{unknown: True})
@@ -556,7 +556,6 @@ class TestFactory:
     @pytest.mark.filterwarnings(
         "ignore:server_kwargs will be removed:DeprecationWarning"
     )
-    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_unknown_args_inkwargs(self, silence_event_loop_closed: bool):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), ready_timeout=0.3, server_kwargs={unknown: True})
@@ -568,7 +567,6 @@ class TestFactory:
         finally:
             cont.stop()
 
-    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_factory_none(self, mocker: MockFixture, silence_event_loop_closed: bool):
         # Hypothetical situation where factory() did not raise an Exception
         # but returned None instead
@@ -582,7 +580,6 @@ class TestFactory:
         finally:
             cont.stop()
 
-    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_noexc_smtpd_missing(
         self, mocker: MockFixture, silence_event_loop_closed: bool
     ):
