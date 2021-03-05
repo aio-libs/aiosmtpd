@@ -3,6 +3,22 @@
 ###################
 
 
+1.4.2 (aiosmtpd-next)
+=====================
+
+Fixed/Improved
+--------------
+* Controller's ``ready_timeout`` parameter increased from ``1.0`` to ``5.0``.
+  This won't slow down Controller startup because it's just a timeout limit
+  (instead of a sleep delay),
+  but this should help prevent Controller from giving up too soon,
+  especially during situations where system/network is a bit busy causing slowdowns.
+  (See #262)
+* Timeout messages in ``Controller.start()`` gets more details and a mention about the
+  ``ready_timeout`` parameter. (See #262)
+
+
+
 1.4.1 (2021-03-04)
 ==================
 
