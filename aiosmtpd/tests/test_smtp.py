@@ -74,7 +74,7 @@ def assert_nopassleak(passwd: str, record_tuples: List[Tuple[str, int, str]]):
     :param record_tuples: Usually caplog.record_tuples
     """
     passwd_b64 = b64encode(passwd.encode("ascii")).decode("ascii")
-    for logname, loglevel, logmsg in record_tuples:
+    for _logname, _loglevel, logmsg in record_tuples:
         assert passwd not in logmsg
         assert passwd_b64 not in logmsg
 

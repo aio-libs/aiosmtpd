@@ -935,7 +935,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Pass 'self' to method so external methods can leverage this
             # class's helper methods such as push()
             auth_result = await auth_method.method(self, args)
-            log.debug(f"auth_%s returned %r", mechanism, auth_result)
+            log.debug("auth_%s returned %r", mechanism, auth_result)
 
             # New system using `authenticator` and AuthResult
             if isinstance(auth_result, AuthResult):
