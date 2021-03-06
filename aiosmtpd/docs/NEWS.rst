@@ -16,7 +16,8 @@ Fixed/Improved
   (See #262)
 * Timeout messages in ``Controller.start()`` gets more details and a mention about the
   ``ready_timeout`` parameter. (See #262)
-
+* Prevent sensitive AUTH information leak by sanitizing the repr()
+  of AuthResult and LoginPassword.
 
 
 1.4.1 (2021-03-04)
