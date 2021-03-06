@@ -1676,7 +1676,7 @@ class TestSMTPWithController(_CommonMethods):
             assert rslt == b""
             rslt = send_recv(sock, b"\r\n.")
             # *NOW* we must receive status code
-            assert rslt == b"500 Line too long (see RFC5321 4.5.3.1.6)\r\n"
+            assert rslt == S.S500_DATALINE_TOO_LONG.to_bytes(crlf=True)
 
     @controller_data(data_size_limit=2000)
     def test_too_long_lines_then_too_long_body(self, plain_controller, client):
