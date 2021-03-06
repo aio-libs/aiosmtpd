@@ -11,8 +11,6 @@ import logging
 import re
 import socket
 import ssl
-from aiosmtpd import __version__
-from aiosmtpd.proxy_protocol import get_proxy, ProxyData
 from base64 import b64decode, b64encode
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
@@ -34,6 +32,9 @@ from warnings import warn
 
 import attr
 from public import public
+
+from aiosmtpd import __version__
+from aiosmtpd.proxy_protocol import ProxyData, get_proxy
 
 
 # region #### Custom Data Types #######################################################

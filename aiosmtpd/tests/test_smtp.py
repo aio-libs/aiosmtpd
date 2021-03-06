@@ -11,8 +11,8 @@ import time
 import warnings
 from base64 import b64encode
 from contextlib import suppress
-from smtplib import SMTP as SMTPClient
 from smtplib import (
+    SMTP as SMTPClient,
     SMTPAuthenticationError,
     SMTPDataError,
     SMTPResponseException,
@@ -24,6 +24,7 @@ from typing import Any, AnyStr, Callable, Generator, List, Tuple
 import pytest
 from pytest_mock import MockFixture
 
+from .conftest import Global, controller_data, handler_data
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import (
@@ -45,8 +46,6 @@ from aiosmtpd.testing.helpers import (
     send_recv,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-
-from .conftest import Global, controller_data, handler_data
 
 CRLF = "\r\n"
 BCRLF = b"\r\n"
