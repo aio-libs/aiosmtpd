@@ -16,6 +16,7 @@ from aiosmtpd.proxy_protocol import get_proxy, ProxyData
 from base64 import b64decode, b64encode
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
+from functools import partial
 from typing import (
     Any,
     AnyStr,
@@ -109,21 +110,25 @@ class AuthResult:
     Contains the result of authentication, to be returned to the smtp_AUTH method.
     All initialization arguments _must_ be keyworded!
     """
+    _kwattr = partial(attr.ib, kw_only=True)
 
-    success: bool = attr.ib(kw_only=True)
+    success: bool = _kwattr()
     """Indicates authentication is successful or not"""
 
-    handled: bool = attr.ib(kw_only=True, default=True)
+    handled: bool = _kwattr(default=True)
     """
     True means everything (including sending of status code) has been handled by the
     AUTH handler and smtp_AUTH should not do anything else.
     Applicable only if success == False.
     """
 
-    message: Optional[str] = attr.ib(kw_only=True, default=None)
-    """Optional message for additional handling by smtp_AUTH"""
+    message: Optional[str] = _kwattr(default=None)
+    """
+    Optional message for additional handling by smtp_AUTH.
+    Applicable only if handled == False.
+    """
 
-    auth_data: Optional[Any] = attr.ib(kw_only=True, default=None)
+    auth_data: Optional[Any] = _kwattr(default=None, repr=lambda x: "...")
     """
     Optional free-form authentication data. For the built-in mechanisms, it is usually
     an instance of LoginPassword. Other implementations are free to use any data
@@ -135,6 +140,12 @@ class AuthResult:
 class LoginPassword(NamedTuple):
     login: bytes
     password: bytes
+
+    def __str__(self) -> str:
+        return f"LoginPassword(login='{self.login}', password=...)"
+
+    def __repr__(self) -> str:
+        return str(self)
 
 
 @public
@@ -915,14 +926,15 @@ class SMTP(asyncio.StreamReaderProtocol):
         status = await self._call_handler_hook('AUTH', args)
         if status is MISSING:
             auth_method = self._auth_methods[mechanism]
-            if auth_method.is_builtin:
-                log.debug(f"Using builtin auth_ hook for {mechanism}")
-            else:
-                log.debug(f"Using handler auth_ hook for {mechanism}")
+            log.debug(
+                "Using %s auth_ hook for %r",
+                "builtin" if auth_method.is_builtin else "handler",
+                mechanism
+            )
             # Pass 'self' to method so external methods can leverage this
             # class's helper methods such as push()
             auth_result = await auth_method.method(self, args)
-            log.debug(f"auth_{mechanism} returned {auth_result}")
+            log.debug(f"auth_%s returned %r", mechanism, auth_result)
 
             # New system using `authenticator` and AuthResult
             if isinstance(auth_result, AuthResult):
@@ -952,7 +964,6 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # is rejected / not valid
                 status = CODE_INVALID
             else:
-
                 self.session.login_data = auth_result
                 status = CODE_SUCCESS
 
