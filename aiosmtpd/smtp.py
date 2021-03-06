@@ -14,7 +14,6 @@ import ssl
 from base64 import b64decode, b64encode
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
-from functools import partial
 from typing import (
     Any,
     AnyStr,
@@ -111,25 +110,24 @@ class AuthResult:
     Contains the result of authentication, to be returned to the smtp_AUTH method.
     All initialization arguments _must_ be keyworded!
     """
-    _kwattr = partial(attr.ib, kw_only=True)
 
-    success: bool = _kwattr()
+    success: bool = attr.ib(kw_only=True)
     """Indicates authentication is successful or not"""
 
-    handled: bool = _kwattr(default=True)
+    handled: bool = attr.ib(kw_only=True, default=True)
     """
     True means everything (including sending of status code) has been handled by the
     AUTH handler and smtp_AUTH should not do anything else.
     Applicable only if success == False.
     """
 
-    message: Optional[str] = _kwattr(default=None)
+    message: Optional[str] = attr.ib(kw_only=True, default=None)
     """
     Optional message for additional handling by smtp_AUTH.
     Applicable only if handled == False.
     """
 
-    auth_data: Optional[Any] = _kwattr(default=None, repr=lambda x: "...")
+    auth_data: Optional[Any] = attr.ib(kw_only=True, default=None, repr=lambda x: "...")
     """
     Optional free-form authentication data. For the built-in mechanisms, it is usually
     an instance of LoginPassword. Other implementations are free to use any data
