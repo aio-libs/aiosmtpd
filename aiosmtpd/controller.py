@@ -27,6 +27,8 @@ from aiosmtpd.smtp import SMTP
 
 AsyncServer = asyncio.base_events.Server
 
+DEFAULT_READY_TIMEOUT: float = 5.0
+
 
 @public
 class IP6_IS:
@@ -190,7 +192,7 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         handler: Any,
         loop: asyncio.AbstractEventLoop = None,
         *,
-        ready_timeout: float = 1.0,
+        ready_timeout: float = DEFAULT_READY_TIMEOUT,
         ssl_context: Optional[ssl.SSLContext] = None,
         # SMTP parameters
         server_hostname: Optional[str] = None,
