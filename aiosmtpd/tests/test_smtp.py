@@ -98,6 +98,7 @@ class ErrorSMTP(Server):
 # region #### Special-Purpose Handlers ################################################
 
 
+# noinspection TimingAttack
 class PeekerHandler:
     sess: SMTPSession = None
     login: AnyStr = None
@@ -980,6 +981,7 @@ class TestSMTPAuth(_CommonMethods):
         assert str(w[1].message) == "Sensitive information might be leaked!"
 
 
+# noinspection TimingAttack,HardcodedPassword
 @pytest.mark.usefixtures("auth_peeker_controller")
 class TestAuthMechanisms(_CommonMethods):
     @pytest.fixture
@@ -1244,6 +1246,7 @@ class TestAuthMechanisms(_CommonMethods):
         assert resp == S.S235_AUTH_SUCCESS
 
 
+# noinspection HardcodedPassword
 class TestAuthenticator(_CommonMethods):
     def test_success(self, caplog, authenticator_peeker_controller, client):
         PW = "goodpasswd"
