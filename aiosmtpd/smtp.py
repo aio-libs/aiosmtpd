@@ -346,32 +346,35 @@ class SMTP(asyncio.StreamReaderProtocol):
     _auth_callback: Optional[AuthCallbackType] = None
 
     def __init__(
-            self,
-            handler: Any,
-            *,
-            loop: Optional[asyncio.AbstractEventLoop] = None,
-            hostname: Optional[str] = None,
-            ident: Optional[str] = None,
-            timeout: float = 300,
-            data_size_limit: int = DATA_SIZE_DEFAULT,
-            enable_SMTPUTF8: bool = False,
-            decode_data: bool = False,
-            tls_context: Optional[ssl.SSLContext] = None,
-            require_starttls: bool = False,
-            auth_required: bool = False,
-            auth_require_tls: bool = True,
-            auth_exclude_mechanism: Optional[Iterable[str]] = None,
-            auth_callback: Optional[AuthCallbackType] = None,
-            command_call_limit: Union[int, Dict[str, int], None] = None,
-            authenticator: Optional[AuthenticatorType] = None,
-            proxy_protocol_timeout: Optional[Union[int, float]] = None,
+        self,
+        handler: Any,
+        *,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
+        hostname: Optional[str] = None,
+        ident: Optional[str] = None,
+        timeout: float = 300,
+        data_size_limit: int = DATA_SIZE_DEFAULT,
+        enable_SMTPUTF8: bool = False,
+        decode_data: bool = False,
+        #
+        tls_context: Optional[ssl.SSLContext] = None,
+        require_starttls: bool = False,
+        #
+        auth_required: bool = False,
+        auth_require_tls: bool = True,
+        auth_exclude_mechanism: Optional[Iterable[str]] = None,
+        auth_callback: Optional[AuthCallbackType] = None,
+        authenticator: Optional[AuthenticatorType] = None,
+        #
+        command_call_limit: Union[int, Dict[str, int], None] = None,
+        proxy_protocol_timeout: Optional[Union[int, float]] = None,
     ):
         self.__ident__ = ident or __ident__
         self._loop = loop if loop else make_loop()
         super().__init__(
             asyncio.StreamReader(loop=self.loop, limit=self.line_length_limit),
             client_connected_cb=self._cb_client_connected,
-            loop=self.loop
+            loop=self.loop,
         )
         if data_size_limit is not None and not isinstance(data_size_limit, int):
             raise TypeError("data_size_limit must be None or int")
@@ -387,8 +390,10 @@ class SMTP(asyncio.StreamReaderProtocol):
 
         self._timeout_duration = timeout
         if not auth_require_tls and auth_required:
-            warn("Requiring AUTH while not requiring TLS "
-                 "can lead to security vulnerabilities!")
+            warn(
+                "Requiring AUTH while not requiring TLS "
+                "can lead to security vulnerabilities!"
+            )
             log.warning("auth_required == True but auth_require_tls == False")
         self._auth_require_tls = auth_require_tls
 
@@ -418,9 +423,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             if isinstance(command_call_limit, int):
                 self._call_limit = {"*": command_call_limit}
             elif isinstance(command_call_limit, dict):
-                if not all(
-                        map(lambda x: isinstance(x, int), command_call_limit.values())
-                ):
+                if not all(isinstance(x, int) for x in command_call_limit.values()):
                     raise TypeError("All command_call_limit values must be int")
                 self._call_limit = command_call_limit
                 self._call_limit.setdefault("*", CALL_LIMIT_DEFAULT)
