@@ -26,13 +26,18 @@ from pytest_mock import MockFixture
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import BOGUS_LIMIT, CALL_LIMIT_DEFAULT, MISSING
-from aiosmtpd.smtp import SMTP as Server
-from aiosmtpd.smtp import AuthResult
-from aiosmtpd.smtp import Envelope as SMTPEnvelope
-from aiosmtpd.smtp import Session as SMTPSession
-from aiosmtpd.smtp import __ident__ as GREETING
-from aiosmtpd.smtp import auth_mechanism
+from aiosmtpd.smtp import (
+    BOGUS_LIMIT,
+    CALL_LIMIT_DEFAULT,
+    MISSING,
+    SMTP as Server,
+    AuthResult,
+    Envelope as SMTPEnvelope,
+    LoginPassword,
+    Session as SMTPSession,
+    __ident__ as GREETING,
+    auth_mechanism,
+)
 from aiosmtpd.testing.helpers import (
     ReceivingHandler,
     catchup_delay,
@@ -62,6 +67,17 @@ def auth_callback(mechanism, login, password) -> bool:
         return True
     else:
         return False
+
+
+def assert_nopassleak(passwd: str, record_tuples: List[Tuple[str, int, str]]):
+    """
+    :param passwd: The password we're looking for in the logs
+    :param record_tuples: Usually caplog.record_tuples
+    """
+    passwd_b64 = b64encode(passwd.encode("ascii")).decode("ascii")
+    for logname, loglevel, logmsg in record_tuples:
+        assert passwd not in logmsg
+        assert passwd_b64 not in logmsg
 
 
 class UndescribableError(Exception):
@@ -914,30 +930,35 @@ class TestSMTPAuth(_CommonMethods):
         resp = client.docmd("AUTH")
         assert resp == S.S501_TOO_FEW
 
-    def test_already_authenticated(self, client):
+    def test_already_authenticated(self, caplog, client):
+        PW = "goodpasswd"
         self._ehlo(client)
         resp = client.docmd(
-            "AUTH PLAIN " + b64encode(b"\0goodlogin\0goodpasswd").decode()
+            "AUTH PLAIN " + b64encode(b"\0goodlogin\0" + PW.encode("ascii")).decode()
         )
         assert resp == S.S235_AUTH_SUCCESS
         resp = client.docmd("AUTH")
         assert resp == S.S503_ALREADY_AUTH
         resp = client.docmd("MAIL FROM: <anne@example.com>")
         assert resp == S.S250_OK
+        assert_nopassleak(PW, caplog.record_tuples)
 
-    def test_auth_individually(self, client):
+    def test_auth_individually(self, caplog, client):
         """AUTH state of different clients must be independent"""
+        PW = "goodpasswd"
         client1 = client
         with SMTPClient(*Global.SrvAddr) as client2:
             for c in client1, client2:
                 c.ehlo("example.com")
-                resp = c.login("goodlogin", "goodpasswd")
+                resp = c.login("goodlogin", PW)
                 assert resp == S.S235_AUTH_SUCCESS
+        assert_nopassleak(PW, caplog.record_tuples)
 
-    def test_rset_maintain_authenticated(self, client):
+    def test_rset_maintain_authenticated(self, caplog, client):
         """RSET resets only Envelope not Session"""
+        PW = "goodpasswd"
         self._ehlo(client, "example.com")
-        resp = client.login("goodlogin", "goodpasswd")
+        resp = client.login("goodlogin", PW)
         assert resp == S.S235_AUTH_SUCCESS
         resp = client.mail("alice@example.com")
         assert resp == S.S250_OK
@@ -945,6 +966,7 @@ class TestSMTPAuth(_CommonMethods):
         assert resp == S.S250_OK
         resp = client.docmd("AUTH PLAIN")
         assert resp == S.S503_ALREADY_AUTH
+        assert_nopassleak(PW, caplog.record_tuples)
 
     @handler_data(class_=PeekerHandler)
     def test_auth_loginteract_warning(self, client):
@@ -1019,10 +1041,13 @@ class TestAuthMechanisms(_CommonMethods):
 
     @pytest.mark.parametrize("init_resp", [True, False])
     @pytest.mark.parametrize("mechanism", ["login", "plain"])
-    def test_byclient(self, auth_peeker_controller, client, mechanism, init_resp):
+    def test_byclient(
+        self, caplog, auth_peeker_controller, client, mechanism, init_resp
+    ):
         self._ehlo(client)
+        PW = "goodpasswd"
         client.user = "goodlogin"
-        client.password = "goodpasswd"
+        client.password = PW
         auth_meth = getattr(client, "auth_" + mechanism)
         if (mechanism, init_resp) == ("login", False):
             with pytest.raises(SMTPAuthenticationError):
@@ -1033,7 +1058,8 @@ class TestAuthMechanisms(_CommonMethods):
         peeker = auth_peeker_controller.handler
         assert isinstance(peeker, PeekerHandler)
         assert peeker.login == b"goodlogin"
-        assert peeker.password == b"goodpasswd"
+        assert peeker.password == PW.encode("ascii")
+        assert_nopassleak(PW, caplog.record_tuples)
 
     def test_plain1_bad_base64_encoding(self, do_auth_plain1):
         resp = do_auth_plain1("not-b64")
@@ -1059,22 +1085,29 @@ class TestAuthMechanisms(_CommonMethods):
         resp = do_auth_plain1("=")
         assert resp == S.S501_AUTH_CANTSPLIT
 
-    def test_plain1_good_credentials(self, auth_peeker_controller, do_auth_plain1):
-        resp = do_auth_plain1(b64encode(b"\0goodlogin\0goodpasswd").decode())
+    def test_plain1_good_credentials(
+        self, caplog, auth_peeker_controller, do_auth_plain1
+    ):
+        PW = "goodpasswd"
+        PWb = PW.encode("ascii")
+        resp = do_auth_plain1(b64encode(b"\0goodlogin\0" + PWb).decode())
         assert resp == S.S235_AUTH_SUCCESS
         peeker = auth_peeker_controller.handler
         assert isinstance(peeker, PeekerHandler)
         assert peeker.login == b"goodlogin"
-        assert peeker.password == b"goodpasswd"
+        assert peeker.password == PWb
         # noinspection PyUnresolvedReferences
         resp = do_auth_plain1.client.mail("alice@example.com")
         assert resp == S.S250_OK
+        assert_nopassleak(PW, caplog.record_tuples)
 
     def test_plain1_goodcreds_sanitized_log(self, caplog, client):
         caplog.set_level("DEBUG")
         client.ehlo("example.com")
+        PW = "goodpasswd"
+        PWb = PW.encode("ascii")
         code, response = client.docmd(
-            "AUTH PLAIN " + b64encode(b"\0goodlogin\0goodpasswd").decode()
+            "AUTH PLAIN " + b64encode(b"\0goodlogin\0" + PWb).decode()
         )
         interestings = [tup for tup in caplog.record_tuples if "AUTH PLAIN" in tup[-1]]
         assert len(interestings) == 2
@@ -1082,6 +1115,7 @@ class TestAuthMechanisms(_CommonMethods):
         assert interestings[0][2].endswith("b'AUTH PLAIN ********\\r\\n'")
         assert interestings[1][1] == logging.INFO
         assert interestings[1][2].endswith("b'AUTH PLAIN ********'")
+        assert_nopassleak(PW, caplog.record_tuples)
 
     @pytest.fixture
     def client_auth_plain2(self, client) -> Generator[SMTPClient, None, None]:
@@ -1090,8 +1124,12 @@ class TestAuthMechanisms(_CommonMethods):
         assert resp == S.S334_AUTH_EMPTYPROMPT
         yield client
 
-    def test_plain2_good_credentials(self, auth_peeker_controller, client_auth_plain2):
-        resp = client_auth_plain2.docmd(b64encode(b"\0goodlogin\0goodpasswd").decode())
+    def test_plain2_good_credentials(
+        self, caplog, auth_peeker_controller, client_auth_plain2
+    ):
+        PW = "goodpasswd"
+        PWb = PW.encode("ascii")
+        resp = client_auth_plain2.docmd(b64encode(b"\0goodlogin\0" + PWb).decode())
         assert resp == S.S235_AUTH_SUCCESS
         peeker = auth_peeker_controller.handler
         assert isinstance(peeker, PeekerHandler)
@@ -1099,6 +1137,7 @@ class TestAuthMechanisms(_CommonMethods):
         assert peeker.password == b"goodpasswd"
         resp = client_auth_plain2.mail("alice@example.com")
         assert resp == S.S250_OK
+        assert_nopassleak(PW, caplog.record_tuples)
 
     def test_plain2_bad_credentials(self, client_auth_plain2):
         resp = client_auth_plain2.docmd(b64encode(b"\0badlogin\0badpasswd").decode())
@@ -1121,33 +1160,41 @@ class TestAuthMechanisms(_CommonMethods):
         resp = client.docmd("AUTH LOGIN ab@%")
         assert resp == S.S501_AUTH_NOTB64
 
-    def test_login2_good_credentials(self, auth_peeker_controller, client):
+    def test_login2_good_credentials(self, caplog, auth_peeker_controller, client):
         self._ehlo(client)
+        PW = "goodpasswd"
+        PWb = PW.encode("ascii")
         line = "AUTH LOGIN " + b64encode(b"goodlogin").decode()
         resp = client.docmd(line)
         assert resp == S.S334_AUTH_PASSWORD
         assert resp == S.S334_AUTH_PASSWORD
-        resp = client.docmd(b64encode(b"goodpasswd").decode())
+        resp = client.docmd(b64encode(PWb).decode())
         assert resp == S.S235_AUTH_SUCCESS
         peeker = auth_peeker_controller.handler
         assert isinstance(peeker, PeekerHandler)
         assert peeker.login == b"goodlogin"
-        assert peeker.password == b"goodpasswd"
+        assert peeker.password == PWb
         resp = client.mail("alice@example.com")
         assert resp == S.S250_OK
+        assert_nopassleak(PW, caplog.record_tuples)
 
-    def test_login3_good_credentials(self, auth_peeker_controller, do_auth_login3):
+    def test_login3_good_credentials(
+        self, caplog, auth_peeker_controller, do_auth_login3
+    ):
+        PW = "goodpasswd"
+        PWb = PW.encode("ascii")
         resp = do_auth_login3(b64encode(b"goodlogin").decode())
         assert resp == S.S334_AUTH_PASSWORD
-        resp = do_auth_login3(b64encode(b"goodpasswd").decode())
+        resp = do_auth_login3(b64encode(PWb).decode())
         assert resp == S.S235_AUTH_SUCCESS
         peeker = auth_peeker_controller.handler
         assert isinstance(peeker, PeekerHandler)
         assert peeker.login == b"goodlogin"
-        assert peeker.password == b"goodpasswd"
+        assert peeker.password == PWb
         # noinspection PyUnresolvedReferences
         resp = do_auth_login3.client.mail("alice@example.com")
         assert resp == S.S250_OK
+        assert_nopassleak(PW, caplog.record_tuples)
 
     def test_login3_bad_base64(self, do_auth_login3):
         resp = do_auth_login3("not-b64")
@@ -1198,9 +1245,10 @@ class TestAuthMechanisms(_CommonMethods):
 
 
 class TestAuthenticator(_CommonMethods):
-    def test_success(self, authenticator_peeker_controller, client):
+    def test_success(self, caplog, authenticator_peeker_controller, client):
+        PW = "goodpasswd"
         client.user = "gooduser"
-        client.password = "goodpasswd"
+        client.password = PW
         self._ehlo(client)
         client.auth("plain", client.auth_plain)
         auth_peeker = authenticator_peeker_controller.handler
@@ -1208,12 +1256,14 @@ class TestAuthenticator(_CommonMethods):
         assert auth_peeker.sess.peer[0] in {"::1", "127.0.0.1", "localhost"}
         assert auth_peeker.sess.peer[1] > 0
         assert auth_peeker.sess.authenticated
-        assert auth_peeker.sess.auth_data == (b"gooduser", b"goodpasswd")
-        assert auth_peeker.login_data == (b"gooduser", b"goodpasswd")
+        assert auth_peeker.sess.auth_data == (b"gooduser", PW.encode("ascii"))
+        assert auth_peeker.login_data == (b"gooduser", PW.encode("ascii"))
+        assert_nopassleak(PW, caplog.record_tuples)
 
-    def test_fail_withmesg(self, authenticator_peeker_controller, client):
+    def test_fail_withmesg(self, caplog, authenticator_peeker_controller, client):
+        PW = "anypass"
         client.user = "failme_with454"
-        client.password = "anypass"
+        client.password = PW
         self._ehlo(client)
         with pytest.raises(SMTPAuthenticationError) as cm:
             client.auth("plain", client.auth_plain)
@@ -1223,7 +1273,8 @@ class TestAuthenticator(_CommonMethods):
         assert auth_peeker.sess.peer[0] in {"::1", "127.0.0.1", "localhost"}
         assert auth_peeker.sess.peer[1] > 0
         assert auth_peeker.sess.login_data is None
-        assert auth_peeker.login_data == (b"failme_with454", b"anypass")
+        assert auth_peeker.login_data == (b"failme_with454", PW.encode("ascii"))
+        assert_nopassleak(PW, caplog.record_tuples)
 
 
 @pytest.mark.filterwarnings("ignore:Requiring AUTH while not requiring TLS:UserWarning")
@@ -2000,3 +2051,17 @@ class TestLimits(_CommonMethods):
         assert client.docmd("LASTBOGUS") == S.S502_TOO_MANY_UNRECOG
         with pytest.raises(SMTPServerDisconnected):
             client.noop()
+
+
+class TestSanitize:
+    def test_loginpassword(self):
+        lp = LoginPassword(b"user", b"pass")
+        expect = "LoginPassword(login='b'user'', password=...)"
+        assert repr(lp) == expect
+        assert str(lp) == expect
+
+    def test_authresult(self):
+        ar = AuthResult(success=True, auth_data="user:pass")
+        expect = "AuthResult(success=True, handled=True, message=None, auth_data=...)"
+        assert repr(ar) == expect
+        assert str(ar) == expect
