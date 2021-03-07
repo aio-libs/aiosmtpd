@@ -360,11 +360,18 @@ Controller API
 
 .. py:module:: aiosmtpd.controller
 
+
+.. py:data:: DEFAULT_READY_TIMEOUT
+    :type: float
+    :value: 5.0
+
+
 .. py:function:: get_localhost()
 
    :return: The numeric address of the loopback interface; ``"::1"`` if IPv6 is supported,
       ``"127.0.0.1"`` if IPv6 is not supported.
-   :rtype: str
+   :rtype: Literal["::1", "127.0.0.1"]
+
 
 .. class:: IP6_IS
 
@@ -390,8 +397,10 @@ Controller API
 .. class:: BaseController(\
     handler, \
     loop=None, \
+    *, \
     ssl_context=None, \
     server_hostname=None, \
+    server_kwargs=None, \
     **SMTP_parameters, \
     )
 
@@ -401,17 +410,17 @@ Controller API
     :param handler: Handler object
     :param loop: The asyncio event loop in which the server will run.
         If not given, :func:`asyncio.new_event_loop` will be called to create the event loop.
+    :type loop: asyncio.AbstractEventLoop
     :param ssl_context: SSL Context to wrap the socket in.
         Will be passed-through to  :meth:`~asyncio.loop.create_server` method
     :type ssl_context: ssl.SSLContext
     :param server_hostname: Server's hostname,
         will be passed-through as ``hostname`` parameter of :class:`~aiosmtpd.smtp.SMTP`
     :type server_hostname: Optional[str]
-    :param server_kwargs: (DEPRECATED) A dict that
-        will be passed-through as keyword arguments of :class:`~aiosmtpd.smtp.SMTP`.
-        Explicitly listed keyword arguments going into ``**SMTP_parameters``
-        will take precedence over this parameter
-    :type server_kwargs: Dict[str, Any]
+    :param server_kwargs: *(DEPRECATED)* A dict that will be passed-through as keyword
+        arguments of :class:`~aiosmtpd.smtp.SMTP`.
+        This is DEPRECATED; please use ``**SMTP_parameters`` instead.
+    :type server_kwargs: dict
     :param SMTP_parameters: Optional keyword arguments that
         will be passed-through as keyword arguments of :class:`~aiosmtpd.smtp.SMTP`
 
@@ -432,6 +441,9 @@ Controller API
 
         This is the server instance returned by
         :meth:`_create_server` after the server has started.
+
+        You can retrieve the :class:`~socket.socket` objects the server is listening on
+        from the ``server.sockets`` attribute.
 
     .. py:attribute:: smtpd
         :type: aiosmtpd.smtp.SMTP
@@ -468,9 +480,11 @@ Controller API
     port=8025, \
     loop=None, \
     *, \
-    ready_timeout=3.0, \
+    ready_timeout=DEFAULT_READY_TIMEOUT, \
     ssl_context=None, \
-    server_hostname=None, server_kwargs=None, **SMTP_parameters)
+    server_hostname=None, \
+    server_kwargs=None, \
+    **SMTP_parameters)
 
     A concrete subclass of :class:`BaseController` that provides
     a threaded, INET listener.
@@ -478,7 +492,7 @@ Controller API
     :param hostname: Will be given to the event loop's :meth:`~asyncio.loop.create_server` method
        as the ``host`` parameter, with a slight processing (see below)
     :type hostname: Optional[str]
-    :param port: Will be passed-through to  :meth:`~asyncio.loop.create_server` method
+    :param port: Will be passed-through to :meth:`~asyncio.loop.create_server` method
     :type port: int
     :param ready_timeout: How long to wait until server starts.
         The :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` takes precedence over this parameter.
@@ -528,7 +542,6 @@ Controller API
 
     .. attribute:: hostname: str
                    port: int
-        :noindex:
 
         The values of the *hostname* and *port* arguments.
 
@@ -603,40 +616,40 @@ Controller API
 
 
 .. class:: UnixSocketController(\
-   handler, \
-   unix_socket, \
-   loop=None, \
-   *, \
-   ready_timeout=3.0, \
-   ssl_context=None, \
-   server_hostname=None,\
-   **SMTP_parameters)
+    handler, \
+    unix_socket, \
+    loop=None, \
+    *, \
+    ready_timeout=DEFAULT_READY_TIMEOUT, \
+    ssl_context=None, \
+    server_hostname=None, \
+    **SMTP_parameters)
 
     A concrete subclass of :class:`BaseController` that provides
     a threaded, Unix Socket listener.
 
-   :param unix_socket: Socket file,
-      will be passed-through to :meth:`asyncio.loop.create_unix_server`
-   :type unix_socket: Union[str, pathlib.Path]
+    :param unix_socket: Socket file,
+        will be passed-through to :meth:`asyncio.loop.create_unix_server`
+    :type unix_socket: Union[str, pathlib.Path]
 
-   For the other parameters, see the description under :class:`Controller`
+    For the other parameters, see the description under :class:`Controller`
 
-   |
-   | :part:`Attributes`
+    |
+    | :part:`Attributes`
 
-   .. py:attribute:: unix_socket
-      :type: str
+    .. py:attribute:: unix_socket
+        :type: str
 
-      The stringified version of the ``unix_socket`` parameter
+        The stringified version of the ``unix_socket`` parameter
 
-   Other attributes (except ``hostname`` and ``port``) are identical to :class:`Controller`
-   and thus are not repeated nor explained here.
+    Other attributes (except ``hostname`` and ``port``) are identical to :class:`Controller`
+    and thus are not repeated nor explained here.
 
-   |
-   | :part:`Methods`
+    |
+    | :part:`Methods`
 
-   All methods are identical to :class:`Controller`
-   and thus are not repeated nor explained here.
+    All methods are identical to :class:`Controller`
+    and thus are not repeated nor explained here.
 
 
 .. class:: UnthreadedController(\
@@ -645,9 +658,10 @@ Controller API
     port=8025, \
     loop=None, \
     *, \
-    ready_timeout=1.0, \
     ssl_context=None, \
-    server_hostname=None, server_kwargs=None, **SMTP_parameters)
+    server_hostname=None, \
+    server_kwargs=None, \
+    **SMTP_parameters)
 
     .. versionadded:: 1.5.0
 
@@ -710,9 +724,9 @@ Controller API
     unix_socket, \
     loop=None, \
     *, \
-    ready_timeout=1.0, \
     ssl_context=None, \
     server_hostname=None,\
+    server_kwargs=None, \
     **SMTP_parameters)
 
     .. versionadded:: 1.5.0
