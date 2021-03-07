@@ -472,6 +472,7 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
 @public
 class Controller(InetMixin, BaseThreadedController):
     """Provides a multithreaded controller that listens on an INET endpoint"""
+
     def _trigger_server(self):
         # Prevent confusion on which _trigger_server() to invoke.
         # Or so LGTM.com claimed
@@ -483,6 +484,7 @@ class UnixSocketController(  # pragma: no-unixsock
     UnixSocketMixin, BaseThreadedController
 ):
     """Provides a multithreaded controller that listens on a Unix Socket file"""
+
     def _trigger_server(self):  # pragma: no-unixsock
         # Prevent confusion on which _trigger_server() to invoke.
         # Or so LGTM.com claimed
@@ -492,6 +494,7 @@ class UnixSocketController(  # pragma: no-unixsock
 @public
 class UnthreadedController(InetMixin, BaseUnthreadedController):
     """Provides an unthreaded controller that listens on an INET endpoint"""
+
     pass
 
 
@@ -500,4 +503,5 @@ class UnixSocketUnthreadedController(  # pragma: no-unixsock
     UnixSocketMixin, BaseUnthreadedController
 ):
     """Provides an unthreaded controller that listens on a Unix Socket file"""
+
     pass
