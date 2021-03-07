@@ -38,7 +38,7 @@ from aiosmtpd.smtp import Session as SMTPSession
 from aiosmtpd.tests.conftest import Global, controller_data, handler_data
 
 DEFAULT_AUTOCANCEL = 0.1
-TIMEOUT_MULTIPLIER = 1.5
+TIMEOUT_MULTIPLIER = 2.0
 
 param = pytest.param
 parametrize = pytest.mark.parametrize

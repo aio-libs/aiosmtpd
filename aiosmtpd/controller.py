@@ -266,7 +266,11 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
                 # See comment about WSL1.0 in the _run() method
                 raise self._thread_exception
             else:
-                raise TimeoutError("SMTP server failed to start within allotted time")
+                raise TimeoutError(
+                    "SMTP server failed to start within allotted time. "
+                    "This might happen if the system is too busy. "
+                    "Try increasing the `ready_timeout` parameter."
+                )
         respond_timeout = self.ready_timeout - (time.monotonic() - start)
 
         # Apparently create_server invokes factory() "lazily", so exceptions in
@@ -281,7 +285,11 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
             # Raise other exceptions though
             raise
         if not self._factory_invoked.wait(respond_timeout):
-            raise TimeoutError("SMTP server not responding within allotted time")
+            raise TimeoutError(
+                "SMTP server started, but not responding within allotted time. "
+                "This might happen if the system is too busy. "
+                "Try increasing the `ready_timeout` parameter."
+            )
         if self._thread_exception is not None:
             raise self._thread_exception
 
@@ -308,6 +316,7 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         handler: Any,
         loop: asyncio.AbstractEventLoop = None,
         *,
+        ready_timeout: float = DEFAULT_READY_TIMEOUT,
         ssl_context: Optional[ssl.SSLContext] = None,
         # SMTP parameters
         server_hostname: Optional[str] = None,

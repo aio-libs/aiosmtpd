@@ -168,7 +168,11 @@ class TestController:
     @pytest.mark.filterwarnings("ignore")
     def test_ready_timeout(self):
         cont = SlowStartController(Sink())
-        expectre = r"SMTP server failed to start within allotted time"
+        expectre = (
+            "SMTP server failed to start within allotted time. "
+            "This might happen if the system is too busy. "
+            "Try increasing the `ready_timeout` parameter."
+        )
         try:
             with pytest.raises(TimeoutError, match=expectre):
                 cont.start()
@@ -178,7 +182,11 @@ class TestController:
     @pytest.mark.filterwarnings("ignore")
     def test_factory_timeout(self):
         cont = SlowFactoryController(Sink())
-        expectre = r"SMTP server not responding within allotted time"
+        expectre = (
+            r"SMTP server started, but not responding within allotted time. "
+            r"This might happen if the system is too busy. "
+            r"Try increasing the `ready_timeout` parameter."
+        )
         try:
             with pytest.raises(TimeoutError, match=expectre):
                 cont.start()
