@@ -322,7 +322,6 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         handler: Any,
         loop: asyncio.AbstractEventLoop = None,
         *,
-        ready_timeout: float = DEFAULT_READY_TIMEOUT,
         ssl_context: Optional[ssl.SSLContext] = None,
         # SMTP parameters
         server_hostname: Optional[str] = None,
