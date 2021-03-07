@@ -5,6 +5,7 @@ import asyncio
 import errno
 import os
 import ssl
+import sys
 import threading
 import time
 from abc import ABCMeta, abstractmethod
@@ -19,6 +20,11 @@ try:
 except ImportError:  # pragma: on-not-win32
     AF_UNIX = None
 from typing import Any, Coroutine, Dict, Optional, Union
+
+if sys.version_info >= (3, 8):
+    from typing import Literal  # pragma: py-lt-38
+else:  # pragma: py-ge-38
+    from typing_extensions import Literal
 from warnings import warn
 
 from public import public
@@ -44,7 +50,7 @@ def _has_ipv6() -> bool:
 
 
 @public
-def get_localhost() -> str:
+def get_localhost() -> Literal["::1", "127.0.0.1"]:
     """Returns numeric address to localhost depending on IPv6 availability"""
     # Ref:
     #  - https://github.com/urllib3/urllib3/pull/611#issuecomment-100954017

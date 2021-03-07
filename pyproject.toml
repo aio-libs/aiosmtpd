@@ -36,6 +36,7 @@ source = [
 [tool.coverage.coverage_conditional_plugin.rules]
 # Here we specify our pragma rules:
 py-ge-38 = "sys_version_info >= (3, 8)"
+py-lt-38 = "sys_version_info < (3, 8)"
 py-gt-36 = "sys_version_info > (3, 6)"
 has-mypy = "is_installed('mypy')"
 has-pwd = "is_installed('pwd')"
