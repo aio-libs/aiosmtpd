@@ -61,10 +61,19 @@ Starting version 1.3.1,
 files provided through PyPI or `GitHub Releases`_
 will be signed using one of the following GPG Keys:
 
-+-------------------------+----------------+------------------------------+
-| GPG Key ID              | Owner          | Email                        |
-+=========================+================+==============================+
-| ``5D60 CE28 9CD7 C258`` | Pandu E POLUAN | pepoluan at gmail period com |
-+-------------------------+----------------+------------------------------+
-
 .. _`GitHub Releases`: https://github.com/aio-libs/aiosmtpd/releases
+
+.. .. In the second column of the table, prefix each line with "| "
+   .. In the third column, refrain from putting in a direct link to keep the table tidy.
+      Rather, use the |...|_ construct and do the replacement+linking directive below the table
+
++-------------------------+--------------------------------+-----------+
+| GPG Key ID              | Owner / Email                  | Key       |
++=========================+================================+===========+
+| ``5D60 CE28 9CD7 C258`` | | Pandu POLUAN /               | |pep_gh|_ |
+|                         | | pepoluan at gmail period com |           |
++-------------------------+--------------------------------+-----------+
+
+.. .. The |_| contruct is U+00A0 (non-breaking space), defined at the start of the file
+.. |pep_gh| replace:: On |_| GitHub
+.. _`pep_gh`: https://github.com/pepoluan.gpg
