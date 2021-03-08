@@ -13,19 +13,21 @@ class StatusCode(NamedTuple):
         nmsg = self.mesg % args
         return StatusCode(self.code, nmsg)
 
-    def to_bytes(self) -> bytes:
+    def to_bytes(self, crlf: bool = False) -> bytes:
         """
         Returns code + mesg as bytes.
         WARNING: This is NOT identical to __str()__.encode()!
         """
-        return str(self.code).encode() + b" " + self.mesg
+        _crlf = b"\r\n" if crlf else b""
+        return str(self.code).encode() + b" " + self.mesg + _crlf
 
-    def to_str(self) -> str:
+    def to_str(self, crlf: bool = False) -> str:
         """
         Returns code + mesg as a string.
         WARNING: This is NOT identical to __str__()!
         """
-        return str(self.code) + " " + self.mesg.decode()
+        _crlf = "\r\n" if crlf else ""
+        return str(self.code) + " " + self.mesg.decode() + _crlf
 
 
 _COMMON_COMMANDS = [
