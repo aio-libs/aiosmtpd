@@ -3,7 +3,6 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
-# addopts = """--doctest-glob="*.rst" --strict-markers -rfEX"""
 addopts = """--strict-markers -rfEX"""
 markers = [
     "client_data",
@@ -37,6 +36,7 @@ source = [
 [tool.coverage.coverage_conditional_plugin.rules]
 # Here we specify our pragma rules:
 py-ge-38 = "sys_version_info >= (3, 8)"
+py-lt-38 = "sys_version_info < (3, 8)"
 py-gt-36 = "sys_version_info > (3, 6)"
 has-mypy = "is_installed('mypy')"
 has-pwd = "is_installed('pwd')"
@@ -47,10 +47,14 @@ on-wsl = "'Microsoft' in platform_release"
     # As of 2021-02-07, only WSL has a kernel with "Microsoft" in the version.
 on-not-win32 = "sys_platform != 'win32'"
 on-cygwin = "sys_platform == 'cygwin'"
+no-unixsock = "sys_platform in {'win32', 'cygwin'}"
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: nocover",
+    "pragma: no cover",
+    "@abstract",
+    'class \S+\(Protocol\):'
 ]
 fail_under = 100
 show_missing = true

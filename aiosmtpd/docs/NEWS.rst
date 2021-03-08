@@ -3,6 +3,18 @@
 ###################
 
 
+1.5.0 (aiosmtpd-next-next)
+==========================
+
+Added
+-----
+* Unthreaded Controllers (Closes #160)
+
+Fixed/Improved
+--------------
+* All Controllers now have more rationale design, as they are now composited from a Base + a Mixin
+
+
 1.4.2 (2021-03-08)
 =====================
 

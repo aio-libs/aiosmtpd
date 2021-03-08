@@ -99,7 +99,8 @@ Server hooks
 The ``SMTP`` server class also implements some hooks which your subclass can
 override to provide additional responses.
 
-``ehlo_hook()``
+.. py:function:: ehlo_hook()
+
     This hook makes it possible for subclasses to return additional ``EHLO``
     responses.  This method, called *asynchronously* and taking no arguments,
     can do whatever it wants, including (most commonly) pushing new
@@ -107,11 +108,16 @@ override to provide additional responses.
     before the standard ``250 HELP`` which ends the ``EHLO`` response from the
     server.
 
-``rset_hook()``
+    .. deprecated:: 1.2
+
+.. py:function:: rset_hook()
+
     This hook makes it possible to return additional ``RSET`` responses.  This
     method, called *asynchronously* and taking no arguments, is called just
     before the standard ``250 OK`` which ends the ``RSET`` response from the
     server.
+
+    .. deprecated:: 1.2
 
 
 .. _smtp_api:

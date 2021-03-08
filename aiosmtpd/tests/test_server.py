@@ -3,16 +3,18 @@
 
 """Test other aspects of the server implementation."""
 
+import asyncio
 import errno
 import platform
 import socket
-import ssl
 import time
 from contextlib import ExitStack
 from functools import partial
 from pathlib import Path
+from smtplib import SMTP as SMTPClient, SMTPServerDisconnected
 from tempfile import mkdtemp
-from typing import Generator
+from threading import Thread
+from typing import Generator, Optional
 
 import pytest
 from pytest_mock import MockFixture
@@ -20,13 +22,17 @@ from pytest_mock import MockFixture
 from aiosmtpd.controller import (
     Controller,
     UnixSocketController,
+    UnthreadedController,
+    UnixSocketMixin,
+    UnixSocketUnthreadedController,
     _FakeServer,
     get_localhost,
 )
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
+from aiosmtpd.testing.helpers import catchup_delay
 
-from .conftest import Global
+from .conftest import Global, AUTOSTOP_DELAY
 
 
 class SlowStartController(Controller):
@@ -89,6 +95,45 @@ def safe_socket_dir() -> Generator[Path, None, None]:
         else:
             p.unlink()
     tmpdir.rmdir()
+
+
+def assert_smtp_socket(controller: UnixSocketMixin):
+    assert Path(controller.unix_socket).exists()
+    sockfile = controller.unix_socket
+    ssl_context = controller.ssl_context
+    with ExitStack() as stk:
+        sock: socket.socket = stk.enter_context(
+            socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        )
+        sock.settimeout(AUTOSTOP_DELAY)
+        sock.connect(str(sockfile))
+        if ssl_context:
+            sock = stk.enter_context(ssl_context.wrap_socket(sock))
+        catchup_delay()
+        try:
+            resp = sock.recv(1024)
+        except socket.timeout:
+            return False
+        if not resp:
+            return False
+        assert resp.startswith(b"220 ")
+        assert resp.endswith(b"\r\n")
+        sock.send(b"EHLO socket.test\r\n")
+        # We need to "build" resparr because, especially when socket is wrapped
+        # in SSL, the SMTP server takes it sweet time responding with the list
+        # of ESMTP features ...
+        resparr = bytearray()
+        while not resparr.endswith(b"250 HELP\r\n"):
+            catchup_delay()
+            resp = sock.recv(1024)
+            if not resp:
+                break
+            resparr += resp
+        assert resparr.endswith(b"250 HELP\r\n")
+        sock.send(b"QUIT\r\n")
+        catchup_delay()
+        resp = sock.recv(1024)
+        assert resp.startswith(b"221")
 
 
 class TestServer:
@@ -272,10 +317,7 @@ class TestController:
 
     # Apparently errno.E* constants adapts to the OS, so on Windows they will
     # automatically use the analogous WSAE* constants
-    @pytest.mark.parametrize(
-        "err",
-        [errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT]
-    )
+    @pytest.mark.parametrize("err", [errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT])
     def test_getlocalhost_6no(self, mocker, err):
         mock_makesock: mocker.Mock = mocker.patch(
             "aiosmtpd.controller.makesock",
@@ -320,63 +362,168 @@ class TestController:
 @pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
 @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
 class TestUnixSocketController:
-    sockfile: Path = None
-
-    def _assert_good_server(self, ssl_context: ssl.SSLContext = None):
-        # Note: all those time.sleep()s are necessary
-        # Remember that we're running in "Threaded" mode, and there's the GIL...
-        # The time.sleep()s lets go of the GIL allowing the asyncio loop to move
-        # forward
-        assert self.sockfile.exists()
-        with ExitStack() as stk:
-            sock: socket.socket = stk.enter_context(
-                socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            )
-            sock.connect(str(self.sockfile))
-            if ssl_context:
-                sock = stk.enter_context(ssl_context.wrap_socket(sock))
-                time.sleep(0.1)
-            resp = sock.recv(1024)
-            assert resp.startswith(b"220 ")
-            assert resp.endswith(b"\r\n")
-            sock.send(b"EHLO socket.test\r\n")
-            # We need to "build" resparr because, especially when socket is wrapped
-            # in SSL, the SMTP server takes it sweet time responding with the list
-            # of ESMTP features ...
-            resparr = bytearray()
-            while not resparr.endswith(b"250 HELP\r\n"):
-                time.sleep(0.1)
-                resp = sock.recv(1024)
-                if not resp:
-                    break
-                resparr += resp
-            assert resparr.endswith(b"250 HELP\r\n")
-            sock.send(b"QUIT\r\n")
-            time.sleep(0.1)
-            resp = sock.recv(1024)
-            assert resp.startswith(b"221")
-
     def test_server_creation(self, safe_socket_dir):
-        self.sockfile = safe_socket_dir / "smtp"
-        cont = UnixSocketController(Sink(), unix_socket=self.sockfile)
+        sockfile = safe_socket_dir / "smtp"
+        cont = UnixSocketController(Sink(), unix_socket=sockfile)
         try:
             cont.start()
-            self._assert_good_server()
+            assert_smtp_socket(cont)
         finally:
             cont.stop()
 
     def test_server_creation_ssl(self, safe_socket_dir, ssl_context_server):
-        self.sockfile = safe_socket_dir / "smtp"
+        sockfile = safe_socket_dir / "smtp"
         cont = UnixSocketController(
-            Sink(), unix_socket=self.sockfile, ssl_context=ssl_context_server
+            Sink(), unix_socket=sockfile, ssl_context=ssl_context_server
         )
         try:
             cont.start()
             # Allow additional time for SSL to kick in
-            time.sleep(0.1)
-            self._assert_good_server(ssl_context_server)
+            catchup_delay()
+            assert_smtp_socket(cont)
         finally:
             cont.stop()
+
+
+class TestUnthreaded:
+    @pytest.fixture
+    def runner(self):
+        thread: Optional[Thread] = None
+
+        def _runner(loop: asyncio.AbstractEventLoop):
+            loop.run_forever()
+
+        def starter(loop: asyncio.AbstractEventLoop):
+            nonlocal thread
+            thread = Thread(target=_runner, args=(loop,))
+            thread.setDaemon(True)
+            thread.start()
+            catchup_delay()
+
+        def joiner(timeout: float = None):
+            nonlocal thread
+            assert isinstance(thread, Thread)
+            thread.join(timeout=timeout)
+
+        def is_alive():
+            nonlocal thread
+            assert isinstance(thread, Thread)
+            return thread.is_alive()
+
+        starter.join = joiner
+        starter.is_alive = is_alive
+        return starter
+
+    @pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
+    @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
+    def test_unixsocket(self, safe_socket_dir, autostop_loop, runner):
+        sockfile = safe_socket_dir / "smtp"
+        cont = UnixSocketUnthreadedController(
+            Sink(), unix_socket=sockfile, loop=autostop_loop
+        )
+        cont.begin()
+        # Make sure event loop is not running (will be started in thread)
+        assert autostop_loop.is_running() is False
+        runner(autostop_loop)
+        # Make sure event loop is up and running (started within thread)
+        assert autostop_loop.is_running() is True
+        # Check we can connect
+        assert_smtp_socket(cont)
+        # Wait until thread ends, which it will be when the loop autostops
+        runner.join(timeout=AUTOSTOP_DELAY)
+        assert runner.is_alive() is False
+        catchup_delay()
+        assert autostop_loop.is_running() is False
+        # At this point, the loop _has_ stopped, but the task is still listening
+        assert assert_smtp_socket(cont) is False
+        # Stop the task
+        cont.end()
+        catchup_delay()
+        # Now the listener has gone away
+        # noinspection PyTypeChecker
+        with pytest.raises((socket.timeout, ConnectionError)):
+            assert_smtp_socket(cont)
+
+    @pytest.mark.filterwarnings(
+        "ignore::pytest.PytestUnraisableExceptionWarning"
+    )
+    def test_inet_loopstop(self, autostop_loop, runner):
+        """
+        Verify behavior when the loop is stopped before controller is stopped
+        """
+        autostop_loop.set_debug(True)
+        cont = UnthreadedController(Sink(), loop=autostop_loop)
+        cont.begin()
+        # Make sure event loop is not running (will be started in thread)
+        assert autostop_loop.is_running() is False
+        runner(autostop_loop)
+        # Make sure event loop is up and running (started within thread)
+        assert autostop_loop.is_running() is True
+        # Check we can connect
+        with SMTPClient(cont.hostname, cont.port, timeout=AUTOSTOP_DELAY) as client:
+            code, _ = client.helo("example.org")
+            assert code == 250
+        # Wait until thread ends, which it will be when the loop autostops
+        runner.join(timeout=AUTOSTOP_DELAY)
+        assert runner.is_alive() is False
+        catchup_delay()
+        assert autostop_loop.is_running() is False
+        # At this point, the loop _has_ stopped, but the task is still listening,
+        # so rather than socket.timeout, we'll get a refusal instead, thus causing
+        # SMTPServerDisconnected
+        with pytest.raises(SMTPServerDisconnected):
+            SMTPClient(cont.hostname, cont.port, timeout=0.1)
+        cont.end()
+        catchup_delay()
+        cont.ended.wait()
+        # Now the listener has gone away, and thus we will end up with socket.timeout
+        # or ConnectionError (depending on OS)
+        # noinspection PyTypeChecker
+        with pytest.raises((socket.timeout, ConnectionError)):
+            SMTPClient(cont.hostname, cont.port, timeout=0.1)
+
+    @pytest.mark.filterwarnings(
+        "ignore::pytest.PytestUnraisableExceptionWarning"
+    )
+    def test_inet_contstop(self, temp_event_loop, runner):
+        """
+        Verify behavior when the controller is stopped before loop is stopped
+        """
+        cont = UnthreadedController(Sink(), loop=temp_event_loop)
+        cont.begin()
+        # Make sure event loop is not running (will be started in thread)
+        assert temp_event_loop.is_running() is False
+        runner(temp_event_loop)
+        # Make sure event loop is up and running
+        assert temp_event_loop.is_running() is True
+        try:
+            # Check that we can connect
+            with SMTPClient(cont.hostname, cont.port, timeout=AUTOSTOP_DELAY) as client:
+                code, _ = client.helo("example.org")
+                assert code == 250
+                client.quit()
+            catchup_delay()
+            temp_event_loop.call_soon_threadsafe(cont.end)
+            for _ in range(10):  # 10 is arbitrary
+                catchup_delay()  # effectively yield to other threads/event loop
+                if cont.ended.wait(1.0):
+                    break
+            assert temp_event_loop.is_running() is True
+            # Because we've called .end() there, the server listener should've gone
+            # away, so we should end up with a socket.timeout or ConnectionError or
+            # SMTPServerDisconnected (depending on lotsa factors)
+            expect_errs = (socket.timeout, ConnectionError, SMTPServerDisconnected)
+            # noinspection PyTypeChecker
+            with pytest.raises(expect_errs):
+                SMTPClient(cont.hostname, cont.port, timeout=0.1)
+        finally:
+            # Wrap up, or else we'll hang
+            temp_event_loop.call_soon_threadsafe(cont.cancel_tasks)
+            catchup_delay()
+            runner.join()
+        assert runner.is_alive() is False
+        assert temp_event_loop.is_running() is False
+        assert temp_event_loop.is_closed() is False
 
 
 class TestFactory:
@@ -384,6 +531,7 @@ class TestFactory:
         cont = Controller(Sink())
         try:
             cont.start()
+            catchup_delay()
             assert cont.smtpd is not None
             assert cont._thread_exception is None
         finally:

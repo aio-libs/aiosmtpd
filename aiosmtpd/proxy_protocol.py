@@ -99,7 +99,7 @@ class UnknownTypeTLV(KeyError):
 
 
 @public
-class AsyncReader(Protocol):  # pragma: nocover
+class AsyncReader(Protocol):
     async def read(self, num_bytes: Optional[int] = None) -> bytes:
         ...
         return b""

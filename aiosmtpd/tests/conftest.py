@@ -29,6 +29,7 @@ __all__ = [
     "controller_data",
     "handler_data",
     "Global",
+    "AUTOSTOP_DELAY",
     "SERVER_CRT",
     "SERVER_KEY",
 ]
@@ -64,6 +65,9 @@ class Global:
         cls.SrvAddr = HostPort(contr.hostname, contr.port)
 
 
+# If less than 1.0, might cause intermittent error if test system
+# is too busy/overloaded.
+AUTOSTOP_DELAY = 1.0
 SERVER_CRT = resource_filename("aiosmtpd.tests.certs", "server.crt")
 SERVER_KEY = resource_filename("aiosmtpd.tests.certs", "server.key")
 
@@ -202,6 +206,17 @@ def temp_event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
     #
     new_loop.close()
     asyncio.set_event_loop(default_loop)
+
+
+@pytest.fixture
+def autostop_loop(temp_event_loop) -> Generator[asyncio.AbstractEventLoop, None, None]:
+    # Create a new event loop, and arrange for that loop to end almost
+    # immediately.  This will allow the calls to main() in these tests to
+    # also exit almost immediately.  Otherwise, the foreground test
+    # process will hang.
+    temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
+    #
+    yield temp_event_loop
 
 
 @pytest.fixture
