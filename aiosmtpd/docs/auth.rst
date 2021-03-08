@@ -195,6 +195,17 @@ AuthResult API
       where legacy handlers might be looking for ``session.login_data`` for some reasons.
 
 
+Security Considerations
+=======================
+
+We have taken steps to prevent leakage of sensitive information (i.e., password) through logging
+by overriding the ``__repr__`` and ``__str__`` methods of the :class:`AuthResult` and
+:class:`LoginPassword` classes.
+
+However, we have no control on the (logging) output of your custom hooks.
+Please be very careful emitting/recording AUTH information to prevent leakage.
+
+
 Example
 =======
 

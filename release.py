@@ -139,4 +139,4 @@ else:
     # The annotation information should come from the changelog
     subprocess.run(["git", "tag", "-a", version])
     # And now push the tag, of course.
-    subprocess.run(["git", "push", UPSTREAM_REMOTE, "--tags"])
+    subprocess.run(["git", "push", "--atomic", UPSTREAM_REMOTE, "master", version])
