@@ -1032,7 +1032,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         CODE_INVALID = "535 5.7.8 Authentication credentials invalid"
         status = await self._call_handler_hook('AUTH', args)
         if status is MISSING:
-            auth_method = self._auth_methods[mechanism]
+            auth_method = self.methods_auth[mechanism]
             log.debug(
                 "Using %s auth_ hook for %r",
                 "builtin" if auth_method.is_builtin else "handler",
