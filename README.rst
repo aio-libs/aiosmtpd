@@ -2,14 +2,22 @@
  aiosmtpd - An asyncio based SMTP server
 =========================================
 
-| |github license| |PyPI| |PyPI Python|
-| |GA badge| |codecov| |LGTM.com| |readthedocs|
+| |github license| |_| |PyPI Version| |_| |PyPI Python|
+| |GA badge| |_| |codecov| |_| |LGTM.com| |_| |readthedocs|
 |
 | |Discourse|
 
-.. |github license| image:: https://img.shields.io/github/license/aio-libs/aiosmtpd
+.. |_| unicode:: 0xA0
+   :trim:
+.. |github license| image:: https://img.shields.io/github/license/aio-libs/aiosmtpd?logo=Open+Source+Initiative&logoColor=0F0
    :target: https://github.com/aio-libs/aiosmtpd/blob/master/LICENSE
    :alt: Project License on GitHub
+.. |PyPI Version| image:: https://img.shields.io/pypi/v/aiosmtpd?logo=pypi&logoColor=yellow
+   :target: https://pypi.org/project/aiosmtpd/
+   :alt: PyPI Package
+.. |PyPI Python| image:: https://img.shields.io/pypi/pyversions/aiosmtpd?logo=python&logoColor=yellow
+   :target: https://pypi.org/project/aiosmtpd/
+   :alt: Supported Python Versions
 .. .. For |GA badge|, don't forget to check actual workflow name in unit-testing-and-coverage.yml
 .. |GA badge| image:: https://github.com/aio-libs/aiosmtpd/workflows/aiosmtpd%20CI/badge.svg
    :target: https://github.com/aio-libs/aiosmtpd/actions
@@ -20,15 +28,9 @@
 .. |LGTM.com| image:: https://img.shields.io/lgtm/grade/python/github/aio-libs/aiosmtpd.svg?logo=lgtm&logoWidth=18
    :target: https://lgtm.com/projects/g/aio-libs/aiosmtpd/context:python
    :alt: Semmle/LGTM.com quality
-.. |readthedocs| image:: https://readthedocs.org/projects/aiosmtpd/badge/?version=latest
-   :target: https://aiosmtpd.readthedocs.io/en/latest/?badge=latest
+.. |readthedocs| image:: https://img.shields.io/readthedocs/aiosmtpd?logo=Read+the+Docs&logoColor=white
+   :target: https://aiosmtpd.readthedocs.io/en/latest/
    :alt: Documentation Status
-.. |PyPI| image:: https://badge.fury.io/py/aiosmtpd.svg
-   :target: https://badge.fury.io/py/aiosmtpd
-   :alt: PyPI Package
-.. |PyPI Python| image:: https://img.shields.io/pypi/pyversions/aiosmtpd.svg
-   :target: https://pypi.org/project/aiosmtpd/
-   :alt: Supported Python Versions
 .. .. If you edit the above badges, don't forget to edit setup.cfg
 .. .. The |Discourse| badge MUST NOT be included in setup.cfg
 .. |Discourse| image:: https://img.shields.io/discourse/status?server=https%3A%2F%2Faio-libs.discourse.group%2F&style=social
