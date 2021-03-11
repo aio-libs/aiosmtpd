@@ -266,8 +266,12 @@ class BaseController(metaclass=ABCMeta):
         """Reset internal variables to prevent contamination"""
         self._thread_exception = None
         self._factory_invoked.clear()
+        if self.server:
+            self.server.close()
+            self.server = None
+        if self.server_coro:
+            self.server_coro.close()
         self.server_coro = None
-        self.server = None
         self.smtpd = None
 
     def cancel_tasks(self, stop_loop: bool = True):
@@ -356,8 +360,11 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         # We reach this point when loop is ended (by external code)
         # Perform some stoppages to ensure endpoint no longer bound.
         self.server.close()
-        self.loop.run_until_complete(self.server.wait_closed())
-        self.loop.close()
+        self.server_coro.close()
+        if not self.loop.is_closed():  # pragma: nobranch
+            self.loop.run_until_complete(self.server.wait_closed())
+            time.sleep(0.1)
+            self.loop.close()
         self.server = None
 
     def start(self, thread_name: Optional[str] = None):
@@ -431,6 +438,8 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         assert no_assert or self._thread is not None, "SMTP daemon not running"
         log.info("Stopping")
         self.loop.call_soon_threadsafe(self.cancel_tasks)
+        if not self.loop.is_running():
+            self.loop.close()
         if self._thread is not None:
             log.debug("Waiting to join thread...")
             self._thread.join()

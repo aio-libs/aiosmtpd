@@ -564,6 +564,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._original_transport.close()
         super().connection_lost(error)
         self._handler_coroutine.cancel()
+        if self.transport:  # pragma: nobranch
+            self.transport.close()
         self.transport = None
 
     def eof_received(self):
