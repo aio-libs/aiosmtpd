@@ -3,16 +3,18 @@
 ###################
 
 
-1.5.0 (aiosmtpd-next-next)
-==========================
+1.5.0 (aiosmtpd-next)
+=====================
 
 Added
 -----
 * Unthreaded Controllers (Closes #160)
+* A whole lotta instrumentation (logging)
 
 Fixed/Improved
 --------------
 * All Controllers now have more rationale design, as they are now composited from a Base + a Mixin
+* SMTP logging uses LoggingAdapter feature to reduce complexity
 
 
 1.4.2 (2021-03-08)

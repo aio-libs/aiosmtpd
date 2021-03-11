@@ -92,11 +92,13 @@ def deldir(targ: Path, verbose: bool = True):
 
 
 def dump_env():
+    env = dict(os.environ)
+    env["PYTHON_EXE"] = str(sys.executable)
     dumpdir = Path(DUMP_DIR)
     dumpdir.mkdir(exist_ok=True)
     with (dumpdir / f"ENV.{TOX_ENV_NAME}.py").open("wt") as fout:
         print("ENV = \\", file=fout)
-        pprint.pprint(dict(os.environ), stream=fout)
+        pprint.pprint(env, stream=fout)
 
 
 def move_prof(verbose: bool = False):

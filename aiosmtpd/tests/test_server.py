@@ -21,6 +21,7 @@ from pytest_mock import MockFixture
 
 from aiosmtpd.controller import (
     Controller,
+    ExceptionAccumulator,
     UnixSocketController,
     UnthreadedController,
     UnixSocketMixin,
@@ -358,6 +359,13 @@ class TestController:
         controller = Controller(Sink())
         controller.stop(no_assert=True)
 
+    def test_start_already(self):
+        cont = Controller(Sink())
+        cont._thread = True  # Anything not None
+        with pytest.raises(RuntimeError, match="SMTP daemon already running"):
+            cont.start()
+        del cont
+
 
 @pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
 @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
@@ -444,9 +452,7 @@ class TestUnthreaded:
         with pytest.raises((socket.timeout, ConnectionError)):
             assert_smtp_socket(cont)
 
-    @pytest.mark.filterwarnings(
-        "ignore::pytest.PytestUnraisableExceptionWarning"
-    )
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_inet_loopstop(self, autostop_loop, runner):
         """
         Verify behavior when the loop is stopped before controller is stopped
@@ -482,9 +488,7 @@ class TestUnthreaded:
         with pytest.raises((socket.timeout, ConnectionError)):
             SMTPClient(cont.hostname, cont.port, timeout=0.1)
 
-    @pytest.mark.filterwarnings(
-        "ignore::pytest.PytestUnraisableExceptionWarning"
-    )
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_inet_contstop(self, temp_event_loop, runner):
         """
         Verify behavior when the controller is stopped before loop is stopped
@@ -612,3 +616,41 @@ class TestCompat:
         from aiosmtpd.smtp import __version__ as smtp_version
 
         assert smtp_version is init_version
+
+
+class TestAccumulator:
+    def test_resize(self):
+        ea = ExceptionAccumulator(with_log=False, maxlen=5)
+        assert ea.max_items == 5
+        for i in range(5):
+            ea(None, {"message": i})
+        assert len(ea.accumulator) == 5
+        ea.max_items = 3
+        assert ea.max_items == 3
+        assert len(ea.accumulator) == 3
+
+    def test_samesize(self):
+        SIZE = 5
+        ea = ExceptionAccumulator(with_log=False, maxlen=SIZE)
+        accu1 = ea.accumulator
+        ea.max_items = SIZE
+        assert ea.accumulator is accu1
+
+    def test_peaked_and_cleared(self):
+        SIZE = 5
+        ea = ExceptionAccumulator(with_log=False, maxlen=SIZE)
+        for i in range(SIZE * 2):
+            ea(None, {"message": i})
+        assert len(ea.accumulator) == SIZE
+        assert ea.peaked
+        ea.clear()
+        assert len(ea.accumulator) == 0
+        assert not ea.peaked
+
+    @pytest.mark.parametrize("size", [-1, 0, 1.5, None, "a", [], ()])
+    def test_invalidsize(self, size):
+        ea = ExceptionAccumulator(with_log=False)
+        defsize = ea.max_items
+        with pytest.raises(ValueError, match="maxlen must be an int > 0"):
+            ea.max_items = size
+        assert ea.max_items == defsize

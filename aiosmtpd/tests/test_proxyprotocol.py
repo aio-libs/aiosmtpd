@@ -117,6 +117,7 @@ def setup_proxy_protocol(mocker: MockFixture, temp_event_loop):
     proxy_timeout = 1.0
     responses = []
     transport = mocker.Mock()
+    transport.get_extra_info.return_value = "<Mocked>"
     transport.write = responses.append
     handler = ProxyPeekerHandler()
     loop = temp_event_loop
