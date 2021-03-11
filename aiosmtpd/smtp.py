@@ -56,6 +56,8 @@ log_peer = PeerPrefixAdapter(log, {})
 # region #### Custom Data Types #######################################################
 
 class _Missing:
+    __slots__ = ()
+
     def __repr__(self):
         return "MISSING"
 
@@ -120,7 +122,7 @@ CLIENT_AUTH_B = re.compile(
 # endregion
 
 
-@attr.s
+@attr.s(slots=True)
 class AuthResult:
     """
     Contains the result of authentication, to be returned to the smtp_AUTH method.
@@ -762,17 +764,18 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # Received a valid command, reset the timer.
                 self._reset_timeout()
                 await method(arg)
+                await asyncio.sleep(0)
             except asyncio.CancelledError:
                 # The connection got reset during the DATA command.
                 # XXX If handler method raises ConnectionResetError, we should
                 # verify that it was actually self._reader that was reset.
                 log_peer.info("Connection lost during _handle_client()")
                 self._writer.close()
-                raise
+                break
             except ConnectionResetError:
                 log_peer.info("Connection lost during _handle_client()")
                 self._writer.close()
-                raise
+                break
             except Exception as error:
                 status = None
                 try:
