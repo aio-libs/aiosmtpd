@@ -36,3 +36,4 @@ diffcov-*.html
 prof/
 .pytype/
 ~temp*
+aiosmtpd_test.log
