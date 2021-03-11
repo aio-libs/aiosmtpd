@@ -13,9 +13,14 @@ from abc import ABCMeta, abstractmethod
 from collections import deque
 from contextlib import ExitStack
 from pathlib import Path
-from socket import AF_INET6, SOCK_STREAM, create_connection, has_ipv6
-from socket import socket as makesock
-from socket import timeout as socket_timeout
+from socket import (
+    AF_INET6,
+    SOCK_STREAM,
+    create_connection,
+    has_ipv6,
+    socket as makesock,
+    timeout as socket_timeout,
+)
 
 try:
     from socket import AF_UNIX
@@ -37,6 +42,7 @@ if sys.version_info >= (3, 8):
     from typing import Literal  # pragma: py-lt-38
 else:  # pragma: py-ge-38
     from typing_extensions import Literal
+
 from warnings import warn
 
 from public import public
@@ -112,6 +118,7 @@ class _FakeServer(asyncio.StreamReaderProtocol):
     Returned by _factory_invoker() in lieu of an SMTP instance in case
     factory() failed to instantiate an SMTP instance.
     """
+    __slots__ = ()  # 'Finalize' this class
 
     def __init__(self, loop):
         # Imitate what SMTP does
@@ -121,7 +128,9 @@ class _FakeServer(asyncio.StreamReaderProtocol):
             loop=loop,
         )
 
-    def _client_connected_cb(self, reader, writer):
+    def _client_connected_cb(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
         pass
 
 
