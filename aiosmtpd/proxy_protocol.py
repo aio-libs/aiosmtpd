@@ -536,9 +536,9 @@ async def get_proxy(reader_func: AsyncReader) -> ProxyData:
     :param reader_func: Async function that implements the AsyncReader protocol.
     :return: Proxy Data
     """
-    log.debug("Waiting for PROXY signature")
-    signature = await reader_func.readexactly(5)
     try:
+        log.debug("Waiting for PROXY signature")
+        signature = await reader_func.readexactly(5)
         if signature == b"PROXY":
             log.debug("PROXY version 1")
             return await _get_v1(reader_func, signature)
@@ -548,4 +548,4 @@ async def get_proxy(reader_func: AsyncReader) -> ProxyData:
         else:
             return ProxyData(version=None).with_error("PROXY unrecognized signature")
     except Exception as e:
-        return ProxyData(version=None).with_error(f"PROXY exception: {str(e)}", False)
+        return ProxyData(version=None).with_error(f"PROXY exception: {e}", False)
