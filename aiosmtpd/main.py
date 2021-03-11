@@ -215,10 +215,19 @@ def parseargs(args=None):
 
 @public
 def main(args=None):
+    logging.basicConfig(level=logging.ERROR)
+    log = logging.getLogger("mail.log")
+
     parser, args = parseargs(args=args)
+    if args.debug > 0:
+        log.setLevel(logging.INFO)
+    if args.debug > 1:
+        log.setLevel(logging.DEBUG)
+    log.info(f"Started with args = {args}")
 
     if args.setuid:  # pragma: on-win32
         if pwd is None:
+            log.critical("Cannot import pwd")
             print(
                 'Cannot import module "pwd"; try running with -n option.',
                 file=sys.stderr,
@@ -228,6 +237,7 @@ def main(args=None):
         try:
             os.setuid(nobody)
         except PermissionError:
+            log.critical("Cannot setuid 'nobody'")
             print(
                 'Cannot setuid "nobody"; try running with -n option.', file=sys.stderr
             )
@@ -237,6 +247,7 @@ def main(args=None):
         tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         tls_context.check_hostname = False
         tls_context.load_cert_chain(str(args.tlscert), str(args.tlskey))
+        log.debug(f"TLS Certificate Chain: {args.tlscert} {args.tlskey}")
     else:
         tls_context = None
 
@@ -249,14 +260,7 @@ def main(args=None):
         require_starttls=args.requiretls,
     )
 
-    logging.basicConfig(level=logging.ERROR)
-    log = logging.getLogger("mail.log")
     loop = asyncio.get_event_loop()
-
-    if args.debug > 0:
-        log.setLevel(logging.INFO)
-    if args.debug > 1:
-        log.setLevel(logging.DEBUG)
     if args.debug > 2:
         loop.set_debug(enabled=True)
 
@@ -264,6 +268,7 @@ def main(args=None):
         smtps_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         smtps_context.check_hostname = False
         smtps_context.load_cert_chain(str(args.smtpscert), str(args.smtpskey))
+        log.debug(f"SMTPS Certificate Chain: {args.tlscert} {args.tlskey}")
     else:
         smtps_context = None
 
@@ -275,6 +280,7 @@ def main(args=None):
         )
         server_loop = loop.run_until_complete(server)
     except RuntimeError:  # pragma: nocover
+        log.exception("Exception happened:")
         raise
     log.debug(f"server_loop = {server_loop}")
     log.info("Server is listening on %s:%s", args.host, args.port)
@@ -288,7 +294,7 @@ def main(args=None):
     try:
         loop.run_forever()
     except KeyboardInterrupt:
-        pass
+        log.info("KeyboardInterrupt signaled")
     server_loop.close()
     log.debug("Completed asyncio loop")
     loop.run_until_complete(server_loop.wait_closed())
