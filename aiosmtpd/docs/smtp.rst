@@ -499,7 +499,7 @@ aiosmtpd.smtp
 
       :param challenge: The SMTP AUTH challenge to send to the client.
          May be in plaintext, may be in base64. Do NOT prefix with "334 "!
-      :type challenge: Union[str, bytes, bytearray]
+      :type challenge: AnyStr
       :param encode_to_b64: If true, will perform base64-encoding before sending
          the challenge to the client.
       :type encode_to_b64: bool

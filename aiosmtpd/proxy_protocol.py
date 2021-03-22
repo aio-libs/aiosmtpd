@@ -9,7 +9,7 @@ from collections import deque
 from enum import IntEnum
 from functools import partial
 from ipaddress import IPv4Address, IPv6Address, ip_address
-from typing import Any, AnyStr, Dict, Optional, Tuple, Union
+from typing import Any, AnyStr, ByteString, Dict, Optional, Tuple, Union
 
 import attr
 from public import public
@@ -87,7 +87,6 @@ log = logging.getLogger("mail.debug")
 
 # region #### Custom Types ############################################################
 
-AnyBytes = Union[bytes, bytearray]
 EndpointAddress = Union[IPv4Address, IPv6Address, AnyStr]
 
 
@@ -178,7 +177,7 @@ class ProxyTLV(dict):
     @classmethod
     def parse(
         cls,
-        data: AnyBytes,
+        data: ByteString,
         partial_ok: bool = True,
         strict: bool = False,
     ) -> Tuple[Dict[str, Any], Dict[str, int]]:
@@ -192,7 +191,7 @@ class ProxyTLV(dict):
         rslt: Dict[str, Any] = {}
         tlv_loc: Dict[str, int] = {}
 
-        def _pars(chunk: Union[bytes, bytearray], *, offset: int) -> None:
+        def _pars(chunk: ByteString, *, offset: int) -> None:
             i = 0
             while i < len(chunk):
                 typ = chunk[i]
@@ -231,7 +230,7 @@ class ProxyTLV(dict):
 
     @classmethod
     def from_raw(
-        cls, raw: Union[bytes, bytearray], strict: bool = False
+        cls, raw: ByteString, strict: bool = False
     ) -> Optional["ProxyTLV"]:
         """
         Parses raw bytes for TLV Vectors, decode them and giving them human-readable
@@ -278,7 +277,7 @@ class ProxyData:
     dst_addr: Optional[EndpointAddress] = _anoinit(default=None)
     src_port: Optional[int] = _anoinit(default=None)
     dst_port: Optional[int] = _anoinit(default=None)
-    rest: Union[bytes, bytearray] = _anoinit(default=b"")
+    rest: ByteString = _anoinit(default=b"")
     """
     Rest of PROXY Protocol data following UNKNOWN (v1) or UNSPEC (v2), or containing
     undecoded TLV (v2). If the latter, you can use the ProxyTLV class to parse the
@@ -354,7 +353,7 @@ RE_PORT_NOLEADZERO = re.compile(r"^[1-9]\d{0,4}|0$")
 # Reference: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt
 
 
-async def _get_v1(reader: AsyncReader, initial: AnyBytes = b"") -> ProxyData:
+async def _get_v1(reader: AsyncReader, initial: ByteString = b"") -> ProxyData:
     proxy_data = ProxyData(version=1)
     proxy_data.whole_raw = bytearray(initial)
 
@@ -438,7 +437,7 @@ async def _get_v1(reader: AsyncReader, initial: AnyBytes = b"") -> ProxyData:
     return proxy_data
 
 
-async def _get_v2(reader: AsyncReader, initial: AnyBytes = b"") -> ProxyData:
+async def _get_v2(reader: AsyncReader, initial: ByteString = b"") -> ProxyData:
     proxy_data = ProxyData(version=2)
     whole_raw = bytearray()
 
