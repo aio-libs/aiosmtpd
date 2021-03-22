@@ -3,7 +3,7 @@
 
 import logging
 import sys
-from email.message import Message, Message as Em_Message
+from email.message import Message as Em_Message
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
@@ -80,9 +80,9 @@ class MessageHandler(AbstractMessageHandler):
 
 
 class AsyncMessageHandler(AsyncMessage):
-    handled_message: Message = None
+    handled_message: Em_Message = None
 
-    async def handle_message(self, message: Message) -> None:
+    async def handle_message(self, message: Em_Message) -> None:
         self.handled_message = message
 
 
@@ -459,7 +459,7 @@ class TestMessage:
         handler = MessageHandler()
         enve_.content = content
         msg = handler.prepare_message(sess_, enve_)
-        assert isinstance(msg, Message)
+        assert isinstance(msg, Em_Message)
         assert msg.keys() == ['X-Peer', 'X-MailFrom', 'X-RcptTo']
         assert msg.get_payload() == ""
 
