@@ -3,6 +3,7 @@
 
 import logging
 import sys
+from email.message import Message as Em_Message
 from io import StringIO
 from mailbox import Maildir
 from operator import itemgetter
@@ -10,14 +11,16 @@ from pathlib import Path
 from smtplib import SMTPDataError, SMTPRecipientsRefused
 from textwrap import dedent
 from types import SimpleNamespace
-from typing import AnyStr, Generator, Type, TypeVar, Union
+from typing import AnyStr, Callable, Generator, Type, TypeVar, Union
 
 import pytest
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
+from aiosmtpd.handlers import Message as AbstractMessageHandler
 from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.smtp import Session as ServerSession
+from aiosmtpd.smtp import Envelope
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from aiosmtpd.testing.statuscodes import StatusCode
 
@@ -54,7 +57,7 @@ class FakeParser:
 
     message: AnyStr = None
 
-    def error(self, message):
+    def error(self, message: AnyStr):
         self.message = message
         raise SystemExit
 
@@ -63,16 +66,23 @@ class DataHandler:
     content: AnyStr = None
     original_content: bytes = None
 
-    async def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(
+        self, server: Server, session: ServerSession, envelope: Envelope
+    ) -> str:
         self.content = envelope.content
         self.original_content = envelope.original_content
         return S.S250_OK.to_str()
 
 
-class AsyncMessageHandler(AsyncMessage):
-    handled_message = None
+class MessageHandler(AbstractMessageHandler):
+    def handle_message(self, message: Em_Message) -> None:
+        pass
 
-    async def handle_message(self, message):
+
+class AsyncMessageHandler(AsyncMessage):
+    handled_message: Em_Message = None
+
+    async def handle_message(self, message: Em_Message) -> None:
         self.handled_message = message
 
 
@@ -209,14 +219,13 @@ def debugging_controller(get_controller) -> Generator[Controller, None, None]:
 
 
 @pytest.fixture
-def temp_maildir(tmp_path: Path) -> Generator[Path, None, None]:
-    maildir_path = tmp_path / "maildir"
-    yield maildir_path
+def temp_maildir(tmp_path: Path) -> Path:
+    return tmp_path / "maildir"
 
 
 @pytest.fixture
 def mailbox_controller(
-        temp_maildir, get_controller
+    temp_maildir, get_controller
 ) -> Generator[Controller, None, None]:
     handler = Mailbox(temp_maildir)
     controller = get_controller(handler)
@@ -229,7 +238,7 @@ def mailbox_controller(
 
 
 @pytest.fixture
-def with_fake_parser():
+def with_fake_parser() -> Callable:
     """
     Gets a function that will instantiate a handler_class using the class's
     from_cli() @classmethod, using FakeParser as the parser.
@@ -250,7 +259,7 @@ def with_fake_parser():
             handler = SimpleNamespace(fparser=parser, exception=type(e))
         return handler
 
-    yield handler_initer
+    return handler_initer
 
 
 @pytest.fixture
@@ -435,6 +444,43 @@ class TestDebugging:
 
 
 class TestMessage:
+    @pytest.mark.parametrize(
+        "content",
+        [
+            b"",
+            bytearray(),
+            "",
+        ],
+        ids=["bytes", "bytearray", "str"]
+    )
+    def test_prepare_message(self, temp_event_loop, content):
+        sess_ = ServerSession(temp_event_loop)
+        enve_ = Envelope()
+        handler = MessageHandler()
+        enve_.content = content
+        msg = handler.prepare_message(sess_, enve_)
+        assert isinstance(msg, Em_Message)
+        assert msg.keys() == ['X-Peer', 'X-MailFrom', 'X-RcptTo']
+        assert msg.get_payload() == ""
+
+    @pytest.mark.parametrize(
+        ("content", "expectre"),
+        [
+            (None, r"Expected str or bytes, got <class 'NoneType'>"),
+            ([], r"Expected str or bytes, got <class 'list'>"),
+            ({}, r"Expected str or bytes, got <class 'dict'>"),
+            ((), r"Expected str or bytes, got <class 'tuple'>"),
+        ],
+        ids=("None", "List", "Dict", "Tuple")
+    )
+    def test_prepare_message_err(self, temp_event_loop, content, expectre):
+        sess_ = ServerSession(temp_event_loop)
+        enve_ = Envelope()
+        handler = MessageHandler()
+        enve_.content = content
+        with pytest.raises(TypeError, match=expectre):
+            _ = handler.prepare_message(sess_, enve_)
+
     @handler_data(class_=DataHandler)
     def test_message(self, plain_controller, client):
         handler = plain_controller.handler
@@ -585,11 +631,8 @@ class TestMailbox:
         # Check the messages in the mailbox.
         mailbox = Maildir(temp_maildir)
         messages = sorted(mailbox, key=itemgetter("message-id"))
-        assert list(message["message-id"] for message in messages) == [
-            "<ant>",
-            "<bee>",
-            "<cat>",
-        ]
+        expect = ["<ant>", "<bee>", "<cat>"]
+        assert [message["message-id"] for message in messages] == expect
 
     def test_mailbox_reset(self, temp_maildir, mailbox_controller, client):
         client.sendmail(
@@ -766,7 +809,6 @@ class TestProxyMocked:
     def patch_smtp_oserror(self, mocker):
         mock = mocker.patch("aiosmtpd.handlers.smtplib.SMTP")
         mock().sendmail.side_effect = OSError
-        yield
 
     def test_oserror(
         self, caplog, patch_smtp_oserror, proxy_decoding_controller, client
@@ -804,13 +846,13 @@ class TestHooks:
 
     def test_hook_EHLO_deprecated_warning(self):
         with pytest.warns(
-                DeprecationWarning,
-                match=(
-                    # Is a regex; escape regex special chars if necessary
-                    r"Use the 5-argument handle_EHLO\(\) hook instead of the "
-                    r"4-argument handle_EHLO\(\) hook; support for the 4-argument "
-                    r"handle_EHLO\(\) hook will be removed in version 2.0"
-                )
+            DeprecationWarning,
+            match=(
+                # Is a regex; escape regex special chars if necessary
+                r"Use the 5-argument handle_EHLO\(\) hook instead of the "
+                r"4-argument handle_EHLO\(\) hook; support for the 4-argument "
+                r"handle_EHLO\(\) hook will be removed in version 2.0"
+            ),
         ):
             _ = Server(EHLOHandlerDeprecated())
 

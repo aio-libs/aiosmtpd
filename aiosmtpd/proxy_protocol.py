@@ -1,6 +1,7 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
+import contextlib
 import logging
 import re
 import struct
@@ -8,7 +9,7 @@ from collections import deque
 from enum import IntEnum
 from functools import partial
 from ipaddress import IPv4Address, IPv6Address, ip_address
-from typing import Any, AnyStr, Dict, Optional, Tuple, Union
+from typing import Any, AnyStr, ByteString, Dict, Optional, Tuple, Union
 
 import attr
 from public import public
@@ -73,9 +74,10 @@ V2_PARSE_ADDR_FAMPRO = {
 """Family & Proto combinations that need address parsing"""
 
 
-__all__ = [
+__all__ = ["struct", "partial", "IPv4Address", "IPv6Address"]
+__all__.extend(
     k for k in globals().keys() if k.startswith("V1_") or k.startswith("V2_")
-] + ["struct", "partial", "IPv4Address", "IPv6Address"]
+)
 
 
 _NOT_FOUND = object()
@@ -144,10 +146,10 @@ class ProxyTLV(dict):
         super().__init__(*args, **kwargs)
         self.tlv_loc = _tlv_loc
 
-    def __getattr__(self, item):
+    def __getattr__(self, item: str) -> Any:
         return self.get(item)
 
-    def __eq__(self, other):
+    def __eq__(self, other: Dict[str, Any]) -> bool:
         return super().__eq__(other)
 
     def same_attribs(self, _raises: bool = False, **kwargs) -> bool:
@@ -175,7 +177,7 @@ class ProxyTLV(dict):
     @classmethod
     def parse(
         cls,
-        data: Union[bytes, bytearray],
+        data: ByteString,
         partial_ok: bool = True,
         strict: bool = False,
     ) -> Tuple[Dict[str, Any], Dict[str, int]]:
@@ -189,7 +191,7 @@ class ProxyTLV(dict):
         rslt: Dict[str, Any] = {}
         tlv_loc: Dict[str, int] = {}
 
-        def _pars(chunk: Union[bytes, bytearray], *, offset: int):
+        def _pars(chunk: ByteString, *, offset: int) -> None:
             i = 0
             while i < len(chunk):
                 typ = chunk[i]
@@ -228,7 +230,7 @@ class ProxyTLV(dict):
 
     @classmethod
     def from_raw(
-        cls, raw: Union[bytes, bytearray], strict: bool = False
+        cls, raw: ByteString, strict: bool = False
     ) -> Optional["ProxyTLV"]:
         """
         Parses raw bytes for TLV Vectors, decode them and giving them human-readable
@@ -275,7 +277,7 @@ class ProxyData:
     dst_addr: Optional[EndpointAddress] = _anoinit(default=None)
     src_port: Optional[int] = _anoinit(default=None)
     dst_port: Optional[int] = _anoinit(default=None)
-    rest: Union[bytes, bytearray] = _anoinit(default=b"")
+    rest: ByteString = _anoinit(default=b"")
     """
     Rest of PROXY Protocol data following UNKNOWN (v1) or UNSPEC (v2), or containing
     undecoded TLV (v2). If the latter, you can use the ProxyTLV class to parse the
@@ -302,12 +304,10 @@ class ProxyData:
         return not (self.error or self.version is None or self.protocol is None)
 
     @property
-    def tlv(self):
+    def tlv(self) -> Optional[ProxyTLV]:
         if self._tlv is None:
-            try:
+            with contextlib.suppress(MalformedTLV):
                 self._tlv = ProxyTLV.from_raw(self.rest)
-            except MalformedTLV:
-                pass
         return self._tlv
 
     def with_error(self, error_msg: str, log_prefix: bool = True) -> "ProxyData":
@@ -340,7 +340,7 @@ class ProxyData:
                     return False
         return True
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return self.valid
 
 
@@ -353,7 +353,7 @@ RE_PORT_NOLEADZERO = re.compile(r"^[1-9]\d{0,4}|0$")
 # Reference: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt
 
 
-async def _get_v1(reader: AsyncReader, initial=b"") -> ProxyData:
+async def _get_v1(reader: AsyncReader, initial: ByteString = b"") -> ProxyData:
     proxy_data = ProxyData(version=1)
     proxy_data.whole_raw = bytearray(initial)
 
@@ -437,7 +437,7 @@ async def _get_v1(reader: AsyncReader, initial=b"") -> ProxyData:
     return proxy_data
 
 
-async def _get_v2(reader: AsyncReader, initial=b"") -> ProxyData:
+async def _get_v2(reader: AsyncReader, initial: ByteString = b"") -> ProxyData:
     proxy_data = ProxyData(version=2)
     whole_raw = bytearray()
 

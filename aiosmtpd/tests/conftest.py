@@ -8,10 +8,11 @@ import ssl
 from contextlib import suppress
 from functools import wraps
 from smtplib import SMTP as SMTPClient
-from typing import Generator, NamedTuple, Optional, Type
+from typing import Any, Callable, Generator, NamedTuple, Optional, Type, TypeVar
 
 import pytest
 from pkg_resources import resource_filename
+from pytest_mock import MockFixture
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
@@ -50,6 +51,9 @@ class HostPort(NamedTuple):
     port: int = 8025
 
 
+RT = TypeVar("RT")  # "ReturnType"
+
+
 # endregion
 
 
@@ -79,15 +83,13 @@ SERVER_KEY = resource_filename("aiosmtpd.tests.certs", "server.key")
 
 # autouse=True and scope="session" automatically apply this fixture to ALL test cases
 @pytest.fixture(autouse=True, scope="session")
-def cache_fqdn(session_mocker):
+def cache_fqdn(session_mocker: MockFixture):
     """
     This fixture "caches" the socket.getfqdn() call. VERY necessary to prevent
     situations where quick repeated getfqdn() causes extreme slowdown. Probably due to
     the DNS server thinking it was an attack or something.
     """
     session_mocker.patch("socket.getfqdn", return_value=Global.FQDN)
-    #
-    yield
 
 
 # endregion
@@ -97,7 +99,7 @@ def cache_fqdn(session_mocker):
 
 
 @pytest.fixture
-def get_controller(request):
+def get_controller(request: pytest.FixtureRequest) -> Callable[..., Controller]:
     """
     Provides a function that will return an instance of a controller.
 
@@ -122,7 +124,7 @@ def get_controller(request):
         markerdata = {}
 
     def getter(
-        handler,
+        handler: Any,
         class_: Optional[Type[Controller]] = None,
         **server_kwargs,
     ) -> Controller:
@@ -154,7 +156,7 @@ def get_controller(request):
 
 
 @pytest.fixture
-def get_handler(request):
+def get_handler(request: pytest.FixtureRequest) -> Callable:
     """
     Provides a function that will return an instance of
     a :ref:`handler class <handlers>`.
@@ -179,7 +181,7 @@ def get_handler(request):
     else:
         markerdata = {}
 
-    def getter(*args, **kwargs):
+    def getter(*args, **kwargs) -> Any:
         if marker:
             class_ = markerdata.pop("class_", default_class)
             # *args overrides args_ in handler_data()
@@ -209,18 +211,22 @@ def temp_event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
 
 
 @pytest.fixture
-def autostop_loop(temp_event_loop) -> Generator[asyncio.AbstractEventLoop, None, None]:
+def autostop_loop(
+    temp_event_loop: asyncio.AbstractEventLoop,
+) -> asyncio.AbstractEventLoop:
     # Create a new event loop, and arrange for that loop to end almost
     # immediately.  This will allow the calls to main() in these tests to
     # also exit almost immediately.  Otherwise, the foreground test
     # process will hang.
     temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
     #
-    yield temp_event_loop
+    return temp_event_loop
 
 
 @pytest.fixture
-def plain_controller(get_handler, get_controller) -> Generator[Controller, None, None]:
+def plain_controller(
+    get_handler: Callable, get_controller: Callable
+) -> Generator[Controller, None, None]:
     """
     Returns a Controller that, by default, gets invoked with no optional args.
     Hence the moniker "plain".
@@ -246,7 +252,7 @@ def plain_controller(get_handler, get_controller) -> Generator[Controller, None,
 
 @pytest.fixture
 def nodecode_controller(
-    get_handler, get_controller
+    get_handler: Callable, get_controller: Callable
 ) -> Generator[Controller, None, None]:
     """
     Same as :fixture:`plain_controller`,
@@ -268,7 +274,7 @@ def nodecode_controller(
 
 @pytest.fixture
 def decoding_controller(
-    get_handler, get_controller
+    get_handler: Callable, get_controller: Callable
 ) -> Generator[Controller, None, None]:
     handler = get_handler()
     controller = get_controller(handler, decode_data=True)
@@ -285,7 +291,7 @@ def decoding_controller(
 
 
 @pytest.fixture
-def client(request) -> Generator[SMTPClient, None, None]:
+def client(request: pytest.FixtureRequest) -> Generator[SMTPClient, None, None]:
     """
     Generic SMTP Client,
     will connect to the ``host:port`` defined in ``Global.SrvAddr``
@@ -302,7 +308,7 @@ def client(request) -> Generator[SMTPClient, None, None]:
 
 
 @pytest.fixture
-def ssl_context_server() -> Generator[ssl.SSLContext, None, None]:
+def ssl_context_server() -> ssl.SSLContext:
     """
     Provides a server-side SSL Context
     """
@@ -310,11 +316,11 @@ def ssl_context_server() -> Generator[ssl.SSLContext, None, None]:
     context.check_hostname = False
     context.load_cert_chain(SERVER_CRT, SERVER_KEY)
     #
-    yield context
+    return context
 
 
 @pytest.fixture
-def ssl_context_client() -> Generator[ssl.SSLContext, None, None]:
+def ssl_context_client() -> ssl.SSLContext:
     """
     Provides a client-side SSL Context
     """
@@ -322,14 +328,14 @@ def ssl_context_client() -> Generator[ssl.SSLContext, None, None]:
     context.check_hostname = False
     context.load_verify_locations(SERVER_CRT)
     #
-    yield context
+    return context
 
 
 # Please keep the scope as "module"; setting it as "function" (the default) somehow
 # causes the 'hidden' exception to be detected when the loop starts over in the next
 # test case, defeating the silencing.
 @pytest.fixture(scope="module")
-def silence_event_loop_closed():
+def silence_event_loop_closed() -> bool:
     """
     Mostly used to suppress "unhandled exception" error due to
     ``_ProactorBasePipeTransport`` raising an exception when doing ``__del__``
@@ -341,9 +347,9 @@ def silence_event_loop_closed():
         return True
 
     # From: https://github.com/aio-libs/aiohttp/issues/4324#issuecomment-733884349
-    def silencer(func):
+    def silencer(func: Callable[..., RT]) -> Callable[..., RT]:
         @wraps(func)
-        def wrapper(self, *args, **kwargs):
+        def wrapper(self: Any, *args, **kwargs) -> RT:
             try:
                 return func(self, *args, **kwargs)
             except RuntimeError as e:

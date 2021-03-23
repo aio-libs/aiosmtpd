@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Test meta / packaging"""
+
 import re
 import subprocess
+from datetime import datetime
 from itertools import tee
 from pathlib import Path
 
@@ -15,6 +17,7 @@ from packaging import version
 from aiosmtpd import __version__
 
 RE_DUNDERVER = re.compile(r"__version__\s*?=\s*?(['\"])(?P<ver>[^'\"]+)\1\s*$")
+RE_VERHEADING = re.compile(r"(?P<ver>[0-9.]+)\s*\((?P<date>[^)]+)\)")
 
 
 @pytest.fixture
@@ -23,14 +26,16 @@ def aiosmtpd_version() -> version.Version:
 
 
 class TestVersion:
-    def test_pep440(self, aiosmtpd_version):
+    def test_pep440(self, aiosmtpd_version: version.Version):
         """Ensure version number compliance to PEP-440"""
         assert isinstance(
             aiosmtpd_version, version.Version
         ), "Version number must comply with PEP-440"
 
     # noinspection PyUnboundLocalVariable
-    def test_ge_master(self, aiosmtpd_version, capsys):
+    def test_ge_master(
+        self, aiosmtpd_version: version.Version, capsys: pytest.CaptureFixture
+    ):
         """Ensure version is monotonically increasing"""
         reference = "master:aiosmtpd/__init__.py"
         cmd = f"git show {reference}".split()
@@ -50,10 +55,11 @@ class TestVersion:
         assert aiosmtpd_version >= master_ver, "Version number cannot be < master's"
 
 
-class TestDocs:
-    def test_NEWS_version(self, aiosmtpd_version):
-        news_rst = next(Path("..").rglob("*/NEWS.rst"))
-        with open(news_rst, "rt") as fin:
+class TestNews:
+    news_rst = list(Path("..").rglob("*/NEWS.rst"))[0]
+
+    def test_NEWS_version(self, aiosmtpd_version: version.Version):
+        with self.news_rst.open("rt") as fin:
             # pairwise() from https://docs.python.org/3/library/itertools.html
             a, b = tee(fin)
             next(b, None)
@@ -73,3 +79,23 @@ class TestDocs:
                 f"NEWS.rst is not updated: "
                 f"{newsver.base_version} < {aiosmtpd_version.base_version}"
             )
+
+    def test_release_date(self, aiosmtpd_version: version.Version):
+        if aiosmtpd_version.pre is not None:
+            pytest.skip("Not a release version")
+        with self.news_rst.open("rt") as fin:
+            for ln in fin:
+                ln = ln.strip()
+                m = RE_VERHEADING.match(ln)
+                if not m:
+                    continue
+                ver = version.Version(m.group("ver"))
+                if ver != aiosmtpd_version:
+                    continue
+                try:
+                    datetime.strptime(m.group("date"), "%Y-%m-%d")
+                except ValueError:
+                    pytest.fail("Release version not dated correctly")
+                break
+            else:
+                pytest.fail("Release version has no NEWS fragment")

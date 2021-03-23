@@ -10,6 +10,7 @@ import socket
 import time
 from contextlib import ExitStack
 from functools import partial
+from threading import Event
 from pathlib import Path
 from smtplib import SMTP as SMTPClient, SMTPServerDisconnected
 from tempfile import mkdtemp
@@ -40,7 +41,7 @@ class SlowStartController(Controller):
         kwargs.setdefault("ready_timeout", 0.5)
         super().__init__(*args, **kwargs)
 
-    def _run(self, ready_event):
+    def _run(self, ready_event: Event):
         time.sleep(self.ready_timeout * 1.5)
         super()._run(ready_event)
 
@@ -88,7 +89,7 @@ def safe_socket_dir() -> Generator[Path, None, None]:
     #
     yield tmpdir
     #
-    plist = [p for p in tmpdir.rglob("*")]
+    plist = list(tmpdir.rglob("*"))
     for p in reversed(plist):
         if p.is_dir():
             p.rmdir()
@@ -97,7 +98,7 @@ def safe_socket_dir() -> Generator[Path, None, None]:
     tmpdir.rmdir()
 
 
-def assert_smtp_socket(controller: UnixSocketMixin):
+def assert_smtp_socket(controller: UnixSocketMixin) -> bool:
     assert Path(controller.unix_socket).exists()
     sockfile = controller.unix_socket
     ssl_context = controller.ssl_context
@@ -134,6 +135,7 @@ def assert_smtp_socket(controller: UnixSocketMixin):
         catchup_delay()
         resp = sock.recv(1024)
         assert resp.startswith(b"221")
+    return True
 
 
 class TestServer:
@@ -207,8 +209,9 @@ class TestController:
         contr2 = Controller(
             Sink(), hostname=Global.SrvAddr.host, port=Global.SrvAddr.port
         )
+        expectedre = r"error while attempting to bind on address"
         try:
-            with pytest.raises(socket.error):
+            with pytest.raises(socket.error, match=expectedre):
                 contr2.start()
         finally:
             contr2.stop()
@@ -526,6 +529,7 @@ class TestUnthreaded:
         assert temp_event_loop.is_closed() is False
 
 
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 class TestFactory:
     def test_normal_situation(self):
         cont = Controller(Sink())
@@ -537,8 +541,7 @@ class TestFactory:
         finally:
             cont.stop()
 
-    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
-    def test_unknown_args_direct(self, silence_event_loop_closed):
+    def test_unknown_args_direct(self, silence_event_loop_closed: bool):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), ready_timeout=0.3, **{unknown: True})
         expectedre = r"__init__.. got an unexpected keyword argument '" + unknown + r"'"
@@ -553,8 +556,7 @@ class TestFactory:
     @pytest.mark.filterwarnings(
         "ignore:server_kwargs will be removed:DeprecationWarning"
     )
-    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
-    def test_unknown_args_inkwargs(self, silence_event_loop_closed):
+    def test_unknown_args_inkwargs(self, silence_event_loop_closed: bool):
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), ready_timeout=0.3, server_kwargs={unknown: True})
         expectedre = r"__init__.. got an unexpected keyword argument '" + unknown + r"'"
@@ -565,8 +567,7 @@ class TestFactory:
         finally:
             cont.stop()
 
-    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
-    def test_factory_none(self, mocker: MockFixture, silence_event_loop_closed):
+    def test_factory_none(self, mocker: MockFixture, silence_event_loop_closed: bool):
         # Hypothetical situation where factory() did not raise an Exception
         # but returned None instead
         mocker.patch("aiosmtpd.controller.SMTP", return_value=None)
@@ -579,8 +580,9 @@ class TestFactory:
         finally:
             cont.stop()
 
-    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
-    def test_noexc_smtpd_missing(self, mocker, silence_event_loop_closed):
+    def test_noexc_smtpd_missing(
+        self, mocker: MockFixture, silence_event_loop_closed: bool
+    ):
         # Hypothetical situation where factory() failed but no
         # Exception was generated.
         cont = Controller(Sink())

@@ -19,7 +19,7 @@ RE_ESC = re.compile(rb"(?P<digit1>\d)\.\d+\.\d+\s")
 
 # noinspection PyUnresolvedReferences
 @pytest.fixture(scope="module", autouse=True)
-def exit_on_fail(request):
+def exit_on_fail(request: pytest.FixtureRequest):
     # Behavior of this will be undefined if tests are running in parallel.
     # But since parallel running is not practically possible (the ports will conflict),
     # then I don't think that will be a problem.
@@ -65,7 +65,9 @@ class TestStatusCodes:
                 f"{key}: First digit of Enhanced Status Code different from "
                 f"first digit of Standard Status Code"
             )
-            total_correct += 1
+            # Can't use enumerate(); total_correct does not increase in lockstep with
+            # the loop (there are several "continue"s above)
+            total_correct += 1  # noqa: SIM113
         assert total_correct > 0
 
     def test_commands(self):

@@ -203,7 +203,7 @@ Enums
       Valid only for address family of :attr:`AF.INET` or :attr:`AF.INET6`
 
    .. py:attribute:: rest
-      :type: Union[bytes, bytearray]
+      :type: ByteString
 
       The contents depend on the version of the PROXY header *and* (for version 2)
       the address family.
@@ -374,7 +374,7 @@ Enums
    .. py:classmethod:: from_raw(raw) -> Optional[ProxyTLV]
 
       :param raw: The raw bytes containing the TLV Vectors
-      :type raw: Union[bytes, bytearray]
+      :type raw: ByteString
       :return: A new instance of ProxyTLV, or ``None`` if parsing failed
 
       This triggers the parsing of raw bytes/bytearray into a ProxyTLV instance.
@@ -387,7 +387,7 @@ Enums
    .. py:classmethod:: parse(chunk, partial_ok=True) -> Dict[str, Any]
 
       :param chunk: The bytes to parse into TLV Vectors
-      :type chunk: Union[bytes, bytearray]
+      :type chunk: ByteString
       :param partial_ok: If ``True``, return partially-parsed TLV Vectors as is.
          If ``False``, (re)raise ``MalformedTLV``
       :type partial_ok: bool

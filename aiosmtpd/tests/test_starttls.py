@@ -12,6 +12,7 @@ import pytest
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
+from aiosmtpd.smtp import Envelope
 from aiosmtpd.smtp import Session as Sess_
 from aiosmtpd.smtp import TLSSetupException
 from aiosmtpd.testing.helpers import ReceivingHandler, catchup_delay
@@ -31,14 +32,18 @@ class EOFingHandler:
     ssl_existed = None
     result = None
 
-    async def handle_NOOP(self, server: Server, session: Sess_, envelope, arg):
+    async def handle_NOOP(
+        self, server: Server, session: Sess_, envelope: Envelope, arg: str
+    ) -> str:
         self.ssl_existed = session.ssl is not None
         self.result = server.eof_received()
         return "250 OK"
 
 
 class HandshakeFailingHandler:
-    def handle_STARTTLS(self, server, session, envelope):
+    def handle_STARTTLS(
+            self, server: Server, session: Sess_, envelope: Envelope
+    ) -> bool:
         return False
 
 
@@ -198,7 +203,7 @@ class TestStartTLS:
 class ExceptionCaptureHandler:
     error = None
 
-    async def handle_exception(self, error):
+    async def handle_exception(self, error: Exception) -> str:
         self.error = error
         return "500 ExceptionCaptureHandler handling error"
 
@@ -354,7 +359,7 @@ class TestRequireTLSAUTH:
 class TestTLSContext:
     def test_verify_mode_nochange(self, ssl_context_server):
         context = ssl_context_server
-        for mode in (ssl.CERT_NONE, ssl.CERT_OPTIONAL):
+        for mode in (ssl.CERT_NONE, ssl.CERT_OPTIONAL):  # noqa: DUO122
             context.verify_mode = mode
             _ = Server(Sink(), tls_context=context)
             assert context.verify_mode == mode
@@ -370,10 +375,10 @@ class TestTLSContext:
 
     def test_nocertreq_chkhost_warn(self, caplog, ssl_context_server):
         context = ssl_context_server
-        context.verify_mode = ssl.CERT_OPTIONAL
+        context.verify_mode = ssl.CERT_OPTIONAL  # noqa: DUO122
         context.check_hostname = True
         _ = Server(Sink(), tls_context=context)
-        assert context.verify_mode == ssl.CERT_OPTIONAL
+        assert context.verify_mode == ssl.CERT_OPTIONAL  # noqa: DUO122
         logmsg = caplog.record_tuples[0][-1]
         assert "tls_context.check_hostname == True" in logmsg
         assert "might cause client connection problems" in logmsg

@@ -69,7 +69,8 @@ TERM_WIDTH, TERM_HEIGHT = shutil.get_terminal_size()
 def deldir(targ: Path, verbose: bool = True):
     if not targ.exists():
         return
-    for i, pp in enumerate(reversed(sorted(targ.rglob("*"))), start=1):
+    rev_items = sorted(targ.rglob("*"), reverse=True)
+    for i, pp in enumerate(rev_items, start=1):
         if pp.is_symlink():
             pp.unlink()
         elif pp.is_file():

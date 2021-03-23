@@ -7,11 +7,13 @@ import multiprocessing as MP
 import os
 import time
 from contextlib import contextmanager
+from multiprocessing.synchronize import Event as MP_Event
 from smtplib import SMTP as SMTPClient
 from smtplib import SMTP_SSL
 from typing import Generator
 
 import pytest
+from pytest_mock import MockFixture
 
 from aiosmtpd import __version__
 from aiosmtpd.handlers import Debugging
@@ -33,7 +35,7 @@ MAIL_LOG = logging.getLogger("mail.log")
 
 
 class FromCliHandler:
-    def __init__(self, called):
+    def __init__(self, called: bool):
         self.called = called
 
     @classmethod
@@ -63,14 +65,12 @@ def nobody_uid() -> Generator[int, None, None]:
 
 
 @pytest.fixture
-def setuid(mocker):
+def setuid(mocker: MockFixture):
     if not HAS_SETUID:
         pytest.skip("setuid is unavailable")
     mocker.patch("aiosmtpd.main.pwd", None)
     mocker.patch("os.setuid", side_effect=PermissionError)
     mocker.patch("aiosmtpd.main.partial", side_effect=RuntimeError)
-    #
-    yield
 
 
 # endregion
@@ -78,7 +78,7 @@ def setuid(mocker):
 # region ##### Helper Funcs ###########################################################
 
 
-def watch_for_tls(ready_flag, retq: MP.Queue):
+def watch_for_tls(ready_flag: MP_Event, retq: MP.Queue):
     has_tls = False
     req_tls = False
     ready_flag.set()
@@ -100,7 +100,7 @@ def watch_for_tls(ready_flag, retq: MP.Queue):
     retq.put(req_tls)
 
 
-def watch_for_smtps(ready_flag, retq: MP.Queue):
+def watch_for_smtps(ready_flag: MP_Event, retq: MP.Queue):
     has_smtps = False
     ready_flag.set()
     start = time.monotonic()
@@ -276,7 +276,7 @@ class TestParseArgs:
         )
 
     @pytest.mark.parametrize(
-        "args, exp_host, exp_port",
+        ("args", "exp_host", "exp_port"),
         [
             ((), "localhost", 8025),
             (("-l", "foo:25"), "foo", 25),
@@ -333,7 +333,7 @@ class TestParseArgs:
         assert args.requiretls is False
 
     @pytest.mark.parametrize(
-        "certfile, keyfile, expect",
+        ("certfile", "keyfile", "expect"),
         [
             ("x", "x", "Cert file x not found"),
             (SERVER_CRT, "x", "Key file x not found"),

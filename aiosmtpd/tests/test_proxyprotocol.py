@@ -10,12 +10,12 @@ import socket
 import struct
 import time
 from base64 import b64decode
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from functools import partial
 from ipaddress import IPv4Address, IPv6Address
 from smtplib import SMTP as SMTPClient
 from smtplib import SMTPServerDisconnected
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import pytest
 from pytest_mock import MockFixture
@@ -35,6 +35,7 @@ from aiosmtpd.proxy_protocol import (
 )
 from aiosmtpd.smtp import SMTP as SMTPServer
 from aiosmtpd.smtp import Session as SMTPSession
+from aiosmtpd.smtp import Envelope as SMTPEnvelope
 from aiosmtpd.tests.conftest import Global, controller_data, handler_data
 
 DEFAULT_AUTOCANCEL = 0.1
@@ -94,13 +95,19 @@ HANDSHAKES = {
 
 
 class ProxyPeekerHandler(Sink):
-    def __init__(self, retval=True):
+    def __init__(self, retval: bool = True):
         self.called = False
         self.sessions: List[SMTPSession] = []
         self.proxy_datas: List[ProxyData] = []
         self.retval = retval
 
-    async def handle_PROXY(self, server, session, envelope, proxy_data):
+    async def handle_PROXY(
+        self,
+        server: SMTPServer,
+        session: SMTPSession,
+        envelope: SMTPEnvelope,
+        proxy_data: ProxyData,
+    ) -> bool:
         self.called = True
         self.sessions.append(session)
         self.proxy_datas.append(proxy_data)
@@ -113,7 +120,9 @@ def does_not_raise():
 
 
 @pytest.fixture
-def setup_proxy_protocol(mocker: MockFixture, temp_event_loop):
+def setup_proxy_protocol(
+    mocker: MockFixture, temp_event_loop: asyncio.AbstractEventLoop
+) -> Callable:
     proxy_timeout = 1.0
     responses = []
     transport = mocker.Mock()
@@ -129,16 +138,14 @@ def setup_proxy_protocol(mocker: MockFixture, temp_event_loop):
 
         def runner(stop_after: float = DEFAULT_AUTOCANCEL):
             loop.call_later(stop_after, protocol._handler_coroutine.cancel)
-            try:
+            with suppress(asyncio.CancelledError):
                 loop.run_until_complete(protocol._handler_coroutine)
-            except asyncio.CancelledError:
-                pass
 
         test_obj.protocol = protocol
         test_obj.runner = runner
         test_obj.transport = transport
 
-    yield getter
+    return getter
 
 
 class _TestProxyProtocolCommon:
@@ -303,7 +310,7 @@ class TestProxyTLV:
             (None, "wrongname"),
         ],
     )
-    def test_backmap(self, typename, typeint):
+    def test_backmap(self, typename: str, typeint: int):
         assert ProxyTLV.name_to_num(typename) == typeint
 
     def test_parse_partial(self):
@@ -384,14 +391,23 @@ class TestModule:
             return emit
 
     @parametrize("handshake", HANDSHAKES.values(), ids=HANDSHAKES.keys())
-    def test_get(self, caplog, temp_event_loop, handshake):
+    def test_get(
+        self,
+        caplog: pytest.LogCaptureFixture,
+        temp_event_loop: asyncio.AbstractEventLoop,
+        handshake: bytes,
+    ):
         caplog.set_level(logging.DEBUG)
         mock_reader = self.MockAsyncReader(handshake)
         reslt = temp_event_loop.run_until_complete(get_proxy(mock_reader))
         assert isinstance(reslt, ProxyData)
         assert reslt.valid
 
-    def test_get_cut_v1(self, caplog, temp_event_loop):
+    def test_get_cut_v1(
+        self,
+        caplog: pytest.LogCaptureFixture,
+        temp_event_loop: asyncio.AbstractEventLoop,
+    ):
         caplog.set_level(logging.DEBUG)
         mock_reader = self.MockAsyncReader(GOOD_V1_HANDSHAKE[0:20])
         reslt = temp_event_loop.run_until_complete(get_proxy(mock_reader))
@@ -401,7 +417,11 @@ class TestModule:
         expect = ("mail.debug", 30, "PROXY error: PROXYv1 malformed")
         assert expect in caplog.record_tuples
 
-    def test_get_cut_v2(self, caplog, temp_event_loop):
+    def test_get_cut_v2(
+        self,
+        caplog: pytest.LogCaptureFixture,
+        temp_event_loop: asyncio.AbstractEventLoop,
+    ):
         caplog.set_level(logging.DEBUG)
         mock_reader = self.MockAsyncReader(TEST_V2_DATA1_EXACT[0:20])
         reslt = temp_event_loop.run_until_complete(get_proxy(mock_reader))
@@ -412,7 +432,11 @@ class TestModule:
         expect = ("mail.debug", 30, expect_msg)
         assert expect in caplog.record_tuples
 
-    def test_get_invalid_sig(self, caplog, temp_event_loop):
+    def test_get_invalid_sig(
+        self,
+        caplog: pytest.LogCaptureFixture,
+        temp_event_loop: asyncio.AbstractEventLoop,
+    ):
         caplog.set_level(logging.DEBUG)
         mock_reader = self.MockAsyncReader(b"PROXI TCP4 1.2.3.4 5.6.7.8 9 10\r\n")
         reslt = temp_event_loop.run_until_complete(get_proxy(mock_reader))
@@ -451,7 +475,7 @@ class TestGetV1(_TestProxyProtocolCommon):
         assert self.transport.close.called
 
     @parametrize("patt", PUBLIC_V1_PATTERNS.values(), ids=PUBLIC_V1_PATTERNS.keys())
-    def test_valid_patterns(self, setup_proxy_protocol, patt: bytes):
+    def test_valid_patterns(self, setup_proxy_protocol: Callable, patt: bytes):
         if not patt.endswith(b"\r\n"):
             patt += b"\r\n"
         setup_proxy_protocol(self)
@@ -1004,7 +1028,7 @@ class TestWithController:
             # Try resending the handshake. Should also fail (because connection has
             # been closed by the server.
             # noinspection PyTypeChecker
-            with pytest.raises(OSError) as exc_info:
+            with pytest.raises(OSError) as exc_info:  # noqa: PT011
                 sock.send(handshake)
                 resp = sock.recv(4096)
                 if resp == b"":
@@ -1041,7 +1065,7 @@ class TestWithController:
             # Try resending the handshake. Should also fail (because connection has
             # been closed by the server.
             # noinspection PyTypeChecker
-            with pytest.raises(OSError) as exc_info:
+            with pytest.raises(OSError) as exc_info:  # noqa: PT011
                 sock.send(handshake)
                 resp = sock.recv(4096)
                 if resp == b"":
@@ -1094,8 +1118,7 @@ class TestHandlerAcceptReject:
             sock.sendall(handshake)
             resp = sock.recv(4096)
             assert oper(resp, b"")
-            with expect:
-                with SMTPClient() as client:
-                    client.sock = sock
-                    code, mesg = client.ehlo("example.org")
-                    assert code == 250
+            with expect, SMTPClient() as client:
+                client.sock = sock
+                code, mesg = client.ehlo("example.org")
+                assert code == 250
