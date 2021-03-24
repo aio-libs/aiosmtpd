@@ -94,7 +94,7 @@ Server hooks
 ============
 
 .. warning:: These methods are deprecated.  See :ref:`handler hooks <hooks>`
-             instead.
+             instead. Support for these hooks **will be removed in 2.0**.
 
 The ``SMTP`` server class also implements some hooks which your subclass can
 override to provide additional responses.
@@ -127,8 +127,25 @@ aiosmtpd.smtp
 
 .. py:module:: aiosmtpd.smtp
 
+
+Type Aliases
+------------
+
+For type hinting, we provide several `Type Aliases`_
+
 .. py:data:: AuthenticatorType
-   :value: Callable[[SMTP, Session, Envelope, str, Any], AuthResult]
+    :value: Callable[[SMTP, Session, Envelope, str, Any], AuthResult]
+
+    Type hint for the :func:`Authenticator` function.
+
+.. py:data:: AuthMechanismType
+    :value: Callable[["SMTP", List[str]], Awaitable[Any]]
+
+    Type hint for :ref:`authmech`.
+
+
+Decorators
+----------
 
 .. decorator:: auth_mechanism(actual_name)
 
@@ -142,6 +159,22 @@ aiosmtpd.smtp
    .. important::
 
       The decorated method's name MUST still start with ``auth_``
+
+.. decorator:: syntax(text, extended=None, when=None)
+
+    :param text: The help text for (E)SMTP HELP
+    :type text: str
+    :param extended: Additional help text for ESMTP HELP;
+        will be appended to *text*.
+    :type extended: str
+    :param when: The name of attribute of SMTP class to check;
+        if the value of the attribute is *Falsey*,
+        then HELP will not be available for that command.
+    :type when: str
+
+
+Classes
+-------
 
 .. class:: AuthResult
 
@@ -158,13 +191,26 @@ aiosmtpd.smtp
 
    For more information, please refer to the :ref:`auth` page.
 
-.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, \
-   decode_data=False, hostname=None, ident=None, tls_context=None, \
-   require_starttls=False, timeout=300, auth_required=False, \
-   auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, \
-   authenticator=None, command_call_limit=None, \
-   proxy_protocol_timeout=None, \
-   loop=None)
+.. class:: SMTP(\
+   handler,\
+   *,\
+   loop=None,\
+   hostname=None,\
+   ident=None,\
+   timeout=300,\
+   data_size_limit=DATA_SIZE_DEFAULT,\
+   enable_SMTPUTF8=False,\
+   decode_data=False,\
+   tls_context=None,\
+   require_starttls=False,\
+   auth_required=False,\
+   auth_require_tls=True,\
+   auth_exclude_mechanism=None,\
+   auth_callback=None,\
+   authenticator=None,\
+   command_call_limit=None,\
+   proxy_protocol_timeout=None,\
+   )
 
    |
    | :part:`Parameters`
@@ -173,6 +219,14 @@ aiosmtpd.smtp
 
       An instance of a :ref:`handler <handlers>` class that optionally can implement
       :ref:`hooks`.
+
+   .. py:attribute:: loop
+      :type: asyncio.AbstractEventLoop
+      :value: None
+      :noindex:
+
+      The asyncio event loop to use.
+      If not given, :meth:`asyncio.new_event_loop` will be called to create the event loop.
 
    .. py:attribute:: data_size_limit
       :type: int
@@ -371,14 +425,14 @@ aiosmtpd.smtp
 
       .. versionadded:: 1.4
 
-   .. py:attribute:: loop
-      :noindex:
-
-      The asyncio event loop to use.
-      If not given, :meth:`asyncio.new_event_loop` will be called to create the event loop.
-
    |
-   | :part:`Attributes & Methods`
+   | :part:`Attributes & Properties`
+
+   .. note::
+
+      All *writable* attributes are "live", meaning that changing any one of them will result
+      in immediate change to the ``SMTP`` class behavior. All attributes below are writable
+      unless explicitly stated as "Read-Only".
 
    .. py:attribute:: line_length_limit
 
@@ -459,12 +513,11 @@ aiosmtpd.smtp
 
    .. attribute:: loop
 
-      The event loop being used.  This will either be the given *loop*
+      **Read-only.** The event loop being used.  This will either be the given *loop*
       argument, or the new event loop that was created.
 
-   .. attribute:: authenticated
-
-      A flag that indicates whether authentication had succeeded.
+   |
+   | :part:`Methods`
 
    .. method:: _create_session()
 
@@ -571,3 +624,4 @@ advertised, and the ``STARTTLS`` command will not be accepted.
 .. _`asyncio transport`: https://docs.python.org/3/library/asyncio-protocol.html#asyncio-transport
 .. _StreamReaderProtocol: https://docs.python.org/3.6/library/asyncio-stream.html#streamreaderprotocol
 .. |StreamReaderProtocol| replace:: ``StreamReaderProtocol``
+.. _`Type Aliases`: https://docs.python.org/3/library/typing.html#type-aliases

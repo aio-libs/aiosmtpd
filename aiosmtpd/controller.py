@@ -94,7 +94,7 @@ class _FakeServer(asyncio.StreamReaderProtocol):
         )
 
     def _client_connected_cb(
-            self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         pass
 
@@ -329,6 +329,11 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         server_hostname: Optional[str] = None,
         **SMTP_parameters,
     ):
+        """
+        `Documentation can be found here
+        <http://aiosmtpd.readthedocs.io/en/latest/aiosmtpd\
+/docs/controller.html#controller-api>`_.
+        """
         super().__init__(
             handler,
             loop,
