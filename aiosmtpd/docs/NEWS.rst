@@ -14,7 +14,6 @@ Fixed/Improved
 --------------
 * All Controllers now have more rationale design, as they are now composited from a Base + a Mixin
 * A whole bunch of annotations
-* A whole bunch of annotations
 
 
 1.4.4 (2023-01-17)
@@ -66,15 +65,6 @@ Fixed/Improved
 Fixed/Improved
 --------------
 * Maximum length of email address local part is customizable, defaults to no limit. (Closes #257)
-
-
-1.4.1 (aiosmtpd-next)
-=====================
-
-Fixed/Improved
---------------
-* Maximum length of email address local part is customizable, defaults to no limit. (Closes #257)
-
 
 
 1.4.0 (2021-02-26)
