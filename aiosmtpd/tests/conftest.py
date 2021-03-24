@@ -3,11 +3,14 @@
 
 import asyncio
 import inspect
+import logging
+import os
 import socket
 import ssl
 import warnings
 from contextlib import suppress
 from functools import wraps
+from pathlib import Path
 from smtplib import SMTP as SMTPClient
 from typing import Any, Callable, Generator, NamedTuple, Optional, Type, TypeVar
 
@@ -36,6 +39,39 @@ __all__ = [
     "SERVER_KEY",
 ]
 
+
+# region #### Instrumentation (Logging) ###############################################
+
+if os.environ.get("AIOSMTPD_TEST_LOG") != "1":
+    log_handler = logging.NullHandler()
+else:
+    log_path = Path(".").expanduser().absolute()
+    while not (log_path / "pyproject.toml").exists():
+        log_path = log_path.parent
+    log_handler = logging.FileHandler(log_path / "aiosmtpd_test.log")
+    log_handler.setFormatter(
+        logging.Formatter("{name} {levelname} {message}", style="{")
+    )
+log_level = int(os.environ.get("AIOSMTPD_TEST_LOGLEVEL", logging.DEBUG))
+log_handler.setLevel(log_level)
+# Attach to root logger
+logging.getLogger().addHandler(log_handler)
+
+for logname in (
+    "aiosmtpd",
+    "aiosmtpd.controller",
+    "aiosmtpd.tests",
+    "mail",
+    "mail.log",
+    "mail.debug",
+):
+    _logger = logging.getLogger(logname)
+    _logger.propagate = True
+    _logger.setLevel(log_level)
+
+log = logging.getLogger("aiosmtpd.tests")
+
+# endregion
 
 # region #### Aliases #################################################################
 
@@ -97,6 +133,14 @@ def cache_fqdn(session_mocker: MockFixture):
 
 
 # region #### Common Fixtures #########################################################
+
+
+@pytest.fixture(autouse=True)
+def log_case(request: pytest.FixtureRequest):
+    node_id = request.node.nodeid
+    log.debug("Entering %s", node_id)
+    yield
+    log.debug("Exiting %s", node_id)
 
 
 @pytest.fixture
