@@ -50,6 +50,8 @@ syspath_insert(repo_root / "aiosmtpd")
 # :classmethod: needs Sphinx>=2.1
 # :noindex: needs Sphinx>=3.2
 needs_sphinx = "3.2"
+# If you change the above, don't forget to change the version limit in
+# `RTD-requirements.txt`
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -62,9 +64,8 @@ extensions = [
     "autoprogramm",
     "sphinx_rtd_theme"
 ]
-# IMPORTANT: If you edit this, also edit the following:
-#   - aiosmtpd/docs/RTD-requirements.txt
-#   - tox.ini
+# IMPORTANT: If you edit the above list, check if you need to edit the deps list
+# in `RTD-requirements.txt`
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
