@@ -93,11 +93,13 @@ def deldir(targ: Path, verbose: bool = True):
 
 
 def dump_env():
+    env = dict(os.environ)
+    env["PYTHON_EXE"] = str(sys.executable)
     dumpdir = Path(DUMP_DIR)
     dumpdir.mkdir(exist_ok=True)
     with (dumpdir / f"ENV.{TOX_ENV_NAME}.py").open("wt") as fout:
         print("ENV = \\", file=fout)
-        pprint.pprint(dict(os.environ), stream=fout)
+        pprint.pprint(env, stream=fout)
 
 
 def move_prof(verbose: bool = False):
@@ -137,6 +139,18 @@ def pycache_clean(verbose=False):
         if verbose and ((i & 0x7) == 0):
             print(".", end="", flush=True)
         deldir(d, verbose)
+    if verbose:
+        print(flush=True)
+
+
+def docs_clean(verbose=False):
+    """Cleanup build/ to force sphinx-build to rebuild"""
+    buildpath = Path("build")
+    if not buildpath.exists():
+        print("Docs already cleaned.")
+        return
+    print("Removing build/ ...", end="")
+    deldir(buildpath, verbose)
     if verbose:
         print(flush=True)
 
@@ -183,6 +197,13 @@ def dispatch_remcache():
     Remove all .py[co] files and all __pycache__ dirs
     """
     pycache_clean()
+
+
+def dispatch_remdocs():
+    """
+    Remove all docs artefacts
+    """
+    docs_clean()
 
 
 def dispatch_superclean():
