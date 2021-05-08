@@ -3,8 +3,10 @@
 
 """Test SMTP over SSL/TLS."""
 
+import sys
 from email.mime.text import MIMEText
-from smtplib import SMTP, SMTP_SSL
+from smtplib import SMTP, SMTPServerDisconnected, SMTP_SSL
+from time import time
 from typing import Generator, Union
 
 import pytest
@@ -21,7 +23,7 @@ def ssl_controller(
     get_controller, ssl_context_server
 ) -> Generator[Controller, None, None]:
     handler = ReceivingHandler()
-    controller = get_controller(handler, ssl_context=ssl_context_server)
+    controller = get_controller(handler, hostname="127.0.0.1", ssl_context=ssl_context_server)
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -50,3 +52,15 @@ class TestSMTPS:
         envelope = handler.box[0]
         assert envelope.mail_from == sender
         assert envelope.rcpt_tos == recipients
+
+    @pytest.mark.skipif(sys.version_info < (3,7),
+                        reason="No timeout for SSL implemented before 3.7")
+    def test_SSL_timeout(self, ssl_controller):
+        start = time()
+        with pytest.raises(SMTPServerDisconnected) as ex:
+            with SMTP(*Global.SrvAddr) as smtp_client:
+                smtp_client.helo("example.com")
+        
+        # ensure that our time is less than the 65 seconds default
+        assert "Connection unexpectedly closed" in str(ex)
+        assert time() <= start + 65.0
