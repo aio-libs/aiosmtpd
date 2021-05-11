@@ -112,6 +112,7 @@ class BaseController(metaclass=ABCMeta):
         loop: asyncio.AbstractEventLoop = None,
         *,
         ssl_context: Optional[ssl.SSLContext] = None,
+        ssl_handshake_timeout: Optional[float] = None,
         # SMTP parameters
         server_hostname: Optional[str] = None,
         **SMTP_parameters,
@@ -122,6 +123,7 @@ class BaseController(metaclass=ABCMeta):
         else:
             self.loop = loop
         self.ssl_context = ssl_context
+        self.ssl_handshake_timeout = ssl_handshake_timeout
         self.SMTP_kwargs: Dict[str, Any] = {}
         if "server_kwargs" in SMTP_parameters:
             warn(
@@ -202,6 +204,7 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         *,
         ready_timeout: float = DEFAULT_READY_TIMEOUT,
         ssl_context: Optional[ssl.SSLContext] = None,
+        ssl_handshake_timeout: Optional[float] = None,
         # SMTP parameters
         server_hostname: Optional[str] = None,
         **SMTP_parameters,
@@ -210,6 +213,7 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
             handler,
             loop,
             ssl_context=ssl_context,
+            ssl_handshake_timeout=ssl_handshake_timeout,
             server_hostname=server_hostname,
             **SMTP_parameters,
         )
@@ -325,6 +329,7 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         loop: asyncio.AbstractEventLoop = None,
         *,
         ssl_context: Optional[ssl.SSLContext] = None,
+        ssl_handshake_timeout: Optional[float] = None,
         # SMTP parameters
         server_hostname: Optional[str] = None,
         **SMTP_parameters,
@@ -333,6 +338,7 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
             handler,
             loop,
             ssl_context=ssl_context,
+            ssl_handshake_timeout=ssl_handshake_timeout,
             server_hostname=server_hostname,
             **SMTP_parameters,
         )
@@ -406,11 +412,17 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         Does NOT actually start the protocol object itself;
         _factory_invoker() is only called upon fist connection attempt.
         """
+        if sys.version_info >= (3, 7) and self.ssl_context is not None:
+            kwargs = {"ssl_handshake_timeout": self.ssl_handshake_timeout}
+        else:
+            kwargs = {}
+
         return self.loop.create_server(
             self._factory_invoker,
             host=self.hostname,
             port=self.port,
             ssl=self.ssl_context,
+            **kwargs,
         )
 
     def _trigger_server(self):
@@ -451,10 +463,16 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
         Does NOT actually start the protocol object itself;
         _factory_invoker() is only called upon fist connection attempt.
         """
+        if sys.version_info >= (3, 7) and self.ssl_context is not None:
+            kwargs = {"ssl_handshake_timeout": self.ssl_handshake_timeout}
+        else:
+            kwargs = {}
+
         return self.loop.create_unix_server(
             self._factory_invoker,
             path=self.unix_socket,
             ssl=self.ssl_context,
+            **kwargs,
         )
 
     def _trigger_server(self):
