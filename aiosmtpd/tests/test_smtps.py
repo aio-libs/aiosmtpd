@@ -4,9 +4,9 @@
 """Test SMTP over SSL/TLS."""
 
 import sys
+import time
 from email.mime.text import MIMEText
 from smtplib import SMTP, SMTPServerDisconnected, SMTP_SSL
-from time import time
 from typing import Generator, Union
 
 import pytest
@@ -15,7 +15,7 @@ from aiosmtpd.controller import Controller
 from aiosmtpd.testing.helpers import ReceivingHandler
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 
-from .conftest import Global
+from .conftest import Global, controller_data
 
 
 @pytest.fixture
@@ -53,14 +53,19 @@ class TestSMTPS:
         assert envelope.mail_from == sender
         assert envelope.rcpt_tos == recipients
 
-    @pytest.mark.skipif(sys.version_info < (3,7),
-                        reason="No timeout for SSL implemented before 3.7")
+    @pytest.mark.skipif(sys.version_info < (3, 7),
+                        reason="SSL timeout implemented implemented with 3.7")
+    @controller_data(ssl_handshake_timeout=1.0)
     def test_SSL_timeout(self, ssl_controller):
-        start = time()
-        with pytest.raises(SMTPServerDisconnected) as ex:
-            with SMTP(*Global.SrvAddr) as smtp_client:
-                smtp_client.helo("example.com")
-        
-        # ensure that our time is less than the 65 seconds default
+        assert ssl_controller.server._ssl_handshake_timeout == 1.0
+        start = time.monotonic()
+        with pytest.raises(SMTPServerDisconnected) as ex,\
+             SMTP(*Global.SrvAddr) as smtp_client:
+            # smtplib.SMTP does not support opporutnistic SSL so the SSL
+            # handshake never completes. On Python 3.6 and earlier this meant
+            # that the connection would just hang.
+            smtp_client.helo("example.com")
+        end = time.monotonic()
         assert "Connection unexpectedly closed" in str(ex)
-        assert time() <= start + 65.0
+        # default ssl_handshake_timeout is 60 seconds
+        assert end <= start + 61.0
