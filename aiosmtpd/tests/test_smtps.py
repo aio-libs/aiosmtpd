@@ -23,7 +23,11 @@ def ssl_controller(
     get_controller, ssl_context_server
 ) -> Generator[Controller, None, None]:
     handler = ReceivingHandler()
-    controller = get_controller(handler, hostname="127.0.0.1", ssl_context=ssl_context_server)
+    controller = get_controller(
+        handler,
+        hostname="127.0.0.1",
+        ssl_context=ssl_context_server
+    )
     controller.start()
     Global.set_addr_from(controller)
     #
