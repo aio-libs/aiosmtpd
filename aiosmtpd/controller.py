@@ -129,8 +129,8 @@ class BaseController(metaclass=ABCMeta):
         self.ssl_handshake_timeout = ssl_handshake_timeout
         # Add a warning in the log that the ssl_handshake_timeout is ignored on
         # Prython 3.6 and earlier.
-        if (self.ssl_handshake_timeout is not None and
-                sys.version_info < (3, 7)):  # pragma: py-lt-37
+        if (self.ssl_handshake_timeout is not None
+                and sys.version_info < (3, 7)):  # pragma: py-lt-37
             log.warning("SSL handshake timeout is ignored on Python 3.6 and "
                         "earlier.")
         self.SMTP_kwargs: Dict[str, Any] = {}
@@ -423,8 +423,8 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         Does NOT actually start the protocol object itself;
         _factory_invoker() is only called upon fist connection attempt.
         """
-        if (sys.version_info >= (3, 7) and
-                self.ssl_context is not None):  # pragma: py-ge-37
+        if (sys.version_info >= (3, 7)
+                and self.ssl_context is not None):  # pragma: py-ge-37
             kwargs = {"ssl_handshake_timeout": self.ssl_handshake_timeout}
         else:
             kwargs = {}
@@ -475,8 +475,8 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
         Does NOT actually start the protocol object itself;
         _factory_invoker() is only called upon fist connection attempt.
         """
-        if (sys.version_info >= (3, 7) and
-                self.ssl_context is not None):  # pragma: py-ge-37
+        if (sys.version_info >= (3, 7)
+                and self.ssl_context is not None):  # pragma: py-ge-37
             kwargs = {"ssl_handshake_timeout": self.ssl_handshake_timeout}
         else:
             kwargs = {}
