@@ -71,7 +71,7 @@ class Global:
 
 # If less than 1.0, might cause intermittent error if test system
 # is too busy/overloaded.
-AUTOSTOP_DELAY = 1.0
+AUTOSTOP_DELAY = 10.0
 SERVER_CRT = resource_filename("aiosmtpd.tests.certs", "server.crt")
 SERVER_KEY = resource_filename("aiosmtpd.tests.certs", "server.key")
 
