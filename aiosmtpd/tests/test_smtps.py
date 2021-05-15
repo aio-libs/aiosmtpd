@@ -63,8 +63,8 @@ class TestSMTPS:
     def test_SSL_timeout(self, ssl_controller):
         assert ssl_controller.server._ssl_handshake_timeout == 1.0
         start = time.monotonic()
-        with pytest.raises(SMTPServerDisconnected) as ex,\
-             SMTP(*Global.SrvAddr) as smtp_client:
+        with pytest.raises(SMTPServerDisconnected) as ex, \
+             SMTP(*Global.SrvAddr) as smtp_client:  # noqa: N400
             # smtplib.SMTP does not support opporutnistic SSL so the SSL
             # handshake never completes. On Python 3.6 and earlier this meant
             # that the connection would just hang.
