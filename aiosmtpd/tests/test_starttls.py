@@ -18,7 +18,7 @@ from aiosmtpd.smtp import TLSSetupException
 from aiosmtpd.testing.helpers import ReceivingHandler, catchup_delay
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 
-from .conftest import Global, handler_data
+from .conftest import Global, controller_data, handler_data
 
 # region #### Harness Classes & Functions #############################################
 
@@ -177,6 +177,12 @@ class TestStartTLS:
         tls_controller.stop()
         with pytest.raises(SMTPServerDisconnected):
             client.quit()
+
+    @controller_data(ssl_handshake_timeout=10.0)
+    def test_set_tls_handshake_timeout(self, tls_controller, client):
+        client.ehlo("example.com")
+        resp = client.starttls()
+        assert resp == S.S220_READY_TLS
 
     def test_tls_bad_syntax(self, client):
         code, _ = client.ehlo("example.com")
