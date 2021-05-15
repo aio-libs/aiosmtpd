@@ -361,7 +361,8 @@ class SMTP(asyncio.StreamReaderProtocol):
                 log.warning("tls_context.check_hostname == True; "
                             "this might cause client connection problems")
         self.tls_handshake_timeout = tls_handshake_timeout
-        if tls_handshake_timeout is not None and sys.version_info < (3, 7):
+        if (tls_handshake_timeout is not None and
+                sys.version_info < (3, 7)):  # pragma: py-lt-37
             log.warning("Setting TLS handshake timeout on python 3.6 or "
                         "earlier has no effect.")
         self.require_starttls = tls_context and require_starttls
@@ -893,7 +894,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         # Create a waiter Future to wait for SSL handshake to complete
         waiter = self.loop.create_future()
         # If on python 3.7 or greater set the ssl_handshake_timeout.
-        if sys.version_info >= (3, 7):
+        if sys.version_info >= (3, 7):  # pragma: py-ge-37
             tls_kwargs = {"ssl_handshake_timeout": self.tls_handshake_timeout}
         else:
             tls_kwargs = {}
