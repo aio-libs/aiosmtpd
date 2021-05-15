@@ -3,6 +3,7 @@
 
 import asyncio
 import errno
+import logging
 import os
 import ssl
 import sys
@@ -32,6 +33,8 @@ from public import public
 from aiosmtpd.smtp import SMTP
 
 AsyncServer = asyncio.base_events.Server
+
+log = logging.getLogger('mail.log')
 
 DEFAULT_READY_TIMEOUT: float = 5.0
 
