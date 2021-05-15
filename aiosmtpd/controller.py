@@ -136,6 +136,8 @@ class BaseController(metaclass=ABCMeta):
         self.SMTP_kwargs.update(SMTP_parameters)
         if server_hostname:
             self.SMTP_kwargs["hostname"] = server_hostname
+        if ssl_handshake_timeout:
+            self.SMTP_kwargs["tls_handshake_timeout"] = ssl_handshake_timeout
         # Emulate previous behavior of defaulting enable_SMTPUTF8 to True
         # It actually conflicts with SMTP class's default, but the reasoning is
         # discussed in the docs.

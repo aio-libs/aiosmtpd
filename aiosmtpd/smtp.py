@@ -11,6 +11,7 @@ import logging
 import re
 import socket
 import ssl
+import sys
 from base64 import b64decode, b64encode
 from email._header_value_parser import get_addr_spec, get_angle_addr
 from email.errors import HeaderParseError
@@ -321,6 +322,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             hostname: str = None,
             ident: str = None,
             tls_context: Optional[ssl.SSLContext] = None,
+            tls_handshake_timeout: float = None,
             require_starttls: bool = False,
             timeout: float = 300,
             auth_required: bool = False,
@@ -358,6 +360,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             elif tls_context.check_hostname:
                 log.warning("tls_context.check_hostname == True; "
                             "this might cause client connection problems")
+        self.tls_handshake_timeout = tls_handshake_timeout
+        if tls_handshake_timeout is not None and sys.version_info < (3, 7):
+            log.warning("Setting TLS handshake timeout on python 3.6 or "
+                        "earlier has no effect.")
         self.require_starttls = tls_context and require_starttls
         self._timeout_duration = timeout
         self._timeout_handle = None
@@ -886,6 +892,11 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push('220 Ready to start TLS')
         # Create a waiter Future to wait for SSL handshake to complete
         waiter = self.loop.create_future()
+        # If on python 3.7 or greater set the ssl_handshake_timeout.
+        if sys.version_info >= (3, 7):
+            tls_kwargs = {"ssl_handshake_timeout": self.tls_handshake_timeout}
+        else:
+            tls_kwargs = {}
         # Create SSL layer.
         # noinspection PyTypeChecker
         self._tls_protocol = sslproto.SSLProtocol(
@@ -893,7 +904,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             self,
             self.tls_context,
             waiter,
-            server_side=True)
+            server_side=True,
+            **tls_kwargs)
         # Reconfigure transport layer.  Keep a reference to the original
         # transport so that we can close it explicitly when the connection is
         # lost.  XXX BaseTransport.set_protocol() was added in Python 3.5.3 :(
