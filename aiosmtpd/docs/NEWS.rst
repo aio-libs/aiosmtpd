@@ -14,6 +14,8 @@ Fixed/Improved
 --------------
 * All Controllers now have more rationale design, as they are now composited from a Base + a Mixin
 * A whole bunch of annotations
+* Adds ``ssl_handshake_timeout`` parameter to the Controller to allow setting the timeout
+  with SSL to be different than the default 60 seconds on Python 3.7 and later. (See #269)
 
 
 1.4.4 (2023-01-13)

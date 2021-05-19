@@ -406,6 +406,7 @@ Controller API
     loop=None, \
     *, \
     ssl_context=None, \
+    ssl_handshake_timeout=None, \
     server_hostname=None, \
     server_kwargs=None, \
     **SMTP_parameters, \
@@ -421,6 +422,10 @@ Controller API
     :param ssl_context: SSL Context to wrap the socket in.
         Will be passed-through to  :meth:`~asyncio.loop.create_server` method
     :type ssl_context: ssl.SSLContext
+    :param: ssl_handshake_timeout: Timeout for the SSL handshake in seconds.
+        Will be passed through to  :meth:`~asyncio.loop.create_server` method on Python 3.7
+        and later.
+    :type ssl_handshake_timeout: float
     :param server_hostname: Server's hostname,
         will be passed-through as ``hostname`` parameter of :class:`~aiosmtpd.smtp.SMTP`
     :type server_hostname: Optional[str]
@@ -489,6 +494,7 @@ Controller API
     *, \
     ready_timeout=DEFAULT_READY_TIMEOUT, \
     ssl_context=None, \
+    ssl_handshake_timeout, \
     server_hostname=None, \
     server_kwargs=None, \
     **SMTP_parameters)
