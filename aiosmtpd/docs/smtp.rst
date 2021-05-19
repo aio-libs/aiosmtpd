@@ -160,9 +160,9 @@ aiosmtpd.smtp
 
 .. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, \
    decode_data=False, hostname=None, ident=None, tls_context=None, \
-   require_starttls=False, timeout=300, auth_required=False, \
-   auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, \
-   authenticator=None, command_call_limit=None, \
+   tls_handshake_timeout=None, require_starttls=False, timeout=300, \
+   auth_required=False, auth_require_tls=True, auth_exclude_mechanism=None, \
+   auth_callback=None, authenticator=None, command_call_limit=None, \
    proxy_protocol_timeout=None, \
    loop=None)
 
@@ -226,6 +226,15 @@ aiosmtpd.smtp
       as defined in :rfc:`3207`.
 
       See :ref:`tls` for a more in-depth discussion on enabling ``STARTTLS``.
+
+   .. py:attribute:: tls_handshake_timeout
+      :type: float
+      :value: None
+      :noindex:
+
+      Sets the timeout for the SSL handshake in seconds. 
+      When running on python 3.7 or later this overrides the default SSL handshake
+      timeout of 60 seconds. On python 3.6 and earlier this has no effect.
 
    .. py:attribute:: require_starttls
       :type: bool
