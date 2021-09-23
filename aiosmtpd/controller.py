@@ -424,7 +424,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         hostname = self.hostname or self._localhost
         with ExitStack() as stk:
             s = stk.enter_context(create_connection((hostname, self.port), 1.0))
-            if self.ssl_context:
+            if self.ssl_context and self.ssl_context.protocol != ssl.PROTOCOL_TLS_SERVER:
                 s = stk.enter_context(self.ssl_context.wrap_socket(s))
             s.recv(1024)
 
