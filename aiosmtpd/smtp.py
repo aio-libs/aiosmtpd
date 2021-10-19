@@ -329,13 +329,15 @@ class SMTP(asyncio.StreamReaderProtocol):
             auth_callback: AuthCallbackType = None,
             command_call_limit: Union[int, Dict[str, int], None] = None,
             authenticator: AuthenticatorType = None,
+            stream_reader_class: Optional[asyncio.StreamReader] = asyncio.StreamReader,
             proxy_protocol_timeout: Optional[Union[int, float]] = None,
             loop: asyncio.AbstractEventLoop = None
     ):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
+        self.stream_reader_class = stream_reader_class
         super().__init__(
-            asyncio.StreamReader(loop=self.loop, limit=self.line_length_limit),
+            stream_reader_class(loop=self.loop, limit=self.line_length_limit),
             client_connected_cb=self._client_connected_cb,
             loop=self.loop)
         self.event_handler = handler
