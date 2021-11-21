@@ -322,6 +322,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             ident: str = None,
             tls_context: Optional[ssl.SSLContext] = None,
             require_starttls: bool = False,
+            is_using_smtps: bool = False,
             timeout: float = 300,
             auth_required: bool = False,
             auth_require_tls: bool = True,
@@ -368,11 +369,13 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.envelope: Optional[Envelope] = None
         self.transport = None
         self._handler_coroutine = None
-        if not auth_require_tls and auth_required:
+        if not auth_require_tls and not is_using_smtps and auth_required:
             warn("Requiring AUTH while not requiring TLS "
                  "can lead to security vulnerabilities!")
-            log.warning("auth_required == True but auth_require_tls == False")
+            log.warning("auth_required == True but auth_require_tls == False "
+                        "and not using SMTPS")
         self._auth_require_tls = auth_require_tls
+        self._is_using_smtps = is_using_smtps
 
         if proxy_protocol_timeout is not None:
             if proxy_protocol_timeout <= 0:
@@ -917,7 +920,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         elif not self.session.extended_smtp:
             return await self.push("500 Error: command 'AUTH' not recognized")
-        elif self._auth_require_tls and not self._tls_protocol:
+        elif self._auth_require_tls and not self._tls_protocol and not self._is_using_smtps:
             return await self.push("538 5.7.11 Encryption required for requested "
                                    "authentication mechanism")
         elif self.session.authenticated:
