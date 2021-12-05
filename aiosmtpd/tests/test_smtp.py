@@ -7,6 +7,7 @@ import asyncio
 import itertools
 import logging
 import socket
+import sys
 import time
 import warnings
 from asyncio.transports import Transport
@@ -1060,7 +1061,9 @@ class TestAuthMechanisms(_CommonMethods):
         client.user = "goodlogin"
         client.password = PW
         auth_meth = getattr(client, "auth_" + mechanism)
-        if (mechanism, init_resp) == ("login", False):
+        if (mechanism, init_resp) == ("login", False) and (
+            sys.version_info < (3, 8, 9) or (3, 9) <= sys.version_info < (3, 9, 3)):
+            # bpo-27820 was fixed for 3.10 and backported to 3.8.9 and 3.9.3
             with pytest.raises(SMTPAuthenticationError):
                 client.auth(mechanism, auth_meth, initial_response_ok=init_resp)
             client.docmd("*")
