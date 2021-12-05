@@ -1940,6 +1940,8 @@ class TestTimeout(_CommonMethods):
 
 
 class TestAuthArgs:
+    @pytest.mark.xfail(sys.version_info >= (3, 10),
+        reason="asyncio.get_event_loop raises DeprecationWarning (bpo-39529)")
     def test_warn_authreqnotls(self, caplog):
         with pytest.warns(UserWarning) as record:
             _ = Server(Sink(), auth_required=True, auth_require_tls=False)
