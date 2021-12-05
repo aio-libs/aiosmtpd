@@ -7,6 +7,7 @@ import asyncio
 import errno
 import platform
 import socket
+import ssl
 import time
 from contextlib import ExitStack
 from functools import partial
@@ -109,7 +110,10 @@ def assert_smtp_socket(controller: UnixSocketMixin) -> bool:
         sock.settimeout(AUTOSTOP_DELAY)
         sock.connect(str(sockfile))
         if ssl_context:
-            sock = stk.enter_context(ssl_context.wrap_socket(sock))
+            context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            sock = stk.enter_context(context.wrap_socket(sock))
         catchup_delay()
         try:
             resp = sock.recv(1024)

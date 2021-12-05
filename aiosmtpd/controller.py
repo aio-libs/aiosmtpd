@@ -425,7 +425,10 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         with ExitStack() as stk:
             s = stk.enter_context(create_connection((hostname, self.port), 1.0))
             if self.ssl_context:
-                s = stk.enter_context(self.ssl_context.wrap_socket(s))
+                context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+                s = stk.enter_context(context.wrap_socket(s))
             s.recv(1024)
 
 
@@ -467,7 +470,10 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
             s: makesock = stk.enter_context(makesock(AF_UNIX, SOCK_STREAM))
             s.connect(self.unix_socket)
             if self.ssl_context:
-                s = stk.enter_context(self.ssl_context.wrap_socket(s))
+                context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+                s = stk.enter_context(context.wrap_socket(s))
             s.recv(1024)
 
 
