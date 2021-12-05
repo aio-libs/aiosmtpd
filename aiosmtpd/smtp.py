@@ -204,13 +204,6 @@ class Envelope:
         self.rcpt_options = []
 
 
-# This is here to enable debugging output when the -E option is given to the
-# unit test suite.  In that case, this function is mocked to set the debug
-# level on the loop (as if PYTHONASYNCIODEBUG=1 were set).
-def make_loop() -> asyncio.AbstractEventLoop:
-    return asyncio.get_event_loop()
-
-
 @public
 def syntax(
         text: str, extended: str = None, when: Optional[str] = None
@@ -333,7 +326,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             loop: asyncio.AbstractEventLoop = None
     ):
         self.__ident__ = ident or __ident__
-        self.loop = loop if loop else make_loop()
+        self.loop = loop if loop else asyncio.get_event_loop()
         super().__init__(
             asyncio.StreamReader(loop=self.loop, limit=self.line_length_limit),
             client_connected_cb=self._client_connected_cb,
