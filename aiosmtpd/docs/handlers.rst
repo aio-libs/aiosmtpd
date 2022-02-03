@@ -207,7 +207,7 @@ The following hooks are currently supported (in alphabetical order):
 .. py:method:: handle_RCPT(server, session, envelope, address, rcpt_options) -> str
    :async:
 
-   :param address: The parsed email address given by the client in the ``MAIL FROM`` command
+   :param address: The parsed email address given by the client in the ``RCPT TO`` command
    :type address: str
    :param rcpt_options: Additional ESMTP RCPT options provided by the client
    :type rcpt_options: List[str]
