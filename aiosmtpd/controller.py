@@ -425,7 +425,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         with ExitStack() as stk:
             s = stk.enter_context(create_connection((hostname, self.port), 1.0))
             if self.ssl_context:
-                s = stk.enter_context(self.ssl_context.wrap_socket(s))
+                s = stk.enter_context(self.ssl_context.wrap_socket(s, server_side=True))
             s.recv(1024)
 
 
