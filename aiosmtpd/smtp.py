@@ -816,10 +816,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push('501 Syntax: EHLO hostname')
             return
 
-        response = []
+        response = ['250-' + self.hostname, ]
         self._set_rset_state()
         self.session.extended_smtp = True
-        response.append('250-' + self.hostname)
         if self.data_size_limit:
             response.append(f'250-SIZE {self.data_size_limit}')
             self.command_size_limits['MAIL'] += 26

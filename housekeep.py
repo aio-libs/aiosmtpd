@@ -21,12 +21,12 @@ try:
 except ImportError:
     colorama_init = None
 
-    class Fore:
+    class Fore:                # noqa: PIE795
         CYAN = "\x1b[1;96m"
         GREEN = "\x1b[1;92m"
         YELLOW = "\x1b[1;93m"
 
-    class Style:
+    class Style:               # noqa: PIE795
         BRIGHT = "\x1b[1m"
         RESET_ALL = "\x1b[0m"
 

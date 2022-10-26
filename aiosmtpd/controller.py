@@ -497,13 +497,9 @@ class UnixSocketController(  # pragma: no-unixsock
 class UnthreadedController(InetMixin, BaseUnthreadedController):
     """Provides an unthreaded controller that listens on an INET endpoint"""
 
-    pass
-
 
 @public
 class UnixSocketUnthreadedController(  # pragma: no-unixsock
     UnixSocketMixin, BaseUnthreadedController
 ):
     """Provides an unthreaded controller that listens on a Unix Socket file"""
-
-    pass

@@ -5,6 +5,7 @@
 
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -26,11 +27,11 @@ DISTFILES = [
 ]
 
 printfl("Updating release toolkit first...", end="")
-run_hidden([sys.executable] + "-m pip install -U setuptools wheel twine".split())
+run_hidden([sys.executable] + shlex.split("-m pip install -U setuptools wheel twine"))
 print()
 
 printfl("Checking extra toolkit...", end="")
-result = run_hidden([sys.executable] + "-m pip freeze".split())
+result = run_hidden([sys.executable] + shlex.split("-m pip freeze"))
 print()
 if b"\ntwine-verify-upload==" not in result.stdout:
     print("*** Package twine-verify-upload is not yet installed.")
@@ -77,7 +78,7 @@ if choice.casefold() in ("y", "yes"):
             run_hidden("tox")
         else:
             printfl("Running 'tox -e qa,docs', please wait...", end="")
-            run_hidden("tox -e qa,docs".split())
+            run_hidden(shlex.split("tox -e qa,docs"))
         print()
     except subprocess.CalledProcessError:
         print("ERROR: tox failed. Please run all tests")
