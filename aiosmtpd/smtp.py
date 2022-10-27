@@ -213,7 +213,7 @@ def make_loop() -> asyncio.AbstractEventLoop:
 
 @public
 def syntax(
-        text: str, extended: str = None, when: Optional[str] = None
+        text: str, extended: Optional[str] = None, when: Optional[str] = None
 ) -> DecoratorType:
     """
     A @decorator that provides helptext for (E)SMTP HELP.
@@ -318,19 +318,19 @@ class SMTP(asyncio.StreamReaderProtocol):
             data_size_limit: int = DATA_SIZE_DEFAULT,
             enable_SMTPUTF8: bool = False,
             decode_data: bool = False,
-            hostname: str = None,
-            ident: str = None,
+            hostname: Optional[str] = None,
+            ident: Optional[str] = None,
             tls_context: Optional[ssl.SSLContext] = None,
             require_starttls: bool = False,
             timeout: float = 300,
             auth_required: bool = False,
             auth_require_tls: bool = True,
             auth_exclude_mechanism: Optional[Iterable[str]] = None,
-            auth_callback: AuthCallbackType = None,
+            auth_callback: Optional[AuthCallbackType] = None,
             command_call_limit: Union[int, Dict[str, int], None] = None,
-            authenticator: AuthenticatorType = None,
+            authenticator: Optional[AuthenticatorType] = None,
             proxy_protocol_timeout: Optional[Union[int, float]] = None,
-            loop: asyncio.AbstractEventLoop = None
+            loop: Optional[asyncio.AbstractEventLoop] = None
     ):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
@@ -492,7 +492,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         if closed.done() and not closed.cancelled():
             closed.exception()
 
-    def connection_made(self, transport: asyncio.transports.Transport) -> None:
+    def connection_made(self, transport: asyncio.transports.BaseTransport) -> None:
         # Reset state due to rfc3207 part 4.2.
         self._set_rset_state()
         self.session = self._create_session()
@@ -545,7 +545,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             return False
         return super().eof_received()
 
-    def _reset_timeout(self, duration: float = None) -> None:
+    def _reset_timeout(self, duration: Optional[float] = None) -> None:
         if self._timeout_handle is not None:
             self._timeout_handle.cancel()
         self._timeout_handle = self.loop.call_later(
@@ -766,10 +766,16 @@ class SMTP(asyncio.StreamReaderProtocol):
                         status = '500 Error: Cannot describe error'
                 finally:
                     if isinstance(error, TLSSetupException):
-                        self.transport.close()
+                        # This code branch is inside None check for self.transport
+                        # so there shouldn't be a None self.transport but pytype
+                        # still complains, so silence that error.
+                        self.transport.close()  # pytype: disable=attribute-error
                         self.connection_lost(error)
                     else:
-                        await self.push(status)
+                        # The value of status is being set with ex-except and it
+                        # shouldn't be None, but pytype isn't able to infer that
+                        # so ignore the error related to wrong argument types.
+                        await self.push(status)  # pytype: disable=wrong-arg-types
 
     async def check_helo_needed(self, helo: str = "HELO") -> bool:
         """
@@ -1009,7 +1015,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         challenge = b"334 " + (b64encode(challenge) if encode_to_b64 else challenge)
         log.debug("%r << challenge: %r", self.session.peer, challenge)
         await self.push(challenge)
-        line = await self._reader.readline()
+        line = await self._reader.readline()      # pytype: disable=attribute-error
         if log_client_response:
             warn("AUTH interaction logging is enabled!")
             warn("Sensitive information might be leaked!")
@@ -1096,7 +1102,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             # login data is "{authz_id}\x00{login_id}\x00{password}"
             # authz_id can be null, and currently ignored
             # See https://tools.ietf.org/html/rfc4616#page-3
-            _, login, password = login_and_password.split(b"\x00")
+            _, login, password = login_and_password.split(b"\x00")  # pytype: disable=attribute-error  # noqa: E501
         except ValueError:  # not enough args
             await self.push("501 5.5.2 Can't split auth value")
             return AuthResult(success=False, handled=True)

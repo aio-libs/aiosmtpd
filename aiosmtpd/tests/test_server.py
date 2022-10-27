@@ -403,7 +403,7 @@ class TestUnthreaded:
             thread.start()
             catchup_delay()
 
-        def joiner(timeout: float = None):
+        def joiner(timeout: Optional[float] = None):
             nonlocal thread
             assert isinstance(thread, Thread)
             thread.join(timeout=timeout)
