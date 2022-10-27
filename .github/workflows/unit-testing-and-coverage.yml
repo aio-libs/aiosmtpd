@@ -83,7 +83,6 @@ jobs:
           pytest -v aiosmtpd/qa
           check-manifest -v
   testing:
-    needs: qa_docs
     strategy:
       # If a matrix fail, do NOT stop other matrix, let them run to completion
       fail-fast: false
