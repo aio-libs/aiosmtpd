@@ -84,7 +84,8 @@ def server_to_client_ssl_ctx(server_ctx: ssl.SSLContext) -> ssl.SSLContext:
     Given an SSLContext object with TLS_SERVER_PROTOCOL return a client
     context that can connect to the server.
     """
-    client_ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=server_ctx.get_ca_certs())
+    client_ctx = ssl.create_default_context(
+        purpose=ssl.Purpose.SERVER_AUTH, cafile=server_ctx.get_ca_certs())
     client_ctx.options = server_ctx.options
     client_ctx.check_hostname = False
     client_ctx.verify_mode = server_ctx.verify_mode
