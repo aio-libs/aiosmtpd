@@ -9,7 +9,7 @@ from collections import deque
 from enum import IntEnum
 from functools import partial
 from ipaddress import IPv4Address, IPv6Address, ip_address
-from typing import Any, AnyStr, ByteString, Dict, Optional, Tuple, Union
+from typing import Any, ByteString, Dict, Optional, Tuple, Union
 
 import attr
 from public import public
@@ -87,7 +87,7 @@ log = logging.getLogger("mail.debug")
 
 # region #### Custom Types ############################################################
 
-EndpointAddress = Union[IPv4Address, IPv6Address, AnyStr]
+EndpointAddress = Union[IPv4Address, IPv6Address, Union[str, bytes]]
 
 
 @public

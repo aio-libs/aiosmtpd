@@ -109,7 +109,7 @@ class BaseController(metaclass=ABCMeta):
     def __init__(
         self,
         handler: Any,
-        loop: asyncio.AbstractEventLoop = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
         *,
         ssl_context: Optional[ssl.SSLContext] = None,
         # SMTP parameters
@@ -184,7 +184,7 @@ class BaseController(metaclass=ABCMeta):
         try:
             _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
         except AttributeError:  # pragma: py-gt-36
-            _all_tasks = asyncio.Task.all_tasks
+            _all_tasks = asyncio.Task.all_tasks  # pytype: disable=attribute-error
         for task in _all_tasks(self.loop):
             # This needs to be invoked in a thread-safe way
             task.cancel()
@@ -198,7 +198,7 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
     def __init__(
         self,
         handler: Any,
-        loop: asyncio.AbstractEventLoop = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
         *,
         ready_timeout: float = DEFAULT_READY_TIMEOUT,
         ssl_context: Optional[ssl.SSLContext] = None,
@@ -322,7 +322,7 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
     def __init__(
         self,
         handler: Any,
-        loop: asyncio.AbstractEventLoop = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
         *,
         ssl_context: Optional[ssl.SSLContext] = None,
         # SMTP parameters
@@ -388,7 +388,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         handler: Any,
         hostname: Optional[str] = None,
         port: int = 8025,
-        loop: asyncio.AbstractEventLoop = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
         **kwargs,
     ):
         super().__init__(
@@ -435,7 +435,7 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
         self,
         handler: Any,
         unix_socket: Union[str, Path],
-        loop: asyncio.AbstractEventLoop = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
         **kwargs,
     ):
         super().__init__(
@@ -497,13 +497,9 @@ class UnixSocketController(  # pragma: no-unixsock
 class UnthreadedController(InetMixin, BaseUnthreadedController):
     """Provides an unthreaded controller that listens on an INET endpoint"""
 
-    pass
-
 
 @public
 class UnixSocketUnthreadedController(  # pragma: no-unixsock
     UnixSocketMixin, BaseUnthreadedController
 ):
     """Provides an unthreaded controller that listens on a Unix Socket file"""
-
-    pass

@@ -55,7 +55,7 @@ class FakeParser:
     Emulates ArgumentParser.error() to catch the message
     """
 
-    message: AnyStr = None
+    message: Union[str, bytes, None] = None
 
     def error(self, message: AnyStr):
         self.message = message
@@ -63,7 +63,7 @@ class FakeParser:
 
 
 class DataHandler:
-    content: AnyStr = None
+    content: Union[str, bytes, None] = None
     original_content: bytes = None
 
     async def handle_DATA(
@@ -319,7 +319,7 @@ class TestDebugging:
                 From: Anne Person <anne@example.com>
                 To: Bart Person <bart@example.com>
                 Subject: A test
-    
+
                 Testing
                 """
             ),
@@ -352,7 +352,7 @@ class TestDebugging:
                 From: Anne Person <anne@example.com>
                 To: Bart Person <bart@example.com>
                 Subject: A test
-    
+
                 Testing
                 """
             ),
@@ -387,7 +387,7 @@ class TestDebugging:
                 From: Anne Person <anne@example.com>
                 To: Bart Person <bart@example.com>
                 Subject: A test
-    
+
                 Testing
                 """
             ),
@@ -418,7 +418,7 @@ class TestDebugging:
                 From: Anne Person <anne@example.com>
                 To: Bart Person <bart@example.com>
                 Subject: A test
-    
+
                 Testing
                 """
             ),
@@ -495,7 +495,7 @@ class TestMessage:
                 To: Bart Person <bart@example.com>
                 Subject: A test
                 Message-ID: <ant>
-    
+
                 Testing
                 """
             ),
@@ -519,7 +519,7 @@ class TestMessage:
                 To: Bart Person <bart@example.com>
                 Subject: A test
                 Message-ID: <ant>
-    
+
                 Testing
                 """
             ),
@@ -542,7 +542,7 @@ class TestMessage:
                 To: Bart Person <bart@example.com>
                 Subject: A test
                 Message-ID: <ant>
-    
+
                 Testing
                 """
             ),
@@ -571,7 +571,7 @@ class TestMessage:
                 To: Bart Person <bart@example.com>
                 Subject: A test
                 Message-ID: <ant>
-    
+
                 Testing
                 """
             ),
@@ -595,7 +595,7 @@ class TestMailbox:
                 To: Bart Person <bart@example.com>
                 Subject: A test
                 Message-ID: <ant>
-    
+
                 Hi Bart, this is Anne.
                 """
             ),
@@ -609,7 +609,7 @@ class TestMailbox:
                 To: Dave Person <dave@example.com>
                 Subject: A test
                 Message-ID: <bee>
-    
+
                 Hi Dave, this is Cate.
                 """
             ),
@@ -623,7 +623,7 @@ class TestMailbox:
                 To: Fred Person <fred@example.com>
                 Subject: A test
                 Message-ID: <cat>
-    
+
                 Hi Fred, this is Elle.
                 """
             ),
@@ -644,7 +644,7 @@ class TestMailbox:
                 To: Bart Person <bart@example.com>
                 Subject: A test
                 Message-ID: <ant>
-    
+
                 Hi Bart, this is Anne.
                 """
             ),
@@ -961,7 +961,7 @@ class TestHooks:
                 From: anne@example.com
                 To: bart@example.com
                 Subject: Test
-    
+
                 """
             )
         )
@@ -981,7 +981,7 @@ class TestDeprecation:
                     From: Anne Person <anne@example.com>
                     To: Bart Person <bart@example.com>
                     Subject: A test
-    
+
                     Testing
                     """
                 ),

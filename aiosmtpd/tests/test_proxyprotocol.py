@@ -903,7 +903,7 @@ class TestGetV2(_TestProxyProtocolCommon):
         fam: int = 0,
         proto: int = 0,
         payload: bytes = b"",
-        expect: str = None,
+        expect: Optional[str] = None,
     ) -> ProxyData:
         ver_cmd = (ver << 4) | cmd
         fam_pro = (fam << 4) | proto

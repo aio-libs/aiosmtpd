@@ -20,7 +20,7 @@ from smtplib import (
     SMTPServerDisconnected,
 )
 from textwrap import dedent
-from typing import cast, Any, AnyStr, Callable, Generator, List, Tuple
+from typing import cast, Any, Callable, Generator, List, Tuple, Union
 
 import pytest
 from pytest_mock import MockFixture
@@ -98,10 +98,10 @@ class ErrorSMTP(Server):
 # noinspection TimingAttack
 class PeekerHandler:
     sess: SMTPSession = None
-    login: AnyStr = None
+    login: Union[str, bytes, None] = None
     login_data: Any = None
-    mechanism: AnyStr = None
-    password: AnyStr = None
+    mechanism: Union[str, bytes, None] = None
+    password: Union[str, bytes, None] = None
 
     # Please do not insert "_" after auth; that will 'fool' SMTP into thinking this is
     # an AUTH Mechanism, and we totally do NOT want that.
@@ -1495,7 +1495,7 @@ class TestSMTPWithController(_CommonMethods):
                     From: anne@example.com
                     To: bart@example.com
                     Subjebgct: A test
-                    
+
                     Testing
                 """
                 ),
