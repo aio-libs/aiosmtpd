@@ -821,7 +821,7 @@ class TestProxyMocked:
             if rt == (
                 logger_name,
                 logging.INFO,
-                "we got some refusals: {'bart@example.com': (-1, 'ignore')}",
+                "we got some refusals: {'bart@example.com': (-1, b'ignore')}",
             ):
                 break
         else:
