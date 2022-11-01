@@ -53,6 +53,7 @@ CRLF = "\r\n"
 BCRLF = b"\r\n"
 MAIL_LOG = logging.getLogger("mail.log")
 MAIL_LOG.setLevel(logging.DEBUG)
+B64EQUALS = b64encode(b"=").decode()
 
 # fh = logging.FileHandler("~smtp.log")
 # fh.setFormatter(logging.Formatter("{asctime} - {levelname} - {message}", style="{"))
@@ -985,7 +986,7 @@ class TestSMTPAuth(_CommonMethods):
         resp = client.docmd("AUTH WITH_UNDERSCORE")
         assert resp == (334, b"challenge")
         with warnings.catch_warnings(record=True) as w:
-            assert client.docmd("=") == S.S235_AUTH_SUCCESS
+            assert client.docmd(B64EQUALS) == S.S235_AUTH_SUCCESS
         assert len(w) > 0
         assert str(w[0].message) == "AUTH interaction logging is enabled!"
         assert str(w[1].message) == "Sensitive information might be leaked!"
@@ -1099,7 +1100,7 @@ class TestAuthMechanisms(_CommonMethods):
         assert resp == S.S535_AUTH_INVALID
 
     def test_plain1_empty(self, do_auth_plain1):
-        resp = do_auth_plain1("=")
+        resp = do_auth_plain1(B64EQUALS)
         assert resp == S.S501_AUTH_CANTSPLIT
 
     def test_plain1_good_credentials(
@@ -1161,7 +1162,7 @@ class TestAuthMechanisms(_CommonMethods):
         assert resp == S.S535_AUTH_INVALID
 
     def test_plain2_no_credentials(self, client_auth_plain2):
-        resp = client_auth_plain2.docmd("=")
+        resp = client_auth_plain2.docmd(B64EQUALS)
         assert resp == S.S501_AUTH_CANTSPLIT
 
     def test_plain2_abort(self, client_auth_plain2):
@@ -1230,9 +1231,9 @@ class TestAuthMechanisms(_CommonMethods):
         assert resp == S.S535_AUTH_INVALID
 
     def test_login3_empty_credentials(self, do_auth_login3):
-        resp = do_auth_login3("=")
+        resp = do_auth_login3(B64EQUALS)
         assert resp == S.S334_AUTH_PASSWORD
-        resp = do_auth_login3("=")
+        resp = do_auth_login3(B64EQUALS)
         assert resp == S.S535_AUTH_INVALID
 
     def test_login3_abort_username(self, do_auth_login3):
@@ -1240,7 +1241,7 @@ class TestAuthMechanisms(_CommonMethods):
         assert resp == S.S501_AUTH_ABORTED
 
     def test_login3_abort_password(self, do_auth_login3):
-        resp = do_auth_login3("=")
+        resp = do_auth_login3(B64EQUALS)
         assert resp == S.S334_AUTH_PASSWORD
         resp = do_auth_login3("*")
         assert resp == S.S501_AUTH_ABORTED
