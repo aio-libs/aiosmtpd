@@ -3,7 +3,6 @@
 
 import asyncio
 import errno
-from http import server
 import os
 import ssl
 import sys
