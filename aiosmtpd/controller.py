@@ -3,6 +3,7 @@
 
 import asyncio
 import errno
+from http import server
 import os
 import ssl
 import sys
@@ -86,13 +87,14 @@ def _server_to_client_ssl_ctx(server_ctx: ssl.SSLContext) -> ssl.SSLContext:
     """
     client_ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
     client_ctx.options = server_ctx.options
+    client_ctx.check_hostname = False
     # We do not verify the ssl cert for the server here simply because this
     # is a local connection to poke at the server for it to do its lazy
     # initialization sequence. The only purpose of this client context
     # is to make a connection to the *local* server created using the same
-    # code.
-    client_ctx.check_hostname = False
-    client_ctx.verify_mode = ssl.CERT_NONE
+    # code. That is also the reason why we disable cert verification below
+    # and the flake8 check for the same.
+    client_ctx.verify_mode = ssl.CERT_NONE    # noqa: DUO122
     return client_ctx
 
 
