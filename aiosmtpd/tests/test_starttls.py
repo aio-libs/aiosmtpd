@@ -347,8 +347,8 @@ class TestRequireTLSAUTH:
         resp = client.docmd("AUTH ")
         assert resp == S.S538_AUTH_ENCRYPTREQ
 
-    def test_auth_tls(self, client, ssl_context_client):
-        resp = client.starttls(context=ssl_context_client)
+    def test_auth_tls(self, client):
+        resp = client.starttls()
         assert resp == S.S220_READY_TLS
         code, _ = client.ehlo("example.com")
         assert code == 250
