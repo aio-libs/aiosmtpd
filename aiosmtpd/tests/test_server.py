@@ -28,6 +28,7 @@ from aiosmtpd.controller import (
     UnixSocketUnthreadedController,
     _FakeServer,
     get_localhost,
+    _server_to_client_ssl_ctx,
 )
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
@@ -101,7 +102,10 @@ def safe_socket_dir() -> Generator[Path, None, None]:
 def assert_smtp_socket(controller: UnixSocketMixin) -> bool:
     assert Path(controller.unix_socket).exists()
     sockfile = controller.unix_socket
-    ssl_context = controller.ssl_context
+    if controller.ssl_context:
+        ssl_context = _server_to_client_ssl_ctx(controller.ssl_context)
+    else:
+        ssl_context = None
     with ExitStack() as stk:
         sock: socket.socket = stk.enter_context(
             socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

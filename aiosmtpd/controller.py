@@ -79,6 +79,24 @@ def get_localhost() -> Literal["::1", "127.0.0.1"]:
         raise
 
 
+def _server_to_client_ssl_ctx(server_ctx: ssl.SSLContext) -> ssl.SSLContext:
+    """
+    Given an SSLContext object with TLS_SERVER_PROTOCOL return a client
+    context that can connect to the server.
+    """
+    client_ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
+    client_ctx.options = server_ctx.options
+    client_ctx.check_hostname = False
+    # We do not verify the ssl cert for the server here simply because this
+    # is a local connection to poke at the server for it to do its lazy
+    # initialization sequence. The only purpose of this client context
+    # is to make a connection to the *local* server created using the same
+    # code. That is also the reason why we disable cert verification below
+    # and the flake8 check for the same.
+    client_ctx.verify_mode = ssl.CERT_NONE    # noqa: DUO122
+    return client_ctx
+
+
 class _FakeServer(asyncio.StreamReaderProtocol):
     """
     Returned by _factory_invoker() in lieu of an SMTP instance in case
@@ -425,7 +443,8 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         with ExitStack() as stk:
             s = stk.enter_context(create_connection((hostname, self.port), 1.0))
             if self.ssl_context:
-                s = stk.enter_context(self.ssl_context.wrap_socket(s))
+                client_ctx = _server_to_client_ssl_ctx(self.ssl_context)
+                s = stk.enter_context(client_ctx.wrap_socket(s))
             s.recv(1024)
 
 
@@ -467,7 +486,8 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
             s: makesock = stk.enter_context(makesock(AF_UNIX, SOCK_STREAM))
             s.connect(self.unix_socket)
             if self.ssl_context:
-                s = stk.enter_context(self.ssl_context.wrap_socket(s))
+                client_ctx = _server_to_client_ssl_ctx(self.ssl_context)
+                s = stk.enter_context(client_ctx.wrap_socket(s))
             s.recv(1024)
 
 
