@@ -904,7 +904,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         # transport so that we can close it explicitly when the connection is
         # lost.
         self._original_transport = self.transport
-        self.transport.set_protocol(self._tls_protocol)
+        self._original_transport.set_protocol(self._tls_protocol)
         # Reconfigure the protocol layer.  Why is the app transport a protected
         # property, if it MUST be used externally?
         self.transport = self._tls_protocol._get_app_transport()
