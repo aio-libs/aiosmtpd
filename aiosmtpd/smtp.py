@@ -907,7 +907,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._original_transport.set_protocol(self._tls_protocol)
         # Reconfigure the protocol layer.  Why is the app transport a protected
         # property, if it MUST be used externally?
-        self.transport = self._tls_protocol._get_app_transport()   # pytype: disable=attribute-error # noqa: E501
+        self.transport = self._tls_protocol._app_transport
         self._tls_protocol.connection_made(self._original_transport)
         # wait until handshake complete
         try:
