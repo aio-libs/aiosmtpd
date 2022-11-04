@@ -529,8 +529,8 @@ class SMTP(asyncio.StreamReaderProtocol):
         # otherwise an unexpected eof_received() will be called *after* the
         # connection_lost().  At that point the stream reader will already be
         # destroyed and we'll get a traceback in super().eof_received() below.
-        # if self._original_transport is not None:
-        #     self._original_transport.close()
+        if self._original_transport is not None:
+            self._original_transport.close()
         super().connection_lost(error)
         self._handler_coroutine.cancel()
         self.transport = None
@@ -902,14 +902,13 @@ class SMTP(asyncio.StreamReaderProtocol):
 
         # Reconfigure transport layer.  Keep a reference to the original
         # transport so that we can close it explicitly when the connection is
-        # lost.  XXX BaseTransport.set_protocol() was added in Python 3.5.3 :(
+        # lost.
         self._original_transport = self.transport
         self.transport.set_protocol(self._tls_protocol)
-        # self._original_transport._protocol = self._tls_protocol
         # Reconfigure the protocol layer.  Why is the app transport a protected
         # property, if it MUST be used externally?
-        # self.transport = self._tls_protocol._get_app_transport()
-        self._tls_protocol.connection_made(self.transport)
+        self.transport = self._tls_protocol._get_app_transport()
+        self._tls_protocol.connection_made(self._original_transport)
         # wait until handshake complete
         try:
             await waiter
