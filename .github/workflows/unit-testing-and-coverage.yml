@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: "Checkout latest PR commit"
-        uses: actions/checkout@v2.6.0
+        uses: actions/checkout@v3
       - name: "Set up Python"
         uses: actions/setup-python@v4.3.1
         with:
@@ -97,7 +97,7 @@ jobs:
     timeout-minutes: 15  # Slowest so far is pypy3 on MacOS, taking almost 7m
     steps:
     - name: "Checkout latest commit"
-      uses: actions/checkout@v2.6.0
+      uses: actions/checkout@v3
       with:
         fetch-depth: 0  # Required by codecov/codecov-action@v1
     - name: "Set up Python ${{ matrix.python-version }}"
