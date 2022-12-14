@@ -31,7 +31,7 @@ jobs:
         with:
           # 3.8 is chosen because it seems to be the fastest for <3.9
           # (3.9 excluded because it seems to be still very unstable)
-          python-version: 3.11
+          python-version: 3.8
       - name: "Update modules & install deps"
         # language=bash
         run: |
