@@ -93,6 +93,10 @@ jobs:
         exclude:
           - os: windows-latest
             python-version: pypy3.6
+          - os: macos-11
+            python-version: pypy3.6
+          - os: macos-12
+            python-version: pypy3.6
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15  # Slowest so far is pypy3 on MacOS, taking almost 7m
     steps:
