@@ -22,7 +22,7 @@ on:
 
 jobs:
   qa_docs:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: "Checkout latest PR commit"
         uses: actions/checkout@v2
@@ -31,7 +31,7 @@ jobs:
         with:
           # 3.8 is chosen because it seems to be the fastest for <3.9
           # (3.9 excluded because it seems to be still very unstable)
-          python-version: 3.8
+          python-version: 3.11
       - name: "Update modules & install deps"
         # language=bash
         run: |
