@@ -55,13 +55,13 @@ Full documentation is available on |aiosmtpd rtd|_
 Requirements
 ============
 
-You need **at least Python 3.6** to use this library.
+You need **at least Python 3.7** to use this library.
 
 
 Supported Platforms
 -----------------------
 
-``aiosmtpd`` has been tested on **CPython** and |PyPy3.7|_
+``aiosmtpd`` has been tested on **CPython**, |PyPy3.7|_, and |PyPy3.8|_
 for the following platforms (in alphabetical order):
 
 * Cygwin (on Windows 10) [1]
@@ -69,6 +69,7 @@ for the following platforms (in alphabetical order):
 * OpenSUSE Leap 15 [2]
 * Ubuntu 18.04
 * Ubuntu 20.04
+* Ubuntu 22.04
 * Windows 10
 
   | [1] Supported only with Cygwin-provided CPython versions
@@ -79,6 +80,8 @@ but we cannot provide support for unlisted platforms.
 
 .. |PyPy3.7| replace:: **PyPy3.7**
 .. _`PyPy3.7`: https://www.pypy.org/
+.. |PyPy3.8| replace:: **PyPy3.7**
+.. _`PyPy3.8`: https://www.pypy.org/
 
 
 Installation
