@@ -313,11 +313,12 @@ Starting version 1.3.1,
 files provided through `PyPI`_ or `GitHub Releases`_
 will be signed using one of the following GPG Keys:
 
-+-------------------------+----------------+------------------------------+
-| GPG Key ID              | Owner          | Email                        |
-+=========================+================+==============================+
-| ``5D60 CE28 9CD7 C258`` | Pandu E POLUAN | pepoluan at gmail period com |
-+-------------------------+----------------+------------------------------+
++-------------------------+----------------+----------------------------------+
+| GPG Key ID              | Owner          | Email                            |
++=========================+================+==================================+
+| ``5D60 CE28 9CD7 C258`` | Pandu E POLUAN | pepoluan at gmail period com     |
+| ``E309 FD82 73BD 8465`` | Wayne Werner   | waynejwerner at gmail period com |
++-------------------------+----------------+----------------------------------+
 
 .. _PyPI: https://pypi.org/project/aiosmtpd/
 .. _`GitHub Releases`: https://github.com/aio-libs/aiosmtpd/releases
