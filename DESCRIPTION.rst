@@ -45,7 +45,7 @@
 
 This is a server for SMTP and related MTA protocols,
 similar in utility to the standard library's |smtpd.py|_ module,
-but rewritten to be based on ``asyncio`` for Python 3.6+.
+but rewritten to be based on ``asyncio`` for Python 3.7+.
 
 Please visit the `Project Homepage`_ for more information.
 

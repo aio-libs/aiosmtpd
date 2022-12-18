@@ -37,3 +37,4 @@ prof/
 .pytype/
 ~temp*
 *.sw[a-p]
+pyvenv.cfg
