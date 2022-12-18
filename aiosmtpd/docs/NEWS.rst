@@ -16,6 +16,20 @@ Fixed/Improved
 * A whole bunch of annotations
 
 
+1.4.3 (2022-12-16)
+==================
+
+Fixed/Improved
+--------------
+* Add compatibility for Python 3.10 and 3.11 (Closes #322)
+* Test matrix update (Closes #306)
+
+  * Drop Python 3.6, PyPy 3.6 (some) and MacOS 10
+  * Add Python 3.10 & 3.11, PyPy 3.7 & 3.8, Ubuntu 22.04, MacOS 11 & 12
+
+* Longer AUTOSTOP_DELAY especially for Windows (Closes #313)
+
+
 1.4.2 (2021-03-08)
 =====================
 
