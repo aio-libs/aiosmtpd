@@ -317,6 +317,8 @@ will be signed using one of the following GPG Keys:
 +-------------------------+----------------+---------------------------------+
 | GPG Key ID              | Owner          | Email                           |
 +=========================+================+=================================+
+| ``5D60 CE28 9CD7 C258`` | Pandu E POLUAN | pepoluan at gmail period com    |
++-------------------------+----------------+---------------------------------+
 | ``5555 A6A6 7AE1 DC91`` | Pandu E POLUAN | pepoluan at gmail period com    |
 +-------------------------+----------------+---------------------------------+
 | ``2427 C54B B7EB CD89`` | Wayne Werner   | wayne at waynewerner period com |
