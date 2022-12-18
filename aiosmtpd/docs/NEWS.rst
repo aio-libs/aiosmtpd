@@ -16,7 +16,7 @@ Fixed/Improved
 * A whole bunch of annotations
 
 
-1.4.3rc1 (2022-12-16)
+1.4.3rc2 (2022-12-18)
 =====================
 
 Fixed/Improved
@@ -28,6 +28,7 @@ Fixed/Improved
   * Add Python 3.10 & 3.11, PyPy 3.7 & 3.8, Ubuntu 22.04, MacOS 11 & 12
 
 * Longer AUTOSTOP_DELAY especially for Windows (Closes #313)
+* Update signing keys
 
 
 1.4.2 (2021-03-08)
