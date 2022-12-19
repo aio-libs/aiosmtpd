@@ -21,7 +21,7 @@ from abc import ABCMeta, abstractmethod
 from argparse import ArgumentParser
 from email.message import Message as Em_Message
 from email.parser import BytesParser, Parser
-from typing import AnyStr, Dict, List, Tuple, Type, TypeVar
+from typing import Any, AnyStr, List, Type, TypeVar, Optional
 
 from public import public
 
@@ -54,7 +54,7 @@ def message_from_string(s, *args, **kws):
 
 @public
 class Debugging:
-    def __init__(self, stream: io.TextIOBase = None):
+    def __init__(self, stream: Optional[io.TextIOBase] = None):
         self.stream = sys.stdout if stream is None else stream
 
     @classmethod
@@ -140,13 +140,13 @@ class Proxy:
 
     def _deliver(
         self, mail_from: AnyStr, rcpt_tos: List[AnyStr], data: AnyStr
-    ) -> Dict[str, Tuple[int, bytes]]:
+    ) -> Any :
         refused = {}
         try:
             s = smtplib.SMTP()
             s.connect(self._hostname, self._port)
             try:
-                refused = s.sendmail(mail_from, rcpt_tos, data)
+                refused = s.sendmail(mail_from, rcpt_tos, data)  # pytype: disable=wrong-arg-types  # noqa: E501
             finally:
                 s.quit()
         except smtplib.SMTPRecipientsRefused as e:
@@ -158,7 +158,7 @@ class Proxy:
             # error code, use it.  Otherwise, fake it with a non-triggering
             # exception code.
             errcode = getattr(e, "smtp_code", -1)
-            errmsg = getattr(e, "smtp_error", "ignore")
+            errmsg = getattr(e, "smtp_error", b"ignore")
             for r in rcpt_tos:
                 refused[r] = (errcode, errmsg)
         return refused
@@ -175,7 +175,7 @@ class Sink:
 
 @public
 class Message(metaclass=ABCMeta):
-    def __init__(self, message_class: Type[Em_Message] = None):
+    def __init__(self, message_class: Optional[Type[Em_Message]] = None):
         self.message_class = message_class
 
     async def handle_DATA(
@@ -213,9 +213,9 @@ class Message(metaclass=ABCMeta):
 class AsyncMessage(Message, metaclass=ABCMeta):
     def __init__(
         self,
-        message_class: Type[Em_Message] = None,
+        message_class: Optional[Type[Em_Message]] = None,
         *,
-        loop: asyncio.AbstractEventLoop = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
     ):
         super().__init__(message_class)
         self.loop = loop or asyncio.get_event_loop()
@@ -234,7 +234,11 @@ class AsyncMessage(Message, metaclass=ABCMeta):
 
 @public
 class Mailbox(Message):
-    def __init__(self, mail_dir: os.PathLike, message_class: Type[Em_Message] = None):
+    def __init__(
+        self,
+        mail_dir: os.PathLike,
+        message_class: Optional[Type[Em_Message]] = None,
+    ):
         self.mailbox = mailbox.Maildir(mail_dir)
         self.mail_dir = mail_dir
         super().__init__(message_class)

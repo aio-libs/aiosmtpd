@@ -21,6 +21,12 @@ In both cases, you need to pass a :ref:`handler <handlers>` to the ``SMTP``
 constructor.  Handlers respond to events that you care about during the SMTP
 dialog.
 
+.. important::
+
+  Consider running the controller in a separate Python process (e.g., using the
+  :mod:`multiprocessing` module) if you don't want your main Python process to be
+  blocked when aiosmtpd is handling extra-large emails.
+
 
 Using the controller
 ====================

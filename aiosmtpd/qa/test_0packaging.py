@@ -56,7 +56,7 @@ class TestVersion:
 
 
 class TestNews:
-    news_rst = list(Path("..").rglob("*/NEWS.rst"))[0]
+    news_rst = list(Path(__file__).parent.parent.rglob("*/NEWS.rst"))[0]
 
     def test_NEWS_version(self, aiosmtpd_version: version.Version):
         with self.news_rst.open("rt") as fin:

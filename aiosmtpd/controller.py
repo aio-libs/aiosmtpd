@@ -79,6 +79,24 @@ def get_localhost() -> Literal["::1", "127.0.0.1"]:
         raise
 
 
+def _server_to_client_ssl_ctx(server_ctx: ssl.SSLContext) -> ssl.SSLContext:
+    """
+    Given an SSLContext object with TLS_SERVER_PROTOCOL return a client
+    context that can connect to the server.
+    """
+    client_ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
+    client_ctx.options = server_ctx.options
+    client_ctx.check_hostname = False
+    # We do not verify the ssl cert for the server here simply because this
+    # is a local connection to poke at the server for it to do its lazy
+    # initialization sequence. The only purpose of this client context
+    # is to make a connection to the *local* server created using the same
+    # code. That is also the reason why we disable cert verification below
+    # and the flake8 check for the same.
+    client_ctx.verify_mode = ssl.CERT_NONE    # noqa: DUO122
+    return client_ctx
+
+
 class _FakeServer(asyncio.StreamReaderProtocol):
     """
     Returned by _factory_invoker() in lieu of an SMTP instance in case
@@ -109,7 +127,7 @@ class BaseController(metaclass=ABCMeta):
     def __init__(
         self,
         handler: Any,
-        loop: asyncio.AbstractEventLoop = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
         *,
         ssl_context: Optional[ssl.SSLContext] = None,
         # SMTP parameters
@@ -184,7 +202,7 @@ class BaseController(metaclass=ABCMeta):
         try:
             _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
         except AttributeError:  # pragma: py-gt-36
-            _all_tasks = asyncio.Task.all_tasks
+            _all_tasks = asyncio.Task.all_tasks  # pytype: disable=attribute-error
         for task in _all_tasks(self.loop):
             # This needs to be invoked in a thread-safe way
             task.cancel()
@@ -198,7 +216,7 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
     def __init__(
         self,
         handler: Any,
-        loop: asyncio.AbstractEventLoop = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
         *,
         ready_timeout: float = DEFAULT_READY_TIMEOUT,
         ssl_context: Optional[ssl.SSLContext] = None,
@@ -322,7 +340,7 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
     def __init__(
         self,
         handler: Any,
-        loop: asyncio.AbstractEventLoop = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
         *,
         ssl_context: Optional[ssl.SSLContext] = None,
         # SMTP parameters
@@ -388,7 +406,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         handler: Any,
         hostname: Optional[str] = None,
         port: int = 8025,
-        loop: asyncio.AbstractEventLoop = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
         **kwargs,
     ):
         super().__init__(
@@ -425,7 +443,8 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         with ExitStack() as stk:
             s = stk.enter_context(create_connection((hostname, self.port), 1.0))
             if self.ssl_context:
-                s = stk.enter_context(self.ssl_context.wrap_socket(s))
+                client_ctx = _server_to_client_ssl_ctx(self.ssl_context)
+                s = stk.enter_context(client_ctx.wrap_socket(s))
             s.recv(1024)
 
 
@@ -435,7 +454,7 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
         self,
         handler: Any,
         unix_socket: Union[str, Path],
-        loop: asyncio.AbstractEventLoop = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
         **kwargs,
     ):
         super().__init__(
@@ -467,7 +486,8 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
             s: makesock = stk.enter_context(makesock(AF_UNIX, SOCK_STREAM))
             s.connect(self.unix_socket)
             if self.ssl_context:
-                s = stk.enter_context(self.ssl_context.wrap_socket(s))
+                client_ctx = _server_to_client_ssl_ctx(self.ssl_context)
+                s = stk.enter_context(client_ctx.wrap_socket(s))
             s.recv(1024)
 
 
@@ -497,13 +517,9 @@ class UnixSocketController(  # pragma: no-unixsock
 class UnthreadedController(InetMixin, BaseUnthreadedController):
     """Provides an unthreaded controller that listens on an INET endpoint"""
 
-    pass
-
 
 @public
 class UnixSocketUnthreadedController(  # pragma: no-unixsock
     UnixSocketMixin, BaseUnthreadedController
 ):
     """Provides an unthreaded controller that listens on a Unix Socket file"""
-
-    pass

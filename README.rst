@@ -55,13 +55,13 @@ Full documentation is available on |aiosmtpd rtd|_
 Requirements
 ============
 
-You need **at least Python 3.6** to use this library.
+You need **at least Python 3.7** to use this library.
 
 
 Supported Platforms
 -----------------------
 
-``aiosmtpd`` has been tested on **CPython** and |PyPy3.7|_
+``aiosmtpd`` has been tested on **CPython**>=3.7 and |PyPy|_>=3.7
 for the following platforms (in alphabetical order):
 
 * Cygwin (on Windows 10) [1]
@@ -69,6 +69,7 @@ for the following platforms (in alphabetical order):
 * OpenSUSE Leap 15 [2]
 * Ubuntu 18.04
 * Ubuntu 20.04
+* Ubuntu 22.04
 * Windows 10
 
   | [1] Supported only with Cygwin-provided CPython versions
@@ -77,8 +78,8 @@ for the following platforms (in alphabetical order):
 ``aiosmtpd`` *probably* can run on platforms not listed above,
 but we cannot provide support for unlisted platforms.
 
-.. |PyPy3.7| replace:: **PyPy3.7**
-.. _`PyPy3.7`: https://www.pypy.org/
+.. |PyPy| replace:: **PyPy**
+.. _`PyPy`: https://www.pypy.org/
 
 
 Installation
@@ -175,7 +176,7 @@ In general, the ``-e`` parameter to tox specifies one (or more) **testenv**
 to run (separate using comma if more than one testenv). The following testenvs
 have been configured and tested:
 
-* ``{py36,py37,py38,py39,pypy3}-{nocov,cov,diffcov,profile}``
+* ``{py37,py38,py39,py310,py311,pypy3}-{nocov,cov,diffcov,profile}``
 
   Specifies the interpreter to run and the kind of testing to perform.
 
@@ -313,11 +314,17 @@ Starting version 1.3.1,
 files provided through `PyPI`_ or `GitHub Releases`_
 will be signed using one of the following GPG Keys:
 
-+-------------------------+----------------+------------------------------+
-| GPG Key ID              | Owner          | Email                        |
-+=========================+================+==============================+
-| ``5D60 CE28 9CD7 C258`` | Pandu E POLUAN | pepoluan at gmail period com |
-+-------------------------+----------------+------------------------------+
++-------------------------+----------------+----------------------------------+
+| GPG Key ID              | Owner          | Email                            |
++=========================+================+==================================+
+| ``5D60 CE28 9CD7 C258`` | Pandu E POLUAN | pepoluan at gmail period com     |
++-------------------------+----------------+----------------------------------+
+| ``5555 A6A6 7AE1 DC91`` | Pandu E POLUAN | pepoluan at gmail period com     |
++-------------------------+----------------+----------------------------------+
+| ``E309 FD82 73BD 8465`` | Wayne Werner   | waynejwerner at gmail period com |
++-------------------------+----------------+----------------------------------+
+
+
 
 .. _PyPI: https://pypi.org/project/aiosmtpd/
 .. _`GitHub Releases`: https://github.com/aio-libs/aiosmtpd/releases

@@ -45,7 +45,7 @@
 
 This is a server for SMTP and related MTA protocols,
 similar in utility to the standard library's |smtpd.py|_ module,
-but rewritten to be based on ``asyncio`` for Python 3.6+.
+but rewritten to be based on ``asyncio`` for Python 3.7+.
 
 Please visit the `Project Homepage`_ for more information.
 
@@ -67,12 +67,18 @@ will be signed using one of the following GPG Keys:
    .. In the third column, refrain from putting in a direct link to keep the table tidy.
       Rather, use the |...|_ construct and do the replacement+linking directive below the table
 
-+-------------------------+--------------------------------+-----------+
-| GPG Key ID              | Owner / Email                  | Key       |
-+=========================+================================+===========+
-| ``5D60 CE28 9CD7 C258`` | | Pandu POLUAN /               | |pep_gh|_ |
-|                         | | pepoluan at gmail period com |           |
-+-------------------------+--------------------------------+-----------+
++-------------------------+------------------------------------+-----------+
+| GPG Key ID              | Owner / Email                      | Key       |
++=========================+====================================+===========+
+| ``5D60 CE28 9CD7 C258`` | | Pandu POLUAN /                   | |pep_gh|_ |
+|                         | | pepoluan at gmail period com     |           |
++-------------------------+------------------------------------+-----------+
+| ``5555 A6A6 7AE1 DC91`` | | Pandu E POLUAN                   |           |
+|                         | | pepoluan at gmail period com     |           |
++-------------------------+------------------------------------+-----------+
+| ``E309 FD82 73BD 8465`` | | Wayne Werner                     |           |
+|                         | | waynejwerner at gmail period com |           |
++-------------------------+------------------------------------+-----------+
 
 .. .. The |_| contruct is U+00A0 (non-breaking space), defined at the start of the file
 .. |pep_gh| replace:: On |_| GitHub
