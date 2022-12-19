@@ -41,8 +41,10 @@ class TestSMTPS:
     def test_smtps(self, ssl_controller, smtps_client):
         sender = "sender@example.com"
         recipients = ["rcpt1@example.com"]
-        resp = smtps_client.helo("example.com")
-        assert resp == S.S250_FQDN
+        code, _ = smtps_client.ehlo("example.com")
+        assert code == 250
+        assert smtps_client.has_extn("AUTH")
+        assert "smtps" in smtps_client.esmtp_features
         results = smtps_client.send_message(MIMEText("hi"), sender, recipients)
         assert results == {}
         handler: ReceivingHandler = ssl_controller.handler
