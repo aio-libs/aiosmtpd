@@ -838,7 +838,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.command_size_limits['MAIL'] += 10
         if self.tls_context and not self._tls_protocol:
             response.append('250-STARTTLS')
-        if not self._auth_require_tls or self._tls_protocol:
+        if (not self._auth_require_tls
+                or self._tls_protocol
+                or self._is_using_smtps):
             response.append(
                 "250-AUTH " + " ".join(sorted(self._auth_methods.keys()))
             )
@@ -926,7 +928,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         elif not self.session.extended_smtp:
             return await self.push("500 Error: command 'AUTH' not recognized")
-        elif self._auth_require_tls and not self._tls_protocol and not self._is_using_smtps:
+        elif (self._auth_require_tls
+                and not self._tls_protocol
+                and not self._is_using_smtps):
             return await self.push("538 5.7.11 Encryption required for requested "
                                    "authentication mechanism")
         elif self.session.authenticated:
