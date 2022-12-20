@@ -20,7 +20,12 @@ def ssl_controller(
     get_controller, ssl_context_server
 ) -> Generator[Controller, None, None]:
     handler = ReceivingHandler()
-    controller = get_controller(handler, ssl_context=ssl_context_server)
+    # ssl_context is only used by create_server, and not accessed at all
+    controller = get_controller(
+        handler,
+        ssl_context=ssl_context_server,
+        is_using_smtps=True
+    )
     controller.start()
     Global.set_addr_from(controller)
     #
