@@ -11,7 +11,6 @@ import pytest
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.testing.helpers import ReceivingHandler
-from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 
 from .conftest import Global
 
