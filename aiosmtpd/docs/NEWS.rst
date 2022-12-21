@@ -21,6 +21,7 @@ Fixed/Improved
 
 Fixed/Improved
 --------------
+* Is now compatible with uvloop
 * Add compatibility for Python 3.10 and 3.11 (Closes #322)
 * Test matrix update (Closes #306)
 
