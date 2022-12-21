@@ -52,6 +52,10 @@ aiosmtpd = "aiosmtpd.main:main"
 [tool.setuptools.dynamic]
 version = { attr = "aiosmtpd.__version__" }
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aiosmtpd*"]
+
 # endregion
 
 [tool.pytest.ini_options]
