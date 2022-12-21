@@ -48,7 +48,7 @@ class TestSMTPS:
         code, _ = smtps_client.ehlo("example.com")
         assert code == 250
         assert smtps_client.has_extn("AUTH")
-        assert "smtps" in smtps_client.esmtp_features
+        assert not smtps_client.has_extn("STARTTLS")
         results = smtps_client.send_message(MIMEText("hi"), sender, recipients)
         assert results == {}
         handler: ReceivingHandler = ssl_controller.handler
