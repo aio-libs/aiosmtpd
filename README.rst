@@ -71,9 +71,8 @@ for the following platforms (in alphabetical order):
 * Ubuntu 20.04
 * Ubuntu 22.04
 * Windows 10
-
-  | [1] Supported only with Cygwin-provided CPython versions
-  | [2] Supported only on the latest minor release
+* Windows Server 2019
+* Windows Server 2022
 
 ``aiosmtpd`` *probably* can run on platforms not listed above,
 but we cannot provide support for unlisted platforms.
