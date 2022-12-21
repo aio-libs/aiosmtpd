@@ -162,10 +162,6 @@ and these options can be combined::
 In general, you'll want to choose the ``nocov`` testenvs if you want to show output,
 so you can see which test is generating which output.)
 
-The `-x` and `-s` options can be combined::
-
-    $ tox -e py36-nocov -- -x -s <testname>
-
 
 Supported 'testenvs'
 ------------------------
