@@ -53,7 +53,9 @@ jobs:
             "print(config['flake8_plugins']['deps']);"
           )
           pip install "flake8>=5.0.4" $(python -c "${grab_f8_plugins[*]}")
-          python -m flake8 aiosmtpd setup.py housekeep.py release.py
+          echo "Running flake8 ... there will be no output if no errors:"
+          python -m flake8 aiosmtpd housekeep.py release.py
+          echo "flake8 done."
       - name: "Docs Checking"
         # language=bash
         run: |
