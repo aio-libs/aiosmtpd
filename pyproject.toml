@@ -1,6 +1,62 @@
+# region #### setuptools settings ##########
+
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "aiosmtpd"
+requires-python = ">=3.7"
+dynamic = ["version"]
+description = "aiosmtpd - asyncio based SMTP server"
+readme = "DESCRIPTION.rst"
+urls."Home Page" = "https://aiosmtpd.readthedocs.io/"
+urls."Bug Tracker" = "https://github.com/aio-libs/aiosmtpd/issues"
+urls."Documentation" = "https://aiosmtpd.readthedocs.io/"
+urls."Source Code" = "https://github.com/aio-libs/aiosmtpd"
+maintainers = [
+    { name = "The aiosmtpd Developers", email = "aiosmtpd@googlegroups.com"}
+]
+keywords = [ "email", "smtpd", "smtp", "async"]
+license.file = "LICENSE"
+classifiers = [
+    "License :: OSI Approved",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: BSD :: FreeBSD",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Topic :: Communications :: Email :: Mail Transport Agents",
+    "Framework :: AsyncIO",
+]
+dependencies = [
+    "atpublic",
+    "attrs",
+    "typing-extensions ; python_version < '3.8'",
+]
+
+[project.scripts]
+aiosmtpd = "aiosmtpd.main:main"
+
+[tool.setuptools]
+zip-safe = false
+
+[tool.setuptools.dynamic]
+version = { attr = "aiosmtpd.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aiosmtpd*"]
+
+# endregion
 
 [tool.pytest.ini_options]
 addopts = """--strict-markers -rfEX"""

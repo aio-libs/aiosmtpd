@@ -38,7 +38,7 @@ jobs:
         # language=bash
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python setup.py develop
+          python -m pip install .
           # Common deps
           pip install colorama
       - name: "flake8 Style Checking"
@@ -69,6 +69,8 @@ jobs:
           pip install dnspython argon2-cffi
           # Install pytype
           pip install pytype
+          # List files & dirs so if pytype blows up we can see what else to exclude
+          ls -la
           pytype --keep-going --jobs auto .
       - name: "Other QA Checks"
         shell: bash
@@ -110,7 +112,7 @@ jobs:
         # Test deps
         pip install colorama "coverage>=7.0.1" coverage[toml] "coverage-conditional-plugin>=0.5.0" packaging pytest pytest-cov pytest-mock
         # Package deps
-        python setup.py develop
+        python -m pip install .
     - name: "Security checking"
       # language=bash
       run: |
