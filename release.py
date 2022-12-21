@@ -26,8 +26,12 @@ DISTFILES = [
     f"dist/aiosmtpd-{version}-py3-none-any.whl",
 ]
 
+RELEASE_TOOLKIT = ["setuptools", "wheel", "twine", "build"]
+
 printfl("Updating release toolkit first...", end="")
-run_hidden([sys.executable] + shlex.split("-m pip install -U setuptools wheel twine build"))
+run_hidden(
+    [sys.executable] + shlex.split("-m pip install -U") + RELEASE_TOOLKIT
+)
 print()
 
 printfl("Checking extra toolkit...", end="")
