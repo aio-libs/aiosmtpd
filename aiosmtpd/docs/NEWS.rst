@@ -27,6 +27,7 @@ Fixed/Improved
   * Drop Python 3.6, PyPy 3.6 (some) and MacOS 10
   * Add Python 3.10 & 3.11, PyPy 3.7 & 3.8, Ubuntu 22.04, MacOS 11 & 12
 
+* Expanded tox environments
 * Longer AUTOSTOP_DELAY especially for Windows (Closes #313)
 * Update signing keys
 
