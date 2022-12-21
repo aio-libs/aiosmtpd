@@ -60,7 +60,7 @@ jobs:
           sphinx-build --color -b doctest -d build/.doctree aiosmtpd/docs build/doctest
           sphinx-build --color -b html    -d build/.doctree aiosmtpd/docs build/html
           sphinx-build --color -b man     -d build/.doctree aiosmtpd/docs build/man
-      - name: "Static Code Checking"
+      - name: "Static Type Checking"
         # language=bash
         run: |
           # Required by examples
