@@ -114,7 +114,7 @@ except subprocess.CalledProcessError as e:
 if has_verify:
     print("Waiting for package to be received by PyPI...", end="")
     for i in range(10, 0, -1):
-        printfl(i, end="..")
+        printfl(i, end="..", flush=True)
         time.sleep(1.0)
     print()
     twine_verif = ["twine", "verify_upload"] + DISTFILES
@@ -134,9 +134,7 @@ if has_verify:
 # Only tag when we've actually built and uploaded. If something goes wrong
 # we may need the tag somewhere else!
 choice = input("tag and push? [y/N]: ")
-if choice.lower() not in ("y", "yes"):
-    pass
-else:
+if choice.lower() in ("y", "yes"):
     # The annotation information should come from the changelog
     subprocess.run(["git", "tag", "-a", version])
     # And now push the tag, of course.
