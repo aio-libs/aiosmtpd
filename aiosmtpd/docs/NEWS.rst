@@ -16,7 +16,7 @@ Fixed/Improved
 * A whole bunch of annotations
 
 
-1.4.3rc2 (2022-12-18)
+1.4.3 (2022-12-21)
 =====================
 
 Fixed/Improved
@@ -30,6 +30,7 @@ Fixed/Improved
 * Expanded tox environments
 * Longer AUTOSTOP_DELAY especially for Windows (Closes #313)
 * Update signing keys
+* Some documentation fixes
 
 
 1.4.2 (2021-03-08)
