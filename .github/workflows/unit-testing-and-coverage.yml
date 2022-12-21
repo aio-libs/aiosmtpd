@@ -50,7 +50,7 @@ jobs:
             "config.read('tox.ini');"
             "print(config['flake8_plugins']['deps']);"
           )
-          pip install flake8 $(python -c "${grab_f8_plugins[*]}")
+          pip install flake8>=5.0.4 $(python -c "${grab_f8_plugins[*]}")
           python -m flake8 aiosmtpd setup.py housekeep.py release.py
       - name: "Docs Checking"
         # language=bash
