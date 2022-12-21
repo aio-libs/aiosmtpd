@@ -36,7 +36,7 @@ jobs:
         # language=bash
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip .
+          python -m pip install .
           # Common deps
           pip install colorama
       - name: "flake8 Style Checking"
@@ -117,7 +117,7 @@ jobs:
         # Test deps
         pip install colorama coverage[toml] coverage-conditional-plugin>=0.7.0 packaging pytest pytest-cov pytest-mock
         # Package deps
-        python -m pip .
+        python -m pip install .
     - name: "Security checking"
       # language=bash
       run: |
