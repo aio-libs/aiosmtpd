@@ -43,8 +43,8 @@ dependencies = [
     "typing-extensions ; python_version < '3.8'",
 ]
 
-[project.entry-points]
-"aiosmtpd" = "aiosmtpd.main:main"
+[project.scripts]
+aiosmtpd = "aiosmtpd.main:main"
 
 [tool.setuptools]
 "zip-safe" = false
