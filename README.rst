@@ -64,16 +64,14 @@ Supported Platforms
 ``aiosmtpd`` has been tested on **CPython**>=3.7 and |PyPy|_>=3.7
 for the following platforms (in alphabetical order):
 
-* Cygwin (on Windows 10) [1]
-* FreeBSD 12 [2]
-* OpenSUSE Leap 15 [2]
+* Cygwin (as of 2022-12-22, only for CPython 3.7, 3.8, and 3.9)
+* MacOS 11 and 12
 * Ubuntu 18.04
 * Ubuntu 20.04
 * Ubuntu 22.04
 * Windows 10
-
-  | [1] Supported only with Cygwin-provided CPython versions
-  | [2] Supported only on the latest minor release
+* Windows Server 2019
+* Windows Server 2022
 
 ``aiosmtpd`` *probably* can run on platforms not listed above,
 but we cannot provide support for unlisted platforms.
@@ -189,7 +187,7 @@ have been configured and tested:
     This must be **invoked manually** using the ``-e`` parameter
 
   **Note 1:** As of 2021-02-23,
-  only the ``{py36,py38}-{nocov,cov}`` combinations work on **Cygwin**.
+  only the ``{py37,py38,py39}-{nocov,cov}`` combinations work on **Cygwin**.
 
   **Note 2:** It is also possible to use whatever Python version is used when
   invoking ``tox`` by using the ``py`` target, but you must explicitly include
