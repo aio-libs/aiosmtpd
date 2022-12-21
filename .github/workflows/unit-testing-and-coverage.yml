@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
   # When doing "releases"
   release:
-    types: [ "created", "edited", "published", "prereleased", "released" ]
+    types: [ "created", "edited" ]
 
 jobs:
   qa_docs:
