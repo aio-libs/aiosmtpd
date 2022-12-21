@@ -36,7 +36,7 @@ jobs:
         # language=bash
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python setup.py develop
+          python -m pip .
           # Common deps
           pip install colorama
       - name: "flake8 Style Checking"
@@ -51,7 +51,7 @@ jobs:
             "print(config['flake8_plugins']['deps']);"
           )
           pip install flake8>=5.0.4 $(python -c "${grab_f8_plugins[*]}")
-          python -m flake8 aiosmtpd setup.py housekeep.py release.py
+          python -m flake8 aiosmtpd housekeep.py release.py
       - name: "Docs Checking"
         # language=bash
         run: |
@@ -117,7 +117,7 @@ jobs:
         # Test deps
         pip install colorama coverage[toml] coverage-conditional-plugin>=0.7.0 packaging pytest pytest-cov pytest-mock
         # Package deps
-        python setup.py develop
+        python -m pip .
     - name: "Security checking"
       # language=bash
       run: |
