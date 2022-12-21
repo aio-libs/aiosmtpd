@@ -121,6 +121,10 @@ jobs:
       run: |
         pip install bandit
         bandit -c bandit.yml -r aiosmtpd
+
+    # IMPORTANT: pypy3.8 is currently excluded from coverage testing because coverage seems to be unstable when
+    # running on PyPy 3.8. This is still under investigation (See issue #325)
+
     - name: "Execute testing with coverage"
       if: matrix.python-version != 'pypy3.8'
       shell: bash
@@ -143,6 +147,7 @@ jobs:
         fi
         pytest
         #
+
     - name: "Report to codecov"
       # Ubuntu 18.04 came out of the box with 3.6, and LOTS of system are still running
       # 18.04 happily, so we choose this as the 'canonical' code coverage testing.
