@@ -64,9 +64,7 @@ Supported Platforms
 ``aiosmtpd`` has been tested on **CPython**>=3.7 and |PyPy|_>=3.7
 for the following platforms (in alphabetical order):
 
-* Cygwin (on Windows 10) [1]
-* FreeBSD 12 [2]
-* OpenSUSE Leap 15 [2]
+* MacOS 11 and 12
 * Ubuntu 18.04
 * Ubuntu 20.04
 * Ubuntu 22.04
