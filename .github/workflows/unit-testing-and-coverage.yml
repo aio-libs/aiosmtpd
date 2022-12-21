@@ -113,7 +113,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip setuptools wheel
         # Test deps
-        pip install colorama coverage[toml] coverage-conditional-plugin packaging pytest pytest-cov pytest-mock
+        pip install colorama coverage[toml] "coverage-conditional-plugin>=0.7.0" packaging pytest pytest-cov pytest-mock
         # Package deps
         python setup.py develop
     - name: "Security checking"
