@@ -38,6 +38,7 @@ The Python standard library includes a basic |SMTP|_ server in the |smtpd|_ modu
 based on the old asynchronous libraries |asyncore|_ and |asynchat|_.
 These modules are quite old and are definitely showing their age;
 ``asyncore`` and ``asynchat`` are difficult APIs to work with, understand, extend, and fix.
+(And have been deprecated since Python 3.6, and will be removed in Python 3.12.)
 
 With the introduction of the |asyncio|_ module in Python 3.4,
 a much better way of doing asynchronous I/O is now available.
