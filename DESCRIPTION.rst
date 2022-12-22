@@ -8,6 +8,7 @@
 | |PyPI DL| |_| |GH DL|
 |
 
+.. .. U+00A0 is non-breaking space
 .. |_| unicode:: 0xA0
    :trim:
 .. |github license| image:: https://img.shields.io/github/license/aio-libs/aiosmtpd?logo=Open+Source+Initiative&logoColor=0F0
@@ -33,7 +34,6 @@
    :target: https://aiosmtpd.readthedocs.io/en/latest/?badge=latest
    :alt: Documentation Status
 .. .. Do NOT include the Discourse badge!
-.. .. Below are badges just for PyPI
 .. |GH Release| image:: https://img.shields.io/github/v/release/aio-libs/aiosmtpd?logo=github
    :target: https://github.com/aio-libs/aiosmtpd/releases
    :alt: GitHub latest release
