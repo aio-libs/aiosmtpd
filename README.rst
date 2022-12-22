@@ -2,7 +2,7 @@
  aiosmtpd - An asyncio based SMTP server
 =========================================
 
-| |github license| |_| |PyPI Version| |_| |PyPI Python|
+| |github license| |_| |PyPI Version| |_| |PyPI Python| |_| |PyPI PythonImpl|
 | |GA badge| |_| |codecov| |_| |readthedocs|
 |
 | |Discourse|
@@ -18,6 +18,9 @@
 .. |PyPI Python| image:: https://img.shields.io/pypi/pyversions/aiosmtpd?logo=python&logoColor=yellow
    :target: https://pypi.org/project/aiosmtpd/
    :alt: Supported Python Versions
+.. |PyPI PythonImpl| image:: https://img.shields.io/pypi/implementation/aiosmtpd?logo=python
+   :target: https://pypi.org/project/aiosmtpd/
+   :alt: Supported Python Implementations
 .. .. For |GA badge|, don't forget to check actual workflow name in unit-testing-and-coverage.yml
 .. |GA badge| image:: https://github.com/aio-libs/aiosmtpd/workflows/aiosmtpd%20CI/badge.svg
    :target: https://github.com/aio-libs/aiosmtpd/actions
