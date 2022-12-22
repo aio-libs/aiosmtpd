@@ -3,7 +3,7 @@
 =========================================
 
 | |github license| |_| |PyPI Version| |_| |PyPI Python|
-| |GA badge| |_| |codecov| |_| |LGTM.com| |_| |readthedocs|
+| |GA badge| |_| |codecov| |_| |readthedocs|
 |
 | |Discourse|
 
@@ -25,9 +25,6 @@
 .. |codecov| image:: https://codecov.io/github/aio-libs/aiosmtpd/coverage.svg?branch=master
    :target: https://codecov.io/github/aio-libs/aiosmtpd?branch=master
    :alt: Code Coverage
-.. |LGTM.com| image:: https://img.shields.io/lgtm/grade/python/github/aio-libs/aiosmtpd.svg?logo=lgtm&logoWidth=18
-   :target: https://lgtm.com/projects/g/aio-libs/aiosmtpd/context:python
-   :alt: Semmle/LGTM.com quality
 .. |readthedocs| image:: https://img.shields.io/readthedocs/aiosmtpd?logo=Read+the+Docs&logoColor=white
    :target: https://aiosmtpd.readthedocs.io/en/latest/
    :alt: Documentation Status
