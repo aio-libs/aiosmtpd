@@ -5,6 +5,7 @@
 | |github license| |_| |PyPI Version| |_| |PyPI Python| |_| |PyPI PythonImpl|
 | |GA badge| |_| |codecov| |_| |readthedocs|
 | |GH Release| |_| |GH PRs| |_| |GH LastCommit|
+| |PyPI DL| |_| |GH DL|
 |
 
 .. |_| unicode:: 0xA0
@@ -42,6 +43,13 @@
 .. |GH LastCommit| image:: https://img.shields.io/github/last-commit/aio-libs/aiosmtpd?logo=GitHub
    :target: https://github.com/aio-libs/aiosmtpd/commits/master
    :alt: GitHub last commit
+.. |PyPI DL| image:: https://img.shields.io/pypi/dm/aiosmtpd?logo=pypi
+   :target: https://pypi.org/project/aiosmtpd/
+   :alt: PyPI monthly downloads
+.. |GH DL| image:: https://img.shields.io/github/downloads/aio-libs/aiosmtpd/total?logo=github
+   :target: https://github.com/aio-libs/aiosmtpd/releases
+   :alt: GitHub downloads
+
 
 This is a server for SMTP and related MTA protocols,
 similar in utility to the standard library's |smtpd.py|_ module,
