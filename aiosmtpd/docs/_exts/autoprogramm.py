@@ -149,7 +149,6 @@ def import_object(import_name: str) -> Any:
         # an ImportError as it did before.
         import glob
         import sys
-        import os
         import imp
 
         for p in sys.path:
