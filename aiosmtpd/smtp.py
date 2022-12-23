@@ -336,7 +336,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.loop = loop if loop else make_loop()
         super().__init__(
             asyncio.StreamReader(loop=self.loop, limit=self.line_length_limit),
-            client_connected_cb=self._client_connected_cb,
+            client_connected_cb=self._cb_client_connected,
             loop=self.loop)
         self.event_handler = handler
         assert data_size_limit is None or isinstance(data_size_limit, int)
@@ -560,7 +560,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         # up state.
         self.transport.close()
 
-    def _client_connected_cb(
+    def _cb_client_connected(
             self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ):
         # This is redundant since we subclass StreamReaderProtocol, but I like
