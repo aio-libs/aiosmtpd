@@ -1112,7 +1112,6 @@ class TestHandlerAcceptReject:
         else:
             oper = operator.eq
             expect = pytest.raises(SMTPServerDisconnected)
-        oper = operator.ne if handler_retval else operator.eq
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(Global.SrvAddr)
             sock.sendall(handshake)
