@@ -2,8 +2,8 @@
  aiosmtpd - An asyncio based SMTP server
 =========================================
 
-| |github license| |_| |PyPI Version| |_| |PyPI Python|
-| |GA badge| |_| |codecov| |_| |LGTM.com| |_| |readthedocs|
+| |github license| |_| |PyPI Version| |_| |PyPI Python| |_| |PyPI PythonImpl|
+| |GA badge| |_| |codecov| |_| |readthedocs|
 |
 | |Discourse|
 
@@ -18,6 +18,9 @@
 .. |PyPI Python| image:: https://img.shields.io/pypi/pyversions/aiosmtpd?logo=python&logoColor=yellow
    :target: https://pypi.org/project/aiosmtpd/
    :alt: Supported Python Versions
+.. |PyPI PythonImpl| image:: https://img.shields.io/pypi/implementation/aiosmtpd?logo=python
+   :target: https://pypi.org/project/aiosmtpd/
+   :alt: Supported Python Implementations
 .. .. For |GA badge|, don't forget to check actual workflow name in unit-testing-and-coverage.yml
 .. |GA badge| image:: https://github.com/aio-libs/aiosmtpd/workflows/aiosmtpd%20CI/badge.svg
    :target: https://github.com/aio-libs/aiosmtpd/actions
@@ -25,9 +28,6 @@
 .. |codecov| image:: https://codecov.io/github/aio-libs/aiosmtpd/coverage.svg?branch=master
    :target: https://codecov.io/github/aio-libs/aiosmtpd?branch=master
    :alt: Code Coverage
-.. |LGTM.com| image:: https://img.shields.io/lgtm/grade/python/github/aio-libs/aiosmtpd.svg?logo=lgtm&logoWidth=18
-   :target: https://lgtm.com/projects/g/aio-libs/aiosmtpd/context:python
-   :alt: Semmle/LGTM.com quality
 .. |readthedocs| image:: https://img.shields.io/readthedocs/aiosmtpd?logo=Read+the+Docs&logoColor=white
    :target: https://aiosmtpd.readthedocs.io/en/latest/
    :alt: Documentation Status
@@ -41,6 +41,7 @@ The Python standard library includes a basic |SMTP|_ server in the |smtpd|_ modu
 based on the old asynchronous libraries |asyncore|_ and |asynchat|_.
 These modules are quite old and are definitely showing their age;
 ``asyncore`` and ``asynchat`` are difficult APIs to work with, understand, extend, and fix.
+(And have been deprecated since Python 3.6, and will be removed in Python 3.12.)
 
 With the introduction of the |asyncio|_ module in Python 3.4,
 a much better way of doing asynchronous I/O is now available.
