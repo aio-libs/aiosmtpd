@@ -816,8 +816,7 @@ class TestProxyMocked:
         logger_name = "mail.debug"
         caplog.set_level(logging.INFO, logger=logger_name)
         client.sendmail("anne@example.com", ["bart@example.com"], self.SOURCE)
-        _l1 = -1
-        for _l1, rt in enumerate(reversed(caplog.record_tuples)):
+        for rt in reversed(caplog.record_tuples):
             if rt == (
                 logger_name,
                 logging.INFO,

@@ -3,7 +3,7 @@
 ######################################
 
 | |github license| |_| |PyPI Version| |_| |PyPI Python| |_| |PyPI PythonImpl|
-| |GA badge| |_| |codecov| |_| |readthedocs|
+| |GA badge| |_| |CodeQL badge| |_| |codecov| |_| |readthedocs|
 | |GH Release| |_| |GH PRs| |_| |GH LastCommit|
 | |PyPI DL| |_| |GH DL|
 |
@@ -25,8 +25,11 @@
    :alt: Supported Python Implementations
 .. .. For |GA badge|, don't forget to check actual workflow name in unit-testing-and-coverage.yml
 .. |GA badge| image:: https://github.com/aio-libs/aiosmtpd/workflows/aiosmtpd%20CI/badge.svg
-   :target: https://github.com/aio-libs/aiosmtpd/actions
-   :alt: GitHub Actions status
+   :target: https://github.com/aio-libs/aiosmtpd/actions/workflows/unit-testing-and-coverage.yml
+   :alt: GitHub CI status
+.. |CodeQL badge| image:: https://github.com/aio-libs/aiosmtpd/workflows/CodeQL/badge.svg
+   :target: https://github.com/aio-libs/aiosmtpd/actions/workflows/codeql.yml
+   :alt: CodeQL status
 .. |codecov| image:: https://codecov.io/github/aio-libs/aiosmtpd/coverage.svg?branch=master
    :target: https://codecov.io/github/aio-libs/aiosmtpd?branch=master
    :alt: Code Coverage

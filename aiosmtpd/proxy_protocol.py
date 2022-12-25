@@ -104,15 +104,12 @@ class UnknownTypeTLV(KeyError):
 class AsyncReader(Protocol):
     async def read(self, num_bytes: Optional[int] = None) -> bytes:
         ...
-        return b""
 
     async def readexactly(self, num_bytes: int) -> bytes:
         ...
-        return b""
 
     async def readuntil(self, until_chars: Optional[bytes] = None) -> bytes:
         ...
-        return b""
 
 
 _anoinit = partial(attr.ib, init=False)

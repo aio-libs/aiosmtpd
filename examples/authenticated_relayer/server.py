@@ -99,4 +99,4 @@ if __name__ == '__main__':
     try:
         loop.run_forever()
     except KeyboardInterrupt:
-        pass
+        print("User abort indicated")

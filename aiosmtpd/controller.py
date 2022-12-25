@@ -107,11 +107,11 @@ class _FakeServer(asyncio.StreamReaderProtocol):
         # Imitate what SMTP does
         super().__init__(
             asyncio.StreamReader(loop=loop),
-            client_connected_cb=self._client_connected_cb,
+            client_connected_cb=self._cb_client_connected,
             loop=loop,
         )
 
-    def _client_connected_cb(
+    def _cb_client_connected(
             self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         pass
