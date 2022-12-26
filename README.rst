@@ -5,7 +5,8 @@
 | |github license| |_| |PyPI Version| |_| |PyPI Python| |_| |PyPI PythonImpl|
 | |GA badge| |_| |CodeQL badge| |_| |codecov| |_| |readthedocs|
 |
-| |Discourse|
+| |GH Discussions|
+|
 
 .. |_| unicode:: 0xA0
    :trim:
@@ -34,11 +35,9 @@
 .. |readthedocs| image:: https://img.shields.io/readthedocs/aiosmtpd?logo=Read+the+Docs&logoColor=white
    :target: https://aiosmtpd.readthedocs.io/en/latest/
    :alt: Documentation Status
-.. .. If you edit the above badges, don't forget to edit setup.cfg
-.. .. The |Discourse| badge MUST NOT be included in setup.cfg
-.. |Discourse| image:: https://img.shields.io/discourse/status?server=https%3A%2F%2Faio-libs.discourse.group%2F&style=social
-   :target: https://aio-libs.discourse.group/
-   :alt: Discourse
+.. |GH Discussions| image:: https://img.shields.io/github/discussions/aio-libs/aiosmtpd?logo=github&style=social
+   :target: https://github.com/aio-libs/aiosmtpd/discussions
+   :alt: GitHub Discussions
 
 The Python standard library includes a basic |SMTP|_ server in the |smtpd|_ module,
 based on the old asynchronous libraries |asyncore|_ and |asynchat|_.
