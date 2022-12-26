@@ -7,6 +7,8 @@
 | |GH Release| |_| |GH PRs| |_| |GH LastCommit|
 | |PyPI DL| |_| |GH DL|
 |
+| |GH Discussions|
+|
 
 .. .. U+00A0 is non-breaking space
 .. |_| unicode:: 0xA0
@@ -36,7 +38,6 @@
 .. |readthedocs| image:: https://img.shields.io/readthedocs/aiosmtpd?logo=Read+the+Docs
    :target: https://aiosmtpd.readthedocs.io/en/latest/?badge=latest
    :alt: Documentation Status
-.. .. Do NOT include the Discourse badge!
 .. |GH Release| image:: https://img.shields.io/github/v/release/aio-libs/aiosmtpd?logo=github
    :target: https://github.com/aio-libs/aiosmtpd/releases
    :alt: GitHub latest release
@@ -52,7 +53,9 @@
 .. |GH DL| image:: https://img.shields.io/github/downloads/aio-libs/aiosmtpd/total?logo=github
    :target: https://github.com/aio-libs/aiosmtpd/releases
    :alt: GitHub downloads
-
+.. |GH Discussions| image:: https://img.shields.io/github/discussions/aio-libs/aiosmtpd?logo=github&style=social
+   :target: https://github.com/aio-libs/aiosmtpd/discussions
+   :alt: GitHub Discussions
 
 This is a server for SMTP and related MTA protocols,
 similar in utility to the standard library's |smtpd.py|_ module,
