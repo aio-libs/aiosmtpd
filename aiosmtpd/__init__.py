@@ -12,7 +12,7 @@ def _get_or_new_eventloop() -> asyncio.AbstractEventLoop:
         warnings.simplefilter("ignore")
         try:
             loop = asyncio.get_event_loop()
-        except (DeprecationWarning, RuntimeError):
+        except (DeprecationWarning, RuntimeError):  # pragma: no cover
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
     return loop
