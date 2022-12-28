@@ -219,10 +219,7 @@ class AsyncMessage(Message, metaclass=ABCMeta):
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ):
         super().__init__(message_class)
-        if loop is not None:
-            self.loop = None
-        else:
-            self.loop = _get_or_new_eventloop()
+        self.loop = loop or _get_or_new_eventloop()
 
     async def handle_DATA(
         self, server: SMTPServer, session: SMTPSession, envelope: SMTPEnvelope
