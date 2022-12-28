@@ -34,7 +34,7 @@ from warnings import warn
 import attr
 from public import public
 
-from aiosmtpd import __version__
+from aiosmtpd import __version__, _get_or_new_eventloop
 from aiosmtpd.proxy_protocol import ProxyData, get_proxy
 
 
@@ -208,7 +208,7 @@ class Envelope:
 # unit test suite.  In that case, this function is mocked to set the debug
 # level on the loop (as if PYTHONASYNCIODEBUG=1 were set).
 def make_loop() -> asyncio.AbstractEventLoop:
-    return asyncio.get_event_loop()
+    return _get_or_new_eventloop()
 
 
 @public
