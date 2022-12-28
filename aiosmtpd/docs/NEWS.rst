@@ -16,6 +16,12 @@ Fixed/Improved
 * A whole bunch of annotations
 
 
+1.4.4a0 (ad hoc)
+================
+
+(Stub ``NEWS.rst`` entry as placeholder for ``qa`` test.)
+
+
 1.4.3 (2022-12-21)
 =====================
 

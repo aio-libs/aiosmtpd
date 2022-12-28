@@ -12,7 +12,9 @@ import time
 from functools import partial
 from pathlib import Path
 
-from aiosmtpd import __version__ as version
+from packaging import version
+
+from aiosmtpd import __version__ as ver_str
 
 printfl = partial(print, flush=True)
 run_hidden = partial(subprocess.run, stdout=subprocess.PIPE)
@@ -22,8 +24,8 @@ TWINE_REPO = os.environ.get("TWINE_REPOSITORY", "aiosmtpd")
 UPSTREAM_REMOTE = os.environ.get("UPSTREAM_REMOTE", "upstream")
 GPG_SIGNING_ID = os.environ.get("GPG_SIGNING_ID")
 DISTFILES = [
-    f"dist/aiosmtpd-{version}.tar.gz",
-    f"dist/aiosmtpd-{version}-py3-none-any.whl",
+    f"dist/aiosmtpd-{ver_str}.tar.gz",
+    f"dist/aiosmtpd-{ver_str}-py3-none-any.whl",
 ]
 
 printfl("Updating release toolkit first...", end="")
@@ -48,20 +50,20 @@ UPSTREAM_REMOTE = {UPSTREAM_REMOTE}
 GPG_SIGNING_ID = {GPG_SIGNING_ID or 'None'}
 """
 )
-choice = input(f"Release aiosmtpd {version} - correct? [y/N]: ")
+choice = input(f"Release aiosmtpd {ver_str} - correct? [y/N]: ")
 if choice.lower() not in ("y", "yes"):
     sys.exit("Release aborted")
 
 newsfile = Path(".") / "aiosmtpd" / "docs" / "NEWS.rst"
 with newsfile.open("rt") as fin:
-    want = re.compile("^" + re.escape(version) + r"\s*\(\d{4}-\d\d-\d\d\)")
+    want = re.compile("^" + re.escape(ver_str) + r"\s*\(\d{4}-\d\d-\d\d\)")
     for ln in fin:
         m = want.match(ln)
         if not m:
             continue
         break
     else:
-        print(f"ERROR: I found no datestamped entry for {version} in NEWS.rst!")
+        print(f"ERROR: I found no datestamped entry for {ver_str} in NEWS.rst!")
         sys.exit(1)
 
 if not GPG_SIGNING_ID:
@@ -134,10 +136,20 @@ if has_verify:
 # Only tag when we've actually built and uploaded. If something goes wrong
 # we may need the tag somewhere else!
 choice = input("tag and push? [y/N]: ")
-if choice.lower() not in ("y", "yes"):
-    pass
-else:
+if choice.lower() in ("y", "yes"):
     # The annotation information should come from the changelog
-    subprocess.run(["git", "tag", "-a", version])
+    subprocess.run(["git", "tag", "-a", ver_str])
     # And now push the tag, of course.
-    subprocess.run(["git", "push", "--atomic", UPSTREAM_REMOTE, "master", version])
+    subprocess.run(["git", "push", "--atomic", UPSTREAM_REMOTE, "master", ver_str])
+    vv = version.parse(ver_str)
+    new_ver = version.Version(f"{vv.major}.{vv.minor}.{vv.micro + 1}a0")
+    print("\u2591\u2592\u2593\u2588 IMPORTANT \u2588\u2593\u2592\u2591")
+    print(
+        f"Now that version {ver_str} has been tagged and pushed, "
+        f"you should bump the code to a new version."
+    )
+    print(
+        f"Suggested version is '{new_ver}'. Please do a grep for "
+        f"the old version and perform changes as necessary."
+    )
+    print("(Also remember to add a news stub in NEWS.rst if you bump the version.)")
