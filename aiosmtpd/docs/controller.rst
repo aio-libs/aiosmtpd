@@ -261,7 +261,7 @@ we'll also schedule an autostop so it won't hang:
     ...     loop.run_forever()
     >>> import threading
     >>> thread = threading.Thread(target=runner)
-    >>> thread.setDaemon(True)
+    >>> thread.daemon = True
     >>> thread.start()
     >>> import time
     >>> time.sleep(0.1)  # Allow the loop to begin

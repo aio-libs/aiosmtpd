@@ -403,7 +403,7 @@ class TestUnthreaded:
         def starter(loop: asyncio.AbstractEventLoop):
             nonlocal thread
             thread = Thread(target=_runner, args=(loop,))
-            thread.setDaemon(True)
+            thread.daemon = True
             thread.start()
             catchup_delay()
 
