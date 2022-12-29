@@ -13,7 +13,7 @@ from aiosmtpd import _get_or_new_eventloop
 
 
 @pytest.fixture(scope="module")
-def close_existing_loop() -> None:
+def close_existing_loop() -> Optional[asyncio.AbstractEventLoop]:
     loop: Optional[asyncio.AbstractEventLoop]
     with warnings.catch_warnings():
         warnings.filterwarnings("error")
@@ -25,20 +25,28 @@ def close_existing_loop() -> None:
         loop.stop()
         loop.close()
         asyncio.set_event_loop(None)
+        yield loop
+    else:
+        yield None
 
 
 class TestInit:
 
     def test_create_new_if_none(self, close_existing_loop):
+        old_loop = close_existing_loop
         loop: Optional[asyncio.AbstractEventLoop]
         loop = _get_or_new_eventloop()
         assert loop is not None
+        assert loop is not old_loop
         assert isinstance(loop, asyncio.AbstractEventLoop)
 
     def test_not_create_new_if_exist(self, close_existing_loop):
+        old_loop = close_existing_loop
         loop: Optional[asyncio.AbstractEventLoop]
         loop = asyncio.new_event_loop()
+        assert loop is not old_loop
         asyncio.set_event_loop(loop)
         ret_loop = _get_or_new_eventloop()
+        assert ret_loop is not old_loop
         assert ret_loop == loop
         assert ret_loop is loop
