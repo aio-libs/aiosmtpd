@@ -155,11 +155,11 @@ option::
 
 You can also add the ``-s``/``--capture=no`` option to show output, e.g.::
 
-    $ tox -e py36-nocov -- -s
+    $ tox -e py37-nocov -- -s
 
 and these options can be combined::
 
-    $ tox -e py36-nocov -- -x -s <testname>
+    $ tox -e py37-nocov -- -x -s <testname>
 
 (The ``-e`` parameter is explained in the next section about 'testenvs'.
 In general, you'll want to choose the ``nocov`` testenvs if you want to show output,
