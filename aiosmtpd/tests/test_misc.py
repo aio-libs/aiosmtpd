@@ -5,7 +5,7 @@
 
 import asyncio
 import warnings
-from typing import Optional
+from typing import Generator, Optional
 
 import pytest
 
@@ -13,7 +13,7 @@ from aiosmtpd import _get_or_new_eventloop
 
 
 @pytest.fixture(scope="module")
-def close_existing_loop() -> Optional[asyncio.AbstractEventLoop]:
+def close_existing_loop() -> Generator[Optional[asyncio.AbstractEventLoop], None, None]:
     loop: Optional[asyncio.AbstractEventLoop]
     with warnings.catch_warnings():
         warnings.filterwarnings("error")
