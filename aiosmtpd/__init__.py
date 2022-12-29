@@ -9,7 +9,7 @@ __version__ = "1.4.4a1"
 
 def _get_or_new_eventloop() -> asyncio.AbstractEventLoop:
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+        warnings.simplefilter("error")
         try:
             loop = asyncio.get_event_loop()
         except (DeprecationWarning, RuntimeError):  # pragma: no cover
