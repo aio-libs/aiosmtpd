@@ -35,6 +35,7 @@ source = [
 
 [tool.coverage.coverage_conditional_plugin.rules]
 # Here we specify our pragma rules:
+py-lt-312 = "sys_version_info < (3, 12)"
 py-lt-310 = "sys_version_info < (3, 10)"
 py-ge-38 = "sys_version_info >= (3, 8)"
 py-lt-38 = "sys_version_info < (3, 8)"
