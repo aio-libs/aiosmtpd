@@ -90,17 +90,8 @@ jobs:
       # If a matrix fail, do NOT stop other matrix, let them run to completion
       fail-fast: false
       matrix:
-        python-version: [ "3.7", "3.8", "3.9", "3.10", "3.11", "pypy3.6", "pypy3.7", "pypy3.8" ]
+        python-version: [ "3.7", "3.8", "3.9", "3.10", "3.11", "pypy3.7", "pypy3.8", "pypy3.9" ]
         os: [ "macos-11", "macos-12", "ubuntu-18.04", "ubuntu-20.04", "ubuntu-22.04", "windows-2019", "windows-2022" ]
-        exclude:
-          - os: windows-2019
-            python-version: pypy3.6
-          - os: windows-2022
-            python-version: pypy3.6
-          - os: macos-11
-            python-version: pypy3.6
-          - os: macos-12
-            python-version: pypy3.6
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15  # Slowest so far is pypy3 on MacOS, taking almost 7m
     steps:
@@ -117,7 +108,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip setuptools wheel
         # Test deps
-        pip install colorama coverage[toml] "coverage-conditional-plugin>=0.5.0" packaging pytest pytest-cov pytest-mock
+        pip install colorama "coverage>=7.0.1" coverage[toml] "coverage-conditional-plugin>=0.5.0" packaging pytest pytest-cov pytest-mock
         # Package deps
         python setup.py develop
     - name: "Security checking"
@@ -128,6 +119,8 @@ jobs:
 
     # IMPORTANT: pypy3.8 is currently excluded from coverage testing because coverage seems to be unstable when
     # running on PyPy 3.8. This is still under investigation (See issue #325)
+    # Edit: This is due to change in behavior in PyPy v7.3.10, and coverage.py needs to adapt.
+    # See: https://github.com/nedbat/coveragepy/issues/1515
 
     - name: "Execute testing with coverage"
       if: matrix.python-version != 'pypy3.8'
