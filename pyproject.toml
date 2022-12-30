@@ -1,13 +1,9 @@
-# region #### setuptools settings ##########
-
-[build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+# region #### Project metadata ##########
 
 [project]
 name = "aiosmtpd"
 requires-python = ">=3.7"
-dynamic = ["version"]
+dynamic = [ "version" ]
 description = "aiosmtpd - asyncio based SMTP server"
 readme = "DESCRIPTION.rst"
 urls."Home Page" = "https://aiosmtpd.readthedocs.io/"
@@ -17,7 +13,7 @@ urls."Source Code" = "https://github.com/aio-libs/aiosmtpd"
 maintainers = [
     { name = "The aiosmtpd Developers", email = "aiosmtpd@googlegroups.com"}
 ]
-keywords = [ "email", "smtpd", "smtp", "async"]
+keywords = [ "email", "smtpd", "smtp", "async" ]
 license.file = "LICENSE"
 classifiers = [
     "License :: OSI Approved",
@@ -45,6 +41,14 @@ dependencies = [
 
 [project.scripts]
 aiosmtpd = "aiosmtpd.main:main"
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# endregion
+
+# region #### setuptools settings ##########
 
 [tool.setuptools]
 zip-safe = false
