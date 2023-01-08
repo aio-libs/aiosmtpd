@@ -1070,6 +1070,9 @@ class TestAuthMechanisms(_CommonMethods):
             # See https://github.com/python/cpython/pull/24118 for the fixes.:
             with pytest.raises(SMTPAuthenticationError):
                 client.auth(mechanism, auth_meth, initial_response_ok=init_resp)
+                # bpo-27820 has been fixed in python version 3.8 or later
+                if sys.version_info >= (3, 8):
+                    raise SMTPAuthenticationError(454, 'Expected failed')
             client.docmd("*")
             pytest.xfail(reason="smtplib.SMTP.auth_login is buggy (bpo-27820)")
         client.auth(mechanism, auth_meth, initial_response_ok=init_resp)

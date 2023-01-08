@@ -29,6 +29,8 @@ from aiosmtpd.controller import (
     _FakeServer,
     get_localhost,
     _server_to_client_ssl_ctx,
+    is_unspecified_address,
+    convert_unspecified_address_to_localhost,
 )
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
@@ -297,6 +299,20 @@ class TestController:
         finally:
             cont.stop()
 
+    def test_hostname_unspecified_ipv4(self):
+        cont = Controller(Sink(), hostname="0.0.0.0")  # nosec
+        try:
+            cont.start()
+        finally:
+            cont.stop()
+
+    def test_hostname_unspecified_ipv6(self):
+        cont = Controller(Sink(), hostname="::")  # nosec
+        try:
+            cont.start()
+        finally:
+            cont.stop()
+
     def test_testconn_raises(self, mocker: MockFixture):
         mocker.patch("socket.socket.recv", side_effect=RuntimeError("MockError"))
         cont = Controller(Sink(), hostname="")
@@ -350,6 +366,26 @@ class TestController:
             get_localhost()
         assert exc.value.errno == errno.EFAULT
         mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
+
+    def test_is_unspecified_address(self):
+        assert is_unspecified_address("127.0.0.1") is False
+        assert is_unspecified_address("0.0.0.0") is True  # nosec
+        assert is_unspecified_address("::") is True  # nosec
+        assert is_unspecified_address("") is True
+
+    def test_convert_unspecified_to_localhost(self):
+        assert convert_unspecified_address_to_localhost(
+            ""
+        ) == get_localhost()
+        assert convert_unspecified_address_to_localhost(
+            "0.0.0.0"  # nosec
+        ) == "127.0.0.1"
+        assert convert_unspecified_address_to_localhost(
+            "::"  # nosec
+        ) == "::1"
+        assert convert_unspecified_address_to_localhost(
+            "0.0.0.1"
+        ) == get_localhost()
 
     def test_stop_default(self):
         controller = Controller(Sink())

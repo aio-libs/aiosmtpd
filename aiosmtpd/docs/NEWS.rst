@@ -14,7 +14,7 @@ Fixed/Improved
 --------------
 * All Controllers now have more rationale design, as they are now composited from a Base + a Mixin
 * A whole bunch of annotations
-
+* Fix bind unspecified address controller will raise TimeoutError
 
 1.4.4a0 (ad hoc)
 ================
