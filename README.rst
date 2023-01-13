@@ -118,11 +118,12 @@ You can also request help by submitting a question on StackOverflow.
 Building
 ========
 
-You can install this package in a virtual environment like so::
+You can install this package -- after cloning -- in a virtual environment like so::
 
     $ python3 -m venv /path/to/venv
     $ source /path/to/venv/bin/activate
-    $ python setup.py install
+    $ python -m pip install -U pip setuptools
+    $ python -m pip install .
 
 This will give you a command line script called ``aiosmtpd`` which implements the
 SMTP server.  Use ``aiosmtpd --help`` for a quick reference.
