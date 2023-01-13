@@ -40,7 +40,7 @@ from docutils.parsers.rst.directives import unchanged  # pytype: disable=pyi-err
 from docutils.statemachine import StringList
 from functools import reduce
 from sphinx.util.nodes import nested_parse_with_titles
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 
 __all__ = ("AutoprogrammDirective", "import_object", "scan_programs", "setup")
@@ -112,7 +112,11 @@ def scan_options(actions: list):
 
 def format_positional_argument(arg: argparse.Action) -> Tuple[List[str], str]:
     desc: str = (arg.help or "") % {"default": arg.default}
-    name: str = arg.metavar or arg.dest or ""
+    name: str
+    if isinstance(arg.metavar, tuple):
+        name = arg.metavar[0]
+    else:
+        name = arg.metavar or arg.dest or ""
     return [name], desc
 
 
