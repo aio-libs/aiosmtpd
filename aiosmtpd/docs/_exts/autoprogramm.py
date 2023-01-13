@@ -40,12 +40,13 @@ from docutils.parsers.rst.directives import unchanged  # pytype: disable=pyi-err
 from docutils.statemachine import StringList
 from functools import reduce
 from sphinx.util.nodes import nested_parse_with_titles
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple
 
 
 __all__ = ("AutoprogrammDirective", "import_object", "scan_programs", "setup")
 
 
+# pytype: disable=bad-return-type
 def get_subparser_action(parser: argparse.ArgumentParser) -> argparse._SubParsersAction:
     neg1_action = parser._actions[-1]
 
@@ -54,7 +55,8 @@ def get_subparser_action(parser: argparse.ArgumentParser) -> argparse._SubParser
 
     for a in parser._actions:
         if isinstance(a, argparse._SubParsersAction):
-            return cast(argparse._SubParsersAction, a)
+            return a
+# pytype: enable=bad-return-type
 
 
 def scan_programs(
