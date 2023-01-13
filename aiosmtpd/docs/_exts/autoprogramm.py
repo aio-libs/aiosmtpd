@@ -40,7 +40,7 @@ from docutils.parsers.rst.directives import unchanged  # pytype: disable=pyi-err
 from docutils.statemachine import StringList
 from functools import reduce
 from sphinx.util.nodes import nested_parse_with_titles
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple
 
 
 __all__ = ("AutoprogrammDirective", "import_object", "scan_programs", "setup")
