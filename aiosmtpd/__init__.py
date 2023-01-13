@@ -4,7 +4,7 @@ import asyncio
 import warnings
 
 
-__version__ = "1.4.4a1"
+__version__ = "1.4.4"
 
 
 def _get_or_new_eventloop() -> asyncio.AbstractEventLoop:

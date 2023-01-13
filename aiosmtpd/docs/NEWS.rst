@@ -16,8 +16,8 @@ Fixed/Improved
 * A whole bunch of annotations
 
 
-1.4.4a1 (ad hoc)
-================
+1.4.4 (2023-01-13)
+==================
 
 Fixed/Improved
 --------------
