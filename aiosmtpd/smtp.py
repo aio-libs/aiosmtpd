@@ -156,7 +156,7 @@ class LoginPassword(NamedTuple):
 class Session:
     def __init__(self, loop: asyncio.AbstractEventLoop):
         self.peer = None
-        self.ssl_context = None
+        self.ssl = None
         self.host_name = None
         self.extended_smtp = False
         self.loop = loop
@@ -362,7 +362,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._timeout_duration = timeout
         self._timeout_handle = None
         self._tls_handshake_okay = True
-        self._tls_protocol: Optional[asyncio.sslproto.SSLProtocol] = None
+        self._tls_protocol = None
         self._original_transport = None
         self.session: Optional[Session] = None
         self.envelope: Optional[Envelope] = None
@@ -506,7 +506,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.transport = transport
             # Do SSL certificate checking as rfc3207 part 4.1 says.  Why is
             # _extra a protected attribute?
-            self.session.ssl_context = transport.get_extra_info("sslcontext")
+            self.session.ssl = self._tls_protocol._extra
             hook = self._handle_hooks.get("STARTTLS")
             if hook is None:
                 self._tls_handshake_okay = True
@@ -538,7 +538,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     def eof_received(self) -> bool:
         log.info('%r EOF received', self.session.peer)
         self._handler_coroutine.cancel()
-        if self.session.ssl_context is not None:
+        if self.session.ssl is not None:
             # If STARTTLS was issued, return False, because True has no effect
             # on an SSL transport and raises a warning. Our superclass has no
             # way of knowing we switched to SSL so it might return True.
