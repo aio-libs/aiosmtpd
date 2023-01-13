@@ -46,6 +46,11 @@ from typing import Any, Dict, List, Optional, Tuple
 __all__ = ("AutoprogrammDirective", "import_object", "scan_programs", "setup")
 
 
+# Need to temporarily disable this particular check, because although this function is guaranteed to return a proper
+# value (due to how ArgumentParser works), pytype doesn't really know that, and therefore raised an error
+# in the (to its view) possible fallthrough of "implicit return None" if the "for a" loop exits without finding the
+# right item.
+#
 # pytype: disable=bad-return-type
 def get_subparser_action(parser: argparse.ArgumentParser) -> argparse._SubParsersAction:
     neg1_action = parser._actions[-1]
