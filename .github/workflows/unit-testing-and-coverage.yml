@@ -7,14 +7,12 @@ on:
     branches: [ "master" ]
     paths:
       - "aiosmtpd/**"
-      - "setup.cfg"  # To monitor changes in dependencies
       - "pyproject.toml"  # To monitor changes in dependencies
   # This is for PRs
   pull_request:
     branches: [ "master" ]
     paths:
       - "aiosmtpd/**"
-      - "setup.cfg"  # To monitor changes in dependencies
       - "pyproject.toml"  # To monitor changes in dependencies
   # Manual/on-demand
   workflow_dispatch:

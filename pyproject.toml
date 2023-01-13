@@ -209,3 +209,18 @@ mypy-init-return = true
 suppress-none-returning = true
 suppress-dummy-args = true
 allow-untyped-defs = true
+
+
+[tool.pytype]
+exclude = [
+    "aiosmtpd/docs/_exts/*",
+    "_dump/*",
+    "aiosmtpd.egg-info/*",
+    "build/*",
+    "dist/*",
+    "Lib/*",
+    "Scripts/*",
+]
+disable = [
+    "not-supported-yet",
+]
