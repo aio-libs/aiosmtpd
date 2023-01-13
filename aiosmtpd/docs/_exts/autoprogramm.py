@@ -34,9 +34,9 @@ import collections
 import os
 import sphinx
 
-from docutils import nodes
-from docutils.parsers.rst import Directive
-from docutils.parsers.rst.directives import unchanged
+from docutils import nodes  # pytype: disable=pyi-error
+from docutils.parsers.rst import Directive  # pytype: disable=pyi-error
+from docutils.parsers.rst.directives import unchanged  # pytype: disable=pyi-error
 from docutils.statemachine import StringList
 from functools import reduce
 from sphinx.util.nodes import nested_parse_with_titles
@@ -59,7 +59,7 @@ def get_subparser_action(parser: argparse.ArgumentParser) -> argparse._SubParser
 
 def scan_programs(
     parser: argparse.ArgumentParser,
-    command: List[str] = None,
+    command: Optional[List[str]] = None,
     maxdepth: int = 0,
     depth: int = 0,
     groups: bool = False,
@@ -111,8 +111,8 @@ def scan_options(actions: list):
 
 
 def format_positional_argument(arg: argparse.Action) -> Tuple[List[str], str]:
-    desc = (arg.help or "") % {"default": arg.default}
-    name = arg.metavar or arg.dest
+    desc: str = (arg.help or "") % {"default": arg.default}
+    name: str = arg.metavar or arg.dest or ""
     return [name], desc
 
 
@@ -297,6 +297,7 @@ def render_rst(
     options_adornment: str,
 ):
     if usage_strip:
+        assert usage is not None
         to_strip = title.rsplit(" ", 1)[0]
 
         len_to_strip = len(to_strip) - 4
