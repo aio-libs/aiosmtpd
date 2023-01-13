@@ -94,7 +94,8 @@ if __name__ == '__main__':
         print(f"Please create {DB_AUTH} first using make_user_db.py")
         sys.exit(1)
     logging.basicConfig(level=logging.DEBUG)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     loop.create_task(amain())
     try:
         loop.run_forever()

@@ -25,6 +25,7 @@ from typing import Any, AnyStr, List, Type, TypeVar, Optional
 
 from public import public
 
+from aiosmtpd import _get_or_new_eventloop
 from aiosmtpd.smtp import SMTP as SMTPServer
 from aiosmtpd.smtp import Envelope as SMTPEnvelope
 from aiosmtpd.smtp import Session as SMTPSession
@@ -218,7 +219,7 @@ class AsyncMessage(Message, metaclass=ABCMeta):
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ):
         super().__init__(message_class)
-        self.loop = loop or asyncio.get_event_loop()
+        self.loop = loop or _get_or_new_eventloop()
 
     async def handle_DATA(
         self, server: SMTPServer, session: SMTPSession, envelope: SMTPEnvelope

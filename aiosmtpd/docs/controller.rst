@@ -236,7 +236,8 @@ you'll have to do something similar to this:
 .. doctest:: unthreaded
 
     >>> import asyncio
-    >>> loop = asyncio.get_event_loop()
+    >>> loop = asyncio.new_event_loop()
+    >>> asyncio.set_event_loop(loop)
     >>> from aiosmtpd.controller import UnthreadedController
     >>> from aiosmtpd.handlers import Sink
     >>> controller = UnthreadedController(Sink(), loop=loop)

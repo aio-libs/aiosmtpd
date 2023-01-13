@@ -5,6 +5,7 @@ import asyncio
 import inspect
 import socket
 import ssl
+import warnings
 from contextlib import suppress
 from functools import wraps
 from smtplib import SMTP as SMTPClient
@@ -200,14 +201,20 @@ def get_handler(request: pytest.FixtureRequest) -> Callable:
 
 @pytest.fixture
 def temp_event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    default_loop = asyncio.get_event_loop()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            default_loop = asyncio.get_event_loop()
+        except (DeprecationWarning, RuntimeError):
+            default_loop = None
     new_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(new_loop)
     #
     yield new_loop
     #
     new_loop.close()
-    asyncio.set_event_loop(default_loop)
+    if default_loop is not None:
+        asyncio.set_event_loop(default_loop)
 
 
 @pytest.fixture

@@ -16,10 +16,12 @@ Fixed/Improved
 * A whole bunch of annotations
 
 
-1.4.4a0 (ad hoc)
+1.4.4a1 (ad hoc)
 ================
 
-(Stub ``NEWS.rst`` entry as placeholder for ``qa`` test.)
+Fixed/Improved
+--------------
+* No longer expect an implicit creation of the event loop through ``get_event_loop()`` (Closes #353)
 
 
 1.4.3 (2022-12-21)

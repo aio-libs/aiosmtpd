@@ -1,7 +1,6 @@
 # Copyright 2014-2021 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
 import logging
 import os
 import signal
@@ -16,7 +15,7 @@ from typing import Optional, Sequence, Tuple
 
 from public import public
 
-from aiosmtpd import __version__
+from aiosmtpd import __version__, _get_or_new_eventloop
 from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP
 
 try:
@@ -252,7 +251,7 @@ def main(args: Optional[Sequence[str]] = None) -> None:
 
     logging.basicConfig(level=logging.ERROR)
     log = logging.getLogger("mail.log")
-    loop = asyncio.get_event_loop()
+    loop = _get_or_new_eventloop()
 
     if args.debug > 0:
         log.setLevel(logging.INFO)
