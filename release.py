@@ -28,8 +28,12 @@ DISTFILES = [
     f"dist/aiosmtpd-{ver_str}-py3-none-any.whl",
 ]
 
+RELEASE_TOOLKIT = ["setuptools", "wheel", "twine", "build"]
+
 printfl("Updating release toolkit first...", end="")
-run_hidden([sys.executable] + shlex.split("-m pip install -U setuptools wheel twine"))
+run_hidden(
+    [sys.executable] + shlex.split("-m pip install -U") + RELEASE_TOOLKIT
+)
 print()
 
 printfl("Checking extra toolkit...", end="")
@@ -91,10 +95,12 @@ os.chdir(Path(__file__).absolute().parent)
 
 try:
     # Let's use *this* python to build, please
-    print("### setup.py sdist")
-    subprocess.run([sys.executable, "setup.py", "sdist"], check=True)
-    print("### setup.py sdist")
-    subprocess.run([sys.executable, "setup.py", "bdist_wheel"], check=True)
+    # print("### setup.py sdist")
+    # subprocess.run([sys.executable, "setup.py", "sdist"], check=True)
+    # print("### setup.py sdist")
+    # subprocess.run([sys.executable, "setup.py", "bdist_wheel"], check=True)
+    print("### build (sdist and wheel")
+    subprocess.run([sys.executable, "-m", "build"])
     for f in DISTFILES:
         assert Path(f).exists(), f"{f} is missing!"
 
@@ -116,7 +122,7 @@ except subprocess.CalledProcessError as e:
 if has_verify:
     print("Waiting for package to be received by PyPI...", end="")
     for i in range(10, 0, -1):
-        printfl(i, end="..")
+        printfl(i, end="..", flush=True)
         time.sleep(1.0)
     print()
     twine_verif = ["twine", "verify_upload"] + DISTFILES
