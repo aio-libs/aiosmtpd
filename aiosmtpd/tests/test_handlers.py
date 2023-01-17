@@ -451,7 +451,7 @@ class TestMessage:
             bytearray(),
             "",
         ],
-        ids=["bytes", "bytearray", "str"]
+        ids=["bytes", "bytearray", "str"],
     )
     def test_prepare_message(self, temp_event_loop, content):
         sess_ = ServerSession(temp_event_loop)
@@ -460,7 +460,7 @@ class TestMessage:
         enve_.content = content
         msg = handler.prepare_message(sess_, enve_)
         assert isinstance(msg, Em_Message)
-        assert msg.keys() == ['X-Peer', 'X-MailFrom', 'X-RcptTo']
+        assert msg.keys() == ["X-Peer", "X-MailFrom", "X-RcptTo"]
         assert msg.get_payload() == ""
 
     @pytest.mark.parametrize(
@@ -471,7 +471,7 @@ class TestMessage:
             ({}, r"Expected str or bytes, got <class 'dict'>"),
             ((), r"Expected str or bytes, got <class 'tuple'>"),
         ],
-        ids=("None", "List", "Dict", "Tuple")
+        ids=("None", "List", "Dict", "Tuple"),
     )
     def test_prepare_message_err(self, temp_event_loop, content, expectre):
         sess_ = ServerSession(temp_event_loop)

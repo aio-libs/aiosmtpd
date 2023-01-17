@@ -38,3 +38,4 @@ prof/
 ~temp*
 *.sw[a-p]
 pyvenv.cfg
+aiosmtpd_test.log

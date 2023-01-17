@@ -360,8 +360,7 @@ def authenticator_peeker_controller(
 
 @pytest.fixture
 def decoding_authnotls_controller(
-    get_handler: Callable,
-    get_controller: Callable[..., Controller]
+    get_handler: Callable, get_controller: Callable[..., Controller]
 ) -> Generator[Controller, None, None]:
     handler = get_handler()
     controller = get_controller(
@@ -996,9 +995,7 @@ class TestSMTPAuth(_CommonMethods):
 @pytest.mark.usefixtures("auth_peeker_controller")
 class TestAuthMechanisms(_CommonMethods):
     @pytest.fixture
-    def do_auth_plain1(
-        self, client
-    ) -> Callable[[str], Tuple[int, bytes]]:
+    def do_auth_plain1(self, client) -> Callable[[str], Tuple[int, bytes]]:
         self._ehlo(client)
 
         def do(param: str) -> Tuple[int, bytes]:
@@ -1008,9 +1005,7 @@ class TestAuthMechanisms(_CommonMethods):
         return do
 
     @pytest.fixture
-    def do_auth_login3(
-        self, client
-    ) -> Callable[[str], Tuple[int, bytes]]:
+    def do_auth_login3(self, client) -> Callable[[str], Tuple[int, bytes]]:
         self._ehlo(client)
         resp = client.docmd("AUTH LOGIN")
         assert resp == S.S334_AUTH_USERNAME
@@ -2045,7 +2040,7 @@ class TestLimits(_CommonMethods):
     def test_different_limits_custom_default(self, plain_controller, client):
         # Important: make sure default_max > CALL_LIMIT_DEFAULT
         # Others can be set small to cut down on testing time, but must be different
-        assert plain_controller.smtpd._call_limit_default > CALL_LIMIT_DEFAULT
+        assert plain_controller.smtpd._call_limit["*"] > CALL_LIMIT_DEFAULT
         srv_ip_port = plain_controller.hostname, plain_controller.port
 
         self._consume_budget(client, 7, "noop")
@@ -2066,7 +2061,7 @@ class TestLimits(_CommonMethods):
 
     @controller_data(command_call_limit=7)
     def test_limit_bogus(self, plain_controller, client):
-        assert plain_controller.smtpd._call_limit_default > BOGUS_LIMIT
+        assert plain_controller.smtpd._call_limit["*"] > BOGUS_LIMIT
         code, mesg = client.ehlo("example.com")
         assert code == 250
         for i in range(0, BOGUS_LIMIT - 1):
@@ -2089,3 +2084,31 @@ class TestSanitize:
         expect = "AuthResult(success=True, handled=True, message=None, auth_data=...)"
         assert repr(ar) == expect
         assert str(ar) == expect
+
+
+class TestClass:
+    def test_handlernone(self):
+        with pytest.raises(TypeError, match="handler must be an object with hooks"):
+            Server(None)
+        smtpd = Server(Sink())
+        with pytest.raises(TypeError, match="handler must be an object with hooks"):
+            smtpd.event_handler = None
+
+    def test_handlerchange(self, caplog):
+        h1 = Sink()
+        h2 = Sink()
+        assert h1 is not h2
+        smtpd = Server(h1)
+        smtpd.event_handler = h2
+        logmsg = caplog.record_tuples[-2][-1]
+        assert logmsg == "event_handler is changing"
+        logmsg = caplog.record_tuples[-1][-1]
+        assert logmsg.startswith("Available AUTH mechanisms:")
+
+    @pytest.mark.parametrize(
+        "tstval", ["a", b"b", ["c"]], ids=["string", "bytes", "list"]
+    )
+    def test_datasizelimit(self, tstval):
+        with pytest.raises(TypeError, match="data_size_limit must be None or int"):
+            # noinspection PyTypeChecker
+            Server(Sink(), data_size_limit="a")
