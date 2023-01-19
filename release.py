@@ -107,7 +107,16 @@ try:
     # Assuming twine is installed.
     print("### twine check")
     subprocess.run(["twine", "check"] + DISTFILES, check=True)
+except subprocess.CalledProcessError as e:
+    print("ERROR: Last step returned exitcode != 0")
+    sys.exit(e.returncode)
 
+choice = input("Ready to upload to PyPI? [y/N]: ")
+if choice.casefold() not in ("y", "yes"):
+    print("Okay.")
+    sys.exit(0)
+
+try:
     # You should have an aiosmtpd bit setup in your ~/.pypirc - for twine
     twine_up = f"twine upload --config-file {TWINE_CONFIG} -r {TWINE_REPO}".split()
     if GPG_SIGNING_ID:
