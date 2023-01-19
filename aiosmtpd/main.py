@@ -240,6 +240,13 @@ def main(args: Optional[Sequence[str]] = None) -> None:
     else:
         tls_context = None
 
+    if args.smtpscert and args.smtpskey:
+        smtps_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        smtps_context.check_hostname = False
+        smtps_context.load_cert_chain(str(args.smtpscert), str(args.smtpskey))
+    else:
+        smtps_context = None
+
     factory = partial(
         SMTP,
         args.handler,
@@ -247,6 +254,7 @@ def main(args: Optional[Sequence[str]] = None) -> None:
         enable_SMTPUTF8=args.smtputf8,
         tls_context=tls_context,
         require_starttls=args.requiretls,
+        is_using_smtps=smtps_context is not None,
     )
 
     logging.basicConfig(level=logging.ERROR)
@@ -259,13 +267,6 @@ def main(args: Optional[Sequence[str]] = None) -> None:
         log.setLevel(logging.DEBUG)
     if args.debug > 2:
         loop.set_debug(enabled=True)
-
-    if args.smtpscert and args.smtpskey:
-        smtps_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        smtps_context.check_hostname = False
-        smtps_context.load_cert_chain(str(args.smtpscert), str(args.smtpskey))
-    else:
-        smtps_context = None
 
     log.debug("Attempting to start server on %s:%s", args.host, args.port)
     server = server_loop = None

@@ -11,7 +11,6 @@ import pytest
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.testing.helpers import ReceivingHandler
-from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 
 from .conftest import Global
 
@@ -21,7 +20,12 @@ def ssl_controller(
     get_controller, ssl_context_server
 ) -> Generator[Controller, None, None]:
     handler = ReceivingHandler()
-    controller = get_controller(handler, ssl_context=ssl_context_server)
+    # ssl_context is only used by create_server, and not accessed at all
+    controller = get_controller(
+        handler,
+        ssl_context=ssl_context_server,
+        is_using_smtps=True
+    )
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -41,8 +45,10 @@ class TestSMTPS:
     def test_smtps(self, ssl_controller, smtps_client):
         sender = "sender@example.com"
         recipients = ["rcpt1@example.com"]
-        resp = smtps_client.helo("example.com")
-        assert resp == S.S250_FQDN
+        code, _ = smtps_client.ehlo("example.com")
+        assert code == 250
+        assert smtps_client.has_extn("AUTH")
+        assert not smtps_client.has_extn("STARTTLS")
         results = smtps_client.send_message(MIMEText("hi"), sender, recipients)
         assert results == {}
         handler: ReceivingHandler = ssl_controller.handler

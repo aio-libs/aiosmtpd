@@ -1960,7 +1960,8 @@ class TestAuthArgs:
         assert caplog.record_tuples[0] == (
             "mail.log",
             logging.WARNING,
-            "auth_required == True but auth_require_tls == False",
+            "auth_required == True but auth_require_tls == False and "
+            "not using SMTPS",
         )
 
     def test_log_authmechanisms(self, caplog):
