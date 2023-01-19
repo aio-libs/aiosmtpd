@@ -16,6 +16,14 @@ Fixed/Improved
 * A whole bunch of annotations
 
 
+1.4.4.post1 (2023-01-19)
+========================
+
+Fixed/Improved
+--------------
+* A packaging mishap results in a buggy test case (Closes #365)
+
+
 1.4.4 (2023-01-17)
 ==================
 
