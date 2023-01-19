@@ -16,6 +16,15 @@ Fixed/Improved
 * A whole bunch of annotations
 
 
+1.4.4.post2 (2023-01-19)
+========================
+
+Fixed/Improved
+--------------
+* Prevent unclean repo from being built (Closes #365)
+* Reduce chance of not-ready-for-release packages from being uploaded
+
+
 1.4.4 (2023-01-17)
 ==================
 

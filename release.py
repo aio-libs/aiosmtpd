@@ -19,6 +19,12 @@ from aiosmtpd import __version__ as ver_str
 printfl = partial(print, flush=True)
 run_hidden = partial(subprocess.run, stdout=subprocess.PIPE)
 
+result = run_hidden(shlex.split("git status --porcelain"))
+if result.stdout:
+    print("git is not clean!")
+    print("Please commit/shelf first before releasing!")
+    sys.exit(1)
+
 TWINE_CONFIG = Path(os.environ.get("TWINE_CONFIG", "~/.pypirc")).expanduser()
 TWINE_REPO = os.environ.get("TWINE_REPOSITORY", "aiosmtpd")
 UPSTREAM_REMOTE = os.environ.get("UPSTREAM_REMOTE", "upstream")
@@ -101,7 +107,16 @@ try:
     # Assuming twine is installed.
     print("### twine check")
     subprocess.run(["twine", "check"] + DISTFILES, check=True)
+except subprocess.CalledProcessError as e:
+    print("ERROR: Last step returned exitcode != 0")
+    sys.exit(e.returncode)
 
+choice = input("Ready to upload to PyPI? [y/N]: ")
+if choice.casefold() not in ("y", "yes"):
+    print("Okay.")
+    sys.exit(0)
+
+try:
     # You should have an aiosmtpd bit setup in your ~/.pypirc - for twine
     twine_up = f"twine upload --config-file {TWINE_CONFIG} -r {TWINE_REPO}".split()
     if GPG_SIGNING_ID:

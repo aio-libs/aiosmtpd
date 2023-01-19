@@ -17,7 +17,7 @@ from packaging import version
 from aiosmtpd import __version__
 
 RE_DUNDERVER = re.compile(r"__version__\s*?=\s*?(['\"])(?P<ver>[^'\"]+)\1\s*$")
-RE_VERHEADING = re.compile(r"(?P<ver>[0-9.]+)\s*\((?P<date>[^)]+)\)")
+RE_VERHEADING = re.compile(r"(?P<ver>([0-9.]+)\S*)\s*\((?P<date>[^)]+)\)")
 
 
 @pytest.fixture
