@@ -19,6 +19,12 @@ from aiosmtpd import __version__ as ver_str
 printfl = partial(print, flush=True)
 run_hidden = partial(subprocess.run, stdout=subprocess.PIPE)
 
+result = run_hidden(shlex.split("git status --porcelain"))
+if result.stdout:
+    print("git is not clean!")
+    print("Please commit/shelf first before releasing!")
+    sys.exit(1)
+
 TWINE_CONFIG = Path(os.environ.get("TWINE_CONFIG", "~/.pypirc")).expanduser()
 TWINE_REPO = os.environ.get("TWINE_REPOSITORY", "aiosmtpd")
 UPSTREAM_REMOTE = os.environ.get("UPSTREAM_REMOTE", "upstream")
