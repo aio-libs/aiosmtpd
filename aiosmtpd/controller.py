@@ -97,6 +97,25 @@ def _server_to_client_ssl_ctx(server_ctx: ssl.SSLContext) -> ssl.SSLContext:
     return client_ctx
 
 
+@public
+def is_unspecified_address(address: str) -> bool:
+    unspecified_address_list = ["", "0.0.0.0", "::"]  # nosec
+    return address in unspecified_address_list
+
+
+@public
+def convert_unspecified_address_to_localhost(
+        address: str
+) -> str:
+    localhost_address = str(get_localhost())
+    address_dict = {
+        "": localhost_address,
+        "0.0.0.0": "127.0.0.1",  # nosec
+        "::": "::1",  # nosec
+    }
+    return address_dict.get(address, localhost_address)
+
+
 class _FakeServer(asyncio.StreamReaderProtocol):
     """
     Returned by _factory_invoker() in lieu of an SMTP instance in case
@@ -414,8 +433,15 @@ class InetMixin(BaseController, metaclass=ABCMeta):
             loop,
             **kwargs,
         )
-        self._localhost = get_localhost()
-        self.hostname = self._localhost if hostname is None else hostname
+        if is_unspecified_address(hostname) is True:
+            self._localhost = convert_unspecified_address_to_localhost(hostname)
+            self.hostname = hostname
+        elif hostname is None:
+            self._localhost = get_localhost()
+            self.hostname = self._localhost
+        else:
+            self._localhost = get_localhost()
+            self.hostname = hostname
         self.port = port
 
     def _create_server(self) -> Coroutine:
@@ -438,10 +464,13 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         gets invoked.
         """
         # At this point, if self.hostname is Falsy, it most likely is "" (bind to all
-        # addresses). In such case, it should be safe to connect to localhost)
-        hostname = self.hostname or self._localhost
+        # addresses). In such case, it should be safe to connect to localhost.
+        if is_unspecified_address(self.hostname) is True:
+            connect_hostname = self._localhost
+        else:
+            connect_hostname = self.hostname
         with ExitStack() as stk:
-            s = stk.enter_context(create_connection((hostname, self.port), 1.0))
+            s = stk.enter_context(create_connection((connect_hostname, self.port), 1.0))
             if self.ssl_context:
                 client_ctx = _server_to_client_ssl_ctx(self.ssl_context)
                 s = stk.enter_context(client_ctx.wrap_socket(s))
