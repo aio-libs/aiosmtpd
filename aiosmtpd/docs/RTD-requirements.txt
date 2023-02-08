@@ -12,3 +12,4 @@ pytest-mock
 ### aiosmtpd deps
 atpublic
 attrs
+setuptools>=65.5.1 # not directly required, pinned by Snyk to avoid a vulnerability
