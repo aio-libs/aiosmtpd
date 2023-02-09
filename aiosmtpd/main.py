@@ -217,22 +217,6 @@ def parseargs(args: Optional[Sequence[str]] = None) -> Tuple[ArgumentParser, Nam
 def main(args: Optional[Sequence[str]] = None) -> None:
     parser, args = parseargs(args=args)
 
-    if args.setuid:  # pragma: on-win32
-        if pwd is None:
-            print(
-                'Cannot import module "pwd"; try running with -n option.',
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        nobody = pwd.getpwnam("nobody").pw_uid
-        try:
-            os.setuid(nobody)
-        except PermissionError:
-            print(
-                'Cannot setuid "nobody"; try running with -n option.', file=sys.stderr
-            )
-            sys.exit(1)
-
     if args.tlscert and args.tlskey:
         tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         tls_context.check_hostname = False
@@ -278,6 +262,24 @@ def main(args: Optional[Sequence[str]] = None) -> None:
         raise
     log.debug(f"server_loop = {server_loop}")
     log.info("Server is listening on %s:%s", args.host, args.port)
+
+    # Change the UID after opening the port. This allows listening
+    # on port < 1024 without any system tweak.
+    if args.setuid:  # pragma: on-win32
+        if pwd is None:
+            print(
+                'Cannot import module "pwd"; try running with -n option.',
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        nobody = pwd.getpwnam("nobody").pw_uid
+        try:
+            os.setuid(nobody)
+        except PermissionError:
+            print(
+                'Cannot setuid "nobody"; try running with -n option.', file=sys.stderr
+            )
+            sys.exit(1)
 
     # Signal handlers are only supported on *nix, so just ignore the failure
     # to set this on Windows.
