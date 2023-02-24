@@ -48,9 +48,18 @@ def _parser() -> ArgumentParser:
         default=True,
         action="store_false",
         help=(
-            "This program generally tries to setuid ``nobody``, unless this "
-            "flag is set.  The setuid call will fail if this program is not "
-            "run as root (in which case, use this flag)."
+            "This program uses setuid to drop permissions unless this flag "
+            "is set.  The setuid call will fail if this program is not run "
+            "as root (in which case, use this flag)."
+        ),
+    )
+    parser.add_argument(
+        "-S",
+        "--suid-user",
+        dest="suid_user",
+        default="nobody",
+        help=(
+            "The user to change to using suid; defaults to ``nobody``."
         ),
     )
     parser.add_argument(
@@ -224,12 +233,13 @@ def main(args: Optional[Sequence[str]] = None) -> None:
                 file=sys.stderr,
             )
             sys.exit(1)
-        nobody = pwd.getpwnam("nobody").pw_uid
+        suid_user_id = pwd.getpwnam(args.suid_user).pw_uid
         try:
-            os.setuid(nobody)
+            os.setuid(suid_user_id)
         except PermissionError:
             print(
-                'Cannot setuid "nobody"; try running with -n option.', file=sys.stderr
+                f'Cannot setuid to "{args.suid_user}"; try running with -n option.',
+                file=sys.stderr,
             )
             sys.exit(1)
 
