@@ -14,6 +14,7 @@ Fixed/Improved
 --------------
 * All Controllers now have more rationale design, as they are now composited from a Base + a Mixin
 * A whole bunch of annotations
+* Delay UID change after loop start (Closes #304)
 
 
 1.4.4.post2 (2023-01-19)
