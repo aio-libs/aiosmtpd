@@ -81,7 +81,8 @@ async def amain():
         handler,
         hostname='',
         port=8025,
-        authenticator=Authenticator(DB_AUTH)
+        authenticator=Authenticator(DB_AUTH),
+        auth_required=True,
     )
     cont.start()
 
