@@ -30,9 +30,11 @@ class Authenticator:
             return fail_nothandled
         if not isinstance(auth_data, LoginPassword):
             return fail_nothandled
-        username = auth_data.login
+        try:
+            username = auth_data.login.decode('utf-8')
+        except UnicodeDecodeError:
+            return fail_nothandled
         password = auth_data.password
-        hashpass = self.ph.hash(password)
         conn = sqlite3.connect(self.auth_db)
         curs = conn.execute(
             "SELECT hashpass FROM userauth WHERE username=?", (username,)
@@ -41,7 +43,7 @@ class Authenticator:
         conn.close()
         if not hash_db:
             return fail_nothandled
-        if hashpass != hash_db[0]:
+        if not self.ph.verify(hash_db[0], password):
             return fail_nothandled
         return AuthResult(success=True)
 
@@ -83,6 +85,7 @@ async def amain():
         port=8025,
         authenticator=Authenticator(DB_AUTH),
         auth_required=True,
+        auth_require_tls=False,
     )
     cont.start()
 
