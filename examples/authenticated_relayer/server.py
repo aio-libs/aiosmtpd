@@ -83,10 +83,7 @@ async def amain():
         port=8025,
         authenticator=Authenticator(DB_AUTH)
     )
-    try:
-        cont.start()
-    finally:
-        cont.stop()
+    cont.start()
 
 
 if __name__ == '__main__':
@@ -96,7 +93,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.create_task(amain())
+    loop.run_until_complete(loop.create_task(amain()))
     try:
         loop.run_forever()
     except KeyboardInterrupt:

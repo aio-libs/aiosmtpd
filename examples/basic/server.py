@@ -17,7 +17,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.create_task(amain(loop=loop))
+    loop.run_until_complete(loop.create_task(amain(loop=loop)))
     try:
         loop.run_forever()
     except KeyboardInterrupt:
