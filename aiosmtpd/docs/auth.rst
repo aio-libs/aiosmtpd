@@ -14,6 +14,7 @@ Activating Authentication
 but attempts to authenticate will always be rejected
 unless the :attr:`authenticator` parameter of :class:`~aiosmtpd.smtp.SMTP`
 is set to a valid & working :ref:`authcallback`.
+The :attr:`auth_required` parameter can be set to ``True`` to reject clients that don't authenticate.
 
 
 AUTH API
@@ -145,6 +146,11 @@ Authenticator Callback
    of data will be :class:`aiosmtpd.smtp.LoginPassword`
 
    .. versionadded:: 1.3
+
+.. important::
+
+   Setting an authenticator on your server or controller is not sufficient to require authentication.
+   In addition to rejecting incorrect credentials in your authenticator, you should set :attr:`auth_required` to ``True`` to reject clients that don't authenticate at all.
 
 AuthResult API
 --------------
