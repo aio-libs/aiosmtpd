@@ -504,6 +504,9 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._reader._transport = transport  # type: ignore[attr-defined]
             self._writer._transport = transport  # type: ignore[attr-defined]
             self.transport = transport
+            # Discard any leftover unencrypted data
+            # See https://tools.ietf.org/html/rfc3207#page-7
+            self._reader._buffer.clear()
             # Do SSL certificate checking as rfc3207 part 4.1 says.  Why is
             # _extra a protected attribute?
             assert self._tls_protocol is not None
