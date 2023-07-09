@@ -889,6 +889,11 @@ class SMTP(asyncio.StreamReaderProtocol):
             await self.push('454 TLS not available')
             return
         await self.push('220 Ready to start TLS')
+
+        # Discard any leftover unencrypted data
+        # See https://tools.ietf.org/html/rfc3207#page-7
+        self._reader._buffer.clear()
+
         # Create a waiter Future to wait for SSL handshake to complete
         waiter = self.loop.create_future()
         # Create SSL layer.
