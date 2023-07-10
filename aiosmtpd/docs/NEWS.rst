@@ -14,6 +14,7 @@ Fixed/Improved
 --------------
 * All Controllers now have more rationale design, as they are now composited from a Base + a Mixin
 * A whole bunch of annotations
+* Allow using port=0 with TCP controllers to use an OS-assigned port (Closes #276).
 
 
 1.4.4.post2 (2023-01-19)
