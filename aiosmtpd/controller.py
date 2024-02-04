@@ -25,8 +25,6 @@ from public import public
 
 from aiosmtpd.smtp import SMTP
 
-AsyncServer = asyncio.base_events.Server
-
 DEFAULT_READY_TIMEOUT: float = 5.0
 
 
@@ -114,7 +112,7 @@ class _FakeServer(asyncio.StreamReaderProtocol):
 @public
 class BaseController(metaclass=ABCMeta):
     smtpd = None
-    server: Optional[AsyncServer] = None
+    server: Optional[asyncio.AbstractServer] = None
     server_coro: Optional[Awaitable[asyncio.AbstractServer]] = None
     _thread_exception: Optional[Exception] = None
 
