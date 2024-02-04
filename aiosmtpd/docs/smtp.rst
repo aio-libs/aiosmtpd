@@ -569,5 +569,5 @@ advertised, and the ``STARTTLS`` command will not be accepted.
 ``False``.
 
 .. _`asyncio transport`: https://docs.python.org/3/library/asyncio-protocol.html#asyncio-transport
-.. _StreamReaderProtocol: https://docs.python.org/3.6/library/asyncio-stream.html#streamreaderprotocol
+.. _StreamReaderProtocol: https://docs.python.org/3/library/asyncio-stream.html#streamreaderprotocol
 .. |StreamReaderProtocol| replace:: ``StreamReaderProtocol``
