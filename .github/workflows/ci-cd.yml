@@ -32,10 +32,10 @@ jobs:
     - name: Install itself
       run: |
         pip install .
-    - name: Flake8
-      run: python -m flake8 aiosmtpd setup.py housekeep.py release.py
     - name: Mypy
       run: mypy
+    - name: Flake8
+      run: python -m flake8 aiosmtpd setup.py housekeep.py release.py
     - name: Docs Checking
       run: |
         # Prepare sphinx and the deps for sphinx extensions
