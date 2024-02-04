@@ -9,7 +9,6 @@
     Adapted & simplified from https://github.com/sphinx-contrib/autoprogram
 
     Besides the name change, here is a summary of the changes:
-    * Remove six; this is now Python>=3.6 only
     * Remove unit testing
     * Remove .lower() when processing metavar/desc
     * Add setup() return dict
