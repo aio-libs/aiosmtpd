@@ -957,7 +957,8 @@ class TestSMTPAuth(_CommonMethods):
         client.ehlo("example.com")
         resp = client.docmd("AUTH WITH_UNDERSCORE")
         assert resp == (334, b"challenge")
-        with warnings.catch_warnings(record=True) as w:
+        with warnings.catch_warnings(
+            record=True, action="default", category=UserWarning) as w:
             assert client.docmd(B64EQUALS) == S.S235_AUTH_SUCCESS
         assert len(w) > 0
         assert str(w[0].message) == "AUTH interaction logging is enabled!"
