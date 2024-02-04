@@ -115,7 +115,7 @@ class _FakeServer(asyncio.StreamReaderProtocol):
 class BaseController(metaclass=ABCMeta):
     smtpd = None
     server: Optional[AsyncServer] = None
-    server_coro: Optional[Awaitable[asyncio.Server]] = None
+    server_coro: Optional[Awaitable[asyncio.AbstractServer]] = None
     _thread_exception: Optional[Exception] = None
 
     def __init__(
@@ -171,7 +171,7 @@ class BaseController(metaclass=ABCMeta):
             self._factory_invoked.set()
 
     @abstractmethod
-    def _create_server(self) -> Awaitable[asyncio.Server]:
+    def _create_server(self) -> Awaitable[asyncio.AbstractServer]:
         """
         Overridden by subclasses to actually perform the async binding to the
         listener endpoint. When overridden, MUST refer the _factory_invoker() method.
@@ -402,7 +402,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         self.hostname = self._localhost if hostname is None else hostname
         self.port = port
 
-    def _create_server(self) -> Awaitable[asyncio.Server]:
+    def _create_server(self) -> Awaitable[asyncio.AbstractServer]:
         """
         Creates a 'server task' that listens on an INET host:port.
         Does NOT actually start the protocol object itself;
@@ -448,7 +448,7 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
         )
         self.unix_socket = str(unix_socket)
 
-    def _create_server(self) -> Awaitable[asyncio.Server]:
+    def _create_server(self) -> Awaitable[asyncio.AbstractServer]:
         """
         Creates a 'server task' that listens on a Unix Socket file.
         Does NOT actually start the protocol object itself;
