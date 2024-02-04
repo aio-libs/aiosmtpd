@@ -10,7 +10,6 @@ your own handling of messages.  Implement only the methods you care about.
 """
 
 import asyncio
-import io
 import logging
 import mailbox
 import os
@@ -21,7 +20,7 @@ from abc import ABCMeta, abstractmethod
 from argparse import ArgumentParser
 from email.message import Message as Em_Message
 from email.parser import BytesParser, Parser
-from typing import Any, AnyStr, List, TextIO, Type, TypeVar, Optional, Union
+from typing import Any, List, TextIO, Type, TypeVar, Optional, Union
 
 from public import public
 
