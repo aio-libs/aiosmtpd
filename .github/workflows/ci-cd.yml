@@ -87,7 +87,7 @@ jobs:
       with:
         path: requirements.txt
     - name: Run unittests
-      run: pytest tests
+      run: pytest
       env:
         COLOR: 'yes'
     - run: python -m coverage xml
