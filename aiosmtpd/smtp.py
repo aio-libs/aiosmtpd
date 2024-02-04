@@ -295,7 +295,7 @@ class SMTP(asyncio.StreamReaderProtocol):
     """
     command_size_limit = 512
     command_size_limits: Dict[str, int] = collections.defaultdict(
-        lambda: command_size_limit)
+        lambda: SMTP.command_size_limit)
 
     line_length_limit = 1001
     """Maximum line length according to RFC 5321 s 4.5.3.1.6"""
