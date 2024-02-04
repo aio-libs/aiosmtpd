@@ -1,4 +1,5 @@
 atpublic==4.0
 coverage==7.4.1
 pytest==7.4.4
+pytest-asyncio==0.23.4
 pytest-cov==4.1.0
