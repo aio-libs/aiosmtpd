@@ -1176,7 +1176,8 @@ class SMTP(asyncio.StreamReaderProtocol):
 
         class AddrSpec(Protocol):
             @property
-            def addr_spec(self) -> str: ...
+            def addr_spec(self) -> str:
+                ...
 
         if not arg:
             return '', ''
