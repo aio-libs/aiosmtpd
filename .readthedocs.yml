@@ -15,4 +15,12 @@ build:
   tools:
     python: "3.11"
 
+sphinx:
+  configuration: aiosmtpd/docs/conf.py
+  fail_on_warning: true
+
+python:
+  install:
+    - requirements: aiosmtpd/docs/requirements.txt
+
 ...
