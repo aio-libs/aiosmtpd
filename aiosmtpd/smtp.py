@@ -293,7 +293,9 @@ class SMTP(asyncio.StreamReaderProtocol):
     `Documentation can be found here
     <https://aiosmtpd.readthedocs.io/en/latest/smtp.html>`_
     """
-    command_size_limits: Dict[str, int] = collections.defaultdict(lambda: 512)
+    command_size_limit = 512
+    command_size_limits: Dict[str, int] = collections.defaultdict(
+        lambda: command_size_limit)
 
     line_length_limit = 1001
     """Maximum line length according to RFC 5321 s 4.5.3.1.6"""
@@ -477,8 +479,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         try:
             return max(self.command_size_limits.values())
         except ValueError:
-            # TODO: Where does this attribute come from, does it actually exist?
-            return self.command_size_limit  # type: ignore[attr-defined]
+            return self.command_size_limit
 
     def __del__(self):  # pragma: nocover
         # This is nocover-ed because the contents *totally* does NOT affect function-
@@ -703,8 +704,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 max_sz = (
                     self.command_size_limits[command]
                     if self.session.extended_smtp
-                    # TODO: Where does this attribute come from, does it actually exist?
-                    else self.command_size_limit  # type: ignore[attr-defined]
+                    else self.command_size_limit
                 )
                 if len(line) > max_sz:
                     await self.push('500 Command line too long')
