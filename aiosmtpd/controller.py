@@ -201,7 +201,7 @@ class BaseController(metaclass=ABCMeta):
             self.loop.stop()
         try:
             _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
-        except AttributeError:  # pragma: py-gt-36
+        except AttributeError:
             _all_tasks = asyncio.Task.all_tasks  # pytype: disable=attribute-error
         for task in _all_tasks(self.loop):
             # This needs to be invoked in a thread-safe way
@@ -246,13 +246,8 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
     def _run(self, ready_event: threading.Event) -> None:
         asyncio.set_event_loop(self.loop)
         try:
-            # Need to do two-step assignments here to ensure IDEs can properly
-            # detect the types of the vars. Cannot use `assert isinstance`, because
-            # Python 3.6 in asyncio debug mode has a bug wherein CoroWrapper is not
-            # an instance of Coroutine
             self.server_coro = self._create_server()
-            srv: AsyncServer = self.loop.run_until_complete(self.server_coro)
-            self.server = srv
+            self.server = self.loop.run_until_complete(self.server_coro)
         except Exception as error:  # pragma: on-wsl
             # Usually will enter this part only if create_server() cannot bind to the
             # specified host:port.
@@ -362,13 +357,8 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         Does NOT actually start the event loop itself.
         """
         asyncio.set_event_loop(self.loop)
-        # Need to do two-step assignments here to ensure IDEs can properly
-        # detect the types of the vars. Cannot use `assert isinstance`, because
-        # Python 3.6 in asyncio debug mode has a bug wherein CoroWrapper is not
-        # an instance of Coroutine
         self.server_coro = self._create_server()
-        srv: AsyncServer = self.loop.run_until_complete(self.server_coro)
-        self.server = srv
+        self.server = self.loop.run_until_complete(self.server_coro)
 
     async def finalize(self):
         """
