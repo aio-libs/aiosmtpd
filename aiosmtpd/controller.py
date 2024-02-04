@@ -19,12 +19,7 @@ try:
     from socket import AF_UNIX
 except ImportError:  # pragma: on-not-win32
     AF_UNIX = None
-from typing import Any, Coroutine, Dict, Optional, Union
-
-if sys.version_info >= (3, 8):
-    from typing import Literal  # pragma: py-lt-38
-else:  # pragma: py-ge-38
-    from typing_extensions import Literal
+from typing import Any, Coroutine, Dict, Literal, Optional, Union
 from warnings import warn
 
 from public import public
