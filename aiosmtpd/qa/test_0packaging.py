@@ -22,7 +22,7 @@ RE_VERHEADING = re.compile(r"(?P<ver>([0-9.]+)\S*)\s*\((?P<date>[^)]+)\)")
 
 @pytest.fixture
 def aiosmtpd_version() -> version.Version:
-    return version.parse(__version__)  # type: ignore[return-value]
+    return version.parse(__version__)
 
 
 class TestVersion:
