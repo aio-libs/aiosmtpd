@@ -131,7 +131,7 @@ jobs:
     - name: Make Release
       uses: aio-libs/create-release@v1.6.6
       with:
-        changes_file: CHANGES.rst
+        changes_file: aiosmtpd/docs/NEWS.rst
         name: aiosmtpd
         version_file: aiosmtpd/__init__.py
         github_token: ${{ secrets.GITHUB_TOKEN }}
