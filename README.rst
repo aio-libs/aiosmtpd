@@ -58,16 +58,13 @@ Full documentation is available on |aiosmtpd rtd|_
 Requirements
 ============
 
-You need **at least Python 3.7** to use this library.
-
-
 Supported Platforms
 -----------------------
 
-``aiosmtpd`` has been tested on **CPython**>=3.7 and |PyPy|_>=3.7
+``aiosmtpd`` has been tested on **CPython**>=3.8 and |PyPy|_>=3.8
 for the following platforms (in alphabetical order):
 
-* Cygwin (as of 2022-12-22, only for CPython 3.7, 3.8, and 3.9)
+* Cygwin (as of 2022-12-22, only for CPython 3.8, and 3.9)
 * MacOS 11 and 12
 * Ubuntu 18.04
 * Ubuntu 20.04
@@ -155,11 +152,11 @@ option::
 
 You can also add the ``-s``/``--capture=no`` option to show output, e.g.::
 
-    $ tox -e py37-nocov -- -s
+    $ tox -e py311-nocov -- -s
 
 and these options can be combined::
 
-    $ tox -e py37-nocov -- -x -s <testname>
+    $ tox -e py311-nocov -- -x -s <testname>
 
 (The ``-e`` parameter is explained in the next section about 'testenvs'.
 In general, you'll want to choose the ``nocov`` testenvs if you want to show output,
@@ -173,7 +170,7 @@ In general, the ``-e`` parameter to tox specifies one (or more) **testenv**
 to run (separate using comma if more than one testenv). The following testenvs
 have been configured and tested:
 
-* ``{py37,py38,py39,py310,py311,pypy3,pypy37,pypy38,pypy39}-{nocov,cov,diffcov,profile}``
+* ``{py38,py39,py310,py311,py312,pypy3,pypy37,pypy38,pypy39}-{nocov,cov,diffcov,profile}``
 
   Specifies the interpreter to run and the kind of testing to perform.
 
@@ -186,7 +183,7 @@ have been configured and tested:
     This must be **invoked manually** using the ``-e`` parameter
 
   **Note 1:** As of 2021-02-23,
-  only the ``{py37,py38,py39}-{nocov,cov}`` combinations work on **Cygwin**.
+  only the ``{py38,py39}-{nocov,cov}`` combinations work on **Cygwin**.
 
   **Note 2:** It is also possible to use whatever Python version is used when
   invoking ``tox`` by using the ``py`` target, but you must explicitly include
