@@ -383,7 +383,7 @@ async def _get_v1(reader: AsyncReader, initial: ByteString = b"") -> ProxyData:
 
     proxy_data.protocol = PROTO.STREAM
 
-    async def get_ap(matcher: re.Pattern[str]) -> str:
+    async def get_ap(matcher: "re.Pattern[str]") -> str:
         chunk = data_parts.popleft().decode("latin-1")
         if not matcher.match(chunk):
             raise ValueError
