@@ -5,7 +5,6 @@ import asyncio
 import errno
 import os
 import ssl
-import sys
 import threading
 import time
 from abc import ABCMeta, abstractmethod
