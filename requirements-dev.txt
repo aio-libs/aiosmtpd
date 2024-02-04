@@ -1,5 +1,6 @@
 -r requirements.txt
 
+check-manifest==0.49
 dnspython==2.5.0
 flake8==7.0.0
 flake8-2020==1.8.1
