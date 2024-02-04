@@ -57,7 +57,7 @@ def get_mx(domain):
 
 class RelayHandler:
     def handle_data(self, server, session, envelope, data):
-        mx_rcpt: dict[str, list[str]] = {}
+        mx_rcpt: Dict[str, list[str]] = {}
         for rcpt in envelope.rcpt_tos:
             _, _, domain = rcpt.partition("@")
             mx = get_mx(domain)
