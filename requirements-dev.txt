@@ -15,5 +15,6 @@ flake8-requirements==2.0.1
 flake8-simplify==0.21.0
 mypy==1.8.0
 sphinx==7.2.6
+sphinx-rtd-theme==2.0.0
 types-colorama==0.4.15
 types-docutils==0.20.0.20240201
