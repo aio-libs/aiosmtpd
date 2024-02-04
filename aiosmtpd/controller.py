@@ -18,7 +18,7 @@ try:
     from socket import AF_UNIX
 except ImportError:  # pragma: on-not-win32
     AF_UNIX = None  # type: ignore[assignment]
-from typing import Any, Awaitable, Coroutine, Dict, Literal, Optional, Union
+from typing import Any, Awaitable, Dict, Literal, Optional, Union
 from warnings import warn
 
 from public import public
