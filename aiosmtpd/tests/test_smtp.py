@@ -724,19 +724,6 @@ class TestSMTP(_CommonMethods):
         resp = client.docmd("MAIL FROM: <anne@example.com> FOO=BAR")
         assert resp == S.S555_MAIL_PARAMS_UNRECOG
 
-    # This was a bug, and it's already fixed since 3.6 (see bpo below)
-    # Since we now only support >=3.6, there is no point emulating this bug.
-    # Rather, we test that bug is fixed.
-    #
-    # # Test the workaround http://bugs.python.org/issue27931
-    # @patch('email._header_value_parser.AngleAddr.addr_spec',
-    #        side_effect=IndexError, new_callable=PropertyMock)
-    # def test_mail_fail_parse_email(self, addr_spec):
-    #     self.client.helo('example.com')
-    #     self.client.assert_cmd_resp(
-    #         'MAIL FROM: <""@example.com>',
-    #         (501, b'Syntax: MAIL FROM: <address>')
-    #     )
     def test_bpo27931fix_smtp(self, client):
         self._helo(client)
         resp = client.docmd('MAIL FROM: <""@example.com>')
@@ -824,21 +811,6 @@ class TestSMTP(_CommonMethods):
         resp = client.docmd(f"RCPT TO: {address}")
         assert resp == S.S553_MALFORMED
 
-    # This was a bug, and it's already fixed since 3.6 (see bpo below)
-    # Since we now only support >=3.6, there is no point emulating this bug
-    # Rather, we test that bug is fixed.
-    #
-    # # Test the workaround http://bugs.python.org/issue27931
-    # @patch('email._header_value_parser.AngleAddr.addr_spec',
-    #        new_callable=PropertyMock)
-    # def test_rcpt_fail_parse_email(self, addr_spec):
-    #     self.client.assert_ehlo_ok('example.com')
-    #     self.client.assert_cmd_ok('MAIL FROM: <anne@example.com>')
-    #     addr_spec.side_effect = IndexError
-    #     self.client.assert_cmd_resp(
-    #         'RCPT TO: <""@example.com>',
-    #         (501, b'Syntax: RCPT TO: <address> [SP <mail-parameters>]')
-    #     )
     def test_bpo27931fix_esmtp(self, client):
         self._ehlo(client)
         resp = client.docmd('MAIL FROM: <""@example.com> SIZE=28113')
