@@ -10,6 +10,7 @@ from functools import lru_cache
 from hashlib import pbkdf2_hmac
 from pathlib import Path
 from smtplib import SMTP as SMTPCLient
+from typing import Dict
 
 import dns.resolver
 from aiosmtpd.controller import Controller
