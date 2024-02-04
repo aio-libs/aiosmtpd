@@ -14,18 +14,19 @@
 # serve to show the default.
 
 import datetime
-import sphinx_rtd_theme  # noqa: F401 # pytype: disable=import-error
 import sys
-
 from pathlib import Path
+from typing import Dict
+
+import sphinx_rtd_theme  # noqa: F401 # pytype: disable=import-error
 
 try:
     # noinspection PyPackageRequirements
     from colorama import init as colorama_init  # pytype: disable=import-error
-
-    colorama_init()
 except ImportError:
-    colorama_init = None
+    pass
+else:
+    colorama_init()
 
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -250,7 +251,7 @@ htmlhelp_basename = "aiosmtpddoc"
 
 # region -- Options for LaTeX output ---------------------------------------------
 
-latex_elements = {
+latex_elements: Dict[str, str] = {
     # The paper size ('letterpaper' or 'a4paper').
     # 'papersize': 'letterpaper',
     # The font size ('10pt', '11pt' or '12pt').

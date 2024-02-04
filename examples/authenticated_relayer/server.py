@@ -2,17 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-import dns.resolver
 import logging
+import secrets
 import sqlite3
 import sys
-
-from aiosmtpd.controller import Controller
-from aiosmtpd.smtp import AuthResult, LoginPassword
-from argon2 import PasswordHasher
 from functools import lru_cache
+from hashlib import pbkdf2_hmac
 from pathlib import Path
 from smtplib import SMTP as SMTPCLient
+
+import dns.resolver
+from aiosmtpd.controller import Controller
+from aiosmtpd.smtp import AuthResult, LoginPassword
 
 
 DEST_PORT = 25
@@ -22,7 +23,6 @@ DB_AUTH = Path("mail.db~")
 class Authenticator:
     def __init__(self, auth_database):
         self.auth_db = Path(auth_database)
-        self.ph = PasswordHasher()
 
     def __call__(self, server, session, envelope, mechanism, auth_data):
         fail_nothandled = AuthResult(success=False, handled=False)
@@ -32,7 +32,7 @@ class Authenticator:
             return fail_nothandled
         username = auth_data.login
         password = auth_data.password
-        hashpass = self.ph.hash(password)
+        hashpass = pbkdf2_hmac("sha256", password, secrets.token_bytes(), 1000000).hex()
         conn = sqlite3.connect(self.auth_db)
         curs = conn.execute(
             "SELECT hashpass FROM userauth WHERE username=?", (username,)
@@ -51,13 +51,13 @@ def get_mx(domain):
     records = dns.resolver.resolve(domain, "MX")
     if not records:
         return None
-    records = sorted(records, key=lambda r: r.preference)
-    return str(records[0].exchange)
+    result = max(records, key=lambda r: r.preference)
+    return str(result.exchange)
 
 
 class RelayHandler:
     def handle_data(self, server, session, envelope, data):
-        mx_rcpt = {}
+        mx_rcpt: dict[str, list[str]] = {}
         for rcpt in envelope.rcpt_tos:
             _, _, domain = rcpt.partition("@")
             mx = get_mx(domain)
@@ -96,7 +96,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.create_task(amain())
+    loop.create_task(amain())  # type: ignore[unused-awaitable]
     try:
         loop.run_forever()
     except KeyboardInterrupt:

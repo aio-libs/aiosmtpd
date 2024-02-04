@@ -21,7 +21,7 @@ from abc import ABCMeta, abstractmethod
 from argparse import ArgumentParser
 from email.message import Message as Em_Message
 from email.parser import BytesParser, Parser
-from typing import Any, AnyStr, List, Type, TypeVar, Optional
+from typing import Any, AnyStr, List, TextIO, Type, TypeVar, Optional, Union
 
 from public import public
 
@@ -55,11 +55,12 @@ def message_from_string(s, *args, **kws):
 
 @public
 class Debugging:
-    def __init__(self, stream: Optional[io.TextIOBase] = None):
-        self.stream = sys.stdout if stream is None else stream
+    def __init__(self, stream: Optional[TextIO] = None):
+        self.stream: TextIO = sys.stdout if stream is None else stream
 
     @classmethod
     def from_cli(cls: Type[T], parser: ArgumentParser, *args) -> T:
+        # TODO(PY311): Use Self instead of T.
         error = False
         stream = None
         if len(args) == 0:
@@ -74,9 +75,9 @@ class Debugging:
             error = True
         if error:
             parser.error("Debugging usage: [stdout|stderr]")
-        return cls(stream)
+        return cls(stream)  # type: ignore[call-arg]
 
-    def _print_message_content(self, peer: str, data: AnyStr) -> None:
+    def _print_message_content(self, peer: str, data: Union[str, bytes]) -> None:
         in_headers = True
         for line in data.splitlines():
             # Dump the RFC 2822 headers first.
@@ -105,6 +106,8 @@ class Debugging:
             add_separator = True
         if add_separator:
             print(file=self.stream)
+        assert session.peer is not None
+        assert envelope.content is not None
         self._print_message_content(session.peer, envelope.content)
         print("------------ END MESSAGE ------------", file=self.stream)
         return "250 OK"
@@ -123,6 +126,7 @@ class Proxy:
             content = envelope.original_content
         else:
             content = envelope.content
+        assert content is not None
         lines = content.splitlines(keepends=True)
         # Look for the last header
         _i = 0
@@ -131,17 +135,23 @@ class Proxy:
             if NLCRE.match(line):
                 ending = line
                 break
+        assert session.peer is not None
         peer = session.peer[0].encode("ascii")
         lines.insert(_i, b"X-Peer: " + peer + ending)
         data = EMPTYBYTES.join(lines)
+        assert envelope.mail_from is not None
+        assert all(r is not None for r in envelope.rcpt_tos)
         refused = self._deliver(envelope.mail_from, envelope.rcpt_tos, data)
         # TBD: what to do with refused addresses?
         log.info("we got some refusals: %s", refused)
         return "250 OK"
 
     def _deliver(
-        self, mail_from: AnyStr, rcpt_tos: List[AnyStr], data: AnyStr
-    ) -> Any :
+        self,
+        mail_from: str,
+        rcpt_tos: List[str],
+        data: Union[str, bytes]
+    ) -> Any:
         refused = {}
         try:
             s = smtplib.SMTP()
@@ -174,17 +184,9 @@ class Sink:
         return cls()
 
 
-@public
-class Message(metaclass=ABCMeta):
+class MessageBase(metaclass=ABCMeta):
     def __init__(self, message_class: Optional[Type[Em_Message]] = None):
         self.message_class = message_class
-
-    async def handle_DATA(
-        self, server: SMTPServer, session: SMTPSession, envelope: SMTPEnvelope
-    ) -> str:
-        message = self.prepare_message(session, envelope)
-        self.handle_message(message)
-        return "250 OK"
 
     def prepare_message(
         self, session: SMTPSession, envelope: SMTPEnvelope
@@ -206,12 +208,28 @@ class Message(metaclass=ABCMeta):
         return message
 
     @abstractmethod
-    def handle_message(self, message: Em_Message) -> None:
-        raise NotImplementedError
+    async def handle_DATA(
+        self, server: SMTPServer, session: SMTPSession, envelope: SMTPEnvelope
+    ) -> str:
+        ...
 
 
 @public
-class AsyncMessage(Message, metaclass=ABCMeta):
+class Message(MessageBase, metaclass=ABCMeta):
+    async def handle_DATA(
+        self, server: SMTPServer, session: SMTPSession, envelope: SMTPEnvelope
+    ) -> str:
+        message = self.prepare_message(session, envelope)
+        self.handle_message(message)
+        return "250 OK"
+
+    @abstractmethod
+    def handle_message(self, message: Em_Message) -> None:
+        ...
+
+
+@public
+class AsyncMessage(MessageBase, metaclass=ABCMeta):
     def __init__(
         self,
         message_class: Optional[Type[Em_Message]] = None,
@@ -230,7 +248,7 @@ class AsyncMessage(Message, metaclass=ABCMeta):
 
     @abstractmethod
     async def handle_message(self, message: Em_Message) -> None:
-        raise NotImplementedError
+        ...
 
 
 @public
@@ -252,8 +270,9 @@ class Mailbox(Message):
 
     @classmethod
     def from_cli(cls: Type[T], parser: ArgumentParser, *args) -> T:
+        # TODO(PY311): Use Self instead of T.
         if len(args) < 1:
             parser.error("The directory for the maildir is required")
         elif len(args) > 1:
             parser.error("Too many arguments for Mailbox handler")
-        return cls(args[0])
+        return cls(args[0])  # type: ignore[call-arg]

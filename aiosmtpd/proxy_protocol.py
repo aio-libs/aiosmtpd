@@ -96,13 +96,13 @@ class UnknownTypeTLV(KeyError):
 
 @public
 class AsyncReader(Protocol):
-    async def read(self, num_bytes: Optional[int] = None) -> bytes:
+    async def read(self, n: int = ...) -> bytes:
         ...
 
-    async def readexactly(self, num_bytes: int) -> bytes:
+    async def readexactly(self, n: int) -> bytes:
         ...
 
-    async def readuntil(self, until_chars: Optional[bytes] = None) -> bytes:
+    async def readuntil(self, separator: bytes = ...) -> bytes:
         ...
 
 
@@ -139,9 +139,6 @@ class ProxyTLV(dict):
 
     def __getattr__(self, item: str) -> Any:
         return self.get(item)
-
-    def __eq__(self, other: Dict[str, Any]) -> bool:
-        return super().__eq__(other)
 
     def same_attribs(self, _raises: bool = False, **kwargs) -> bool:
         """
@@ -337,7 +334,6 @@ class ProxyData:
 
 # endregion
 
-_COMPILED_RE = type(re.compile(r""))
 RE_ADDR_ALLOWCHARS = re.compile(r"^[0-9a-fA-F.:]+$")
 RE_PORT_NOLEADZERO = re.compile(r"^[1-9]\d{0,4}|0$")
 
@@ -387,7 +383,7 @@ async def _get_v1(reader: AsyncReader, initial: ByteString = b"") -> ProxyData:
 
     proxy_data.protocol = PROTO.STREAM
 
-    async def get_ap(matcher: _COMPILED_RE) -> str:
+    async def get_ap(matcher: re.Pattern[str]) -> str:
         chunk = data_parts.popleft().decode("latin-1")
         if not matcher.match(chunk):
             raise ValueError

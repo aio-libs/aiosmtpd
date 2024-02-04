@@ -31,15 +31,15 @@ import argparse
 import builtins
 import collections
 import os
-import sphinx
+from functools import reduce
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+import sphinx
 from docutils import nodes  # pytype: disable=pyi-error
 from docutils.parsers.rst import Directive  # pytype: disable=pyi-error
 from docutils.parsers.rst.directives import unchanged  # pytype: disable=pyi-error
 from docutils.statemachine import StringList
-from functools import reduce
 from sphinx.util.nodes import nested_parse_with_titles
-from typing import Any, Dict, List, Optional, Tuple
 
 
 __all__ = ("AutoprogrammDirective", "import_object", "scan_programs", "setup")
@@ -54,7 +54,7 @@ __all__ = ("AutoprogrammDirective", "import_object", "scan_programs", "setup")
 # pytype: disable=bad-return-type
 def get_subparser_action(
     parser: argparse.ArgumentParser
-) -> argparse._SubParsersAction:
+) -> Optional[argparse._SubParsersAction]:
     neg1_action = parser._actions[-1]
 
     if isinstance(neg1_action, argparse._SubParsersAction):
@@ -63,6 +63,7 @@ def get_subparser_action(
     for a in parser._actions:
         if isinstance(a, argparse._SubParsersAction):
             return a
+    return None
 # pytype: enable=bad-return-type
 
 
@@ -90,7 +91,7 @@ def scan_programs(
         yield command, options, parser
 
     if parser._subparsers:
-        choices = ()
+        choices: Iterable[tuple[str, int]] = ()
 
         subp_action = get_subparser_action(parser)
 
@@ -98,10 +99,7 @@ def scan_programs(
             # noinspection PyUnresolvedReferences
             choices = subp_action.choices.items()
 
-        if not (
-            hasattr(collections, "OrderedDict")
-            and isinstance(choices, collections.OrderedDict)
-        ):
+        if not isinstance(choices, collections.OrderedDict):
             choices = sorted(choices, key=lambda pair: pair[0])
 
         for cmd, sub in choices:
@@ -182,8 +180,8 @@ def import_object(import_name: str) -> Any:
     mod = reduce(getattr, module_name.split(".")[1:], mod)
     globals_ = builtins
     if not isinstance(globals_, dict):
-        globals_ = globals_.__dict__
-    return eval(expr, globals_, mod.__dict__)  # noqa: DUO104  # nosec
+        globals_ = globals_.__dict__  # type: ignore[assignment]
+    return eval(expr, globals_, mod.__dict__)  # type: ignore[arg-type]  # noqa: DUO104  # nosec
 
 
 class AutoprogrammDirective(Directive):
@@ -297,21 +295,21 @@ class AutoprogrammDirective(Directive):
 
 
 def render_rst(
-    title: str,
+    title: Optional[str],
     options: List[Tuple[List[str], str]],
     is_program: bool,
     is_subgroup: bool,
-    description: str,
+    description: Optional[str],
     usage: Optional[str],
     usage_strip: bool,
     usage_codeblock: bool,
-    epilog: str,
+    epilog: Optional[str],
     options_title: str,
     options_adornment: str,
 ):
     if usage_strip:
         assert usage is not None
-        to_strip = title.rsplit(" ", 1)[0]
+        to_strip = (title or "").rsplit(" ", 1)[0]
 
         len_to_strip = len(to_strip) - 4
         usage_lines: List[str] = usage.splitlines()

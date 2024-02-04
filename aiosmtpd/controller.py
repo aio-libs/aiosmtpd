@@ -17,8 +17,8 @@ from socket import timeout as socket_timeout
 try:
     from socket import AF_UNIX
 except ImportError:  # pragma: on-not-win32
-    AF_UNIX = None
-from typing import Any, Coroutine, Dict, Literal, Optional, Union
+    AF_UNIX = None  # type: ignore[assignment]
+from typing import Any, Awaitable, Coroutine, Dict, Literal, Optional, Union
 from warnings import warn
 
 from public import public
@@ -115,8 +115,8 @@ class _FakeServer(asyncio.StreamReaderProtocol):
 class BaseController(metaclass=ABCMeta):
     smtpd = None
     server: Optional[AsyncServer] = None
-    server_coro: Optional[Coroutine] = None
-    _factory_invoked: threading.Event = None
+    server_coro: Optional[Awaitable[asyncio.Server]] = None
+    _thread_exception: Optional[Exception] = None
 
     def __init__(
         self,
@@ -171,7 +171,7 @@ class BaseController(metaclass=ABCMeta):
             self._factory_invoked.set()
 
     @abstractmethod
-    def _create_server(self) -> Coroutine:
+    def _create_server(self) -> Awaitable[asyncio.Server]:
         """
         Overridden by subclasses to actually perform the async binding to the
         listener endpoint. When overridden, MUST refer the _factory_invoker() method.
@@ -193,11 +193,7 @@ class BaseController(metaclass=ABCMeta):
         """
         if stop_loop:  # pragma: nobranch
             self.loop.stop()
-        try:
-            _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
-        except AttributeError:
-            _all_tasks = asyncio.Task.all_tasks  # pytype: disable=attribute-error
-        for task in _all_tasks(self.loop):
+        for task in asyncio.all_tasks(self.loop):
             # This needs to be invoked in a thread-safe way
             task.cancel()
 
@@ -205,7 +201,6 @@ class BaseController(metaclass=ABCMeta):
 @public
 class BaseThreadedController(BaseController, metaclass=ABCMeta):
     _thread: Optional[threading.Thread] = None
-    _thread_exception: Optional[Exception] = None
 
     def __init__(
         self,
@@ -256,6 +251,7 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         self.loop.run_forever()
         # We reach this point when loop is ended (by external code)
         # Perform some stoppages to ensure endpoint no longer bound.
+        assert self.server is not None
         self.server.close()
         self.loop.run_until_complete(self.server.wait_closed())
         self.loop.close()
@@ -363,9 +359,12 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         """
         self.ended.clear()
         server = self.server
+        assert server is not None
         server.close()
         await server.wait_closed()
-        self.server_coro.close()
+        assert self.server_coro is not None
+        # TODO: Where does .close() come from...?
+        self.server_coro.close()  # type: ignore[attr-defined]
         self._cleanup()
         self.ended.set()
 
@@ -378,7 +377,8 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         """
         self.ended.clear()
         if self.loop.is_running():
-            self.loop.create_task(self.finalize())
+            # TODO: Should store and await on task at some point.
+            self.loop.create_task(self.finalize())  # type: ignore[unused-awaitable]
         else:
             self.loop.run_until_complete(self.finalize())
 
@@ -402,7 +402,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         self.hostname = self._localhost if hostname is None else hostname
         self.port = port
 
-    def _create_server(self) -> Coroutine:
+    def _create_server(self) -> Awaitable[asyncio.Server]:
         """
         Creates a 'server task' that listens on an INET host:port.
         Does NOT actually start the protocol object itself;
@@ -448,7 +448,7 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
         )
         self.unix_socket = str(unix_socket)
 
-    def _create_server(self) -> Coroutine:
+    def _create_server(self) -> Awaitable[asyncio.Server]:
         """
         Creates a 'server task' that listens on a Unix Socket file.
         Does NOT actually start the protocol object itself;

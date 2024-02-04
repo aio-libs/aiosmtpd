@@ -22,7 +22,7 @@ RE_VERHEADING = re.compile(r"(?P<ver>([0-9.]+)\S*)\s*\((?P<date>[^)]+)\)")
 
 @pytest.fixture
 def aiosmtpd_version() -> version.Version:
-    return version.parse(__version__)
+    return version.parse(__version__)  # type: ignore[return-value]
 
 
 class TestVersion:
@@ -44,12 +44,10 @@ class TestVersion:
                 master_smtp = subprocess.check_output(cmd).decode()  # nosec
         except subprocess.CalledProcessError:
             pytest.skip("Skipping due to git error")
-            return
-        for ln in master_smtp.splitlines():
-            m = RE_DUNDERVER.match(ln)
-            if m:
-                break
-        else:
+
+        try:
+            m = next(m for ln in master_smtp.splitlines() if (m := RE_DUNDERVER.match(ln)))
+        except StopIteration:
             pytest.fail(f"Cannot find __version__ in {reference}!")
         master_ver = version.parse(m.group("ver"))
         assert aiosmtpd_version >= master_ver, "Version number cannot be < master's"

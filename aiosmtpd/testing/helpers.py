@@ -38,6 +38,7 @@ def reset_connection(client: SMTP_Client):
     struct_format = "hh" if sys.platform == "win32" else "ii"
     l_onoff = 1
     l_linger = 0
+    assert client.sock is not None
     client.sock.setsockopt(
         socket.SOL_SOCKET,
         socket.SO_LINGER,
@@ -47,10 +48,8 @@ def reset_connection(client: SMTP_Client):
 
 
 class ReceivingHandler:
-    box: List[Envelope] = None
-
     def __init__(self):
-        self.box = []
+        self.box: List[Envelope] = []
 
     async def handle_DATA(
             self, server: SMTP, session: Session, envelope: Envelope

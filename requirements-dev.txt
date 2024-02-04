@@ -1,5 +1,6 @@
 -r requirements.txt
 
+dnspython==2.5.0
 flake8==7.0.0
 flake8-2020==1.8.1
 flake8-annotations-complexity==0.0.8
@@ -14,3 +15,4 @@ flake8-requirements==2.0.1
 flake8-simplify==0.21.0
 mypy==1.8.0
 sphinx==7.2.6
+types-colorama==0.4.15
