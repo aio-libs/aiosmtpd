@@ -419,7 +419,7 @@ class SMTP(asyncio.StreamReaderProtocol):
 
         # When we've deprecated the 4-arg form of handle_EHLO,
         # we can -- and should -- remove this whole code block
-        ehlo_hook = self._handle_hooks.get("EHLO", None)
+        ehlo_hook = self._handle_hooks.get("EHLO")
         if ehlo_hook is None:
             self._ehlo_hook_ver = None
         else:
