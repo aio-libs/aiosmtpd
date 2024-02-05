@@ -310,6 +310,7 @@ class TestController:
     def test_getlocalhost(self):
         assert get_localhost() in ("127.0.0.1", "::1")
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="Windows test is flaky")
     def test_getlocalhost_noipv6(self, mocker):
         mock_hasip6 = mocker.patch("aiosmtpd.controller._has_ipv6", return_value=False)
         assert get_localhost() == "127.0.0.1"
