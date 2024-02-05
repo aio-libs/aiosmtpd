@@ -315,7 +315,7 @@ class TestController:
         assert get_localhost() == "127.0.0.1"
         assert mock_hasip6.called
 
-    @pytest.skipif(sys.platform == "win32", reason="Windows test is flaky")
+    @pytest.mark.skipif(sys.platform == "win32", reason="Windows test is flaky")
     def test_getlocalhost_6yes(self, mocker: MockFixture):
         mock_sock = mocker.Mock()
         mock_makesock: mocker.Mock = mocker.patch("aiosmtpd.controller.makesock")
