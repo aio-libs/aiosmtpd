@@ -37,7 +37,6 @@ source = [
 # Here we specify our pragma rules:
 py-lt-312 = "sys_version_info < (3, 12)"
 py-lt-310 = "sys_version_info < (3, 10)"
-has-mypy = "is_installed('mypy')"
 has-pwd = "is_installed('pwd')"
 on-win32 = "sys_platform == 'win32'"
 on-wsl = "'Microsoft' in platform_release"
