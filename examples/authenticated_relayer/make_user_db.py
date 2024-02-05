@@ -5,7 +5,6 @@ import secrets
 import sqlite3
 from hashlib import pbkdf2_hmac
 from pathlib import Path
-from typing import Dict
 
 
 DB_FILE = "mail.db~"

@@ -943,22 +943,28 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         assert self.session is not None
         if not self.session.extended_smtp:
-            return await self.push("500 Error: command 'AUTH' not recognized")
+            await self.push("500 Error: command 'AUTH' not recognized")
+            return
         elif self._auth_require_tls and not self._tls_protocol:
-            return await self.push("538 5.7.11 Encryption required for requested "
-                                   "authentication mechanism")
+            await self.push("538 5.7.11 Encryption required for requested "
+                            "authentication mechanism")
+            return
         elif self.session.authenticated:
-            return await self.push('503 Already authenticated')
+            await self.push('503 Already authenticated')
+            return
         elif not arg:
-            return await self.push('501 Not enough value')
+            await self.push('501 Not enough value')
+            return
 
         args = arg.split()
         if len(args) > 2:
-            return await self.push('501 Too many values')
+            await self.push('501 Too many values')
+            return
 
         mechanism = args[0]
         if mechanism not in self._auth_methods:
-            return await self.push('504 5.5.4 Unrecognized authentication type')
+            await self.push('504 5.5.4 Unrecognized authentication type')
+            return
 
         CODE_SUCCESS = "235 2.7.0 Authentication successful"
         CODE_INVALID = "535 5.7.8 Authentication credentials invalid"
