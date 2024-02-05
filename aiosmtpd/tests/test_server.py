@@ -535,6 +535,7 @@ class TestUnthreaded:
         assert temp_event_loop.is_closed() is False
 
 
+@pytest.mark.skipif(sys.version_info >= (3, 12), reason="Hangs on 3.12")
 @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 class TestFactory:
     def test_normal_situation(self):
