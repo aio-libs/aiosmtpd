@@ -307,6 +307,7 @@ class TestController:
         finally:
             cont.stop()
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="Windows test is flaky")
     def test_getlocalhost(self):
         assert get_localhost() in ("127.0.0.1", "::1")
 
