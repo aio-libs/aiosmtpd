@@ -174,7 +174,6 @@ class BaseController(metaclass=ABCMeta):
         Overridden by subclasses to actually perform the async binding to the
         listener endpoint. When overridden, MUST refer the _factory_invoker() method.
         """
-        ...
 
     def _cleanup(self):
         """Reset internal variables to prevent contamination"""
@@ -228,7 +227,6 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         Overridden by subclasses to trigger asyncio to actually initialize the SMTP
         class (it's lazy initialization, done only on initial connection).
         """
-        ...
 
     def _run(self, ready_event: threading.Event) -> None:
         asyncio.set_event_loop(self.loop)
