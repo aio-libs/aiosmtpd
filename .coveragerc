@@ -1,3 +1,9 @@
 # .coveragerc to control coverage.py
 [run]
 branch = True
+
+[report]
+exclude_also =
+    ^\s*if TYPE_CHECKING:
+    : \.\.\.(\s*#.*)?$
+    ^ +\.\.\.$
