@@ -1,7 +1,7 @@
 # .coveragerc to control coverage.py
 [run]
 branch = True
-omit = aiosmtpd/docs/
+omit = aiosmtpd/docs/*
 
 [report]
 exclude_also =
