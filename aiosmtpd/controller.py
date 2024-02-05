@@ -5,7 +5,6 @@ import asyncio
 import errno
 import os
 import ssl
-import sys
 import threading
 import time
 from abc import ABCMeta, abstractmethod
@@ -18,20 +17,13 @@ from socket import timeout as socket_timeout
 try:
     from socket import AF_UNIX
 except ImportError:  # pragma: on-not-win32
-    AF_UNIX = None
-from typing import Any, Coroutine, Dict, Optional, Union
-
-if sys.version_info >= (3, 8):
-    from typing import Literal  # pragma: py-lt-38
-else:  # pragma: py-ge-38
-    from typing_extensions import Literal
+    AF_UNIX = None  # type: ignore[assignment]
+from typing import Any, Awaitable, Dict, Literal, Optional, Union
 from warnings import warn
 
 from public import public
 
 from aiosmtpd.smtp import SMTP
-
-AsyncServer = asyncio.base_events.Server
 
 DEFAULT_READY_TIMEOUT: float = 5.0
 
@@ -120,9 +112,9 @@ class _FakeServer(asyncio.StreamReaderProtocol):
 @public
 class BaseController(metaclass=ABCMeta):
     smtpd = None
-    server: Optional[AsyncServer] = None
-    server_coro: Optional[Coroutine] = None
-    _factory_invoked: threading.Event = None
+    server: Optional[asyncio.AbstractServer] = None
+    server_coro: Optional[Awaitable[asyncio.AbstractServer]] = None
+    _thread_exception: Optional[Exception] = None
 
     def __init__(
         self,
@@ -177,12 +169,11 @@ class BaseController(metaclass=ABCMeta):
             self._factory_invoked.set()
 
     @abstractmethod
-    def _create_server(self) -> Coroutine:
+    def _create_server(self) -> Awaitable[asyncio.AbstractServer]:
         """
         Overridden by subclasses to actually perform the async binding to the
         listener endpoint. When overridden, MUST refer the _factory_invoker() method.
         """
-        raise NotImplementedError
 
     def _cleanup(self):
         """Reset internal variables to prevent contamination"""
@@ -199,11 +190,7 @@ class BaseController(metaclass=ABCMeta):
         """
         if stop_loop:  # pragma: nobranch
             self.loop.stop()
-        try:
-            _all_tasks = asyncio.all_tasks  # pytype: disable=module-attr
-        except AttributeError:  # pragma: py-gt-36
-            _all_tasks = asyncio.Task.all_tasks  # pytype: disable=attribute-error
-        for task in _all_tasks(self.loop):
+        for task in asyncio.all_tasks(self.loop):
             # This needs to be invoked in a thread-safe way
             task.cancel()
 
@@ -211,7 +198,6 @@ class BaseController(metaclass=ABCMeta):
 @public
 class BaseThreadedController(BaseController, metaclass=ABCMeta):
     _thread: Optional[threading.Thread] = None
-    _thread_exception: Optional[Exception] = None
 
     def __init__(
         self,
@@ -241,18 +227,12 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         Overridden by subclasses to trigger asyncio to actually initialize the SMTP
         class (it's lazy initialization, done only on initial connection).
         """
-        raise NotImplementedError
 
     def _run(self, ready_event: threading.Event) -> None:
         asyncio.set_event_loop(self.loop)
         try:
-            # Need to do two-step assignments here to ensure IDEs can properly
-            # detect the types of the vars. Cannot use `assert isinstance`, because
-            # Python 3.6 in asyncio debug mode has a bug wherein CoroWrapper is not
-            # an instance of Coroutine
             self.server_coro = self._create_server()
-            srv: AsyncServer = self.loop.run_until_complete(self.server_coro)
-            self.server = srv
+            self.server = self.loop.run_until_complete(self.server_coro)
         except Exception as error:  # pragma: on-wsl
             # Usually will enter this part only if create_server() cannot bind to the
             # specified host:port.
@@ -267,6 +247,7 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         self.loop.run_forever()
         # We reach this point when loop is ended (by external code)
         # Perform some stoppages to ensure endpoint no longer bound.
+        assert self.server is not None
         self.server.close()
         self.loop.run_until_complete(self.server.wait_closed())
         self.loop.close()
@@ -362,13 +343,8 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         Does NOT actually start the event loop itself.
         """
         asyncio.set_event_loop(self.loop)
-        # Need to do two-step assignments here to ensure IDEs can properly
-        # detect the types of the vars. Cannot use `assert isinstance`, because
-        # Python 3.6 in asyncio debug mode has a bug wherein CoroWrapper is not
-        # an instance of Coroutine
         self.server_coro = self._create_server()
-        srv: AsyncServer = self.loop.run_until_complete(self.server_coro)
-        self.server = srv
+        self.server = self.loop.run_until_complete(self.server_coro)
 
     async def finalize(self):
         """
@@ -379,9 +355,12 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         """
         self.ended.clear()
         server = self.server
+        assert server is not None
         server.close()
         await server.wait_closed()
-        self.server_coro.close()
+        assert self.server_coro is not None
+        # TODO: Where does .close() come from...?
+        self.server_coro.close()  # type: ignore[attr-defined]
         self._cleanup()
         self.ended.set()
 
@@ -394,7 +373,8 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         """
         self.ended.clear()
         if self.loop.is_running():
-            self.loop.create_task(self.finalize())
+            # TODO: Should store and await on task at some point.
+            self.loop.create_task(self.finalize())  # type: ignore[unused-awaitable]
         else:
             self.loop.run_until_complete(self.finalize())
 
@@ -418,7 +398,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         self.hostname = self._localhost if hostname is None else hostname
         self.port = port
 
-    def _create_server(self) -> Coroutine:
+    def _create_server(self) -> Awaitable[asyncio.AbstractServer]:
         """
         Creates a 'server task' that listens on an INET host:port.
         Does NOT actually start the protocol object itself;
@@ -464,7 +444,7 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
         )
         self.unix_socket = str(unix_socket)
 
-    def _create_server(self) -> Coroutine:
+    def _create_server(self) -> Awaitable[asyncio.AbstractServer]:
         """
         Creates a 'server task' that listens on a Unix Socket file.
         Does NOT actually start the protocol object itself;

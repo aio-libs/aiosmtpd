@@ -2,6 +2,8 @@
  NEWS for aiosmtpd
 ###################
 
+.. towncrier release notes start
+
 
 1.5.0 (aiosmtpd-next)
 =====================

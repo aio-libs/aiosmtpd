@@ -1,0 +1,10 @@
+# .coveragerc to control coverage.py
+[run]
+branch = True
+omit = aiosmtpd/docs/*
+
+[report]
+exclude_also =
+    ^\s*if TYPE_CHECKING:
+    : \.\.\.(\s*#.*)?$
+    ^ +\.\.\.$

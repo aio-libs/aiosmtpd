@@ -32,7 +32,7 @@ except ImportError:
 
 
 DUMP_DIR = "_dump"
-TOX_ENV_NAME = os.environ.get("TOX_ENV_NAME", None)
+TOX_ENV_NAME = os.environ.get("TOX_ENV_NAME")
 
 # These dirs will be processed if exists, so no need to remove old entries.
 # I suggest keeping them to clean up old artefacts just in case.

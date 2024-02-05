@@ -44,12 +44,10 @@ class TestVersion:
                 master_smtp = subprocess.check_output(cmd).decode()  # nosec
         except subprocess.CalledProcessError:
             pytest.skip("Skipping due to git error")
-            return
-        for ln in master_smtp.splitlines():
-            m = RE_DUNDERVER.match(ln)
-            if m:
-                break
-        else:
+
+        try:
+            m = next(m for ln in master_smtp.splitlines() if (m := RE_DUNDERVER.match(ln)))
+        except StopIteration:
             pytest.fail(f"Cannot find __version__ in {reference}!")
         master_ver = version.parse(m.group("ver"))
         assert aiosmtpd_version >= master_ver, "Version number cannot be < master's"

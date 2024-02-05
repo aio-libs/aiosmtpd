@@ -21,7 +21,7 @@ from aiosmtpd.smtp import DATA_SIZE_DEFAULT, SMTP
 try:
     import pwd
 except ImportError:  # pragma: has-pwd
-    pwd = None
+    pwd = None  # type: ignore[assignment]
 
 
 DEFAULT_HOST = "localhost"
@@ -215,11 +215,11 @@ def parseargs(args: Optional[Sequence[str]] = None) -> Tuple[ArgumentParser, Nam
 
 @public
 def main(args: Optional[Sequence[str]] = None) -> None:
-    parser, args = parseargs(args=args)
+    parser, ns = parseargs(args=args)
 
-    if args.setuid:  # pragma: on-win32
+    if ns.setuid:  # pragma: on-win32
         if pwd is None:
-            print(
+            print(  # type: ignore[unreachable]
                 'Cannot import module "pwd"; try running with -n option.',
                 file=sys.stderr,
             )
@@ -233,51 +233,51 @@ def main(args: Optional[Sequence[str]] = None) -> None:
             )
             sys.exit(1)
 
-    if args.tlscert and args.tlskey:
+    if ns.tlscert and ns.tlskey:
         tls_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         tls_context.check_hostname = False
-        tls_context.load_cert_chain(str(args.tlscert), str(args.tlskey))
+        tls_context.load_cert_chain(str(ns.tlscert), str(ns.tlskey))
     else:
         tls_context = None
 
     factory = partial(
         SMTP,
-        args.handler,
-        data_size_limit=args.size,
-        enable_SMTPUTF8=args.smtputf8,
+        ns.handler,
+        data_size_limit=ns.size,
+        enable_SMTPUTF8=ns.smtputf8,
         tls_context=tls_context,
-        require_starttls=args.requiretls,
+        require_starttls=ns.requiretls,
     )
 
     logging.basicConfig(level=logging.ERROR)
     log = logging.getLogger("mail.log")
     loop = _get_or_new_eventloop()
 
-    if args.debug > 0:
+    if ns.debug > 0:
         log.setLevel(logging.INFO)
-    if args.debug > 1:
+    if ns.debug > 1:
         log.setLevel(logging.DEBUG)
-    if args.debug > 2:
+    if ns.debug > 2:
         loop.set_debug(enabled=True)
 
-    if args.smtpscert and args.smtpskey:
+    if ns.smtpscert and ns.smtpskey:
         smtps_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         smtps_context.check_hostname = False
-        smtps_context.load_cert_chain(str(args.smtpscert), str(args.smtpskey))
+        smtps_context.load_cert_chain(str(ns.smtpscert), str(ns.smtpskey))
     else:
         smtps_context = None
 
-    log.debug("Attempting to start server on %s:%s", args.host, args.port)
+    log.debug("Attempting to start server on %s:%s", ns.host, ns.port)
     server = server_loop = None
     try:
         server = loop.create_server(
-            factory, host=args.host, port=args.port, ssl=smtps_context
+            factory, host=ns.host, port=ns.port, ssl=smtps_context
         )
         server_loop = loop.run_until_complete(server)
     except RuntimeError:  # pragma: nocover
         raise
     log.debug(f"server_loop = {server_loop}")
-    log.info("Server is listening on %s:%s", args.host, args.port)
+    log.info("Server is listening on %s:%s", ns.host, ns.port)
 
     # Signal handlers are only supported on *nix, so just ignore the failure
     # to set this on Windows.

@@ -17,7 +17,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.create_task(amain(loop=loop))
+    loop.create_task(amain(loop=loop))  # type: ignore[unused-awaitable]
     try:
         loop.run_forever()
     except KeyboardInterrupt:
