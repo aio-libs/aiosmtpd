@@ -1276,9 +1276,11 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         address, addrparams = self._getaddr(arg)
         if address is None:
-            return await self.push("553 5.1.3 Error: malformed address")
+            await self.push("553 5.1.3 Error: malformed address")
+            return
         if not address:
-            return await self.push(syntaxerr)
+            await self.push(syntaxerr)
+            return
         if not self.session.extended_smtp and addrparams:
             await self.push(syntaxerr)
             return
@@ -1336,34 +1338,42 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         assert self.envelope is not None
         if not self.envelope.mail_from:
-            return await self.push('503 Error: need MAIL command')
+            await self.push("503 Error: need MAIL command")
+            return
 
         syntaxerr = '501 Syntax: RCPT TO: <address>'
         assert self.session is not None
         if self.session.extended_smtp:
             syntaxerr += ' [SP <mail-parameters>]'
         if arg is None:
-            return await self.push(syntaxerr)
+            await self.push(syntaxerr)
+            return
         arg = self._strip_command_keyword('TO:', arg)
         if arg is None:
-            return await self.push(syntaxerr)
+            await self.push(syntaxerr)
+            return
         address, params = self._getaddr(arg)
         if address is None:
-            return await self.push("553 5.1.3 Error: malformed address")
+            await self.push("553 5.1.3 Error: malformed address")
+            return
         if not address:
-            return await self.push(syntaxerr)
+            await self.push(syntaxerr)
+            return
         if not self.session.extended_smtp and params:
-            return await self.push(syntaxerr)
+            await self.push(syntaxerr)
+            return
         assert params is not None
         rcpt_options = params.upper().split()
         params_dict = self._getparams(rcpt_options)
         if params_dict is None:
-            return await self.push(syntaxerr)
+            await self.push(syntaxerr)
+            return
         # XXX currently there are no options we recognize.
         if len(params_dict) > 0:
-            return await self.push(
+            await self.push(
                 '555 RCPT TO parameters not recognized or not implemented'
             )
+            return
 
         status = await self._call_handler_hook('RCPT', address, rcpt_options)
         if status is MISSING:
