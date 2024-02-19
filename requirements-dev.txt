@@ -2,7 +2,7 @@
 -r aiosmtpd/docs/requirements.txt
 
 check-manifest==0.49
-dnspython==2.5.0
+dnspython==2.6.1
 flake8==7.0.0
 flake8-2020==1.8.1
 flake8-annotations-complexity==0.0.8
