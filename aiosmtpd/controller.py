@@ -420,6 +420,10 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         # At this point, if self.hostname is Falsy, it most likely is "" (bind to all
         # addresses). In such case, it should be safe to connect to localhost)
         hostname = self.hostname or self._localhost
+        # If port is 0, we need to get the port that the OS assigned so that we
+        # can connect.
+        if self.port == 0:
+            self.port = self.server.sockets[0].getsockname()[1]
         with ExitStack() as stk:
             s = stk.enter_context(create_connection((hostname, self.port), 1.0))
             if self.ssl_context:

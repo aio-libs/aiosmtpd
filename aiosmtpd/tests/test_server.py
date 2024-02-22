@@ -299,6 +299,15 @@ class TestController:
         finally:
             cont.stop()
 
+    def test_port_zero(self):
+        cont = Controller(Sink(), port=0)
+        try:
+            cont.start()
+            # Ensure port on controller has been populated with the OS-assigned port
+            assert cont.port != 0
+        finally:
+            cont.stop()
+
     def test_testconn_raises(self, mocker: MockFixture):
         mocker.patch("socket.socket.recv", side_effect=RuntimeError("MockError"))
         cont = Controller(Sink(), hostname="")
