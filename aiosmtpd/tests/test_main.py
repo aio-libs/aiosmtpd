@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+from collections import namedtuple
 import logging
 import multiprocessing as MP
 import os
@@ -142,6 +143,17 @@ class TestMain:
         main(args=())
         mock.assert_called_with(nobody_uid)
 
+    def test_setuid_other(self, nobody_uid, mocker):
+        other_user = namedtuple(
+            "pwnam",
+            ["pw_uid", "pw_dir", "pw_shell"],
+        )(42, "/", "/bin/sh")
+        mock_getpwnam = mocker.patch("pwd.getpwnam", return_value=other_user)
+        mock_suid = mocker.patch("os.setuid")
+        main(args=("-S", "other"))
+        mock_getpwnam.assert_called_with("other")
+        mock_suid.assert_called_with(42)
+
     def test_setuid_permission_error(self, nobody_uid, mocker, capsys):
         mock = mocker.patch("os.setuid", side_effect=PermissionError)
         with pytest.raises(SystemExit) as excinfo:
@@ -150,7 +162,7 @@ class TestMain:
         mock.assert_called_with(nobody_uid)
         assert (
             capsys.readouterr().err
-            == 'Cannot setuid "nobody"; try running with -n option.\n'
+            == 'Cannot setuid to "nobody"; try running with -n option.\n'
         )
 
     def test_setuid_no_pwd_module(self, nobody_uid, mocker, capsys):

@@ -11,6 +11,7 @@
 Added
 -----
 * Unthreaded Controllers (Closes #160)
+* Ability to drop permissions to a user other than ``nobody`` using ``-S``
 
 Fixed/Improved
 --------------
