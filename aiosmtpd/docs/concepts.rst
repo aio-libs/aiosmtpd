@@ -2,6 +2,8 @@
  Concepts
 ==========
 
+This guide assumes familiarity with the SMTP protocol.
+
 There are two general ways you can run the SMTP server, via the
 :ref:`command line <cli>` or :ref:`programmatically <controller>`.
 

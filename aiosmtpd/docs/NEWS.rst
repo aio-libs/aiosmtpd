@@ -14,7 +14,7 @@ Added
 
 Fixed/Improved
 --------------
-* All Controllers now have more rationale design, as they are now composited from a Base + a Mixin
+* All Controllers now have more rational design, as they are now composited from a Base + a Mixin
 * A whole bunch of annotations
 
 

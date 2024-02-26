@@ -9,7 +9,10 @@ Simple Mail Transfer Protocol (SMTP) and
 Local Mail Transfer Protocol (LMTP).  It is derived from
 `Python 3.5's smtpd.py <https://hg.python.org/cpython/file/3.5/Lib/smtpd.py>`__
 standard library module, and provides both a command line interface and an API
-for use in testing applications that send email.
+for use in testing applications that send email. Since the `smtpd module was
+removed in Python 3.12
+<https://docs.python.org/3.12/whatsnew/3.12.html#locale>`__, following :pep:`594#smtpd`, aiosmtpd is the recommended
+replacement.
 
 Inspiration for this library comes from several other packages:
 
