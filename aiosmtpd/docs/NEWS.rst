@@ -18,6 +18,12 @@ Fixed/Improved
 * A whole bunch of annotations
 
 
+1.4.5 (2024-03-02)
+==================
+
+* Fixed incorrect handling of newlines.
+
+
 1.4.4.post2 (2023-01-19)
 ========================
 
