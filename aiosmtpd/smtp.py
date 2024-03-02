@@ -87,7 +87,7 @@ DATA_SIZE_DEFAULT = 2**25  # Where does this number come from, I wonder...
 EMPTY_BARR = bytearray()
 EMPTYBYTES = b''
 MISSING = _Missing.MISSING
-NEWLINE = '\n'
+NEWLINE = '\r\n'
 VALID_AUTHMECH = re.compile(r"[A-Z0-9_-]+\Z")
 
 # https://tools.ietf.org/html/rfc3207.html#page-3
@@ -1427,9 +1427,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Since eof_received cancels this coroutine,
             # readuntil() can never raise asyncio.IncompleteReadError.
             try:
-                line: bytes = await self._reader.readuntil()
+                # https://datatracker.ietf.org/doc/html/rfc5321#section-2.3.8
+                line: bytes = await self._reader.readuntil(b'\r\n')
                 log.debug('DATA readline: %s', line)
-                assert line.endswith(b'\n')
+                assert line.endswith(b'\r\n')
             except asyncio.CancelledError:
                 # The connection got reset during the DATA command.
                 log.info('Connection lost during DATA')
@@ -1446,7 +1447,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 data *= 0
                 # Drain the stream anyways
                 line = await self._reader.read(e.consumed)
-                assert not line.endswith(b'\n')
+                assert not line.endswith(b'\r\n')
             # A lone dot in a line signals the end of DATA.
             if not line_fragments and line == b'.\r\n':
                 break
@@ -1458,7 +1459,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # Discard data immediately to prevent memory pressure
                 data *= 0
             line_fragments.append(line)
-            if line.endswith(b'\n'):
+            if line.endswith(b'\r\n'):
                 # Record data only if state is "NOMINAL"
                 if state == _DataState.NOMINAL:
                     line = EMPTY_BARR.join(line_fragments)
