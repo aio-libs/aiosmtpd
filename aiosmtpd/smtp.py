@@ -87,7 +87,6 @@ DATA_SIZE_DEFAULT = 2**25  # Where does this number come from, I wonder...
 EMPTY_BARR = bytearray()
 EMPTYBYTES = b''
 MISSING = _Missing.MISSING
-NEWLINE = '\r\n'
 VALID_AUTHMECH = re.compile(r"[A-Z0-9_-]+\Z")
 
 # https://tools.ietf.org/html/rfc3207.html#page-3
