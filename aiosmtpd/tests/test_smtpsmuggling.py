@@ -1,4 +1,4 @@
-# Copyright 2014-2021 The aiosmtpd Developers
+# Copyright 2024 The aiosmtpd Developers
 # SPDX-License-Identifier: Apache-2.0
 
 """Test SMTP smuggling."""
