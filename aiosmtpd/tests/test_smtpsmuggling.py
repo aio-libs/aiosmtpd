@@ -18,7 +18,7 @@ def new_data(self, msg):
     if self.debuglevel > 0:
         self._print_debug('data:', (code, repl))
     if code != 354:
-        raise SMTPDataError(code, repl)
+        raise smtplib.SMTPDataError(code, repl)
     else:
         q = msg
         self.send(q)
