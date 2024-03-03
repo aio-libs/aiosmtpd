@@ -5,19 +5,6 @@
 .. towncrier release notes start
 
 
-1.5.0 (aiosmtpd-next)
-=====================
-
-Added
------
-* Unthreaded Controllers (Closes #160)
-
-Fixed/Improved
---------------
-* All Controllers now have more rationale design, as they are now composited from a Base + a Mixin
-* A whole bunch of annotations
-
-
 1.4.5 (2024-03-02)
 ==================
 
