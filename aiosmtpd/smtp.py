@@ -87,7 +87,6 @@ DATA_SIZE_DEFAULT = 2**25  # Where does this number come from, I wonder...
 EMPTY_BARR = bytearray()
 EMPTYBYTES = b''
 MISSING = _Missing.MISSING
-NEWLINE = '\n'
 VALID_AUTHMECH = re.compile(r"[A-Z0-9_-]+\Z")
 
 # https://tools.ietf.org/html/rfc3207.html#page-3
@@ -943,22 +942,28 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         assert self.session is not None
         if not self.session.extended_smtp:
-            return await self.push("500 Error: command 'AUTH' not recognized")
+            await self.push("500 Error: command 'AUTH' not recognized")
+            return
         elif self._auth_require_tls and not self._tls_protocol:
-            return await self.push("538 5.7.11 Encryption required for requested "
-                                   "authentication mechanism")
+            await self.push("538 5.7.11 Encryption required for requested "
+                            "authentication mechanism")
+            return
         elif self.session.authenticated:
-            return await self.push('503 Already authenticated')
+            await self.push('503 Already authenticated')
+            return
         elif not arg:
-            return await self.push('501 Not enough value')
+            await self.push('501 Not enough value')
+            return
 
         args = arg.split()
         if len(args) > 2:
-            return await self.push('501 Too many values')
+            await self.push('501 Too many values')
+            return
 
         mechanism = args[0]
         if mechanism not in self._auth_methods:
-            return await self.push('504 5.5.4 Unrecognized authentication type')
+            await self.push('504 5.5.4 Unrecognized authentication type')
+            return
 
         CODE_SUCCESS = "235 2.7.0 Authentication successful"
         CODE_INVALID = "535 5.7.8 Authentication credentials invalid"
@@ -1421,9 +1426,10 @@ class SMTP(asyncio.StreamReaderProtocol):
             # Since eof_received cancels this coroutine,
             # readuntil() can never raise asyncio.IncompleteReadError.
             try:
-                line: bytes = await self._reader.readuntil()
+                # https://datatracker.ietf.org/doc/html/rfc5321#section-2.3.8
+                line: bytes = await self._reader.readuntil(b'\r\n')
                 log.debug('DATA readline: %s', line)
-                assert line.endswith(b'\n')
+                assert line.endswith(b'\r\n')
             except asyncio.CancelledError:
                 # The connection got reset during the DATA command.
                 log.info('Connection lost during DATA')
@@ -1440,7 +1446,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 data *= 0
                 # Drain the stream anyways
                 line = await self._reader.read(e.consumed)
-                assert not line.endswith(b'\n')
+                assert not line.endswith(b'\r\n')
             # A lone dot in a line signals the end of DATA.
             if not line_fragments and line == b'.\r\n':
                 break
@@ -1452,7 +1458,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # Discard data immediately to prevent memory pressure
                 data *= 0
             line_fragments.append(line)
-            if line.endswith(b'\n'):
+            if line.endswith(b'\r\n'):
                 # Record data only if state is "NOMINAL"
                 if state == _DataState.NOMINAL:
                     line = EMPTY_BARR.join(line_fragments)
