@@ -304,7 +304,7 @@ def render_rst(
     usage_strip: bool,
     usage_codeblock: bool,
     epilog: Optional[str],
-    options_title: str,
+    options_title: Optional[str],
     options_adornment: str,
 ):
     if usage_strip:
