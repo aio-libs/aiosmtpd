@@ -253,7 +253,7 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         self.loop.close()
         self.server = None
 
-    def start(self):
+    def start(self) -> None:
         """
         Start a thread and run the asyncio event loop in that thread
         """
