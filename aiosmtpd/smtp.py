@@ -461,7 +461,11 @@ class SMTP(asyncio.StreamReaderProtocol):
                 raise TypeError("command_call_limit must be int or Dict[str, int]")
 
     def _create_session(self) -> Session:
-        return Session(self.loop)
+        prev_session: Optional[Session] = getattr(self, 'session', None)
+        session = Session(self.loop)
+        if prev_session is not None:
+            session.proxy_data = prev_session.proxy_data
+        return session
 
     def _create_envelope(self) -> Envelope:
         return Envelope()
