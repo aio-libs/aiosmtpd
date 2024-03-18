@@ -17,4 +17,4 @@ flake8-requirements==2.1.0
 flake8-simplify==0.21.0
 mypy==1.8.0
 types-colorama==0.4.15.20240311
-types-docutils==0.20.0.20240314
+types-docutils==0.20.0.20240317
