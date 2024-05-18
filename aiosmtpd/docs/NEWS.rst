@@ -4,7 +4,7 @@
 
 .. towncrier release notes start
 
-1.4.6 (2024-05-06)
+1.4.6 (2024-05-18)
 ==================
 
 * STARTTLS is now fully enforced if used.
