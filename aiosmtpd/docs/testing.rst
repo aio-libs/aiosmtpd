@@ -30,9 +30,6 @@ Other plugins that are used, to various degrees, in the ``aiosmtpd`` test suite 
 * |pytest-cov|_ to integrate with |coverage-py|_
 * |pytest-sugar|_ to provide better ux
 * |pytest-print|_ to give some progress indicator and to assist test troubleshooting
-* |pytest-profiling|_ to implement ``*-profile`` testenv,
-  although to be honest this is not really useful as the profiling gets 'muddied' by
-  pytest runner.
 
 .. _`pytest-mock`: https://pypi.org/project/pytest-mock/
 .. |pytest-mock| replace:: ``pytest-mock``
@@ -44,8 +41,6 @@ Other plugins that are used, to various degrees, in the ``aiosmtpd`` test suite 
 .. |pytest-sugar| replace:: ``pytest-sugar``
 .. _`pytest-print`: https://pypi.org/project/pytest-print/
 .. |pytest-print| replace:: ``pytest-print``
-.. _`pytest-profiling`: https://pypi.org/project/pytest-profiling/
-.. |pytest-profiling| replace:: ``pytest-profiling``
 
 
 Fixtures

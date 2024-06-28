@@ -179,7 +179,6 @@ have been configured and tested:
     (showing a single character per test run)
   - ``diffcov`` = with diff-coverage report (showing difference in
     coverage compared to previous commit). Tests will run in brief mode
-  - ``profile`` = no coverage testing, but code profiling instead.
     This must be **invoked manually** using the ``-e`` parameter
 
   **Note 1:** As of 2021-02-23,
