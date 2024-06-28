@@ -66,7 +66,7 @@ jobs:
     name: Test
     strategy:
       matrix:
-        pyver: ['3.8', '3.9', '3.10', '3.11', '3.12']
+        pyver: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
         os: [ubuntu, macos, windows]
         include:
           - pyver: pypy-3.8
@@ -82,6 +82,7 @@ jobs:
         python-version: ${{ matrix.pyver }}
         cache: 'pip'
         cache-dependency-path: '**/requirements*.txt'
+        allow-prereleases: true
     - name: Install dependencies
       uses: py-actions/py-dependency-install@v4
       with:

@@ -4,6 +4,14 @@
 
 .. towncrier release notes start
 
+1.4.7 (aiosmtpd-next)
+=====================
+
+Fixed/Improved
+--------------
+
+* Added compatibility for Python 3.13 (Closes #403)
+
 1.4.6 (2024-05-18)
 ==================
 
