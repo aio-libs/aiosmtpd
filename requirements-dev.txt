@@ -15,6 +15,6 @@ flake8-import-order==0.18.2
 flake8-pytest-style==2.0.0
 flake8-requirements==2.2.1
 flake8-simplify==0.21.0
-mypy==1.10.1
+mypy==1.11.0
 types-colorama==0.4.15.20240311
 types-docutils==0.21.0.20240724
