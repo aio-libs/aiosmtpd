@@ -1,4 +1,4 @@
-atpublic==4.1.0
+atpublic==5.0
 attrs==23.2.0
 coverage==7.6.0
 pytest==8.3.1
