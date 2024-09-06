@@ -5,18 +5,27 @@ import asyncio
 import inspect
 import socket
 import ssl
+import sys
 import warnings
 from contextlib import suppress
 from functools import wraps
+from pathlib import Path
 from smtplib import SMTP as SMTPClient
 from typing import Any, Callable, Generator, NamedTuple, Optional, Type, TypeVar
 
 import pytest
-from pkg_resources import resource_filename
 from pytest_mock import MockFixture
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
+
+# `importlib.resources.files` was added in Python 3.9:
+# https://docs.python.org/3/library/importlib.resources.html#importlib.resources.files
+# Use backport https://github.com/python/importlib_resources on Python 3.8.
+if sys.version_info[:2] == (3, 8):
+    import importlib_resources
+else:
+    import importlib.resources as importlib_resources
 
 try:
     from asyncio.proactor_events import _ProactorBasePipeTransport
@@ -32,8 +41,6 @@ __all__ = [
     "handler_data",
     "Global",
     "AUTOSTOP_DELAY",
-    "SERVER_CRT",
-    "SERVER_KEY",
 ]
 
 
@@ -73,8 +80,6 @@ class Global:
 # If less than 1.0, might cause intermittent error if test system
 # is too busy/overloaded.
 AUTOSTOP_DELAY = 1.5
-SERVER_CRT = resource_filename("aiosmtpd.tests.certs", "server.crt")
-SERVER_KEY = resource_filename("aiosmtpd.tests.certs", "server.key")
 
 # endregion
 
@@ -97,6 +102,22 @@ def cache_fqdn(session_mocker: MockFixture):
 
 
 # region #### Common Fixtures #########################################################
+
+
+def _server_resource(name: str, /) -> Generator[Path, None, None]:
+    ref = importlib_resources.files("aiosmtpd.tests.certs") / name
+    with importlib_resources.as_file(ref) as path:
+        yield path
+
+
+@pytest.fixture(scope="session")
+def server_crt() -> Generator[Path, None, None]:
+    yield from _server_resource("server.crt")
+
+
+@pytest.fixture(scope="session")
+def server_key() -> Generator[Path, None, None]:
+    yield from _server_resource("server.key")
 
 
 @pytest.fixture
@@ -315,25 +336,25 @@ def client(request: pytest.FixtureRequest) -> Generator[SMTPClient, None, None]:
 
 
 @pytest.fixture
-def ssl_context_server() -> ssl.SSLContext:
+def ssl_context_server(server_crt: Path, server_key: Path) -> ssl.SSLContext:
     """
     Provides a server-side SSL Context
     """
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     context.check_hostname = False
-    context.load_cert_chain(SERVER_CRT, SERVER_KEY)
+    context.load_cert_chain(server_crt, server_key)
     #
     return context
 
 
 @pytest.fixture
-def ssl_context_client() -> ssl.SSLContext:
+def ssl_context_client(server_crt: Path) -> ssl.SSLContext:
     """
     Provides a client-side SSL Context
     """
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
     context.check_hostname = False
-    context.load_verify_locations(SERVER_CRT)
+    context.load_verify_locations(server_crt)
     #
     return context
 
