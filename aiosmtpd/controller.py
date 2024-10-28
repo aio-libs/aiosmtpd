@@ -108,6 +108,9 @@ class _FakeServer(asyncio.StreamReaderProtocol):
     ) -> None:
         pass
 
+    def connection_made(self, transport):
+        transport.close()
+
 
 @public
 class BaseController(metaclass=ABCMeta):
