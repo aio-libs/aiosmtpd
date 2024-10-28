@@ -155,7 +155,7 @@ class LoginPassword(NamedTuple):
 @public
 class Session:
     def __init__(self, loop: asyncio.AbstractEventLoop):
-        self.peer: Optional[str] = None
+        self.peer: Optional[Tuple[str, int]] = None
         self.ssl: Optional[dict[str, Any]] = None
         self.host_name: Optional[str] = None
         self.extended_smtp = False
