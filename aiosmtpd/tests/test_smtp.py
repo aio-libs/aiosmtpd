@@ -1604,23 +1604,6 @@ class TestSMTPWithController(_CommonMethods):
             client.sendmail("anne@example.com", ["bart@example.com"], mail)
         assert exc.value.args == S.S500_DATALINE_TOO_LONG
 
-    def test_long_line_leak(self, mocker: MockFixture, plain_controller, client):
-        # Simulates situation where readuntil() does not raise LimitOverrunError,
-        # but somehow the line_fragments when join()ed resulted in a too-long line
-
-        # Hijack EMPTY_BARR.join() to return a bytes object that's definitely too long
-        mock_ebarr = mocker.patch("aiosmtpd.smtp.EMPTY_BARR")
-        mock_ebarr.join.return_value = b"a" * 1010
-
-        client.helo("example.com")
-        mail = "z" * 72  # Make sure this is small and definitely within limits
-        with pytest.raises(SMTPDataError) as exc:
-            client.sendmail("anne@example.com", ["bart@example.com"], mail)
-        assert exc.value.args == S.S500_DATALINE_TOO_LONG
-        # self.assertEqual(cm.exception.smtp_code, 500)
-        # self.assertEqual(cm.exception.smtp_error,
-        #                  b'Line too long (see RFC5321 4.5.3.1.6)')
-
     @controller_data(data_size_limit=20)
     def test_too_long_body_delay_error(self, plain_controller):
         with socket.socket() as sock:

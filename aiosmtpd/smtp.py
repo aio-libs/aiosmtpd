@@ -1423,7 +1423,6 @@ class SMTP(asyncio.StreamReaderProtocol):
 
         num_bytes: int = 0
         limit: Optional[int] = self.data_size_limit
-        line_fragments: List[bytes] = []
         state: _DataState = _DataState.NOMINAL
         while self.transport is not None:           # pragma: nobranch
             # Since eof_received cancels this coroutine,
@@ -1448,10 +1447,14 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # Discard data immediately to prevent memory pressure
                 data *= 0
                 # Drain the stream anyways
+                # Note: if the StreamReader buffer ends with a prefix
+                # of the delimiter, e.consumed does not include that
                 line = await self._reader.read(e.consumed)
                 assert not line.endswith(b'\r\n')
+                continue
+
             # A lone dot in a line signals the end of DATA.
-            if not line_fragments and line == b'.\r\n':
+            if line == b'.\r\n':
                 break
             num_bytes += len(line)
             if state == _DataState.NOMINAL and limit and num_bytes > limit:
@@ -1460,20 +1463,14 @@ class SMTP(asyncio.StreamReaderProtocol):
                 state = _DataState.TOO_MUCH
                 # Discard data immediately to prevent memory pressure
                 data *= 0
-            line_fragments.append(line)
-            if line.endswith(b'\r\n'):
-                # Record data only if state is "NOMINAL"
-                if state == _DataState.NOMINAL:
-                    line = EMPTY_BARR.join(line_fragments)
-                    if len(line) > self.line_length_limit:
-                        # Theoretically we shouldn't reach this place. But it's always
-                        # good to practice DEFENSIVE coding.
-                        state = _DataState.TOO_LONG
-                        # Discard data immediately to prevent memory pressure
-                        data *= 0
-                    else:
-                        data.append(EMPTY_BARR.join(line_fragments))
-                line_fragments *= 0
+            assert line.endswith(b'\r\n')
+            assert len(line) <= (self.line_length_limit + 2)
+            # Record data only if state is "NOMINAL"
+            if state != _DataState.NOMINAL:
+                continue
+
+            data.append(bytearray(line))
+
 
         # Day of reckoning! Let's take care of those out-of-nominal situations
         if state != _DataState.NOMINAL:
@@ -1483,9 +1480,6 @@ class SMTP(asyncio.StreamReaderProtocol):
                 await self.push('552 Error: Too much mail data')
             self._set_post_data_state()
             return
-
-        # If unfinished_line is non-empty, then the connection was closed.
-        assert not line_fragments
 
         # Remove extraneous carriage returns and de-transparency
         # according to RFC 5321, Section 4.5.2.
