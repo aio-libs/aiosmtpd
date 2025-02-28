@@ -1404,6 +1404,23 @@ class SMTP(asyncio.StreamReaderProtocol):
         status = await self._call_handler_hook('RSET')
         await self.push('250 OK' if status is MISSING else status)
 
+    # -> err, decoded data
+    def _decode_line(self, data : bytes
+                     ) -> Tuple[Optional[str], Optional[str]]:
+        if not self._decode_data:
+            return None, None
+        if self.enable_SMTPUTF8:
+            return None, data.decode('utf-8', errors='surrogateescape')
+        else:
+            try:
+                return None, data.decode('ascii', errors='strict')
+            except UnicodeDecodeError:
+                # This happens if enable_smtputf8 is false, meaning that
+                # the server explicitly does not want to accept non-ascii,
+                # but the client ignores that and sends non-ascii anyway.
+                return '500 Error: strict ASCII mode', None
+
+
     @syntax('DATA')
     async def smtp_DATA(self, arg: str) -> None:
         if await self.check_helo_needed():
@@ -1419,13 +1436,12 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
 
         await self.push('354 End data with <CR><LF>.<CR><LF>')
-        data: List[bytearray] = []
-        decoded_lines: List[str] = []
+        data: List[bytes] = []
 
         num_bytes: int = 0
         limit: Optional[int] = self.data_size_limit
         state: _DataState = _DataState.NOMINAL
-        status : Optional[bytes] = None
+        status = None
         DOT = ord('.')
 
         while self.transport is not None:           # pragma: nobranch
@@ -1480,30 +1496,17 @@ class SMTP(asyncio.StreamReaderProtocol):
             # according to RFC 5321, Section 4.5.2.
             if line[0] == DOT:
                 line = line[1:]
-            decoded_line = None
-
-            if self._decode_data:
-                if self.enable_SMTPUTF8:
-                    decoded_line = line.decode('utf-8', errors='surrogateescape')
-                else:
-                    try:
-                        decoded_line = line.decode('ascii', errors='strict')
-                    except UnicodeDecodeError:
-                        # This happens if enable_smtputf8 is false, meaning that
-                        # the server explicitly does not want to accept non-ascii,
-                        # but the client ignores that and sends non-ascii anyway.
-                        status = '500 Error: strict ASCII mode'
-                        decoded_lines *= 0
-                        continue
 
             if "DATA_CHUNK" in self._handle_hooks:
+                if status is None:
+                    status, decoded_line = self._decode_line(line)
+                    if status:
+                        data *= 0
                 if status is None:
                     status = await self._call_handler_hook(
                         'DATA_CHUNK', line, decoded_line, False)
             else:
                 data.append(line)
-                if decoded_line:
-                    decoded_lines.append(decoded_line)
 
         # Day of reckoning! Let's take care of those out-of-nominal situations
         if state != _DataState.NOMINAL or status is not None:
@@ -1531,9 +1534,11 @@ class SMTP(asyncio.StreamReaderProtocol):
         # Discard data immediately to prevent memory pressure
         data *= 0
         content: Union[str, bytes]
-        if decoded_lines:
-            content = ''.join(decoded_lines)
-            decoded_lines *= 0
+        if self._decode_data:
+            status, content = self._decode_line(original_content)
+            if status:
+                await self.push(status)
+                return
         else:
             content = original_content
 
