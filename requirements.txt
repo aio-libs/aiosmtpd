@@ -1,6 +1,10 @@
+# Python 3.8 is EOL, so latest versions of some packages do not support it, use newest compatible versions 
 atpublic==5.0
 attrs==24.2.0
 coverage==7.6.1
+cryptography==41.0.7; python_version == '3.8' and platform_python_implementation == "PyPy"
 pytest==8.3.4
 pytest-cov==5.0.0
 pytest-mock==3.14.0
+trustme==1.1.0; python_version == '3.8'
+trustme==1.2.1; python_version > '3.8'

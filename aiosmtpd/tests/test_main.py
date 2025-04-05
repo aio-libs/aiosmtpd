@@ -21,7 +21,7 @@ from aiosmtpd.handlers import Debugging
 from aiosmtpd.main import main, parseargs
 from aiosmtpd.testing.helpers import catchup_delay
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-from aiosmtpd.tests.conftest import AUTOSTOP_DELAY, SERVER_CRT, SERVER_KEY
+from aiosmtpd.tests.conftest import AUTOSTOP_DELAY
 
 try:
     import pwd
@@ -199,24 +199,24 @@ class TestMain:
 
 @pytest.mark.skipif(sys.platform == "darwin", reason="No idea why these are failing")
 class TestMainByWatcher:
-    def test_tls(self, temp_event_loop):
+    def test_tls(self, temp_event_loop, tls_cert_pem_path, tls_key_pem_path):
         with watcher_process(watch_for_tls) as retq:
             temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
-            main_n("--tlscert", str(SERVER_CRT), "--tlskey", str(SERVER_KEY))
+            main_n("--tlscert", tls_cert_pem_path, "--tlskey", tls_key_pem_path)
             catchup_delay()
         has_starttls = retq.get()
         assert has_starttls is True
         require_tls = retq.get()
         assert require_tls is True
 
-    def test_tls_noreq(self, temp_event_loop):
+    def test_tls_noreq(self, temp_event_loop, tls_cert_pem_path, tls_key_pem_path):
         with watcher_process(watch_for_tls) as retq:
             temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
             main_n(
                 "--tlscert",
-                str(SERVER_CRT),
+                tls_cert_pem_path,
                 "--tlskey",
-                str(SERVER_KEY),
+                tls_key_pem_path,
                 "--no-requiretls",
             )
             catchup_delay()
@@ -225,10 +225,10 @@ class TestMainByWatcher:
         require_tls = retq.get()
         assert require_tls is False
 
-    def test_smtps(self, temp_event_loop):
+    def test_smtps(self, temp_event_loop, tls_cert_pem_path, tls_key_pem_path):
         with watcher_process(watch_for_smtps) as retq:
             temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
-            main_n("--smtpscert", str(SERVER_CRT), "--smtpskey", str(SERVER_KEY))
+            main_n("--smtpscert", tls_cert_pem_path, "--smtpskey", tls_key_pem_path)
             catchup_delay()
         has_smtps = retq.get()
         assert has_smtps is True
@@ -335,16 +335,18 @@ class TestParseArgs:
         assert args.requiretls is False
 
     @pytest.mark.parametrize(
-        ("certfile", "keyfile", "expect"),
+        ("certfile_present", "keyfile_present", "expect"),
         [
-            ("x", "x", "Cert file x not found"),
-            (SERVER_CRT, "x", "Key file x not found"),
-            ("x", SERVER_KEY, "Cert file x not found"),
+            (False, False, "Cert file x not found"),
+            (True, False, "Key file x not found"),
+            (False, True, "Cert file x not found"),
         ],
         ids=["x-x", "cert-x", "x-key"],
     )
     @pytest.mark.parametrize("meth", ["smtps", "tls"])
-    def test_ssl_files_err(self, capsys, mocker, meth, certfile, keyfile, expect):
+    def test_ssl_files_err(self, capsys, mocker, meth, certfile_present, keyfile_present, expect, request):
+        certfile = request.getfixturevalue("tls_cert_pem_path") if certfile_present else "x"
+        keyfile = request.getfixturevalue("tls_key_pem_path") if keyfile_present else "x"
         mocker.patch("aiosmtpd.main.PROGRAM", "smtpd")
         with pytest.raises(SystemExit) as exc:
             parseargs((f"--{meth}cert", certfile, f"--{meth}key", keyfile))

@@ -9,10 +9,10 @@ import warnings
 from contextlib import suppress
 from functools import wraps
 from smtplib import SMTP as SMTPClient
-from typing import Any, Callable, Generator, NamedTuple, Optional, Type, TypeVar
+from typing import Any, Callable, Generator, Iterator, NamedTuple, Optional, Type, TypeVar
 
 import pytest
-from pkg_resources import resource_filename
+import trustme
 from pytest_mock import MockFixture
 
 from aiosmtpd.controller import Controller
@@ -32,8 +32,6 @@ __all__ = [
     "handler_data",
     "Global",
     "AUTOSTOP_DELAY",
-    "SERVER_CRT",
-    "SERVER_KEY",
 ]
 
 
@@ -73,8 +71,6 @@ class Global:
 # If less than 1.0, might cause intermittent error if test system
 # is too busy/overloaded.
 AUTOSTOP_DELAY = 1.5
-SERVER_CRT = resource_filename("aiosmtpd.tests.certs", "server.crt")
-SERVER_KEY = resource_filename("aiosmtpd.tests.certs", "server.key")
 
 # endregion
 
@@ -315,27 +311,50 @@ def client(request: pytest.FixtureRequest) -> Generator[SMTPClient, None, None]:
 
 
 @pytest.fixture
-def ssl_context_server() -> ssl.SSLContext:
-    """
-    Provides a server-side SSL Context
-    """
-    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    context.check_hostname = False
-    context.load_cert_chain(SERVER_CRT, SERVER_KEY)
-    #
-    return context
+def tls_certificate_authority() -> trustme.CA:
+    return trustme.CA()
 
 
 @pytest.fixture
-def ssl_context_client() -> ssl.SSLContext:
+def tls_certificate(tls_certificate_authority: trustme.CA) -> trustme.LeafCert:
+    return tls_certificate_authority.issue_cert(
+        "localhost",
+        "xn--prklad-4va.localhost",  # príklad.localhost
+        "127.0.0.1",
+        "::1",
+    )
+
+
+@pytest.fixture
+def ssl_context_server(tls_certificate: trustme.LeafCert) -> ssl.SSLContext:
+    """
+    Provides a server-side SSL Context
+    """
+    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    tls_certificate.configure_cert(ssl_ctx)
+    return ssl_ctx
+
+
+@pytest.fixture
+def ssl_context_client(tls_certificate_authority: trustme.CA) -> ssl.SSLContext:
     """
     Provides a client-side SSL Context
     """
-    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-    context.check_hostname = False
-    context.load_verify_locations(SERVER_CRT)
-    #
-    return context
+    ssl_ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
+    tls_certificate_authority.configure_trust(ssl_ctx)
+    return ssl_ctx
+
+
+@pytest.fixture
+def tls_cert_pem_path(tls_certificate: trustme.LeafCert) -> Iterator[str]:
+    with tls_certificate.cert_chain_pems[0].tempfile() as cert_pem:
+        yield cert_pem
+
+
+@pytest.fixture
+def tls_key_pem_path(tls_certificate: trustme.LeafCert) -> Iterator[str]:
+    with tls_certificate.private_key_pem.tempfile() as key_pem:
+        yield key_pem
 
 
 # Please keep the scope as "module"; setting it as "function" (the default) somehow
