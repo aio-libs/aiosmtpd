@@ -448,10 +448,17 @@ class TestUnthreaded:
         # Stop the task
         cont.end()
         catchup_delay()
-        # Now the listener has gone away
-        # noinspection PyTypeChecker
-        with pytest.raises((socket.timeout, ConnectionError)):
-            assert_smtp_socket(cont)
+        if sys.version_info < (3, 13):
+            # Now the listener has gone away
+            # noinspection PyTypeChecker
+            with pytest.raises((socket.timeout, ConnectionError)):
+                assert_smtp_socket(cont)
+        else:
+            # Starting from Python 3.13, listening asyncio Unix socket is
+            # removed on close, see:
+            # https://github.com/python/cpython/issues/111246
+            # https://github.com/python/cpython/pull/111483
+            assert not Path(cont.unix_socket).exists()
 
     @pytest.mark.filterwarnings(
         "ignore::pytest.PytestUnraisableExceptionWarning"
