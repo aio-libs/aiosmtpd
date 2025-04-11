@@ -158,15 +158,7 @@ class TestMain:
         with pytest.raises(SystemExit) as excinfo:
             main(args=())
         assert excinfo.value.code == 1
-        # On Python 3.8 on Linux, a bunch of "RuntimeWarning: coroutine
-        # 'AsyncMockMixin._execute_mock_call' was never awaited" messages
-        # gets mixed up into stderr causing test fail.
-        # Therefore, we use assertIn instead of assertEqual here, because
-        # the string DOES appear in stderr, just buried.
-        assert (
-            'Cannot import module "pwd"; try running with -n option.\n'
-            in capsys.readouterr().err
-        )
+        assert capsys.readouterr().err == 'Cannot import module "pwd"; try running with -n option.\n'
 
     def test_n(self, setuid):
         with pytest.raises(RuntimeError):
