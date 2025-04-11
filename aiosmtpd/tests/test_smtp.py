@@ -42,6 +42,7 @@ from aiosmtpd.smtp import (
     auth_mechanism,
 )
 from aiosmtpd.testing.helpers import (
+    ChunkedReceivingHandler,
     ReceivingHandler,
     catchup_delay,
     reset_connection,
@@ -461,7 +462,6 @@ class TestProtocol:
         assert responses[5] == S.S250_OK.to_bytes() + b"\r\n"
         assert len(handler.box) == 1
         assert handler.box[0].content == b""
-
 
 @pytest.mark.usefixtures("plain_controller")
 @controller_data(
@@ -1604,23 +1604,6 @@ class TestSMTPWithController(_CommonMethods):
             client.sendmail("anne@example.com", ["bart@example.com"], mail)
         assert exc.value.args == S.S500_DATALINE_TOO_LONG
 
-    def test_long_line_leak(self, mocker: MockFixture, plain_controller, client):
-        # Simulates situation where readuntil() does not raise LimitOverrunError,
-        # but somehow the line_fragments when join()ed resulted in a too-long line
-
-        # Hijack EMPTY_BARR.join() to return a bytes object that's definitely too long
-        mock_ebarr = mocker.patch("aiosmtpd.smtp.EMPTY_BARR")
-        mock_ebarr.join.return_value = b"a" * 1010
-
-        client.helo("example.com")
-        mail = "z" * 72  # Make sure this is small and definitely within limits
-        with pytest.raises(SMTPDataError) as exc:
-            client.sendmail("anne@example.com", ["bart@example.com"], mail)
-        assert exc.value.args == S.S500_DATALINE_TOO_LONG
-        # self.assertEqual(cm.exception.smtp_code, 500)
-        # self.assertEqual(cm.exception.smtp_error,
-        #                  b'Line too long (see RFC5321 4.5.3.1.6)')
-
     @controller_data(data_size_limit=20)
     def test_too_long_body_delay_error(self, plain_controller):
         with socket.socket() as sock:
@@ -1677,6 +1660,27 @@ class TestSMTPWithController(_CommonMethods):
         with pytest.raises(SMTPResponseException) as exc:
             client.sendmail("anne@example.com", ["bart@example.com"], mail)
         assert exc.value.args == S.S500_DATALINE_TOO_LONG
+
+    @controller_data(decode_data=True)
+    @handler_data(class_=ChunkedReceivingHandler)
+    def test_chunked_receiving(self, plain_controller, client):
+        handler = plain_controller.handler
+        self._ehlo(client)
+        client.send(b'MAIL FROM:<anne@example.com>\r\n')
+        assert client.getreply() == S.S250_OK
+        client.send(b'RCPT TO:<bart@example.com>\r\n')
+        assert client.getreply() == S.S250_OK
+        client.send(b'DATA\r\n')
+        assert client.getreply() == S.S354_DATA_ENDWITH
+        client.send(b'hello, \r\n')
+        client.send(b'\xe4\xb8\x96\xe7\x95\x8c!\r\n')
+        client.send(b'.\r\n')
+        assert client.getreply() == S.S250_OK
+
+        assert len(handler.box) == 1
+        envelope = handler.box[0]
+        assert envelope.original_content == b'hello, \r\n\xe4\xb8\x96\xe7\x95\x8c!\r\n'
+        assert envelope.content == 'hello, \r\n世界!\r\n'
 
 
 class TestCustomization(_CommonMethods):

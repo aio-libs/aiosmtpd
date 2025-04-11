@@ -1404,6 +1404,23 @@ class SMTP(asyncio.StreamReaderProtocol):
         status = await self._call_handler_hook('RSET')
         await self.push('250 OK' if status is MISSING else status)
 
+    # -> err, decoded data
+    def _decode_line(self, data : bytes
+                     ) -> Tuple[Optional[str], Optional[str]]:
+        if not self._decode_data:
+            return None, None
+        if self.enable_SMTPUTF8:
+            return None, data.decode('utf-8', errors='surrogateescape')
+        else:
+            try:
+                return None, data.decode('ascii', errors='strict')
+            except UnicodeDecodeError:
+                # This happens if enable_smtputf8 is false, meaning that
+                # the server explicitly does not want to accept non-ascii,
+                # but the client ignores that and sends non-ascii anyway.
+                return '500 Error: strict ASCII mode', None
+
+
     @syntax('DATA')
     async def smtp_DATA(self, arg: str) -> None:
         if await self.check_helo_needed():
@@ -1419,12 +1436,14 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
 
         await self.push('354 End data with <CR><LF>.<CR><LF>')
-        data: List[bytearray] = []
+        data: List[bytes] = []
 
         num_bytes: int = 0
         limit: Optional[int] = self.data_size_limit
-        line_fragments: List[bytes] = []
         state: _DataState = _DataState.NOMINAL
+        status = None
+        DOT = ord('.')
+
         while self.transport is not None:           # pragma: nobranch
             # Since eof_received cancels this coroutine,
             # readuntil() can never raise asyncio.IncompleteReadError.
@@ -1442,6 +1461,11 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # The line exceeds StreamReader's "stream limit".
                 # Delay SMTP Status Code sending until data receive is complete
                 # This seems to be implied in RFC 5321 § 4.2.5
+
+                # TODO this (and _handle_client()) will currently read
+                # an unbounded amount of data from the client looking
+                # for crlf. Possibly this should return an immediate
+                # error and close the connection after some limit ~16kb.
                 if state == _DataState.NOMINAL:
                     # Transition to TOO_LONG only if we haven't gone TOO_MUCH yet
                     state = _DataState.TOO_LONG
@@ -1450,8 +1474,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # Drain the stream anyways
                 line = await self._reader.read(e.consumed)
                 assert not line.endswith(b'\r\n')
+                continue
+
             # A lone dot in a line signals the end of DATA.
-            if not line_fragments and line == b'.\r\n':
+            if line == b'.\r\n':
                 break
             num_bytes += len(line)
             if state == _DataState.NOMINAL and limit and num_bytes > limit:
@@ -1460,61 +1486,65 @@ class SMTP(asyncio.StreamReaderProtocol):
                 state = _DataState.TOO_MUCH
                 # Discard data immediately to prevent memory pressure
                 data *= 0
-            line_fragments.append(line)
-            if line.endswith(b'\r\n'):
-                # Record data only if state is "NOMINAL"
-                if state == _DataState.NOMINAL:
-                    line = EMPTY_BARR.join(line_fragments)
-                    if len(line) > self.line_length_limit:
-                        # Theoretically we shouldn't reach this place. But it's always
-                        # good to practice DEFENSIVE coding.
-                        state = _DataState.TOO_LONG
-                        # Discard data immediately to prevent memory pressure
+            assert line.endswith(b'\r\n')
+            assert len(line) <= (self.line_length_limit + 2)
+            # Record data only if state is "NOMINAL"
+            if state != _DataState.NOMINAL:
+                continue
+
+            # Remove extraneous carriage returns and de-transparency
+            # according to RFC 5321, Section 4.5.2.
+            if line[0] == DOT:
+                line = line[1:]
+
+            if "DATA_CHUNK" in self._handle_hooks:
+                if status is None:
+                    status, decoded_line = self._decode_line(line)
+                    if status:
                         data *= 0
-                    else:
-                        data.append(EMPTY_BARR.join(line_fragments))
-                line_fragments *= 0
+                if status is None:
+                    status = await self._call_handler_hook(
+                        'DATA_CHUNK', line, decoded_line, False)
+            else:
+                data.append(line)
 
         # Day of reckoning! Let's take care of those out-of-nominal situations
-        if state != _DataState.NOMINAL:
+        if state != _DataState.NOMINAL or status is not None:
             if state == _DataState.TOO_LONG:
                 await self.push("500 Line too long (see RFC5321 4.5.3.1.6)")
             elif state == _DataState.TOO_MUCH:  # pragma: nobranch
                 await self.push('552 Error: Too much mail data')
+            elif status is not None:
+                await self.push(status)
             self._set_post_data_state()
             return
 
-        # If unfinished_line is non-empty, then the connection was closed.
-        assert not line_fragments
 
-        # Remove extraneous carriage returns and de-transparency
-        # according to RFC 5321, Section 4.5.2.
-        for text in data:
-            if text.startswith(b'.'):
-                del text[0]
+        # Call the new API first if it's implemented.
+        if "DATA_CHUNK" in self._handle_hooks:
+            if status is None:
+                status = await self._call_handler_hook(
+                    'DATA_CHUNK', bytes(), '' if self._decode_data else None,
+                    True)
+            self._set_post_data_state()
+            await self.push('250 OK' if status is MISSING else status)
+            return
+
         original_content: bytes = EMPTYBYTES.join(data)
         # Discard data immediately to prevent memory pressure
         data *= 0
-
         content: Union[str, bytes]
         if self._decode_data:
-            if self.enable_SMTPUTF8:
-                content = original_content.decode('utf-8', errors='surrogateescape')
-            else:
-                try:
-                    content = original_content.decode('ascii', errors='strict')
-                except UnicodeDecodeError:
-                    # This happens if enable_smtputf8 is false, meaning that
-                    # the server explicitly does not want to accept non-ascii,
-                    # but the client ignores that and sends non-ascii anyway.
-                    await self.push('500 Error: strict ASCII mode')
-                    return
+            status, content = self._decode_line(original_content)
+            if status:
+                await self.push(status)
+                return
         else:
             content = original_content
+
         self.envelope.content = content
         self.envelope.original_content = original_content
 
-        # Call the new API first if it's implemented.
         if "DATA" in self._handle_hooks:
             status = await self._call_handler_hook('DATA')
         else:
