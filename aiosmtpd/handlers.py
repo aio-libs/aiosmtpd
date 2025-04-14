@@ -27,6 +27,7 @@ from public import public
 from aiosmtpd import _get_or_new_eventloop
 from aiosmtpd.smtp import SMTP as SMTPServer
 from aiosmtpd.smtp import Envelope as SMTPEnvelope
+from aiosmtpd.smtp import PeerType
 from aiosmtpd.smtp import Session as SMTPSession
 
 T = TypeVar("T")
@@ -38,7 +39,7 @@ NLCRE = re.compile(br"\r\n|\r|\n")
 log = logging.getLogger("mail.debug")
 
 
-def _format_peer(peer: str) -> str:
+def _format_peer(peer: PeerType) -> str:
     # This is a separate function mostly so the test suite can craft a
     # reproducible output.
     return "X-Peer: {!r}".format(peer)
@@ -76,7 +77,7 @@ class Debugging:
             parser.error("Debugging usage: [stdout|stderr]")
         return cls(stream)  # type: ignore[call-arg]
 
-    def _print_message_content(self, peer: str, data: Union[str, bytes]) -> None:
+    def _print_message_content(self, peer: PeerType, data: Union[str, bytes]) -> None:
         in_headers = True
         for line in data.splitlines():
             # Dump the RFC 2822 headers first.

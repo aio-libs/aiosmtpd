@@ -65,6 +65,8 @@ _TriStateType = Union[None, _Missing, bytes]
 RT = TypeVar("RT")  # "ReturnType"
 DecoratorType = Callable[[Callable[..., RT]], Callable[..., RT]]
 
+# IPv4, IPv6, UNIX socket, not set
+PeerType = Union[Tuple[str, int], Tuple[str, int, int, int], str, None]
 
 # endregion
 
@@ -155,7 +157,7 @@ class LoginPassword(NamedTuple):
 @public
 class Session:
     def __init__(self, loop: asyncio.AbstractEventLoop):
-        self.peer: Optional[str] = None
+        self.peer: PeerType = None
         self.ssl: Optional[dict[str, Any]] = None
         self.host_name: Optional[str] = None
         self.extended_smtp = False
