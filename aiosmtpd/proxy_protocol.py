@@ -9,7 +9,7 @@ from collections import deque
 from enum import IntEnum
 from functools import partial
 from ipaddress import IPv4Address, IPv6Address, ip_address
-from typing import Any, ByteString, Dict, Optional, Protocol, Tuple, Union
+from typing import Any, Dict, Optional, Protocol, Tuple, Union
 
 import attr
 from public import public
@@ -165,7 +165,7 @@ class ProxyTLV(dict):
     @classmethod
     def parse(
         cls,
-        data: ByteString,
+        data: bytearray,
         partial_ok: bool = True,
         strict: bool = False,
     ) -> Tuple[Dict[str, Any], Dict[str, int]]:
@@ -179,7 +179,7 @@ class ProxyTLV(dict):
         rslt: Dict[str, Any] = {}
         tlv_loc: Dict[str, int] = {}
 
-        def _pars(chunk: ByteString, *, offset: int) -> None:
+        def _pars(chunk: bytearray, *, offset: int) -> None:
             i = 0
             while i < len(chunk):
                 typ = chunk[i]
@@ -218,7 +218,7 @@ class ProxyTLV(dict):
 
     @classmethod
     def from_raw(
-        cls, raw: ByteString, strict: bool = False
+        cls, raw: bytearray, strict: bool = False
     ) -> Optional["ProxyTLV"]:
         """
         Parses raw bytes for TLV Vectors, decode them and giving them human-readable
@@ -265,7 +265,7 @@ class ProxyData:
     dst_addr: Optional[EndpointAddress] = _anoinit(default=None)
     src_port: Optional[int] = _anoinit(default=None)
     dst_port: Optional[int] = _anoinit(default=None)
-    rest: ByteString = _anoinit(default=b"")
+    rest: bytearray = _anoinit(default=b"")
     """
     Rest of PROXY Protocol data following UNKNOWN (v1) or UNSPEC (v2), or containing
     undecoded TLV (v2). If the latter, you can use the ProxyTLV class to parse the
@@ -340,7 +340,7 @@ RE_PORT_NOLEADZERO = re.compile(r"^[1-9]\d{0,4}|0$")
 # Reference: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt
 
 
-async def _get_v1(reader: AsyncReader, initial: ByteString = b"") -> ProxyData:
+async def _get_v1(reader: AsyncReader, initial: bytearray = b"") -> ProxyData:
     proxy_data = ProxyData(version=1)
     proxy_data.whole_raw = bytearray(initial)
 
@@ -424,7 +424,7 @@ async def _get_v1(reader: AsyncReader, initial: ByteString = b"") -> ProxyData:
     return proxy_data
 
 
-async def _get_v2(reader: AsyncReader, initial: ByteString = b"") -> ProxyData:
+async def _get_v2(reader: AsyncReader, initial: bytearray = b"") -> ProxyData:
     proxy_data = ProxyData(version=2)
     whole_raw = bytearray()
 
