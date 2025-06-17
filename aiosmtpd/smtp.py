@@ -32,6 +32,7 @@ from typing import (
     Union,
 )
 from warnings import warn
+from io import BytesIO
 
 import attr
 from public import public
@@ -330,7 +331,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             command_call_limit: Union[int, Dict[str, int], None] = None,
             authenticator: Optional[AuthenticatorType] = None,
             proxy_protocol_timeout: Optional[Union[int, float]] = None,
-            loop: Optional[asyncio.AbstractEventLoop] = None
+            loop: Optional[asyncio.AbstractEventLoop] = None,
+            chunk_size : Optional[int] = 2**16
     ):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
@@ -373,6 +375,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                  "can lead to security vulnerabilities!")
             log.warning("auth_required == True but auth_require_tls == False")
         self._auth_require_tls = auth_require_tls
+        self._chunk_size = chunk_size
 
         if proxy_protocol_timeout is not None:
             if proxy_protocol_timeout <= 0:
@@ -1436,13 +1439,15 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
 
         await self.push('354 End data with <CR><LF>.<CR><LF>')
-        data: List[bytes] = []
+        data = BytesIO()
 
         num_bytes: int = 0
         limit: Optional[int] = self.data_size_limit
         state: _DataState = _DataState.NOMINAL
         status = None
         DOT = ord('.')
+
+        chunking = "DATA_CHUNK" in self._handle_hooks
 
         while self.transport is not None:           # pragma: nobranch
             # Since eof_received cancels this coroutine,
@@ -1470,7 +1475,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                     # Transition to TOO_LONG only if we haven't gone TOO_MUCH yet
                     state = _DataState.TOO_LONG
                 # Discard data immediately to prevent memory pressure
-                data *= 0
+                data.truncate(0)
                 # Drain the stream anyways
                 line = await self._reader.read(e.consumed)
                 assert not line.endswith(b'\r\n')
@@ -1485,7 +1490,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # This seems to be implied in RFC 5321 § 4.2.5
                 state = _DataState.TOO_MUCH
                 # Discard data immediately to prevent memory pressure
-                data *= 0
+                data.truncate(0)
             assert line.endswith(b'\r\n')
             assert len(line) <= (self.line_length_limit + 2)
             # Record data only if state is "NOMINAL"
@@ -1497,16 +1502,21 @@ class SMTP(asyncio.StreamReaderProtocol):
             if line[0] == DOT:
                 line = line[1:]
 
-            if "DATA_CHUNK" in self._handle_hooks:
+            if not chunking:
+                data.write(line)
+                continue
+
+            if data.tell() + len(line) > self._chunk_size:
+                data.seek(0)
+                chunk = data.read()
+                data.truncate(0)
+                data.seek(0)
                 if status is None:
-                    status, decoded_line = self._decode_line(line)
-                    if status:
-                        data *= 0
+                    status, decoded_line = self._decode_line(chunk)
                 if status is None:
                     status = await self._call_handler_hook(
-                        'DATA_CHUNK', line, decoded_line, False)
-            else:
-                data.append(line)
+                        'DATA_CHUNK', chunk, decoded_line, False)
+            data.write(line)
 
         # Day of reckoning! Let's take care of those out-of-nominal situations
         if state != _DataState.NOMINAL or status is not None:
@@ -1519,28 +1529,30 @@ class SMTP(asyncio.StreamReaderProtocol):
             self._set_post_data_state()
             return
 
-
-        # Call the new API first if it's implemented.
-        if "DATA_CHUNK" in self._handle_hooks:
-            if status is None:
-                status = await self._call_handler_hook(
-                    'DATA_CHUNK', bytes(), '' if self._decode_data else None,
-                    True)
-            self._set_post_data_state()
-            await self.push('250 OK' if status is MISSING else status)
-            return
-
-        original_content: bytes = EMPTYBYTES.join(data)
+        data.seek(0)
+        original_content: bytes = data.read()
         # Discard data immediately to prevent memory pressure
-        data *= 0
-        content: Union[str, bytes]
+        data.truncate(0)
+
+        content: Union[str, bytes, None] = None
         if self._decode_data:
             status, content = self._decode_line(original_content)
             if status:
                 await self.push(status)
                 return
-        else:
+
+        # Call the new API first if it's implemented.
+        if chunking:
+            if status is None:
+                status = await self._call_handler_hook(
+                    'DATA_CHUNK', original_content, content, True)
+            self._set_post_data_state()
+            await self.push('250 OK' if status is MISSING else status)
+            return
+
+        if not self._decode_data:
             content = original_content
+        assert content is not None
 
         self.envelope.content = content
         self.envelope.original_content = original_content

@@ -65,6 +65,7 @@ class ChunkedReceivingHandler:
             self, server: SMTP, session: Session, envelope: Envelope,
             data : bytes, text : Optional[str], last : bool
     ) -> Optional[str]:
+        assert bool(data)
         if text is not None:
             if envelope.content is None:
                 envelope.content = ''
