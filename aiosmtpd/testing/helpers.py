@@ -57,14 +57,19 @@ class ReceivingHandler:
         self.box.append(envelope)
         return "250 OK"
 
+
 class ChunkedReceivingHandler:
     def __init__(self):
         self.box: List[Envelope] = []
+        self.response: Optional[str] = '250 OK'
+        self.respond_last = True
+        self.sent_response = False
 
     async def handle_DATA_CHUNK(
             self, server: SMTP, session: Session, envelope: Envelope,
             data: bytes, text: Optional[str], last: bool
     ) -> Optional[str]:
+        assert not self.sent_response
         assert bool(data)
         if text is not None:
             if envelope.content is None:
@@ -80,10 +85,13 @@ class ChunkedReceivingHandler:
             assert isinstance(envelope.content, bytes)
             envelope.content += data
 
-        if not last:
+        if last:
+            self.box.append(envelope)
+        if not last and self.respond_last:
             return None
-        self.box.append(envelope)
-        return "250 OK"
+        if self.response is not None:
+            self.sent_response = True
+        return self.response
 
 
 def catchup_delay(delay: float = ASYNCIO_CATCHUP_DELAY):

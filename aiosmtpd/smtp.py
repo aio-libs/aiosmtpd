@@ -1545,11 +1545,11 @@ class SMTP(asyncio.StreamReaderProtocol):
 
         # Call the new API first if it's implemented.
         if chunking:
-            if status is MISSING:
-                new_status = await self._call_handler_hook(
-                    'DATA_CHUNK', original_content, content, True)
-                assert new_status is not None
-                status = new_status
+            assert status is MISSING  # handled above
+            new_status = await self._call_handler_hook(
+                'DATA_CHUNK', original_content, content, True)
+            assert new_status is not None
+            status = new_status
             assert status is not MISSING
             self._set_post_data_state()
             await self.push(status)

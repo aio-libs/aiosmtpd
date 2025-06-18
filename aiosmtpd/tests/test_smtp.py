@@ -1675,7 +1675,7 @@ class TestSMTPWithController(_CommonMethods):
         client.send(b'DATA\r\n')
         assert client.getreply() == S.S354_DATA_ENDWITH
         client.send(b'hello, \r\n')  # fits in chunk_size
-        client.send(b'\xe4\xb8\x96\xe7\x95\x8c!\r\n') # overflow -> flush
+        client.send(b'\xe4\xb8\x96\xe7\x95\x8c!\r\n')  # overflow -> flush
         client.send(b'.\r\n')
         assert client.getreply() == S.S250_OK
 
@@ -1683,6 +1683,28 @@ class TestSMTPWithController(_CommonMethods):
         envelope = handler.box[0]
         assert envelope.original_content == b'hello, \r\n\xe4\xb8\x96\xe7\x95\x8c!\r\n'
         assert envelope.content == 'hello, \r\n世界!\r\n'
+
+    @controller_data(decode_data=True)
+    @handler_data(class_=ChunkedReceivingHandler)
+    def test_chunked_receiving_early_err(self, plain_controller, client):
+        smtpd: Server = plain_controller.smtpd
+        smtpd._chunk_size = 10
+        handler = plain_controller.handler
+        handler.response = '550 bad'
+        handler.respond_last = False
+        self._ehlo(client)
+        client.send(b'MAIL FROM:<anne@example.com>\r\n')
+        assert client.getreply() == S.S250_OK
+        client.send(b'RCPT TO:<bart@example.com>\r\n')
+        assert client.getreply() == S.S250_OK
+        client.send(b'DATA\r\n')
+        assert client.getreply() == S.S354_DATA_ENDWITH
+        client.send(b'hello, \r\n')  # fits in chunk_size
+        client.send(b'\xe4\xb8\x96\xe7\x95\x8c!\r\n')  # overflow -> flush
+        client.send(b'.\r\n')
+        assert client.getreply() == (550, b'bad')
+
+        assert len(handler.box) == 0
 
 
 class TestCustomization(_CommonMethods):
