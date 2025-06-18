@@ -12,7 +12,7 @@ from smtplib import SMTP as SMTPClient
 from typing import Any, Callable, Generator, NamedTuple, Optional, Type, TypeVar
 
 import pytest
-import importlib_resources
+import importlib.resources
 from pytest_mock import MockFixture
 
 from aiosmtpd.controller import Controller
@@ -76,11 +76,11 @@ AUTOSTOP_DELAY = 1.5
 # https://importlib-resources.readthedocs.io/en/latest/migration.html
 # this assumes these files are already present in the filesystem so
 # it doesn't need to extract a tempfile for the context manager to clean up
-ref = importlib_resources.files("aiosmtpd.tests.certs") / "server.crt"
-with importlib_resources.as_file(ref) as path:
+ref = importlib.resources.files("aiosmtpd.tests.certs") / "server.crt"
+with importlib.resources.as_file(ref) as path:
     SERVER_CRT = str(path)
-ref = importlib_resources.files("aiosmtpd.tests.certs") / "server.key"
-with importlib_resources.as_file(ref) as path:
+ref = importlib.resources.files("aiosmtpd.tests.certs") / "server.key"
+with importlib.resources.as_file(ref) as path:
     SERVER_KEY = str(path)
 
 # endregion
