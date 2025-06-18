@@ -463,6 +463,7 @@ class TestProtocol:
         assert len(handler.box) == 1
         assert handler.box[0].content == b""
 
+
 @pytest.mark.usefixtures("plain_controller")
 @controller_data(
     decode_data=True,
