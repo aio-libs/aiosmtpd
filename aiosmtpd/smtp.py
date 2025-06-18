@@ -1409,19 +1409,19 @@ class SMTP(asyncio.StreamReaderProtocol):
 
     # -> err, decoded data
     def _decode_line(self, data : bytes
-                     ) -> Tuple[Optional[str], Optional[str]]:
+                     ) -> Tuple[Union[_Missing, bytes], Optional[str]]:
         if not self._decode_data:
-            return None, None
+            return MISSING, None
         if self.enable_SMTPUTF8:
-            return None, data.decode('utf-8', errors='surrogateescape')
+            return MISSING, data.decode('utf-8', errors='surrogateescape')
         else:
             try:
-                return None, data.decode('ascii', errors='strict')
+                return MISSING, data.decode('ascii', errors='strict')
             except UnicodeDecodeError:
                 # This happens if enable_smtputf8 is false, meaning that
                 # the server explicitly does not want to accept non-ascii,
                 # but the client ignores that and sends non-ascii anyway.
-                return '500 Error: strict ASCII mode', None
+                return b'500 Error: strict ASCII mode', None
 
 
     @syntax('DATA')
@@ -1444,7 +1444,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         num_bytes: int = 0
         limit: Optional[int] = self.data_size_limit
         state: _DataState = _DataState.NOMINAL
-        status = None
+        status : Union[_Missing, bytes] = MISSING
         DOT = ord('.')
 
         chunking = "DATA_CHUNK" in self._handle_hooks
@@ -1511,20 +1511,21 @@ class SMTP(asyncio.StreamReaderProtocol):
                 chunk = data.read()
                 data.truncate(0)
                 data.seek(0)
-                if status is None:
+                decoded_line = None
+                if status is MISSING:
                     status, decoded_line = self._decode_line(chunk)
-                if status is None:
+                if status is MISSING:
                     status = await self._call_handler_hook(
                         'DATA_CHUNK', chunk, decoded_line, False)
             data.write(line)
 
         # Day of reckoning! Let's take care of those out-of-nominal situations
-        if state != _DataState.NOMINAL or status is not None:
+        if state != _DataState.NOMINAL or status is not MISSING:
             if state == _DataState.TOO_LONG:
                 await self.push("500 Line too long (see RFC5321 4.5.3.1.6)")
             elif state == _DataState.TOO_MUCH:  # pragma: nobranch
                 await self.push('552 Error: Too much mail data')
-            elif status is not None:
+            elif status is not MISSING:
                 await self.push(status)
             self._set_post_data_state()
             return
@@ -1537,17 +1538,17 @@ class SMTP(asyncio.StreamReaderProtocol):
         content: Union[str, bytes, None] = None
         if self._decode_data:
             status, content = self._decode_line(original_content)
-            if status:
+            if status is not MISSING:
                 await self.push(status)
                 return
 
         # Call the new API first if it's implemented.
         if chunking:
-            if status is None:
+            if status is MISSING:
                 status = await self._call_handler_hook(
                     'DATA_CHUNK', original_content, content, True)
             self._set_post_data_state()
-            await self.push('250 OK' if status is MISSING else status)
+            await self.push(b'250 OK' if status is MISSING else status)
             return
 
         if not self._decode_data:
@@ -1568,18 +1569,21 @@ class SMTP(asyncio.StreamReaderProtocol):
                 assert self.session is not None
                 args = (self.session.peer, self.envelope.mail_from,
                         self.envelope.rcpt_tos, self.envelope.content)
+                old_status : Union[None, bytes] = None
                 if asyncio.iscoroutinefunction(
                         self.event_handler.process_message):
-                    status = await self.event_handler.process_message(*args)
+                    old_status = await self.event_handler.process_message(*args)
                 else:
-                    status = self.event_handler.process_message(*args)
+                    old_status = self.event_handler.process_message(*args)
                 # The deprecated API can return None which means, return the
                 # default status.  Don't worry about coverage for this case as
                 # it's a deprecated API that will go away after 1.0.
-                if status is None:                  # pragma: nocover
+                if old_status is None:                  # pragma: nocover
                     status = MISSING
+                else:
+                    status = old_status
         self._set_post_data_state()
-        await self.push('250 OK' if status is MISSING else status)
+        await self.push(b'250 OK' if status is MISSING else status)
 
     # Commands that have not been implemented.
     async def smtp_EXPN(self, arg: str):
