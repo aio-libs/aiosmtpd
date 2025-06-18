@@ -78,9 +78,10 @@ class ChunkedReceivingHandler:
                 envelope.content = b''
             envelope.content += data
 
-        if last:
-            self.box.append(envelope)
-            return "250 OK"
+        if not last:
+            return None
+        self.box.append(envelope)
+        return "250 OK"
 
 
 def catchup_delay(delay: float = ASYNCIO_CATCHUP_DELAY):
