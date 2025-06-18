@@ -63,7 +63,7 @@ class ChunkedReceivingHandler:
 
     async def handle_DATA_CHUNK(
             self, server: SMTP, session: Session, envelope: Envelope,
-            data : bytes, text : Optional[str], last : bool
+            data: bytes, text: Optional[str], last: bool
     ) -> Optional[str]:
         assert bool(data)
         if text is not None:

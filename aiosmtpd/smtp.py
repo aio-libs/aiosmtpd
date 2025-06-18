@@ -1408,7 +1408,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         await self.push('250 OK' if status is MISSING else status)
 
     # -> err, decoded data
-    def _decode_line(self, data : bytes
+    def _decode_line(self, data: bytes
                      ) -> Tuple[Union[_Missing, bytes], Optional[str]]:
         if not self._decode_data:
             return MISSING, None
