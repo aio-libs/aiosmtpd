@@ -1423,7 +1423,6 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # but the client ignores that and sends non-ascii anyway.
                 return b'500 Error: strict ASCII mode', None
 
-
     @syntax('DATA')
     async def smtp_DATA(self, arg: str) -> None:
         if await self.check_helo_needed():
@@ -1515,8 +1514,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                 if status is MISSING:
                     status, decoded_line = self._decode_line(chunk)
                 if status is MISSING:
-                    status = await self._call_handler_hook(
+                    new_status = await self._call_handler_hook(
                         'DATA_CHUNK', chunk, decoded_line, False)
+                    if new_status is not None:
+                        status = new_status
             data.write(line)
 
         # Day of reckoning! Let's take care of those out-of-nominal situations
@@ -1545,10 +1546,13 @@ class SMTP(asyncio.StreamReaderProtocol):
         # Call the new API first if it's implemented.
         if chunking:
             if status is MISSING:
-                status = await self._call_handler_hook(
+                new_status = await self._call_handler_hook(
                     'DATA_CHUNK', original_content, content, True)
+                assert new_status is not None
+                status = new_status
+            assert status is not MISSING
             self._set_post_data_state()
-            await self.push(b'250 OK' if status is MISSING else status)
+            await self.push(status)
             return
 
         if not self._decode_data:
@@ -1569,7 +1573,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 assert self.session is not None
                 args = (self.session.peer, self.envelope.mail_from,
                         self.envelope.rcpt_tos, self.envelope.content)
-                old_status : Union[None, bytes] = None
+                old_status : Optional[bytes] = None
                 if asyncio.iscoroutinefunction(
                         self.event_handler.process_message):
                     old_status = await self.event_handler.process_message(*args)
