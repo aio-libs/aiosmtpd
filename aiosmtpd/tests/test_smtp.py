@@ -1664,6 +1664,8 @@ class TestSMTPWithController(_CommonMethods):
     @controller_data(decode_data=True)
     @handler_data(class_=ChunkedReceivingHandler)
     def test_chunked_receiving(self, plain_controller, client):
+        smtpd: Server = plain_controller.smtpd
+        smtpd._chunk_size = 10
         handler = plain_controller.handler
         self._ehlo(client)
         client.send(b'MAIL FROM:<anne@example.com>\r\n')
@@ -1672,8 +1674,8 @@ class TestSMTPWithController(_CommonMethods):
         assert client.getreply() == S.S250_OK
         client.send(b'DATA\r\n')
         assert client.getreply() == S.S354_DATA_ENDWITH
-        client.send(b'hello, \r\n')
-        client.send(b'\xe4\xb8\x96\xe7\x95\x8c!\r\n')
+        client.send(b'hello, \r\n')  # fits in chunk_size
+        client.send(b'\xe4\xb8\x96\xe7\x95\x8c!\r\n') # overflow -> flush
         client.send(b'.\r\n')
         assert client.getreply() == S.S250_OK
 
