@@ -69,6 +69,7 @@ class ChunkedReceivingHandler:
         if text is not None:
             if envelope.content is None:
                 envelope.content = ''
+            assert isinstance(envelope.content, str)
             envelope.content += text
             if envelope.original_content is None:
                 envelope.original_content = b''
@@ -76,6 +77,7 @@ class ChunkedReceivingHandler:
         else:
             if envelope.content is None:
                 envelope.content = b''
+            assert isinstance(envelope.content, bytes)
             envelope.content += data
 
         if not last:

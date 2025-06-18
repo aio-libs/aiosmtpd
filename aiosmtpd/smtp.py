@@ -332,7 +332,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             authenticator: Optional[AuthenticatorType] = None,
             proxy_protocol_timeout: Optional[Union[int, float]] = None,
             loop: Optional[asyncio.AbstractEventLoop] = None,
-            chunk_size : int = 2**16
+            chunk_size: int = 2**16
     ):
         self.__ident__ = ident or __ident__
         self.loop = loop if loop else make_loop()
