@@ -10,7 +10,7 @@ import struct
 import sys
 import time
 from smtplib import SMTP as SMTP_Client
-from typing import List
+from typing import List, Optional
 
 from aiosmtpd.smtp import Envelope, Session, SMTP
 
@@ -56,6 +56,42 @@ class ReceivingHandler:
     ) -> str:
         self.box.append(envelope)
         return "250 OK"
+
+
+class ChunkedReceivingHandler:
+    def __init__(self):
+        self.box: List[Envelope] = []
+        self.response: Optional[str] = '250 OK'
+        self.respond_last = True
+        self.sent_response = False
+
+    async def handle_DATA_CHUNK(
+            self, server: SMTP, session: Session, envelope: Envelope,
+            data: bytes, text: Optional[str], last: bool,
+    ) -> Optional[str]:
+        assert not self.sent_response
+        assert bool(data)
+        if text is not None:
+            if envelope.content is None:
+                envelope.content = ''
+            assert isinstance(envelope.content, str)
+            envelope.content += text
+            if envelope.original_content is None:
+                envelope.original_content = b''
+            envelope.original_content += data
+        else:
+            if envelope.content is None:
+                envelope.content = b''
+            assert isinstance(envelope.content, bytes)
+            envelope.content += data
+
+        if last:
+            self.box.append(envelope)
+        if not last and self.respond_last:
+            return None
+        if self.response is not None:
+            self.sent_response = True
+        return self.response
 
 
 def catchup_delay(delay: float = ASYNCIO_CATCHUP_DELAY):
