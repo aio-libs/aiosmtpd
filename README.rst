@@ -61,7 +61,7 @@ Requirements
 Supported Platforms
 -----------------------
 
-``aiosmtpd`` has been tested on **CPython**>=3.8 and |PyPy|_>=3.8
+``aiosmtpd`` has been tested on **CPython**>=3.9 and |PyPy|_>=3.9
 for the following platforms (in alphabetical order):
 
 * Cygwin (as of 2022-12-22, only for CPython 3.8, and 3.9)

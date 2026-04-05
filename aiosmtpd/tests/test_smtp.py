@@ -1036,10 +1036,9 @@ class TestAuthMechanisms(_CommonMethods):
         client.password = PW
         auth_meth = getattr(client, "auth_" + mechanism)
         if (mechanism, init_resp) == ("login", False) and (
-                sys.version_info < (3, 8, 9)
-                or (3, 9, 0) < sys.version_info < (3, 9, 4)):
+                (3, 9, 0) < sys.version_info < (3, 9, 4)):
             # The bug with SMTP.auth_login was fixed in Python 3.10 and backported
-            # to 3.9.4 and and 3.8.9.
+            # to 3.9.4
             # See https://github.com/python/cpython/pull/24118 for the fixes.:
             with pytest.raises(SMTPAuthenticationError):
                 client.auth(mechanism, auth_meth, initial_response_ok=init_resp)
