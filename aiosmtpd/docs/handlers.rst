@@ -98,6 +98,35 @@ The following hooks are currently supported (in alphabetical order):
    ``decode_data=False`` or ``decode_data=True``.
    See :attr:`Envelope.content` for more info.
 
+.. py:method:: handle_DATA_CHUNK(server, session, envelope, data: bytes, text: Optional[str], last: bool) -> Optional[str]
+   :async:
+
+   :return: Response message to be sent to the client
+
+   Alternative to handle_DATA(), under active development, subject to change.
+
+   Called periodically throughout ``DATA`` as the message (`"SMTP content"
+   <https://tools.ietf.org/html/rfc5321#section-2.3.9>`_ as described in
+   RFC 5321) is received.
+
+   The content is passed to ``data`` as type ``bytes``,
+   normalized according to the transparency rules
+   as defined in :rfc:`RFC 5321, §4.5.2 <5321#section-4.5.2>`.
+
+   If :class:`~aiosmtpd.smtp.SMTP` was instantiated with
+   ``decode_data=True``, the decoded text will be passed to ``text``
+   as a python string.
+
+   ``last`` will be ``False`` prior to the final call. The handler MAY
+   return a non-``None`` response prior to the ``last=True``
+   call. This is treated as an error and terminates the
+   transaction. The handler will not be invoked again after a
+   non-``None`` response. Otherwise, the handler MUST return a
+   non-``None`` response to the ``last=True`` call.
+
+   :class:`~aiosmtpd.smtp.SMTP` buffers data per the ``chunk_size``
+   parameter. The hook may be invoked with an empty chunk at any time.
+
 .. py:method:: handle_EHLO(server, session, envelope, hostname, responses) -> List[str]
    :async:
    :noindex:

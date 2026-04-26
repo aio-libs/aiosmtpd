@@ -12,7 +12,12 @@ Fixed/Improved
 
 * Dropped Python 3.8, PyPy 3.8
 * Added PyPy 3.9
+* buffering improvements to ``smtp_DATA()`` (should improve/fix #293)
 
+Added
+-----
+
+* ``handle_DATA_CHUNK()`` hook: chunked data receiving to avoid buffering the entire message in memory while it is being received
 
 1.4.6 (2024-05-18)
 ==================
