@@ -1526,7 +1526,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 assert self.session is not None
                 args = (self.session.peer, self.envelope.mail_from,
                         self.envelope.rcpt_tos, self.envelope.content)
-                if asyncio.iscoroutinefunction(
+                if inspect.iscoroutinefunction(
                         self.event_handler.process_message):
                     status = await self.event_handler.process_message(*args)
                 else:
