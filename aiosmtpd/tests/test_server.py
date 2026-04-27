@@ -213,7 +213,10 @@ class TestController:
     @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
     def test_socket_error_dupe(self, plain_controller, client):
         contr2 = Controller(
-            Sink(), hostname=Global.SrvAddr.host, port=Global.SrvAddr.port
+            Sink(),
+            hostname=Global.SrvAddr.host,
+            port=Global.SrvAddr.port,
+            ready_timeout=0.5,
         )
         expectedre = r"error while attempting to bind on address"
         try:
@@ -225,7 +228,10 @@ class TestController:
     @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
     def test_socket_error_default(self):
         contr1 = Controller(Sink())
-        contr2 = Controller(Sink())
+        contr2 = Controller(
+            Sink(),
+            ready_timeout=0.5,
+        )
         expectedre = r"error while attempting to bind on address"
         try:
             with pytest.raises(socket.error, match=expectedre):
