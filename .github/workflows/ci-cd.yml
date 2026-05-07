@@ -95,7 +95,7 @@ jobs:
         github.ref_name != github.event.repository.default_branch
       env:
         GITHUB_REPOSITORY_DEFAULT_BRANCH: >-
-        ${{ github.event.repository.default_branch }}
+          ${{ github.event.repository.default_branch }}
       run: >-
         git fetch origin
         "${GITHUB_REPOSITORY_DEFAULT_BRANCH}:${GITHUB_REPOSITORY_DEFAULT_BRANCH}" 
