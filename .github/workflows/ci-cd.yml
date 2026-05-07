@@ -86,6 +86,11 @@ jobs:
       uses: py-actions/py-dependency-install@v4
       with:
         path: requirements.txt
+    - name: Fetch master branch 
+      # Needed for aiosmtpd.qa.test_0packaging.TestVersion.test_ge_master,
+      # it runs a "git show" command which will fail if the master branch
+      # does not exist locally
+      run: git fetch origin master:master        
     - name: Run unittests
       run: pytest
       env:
