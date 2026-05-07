@@ -90,7 +90,10 @@ jobs:
       # Needed for aiosmtpd.qa.test_0packaging.TestVersion.test_ge_master,
       # it runs a "git show" command which will fail if the master branch
       # does not exist locally
-      run: git fetch origin master:master        
+      run: |
+        if [[ $GITHUB_REF != refs/heads/master ]]; then
+          git fetch origin master:master
+        fi
     - name: Run unittests
       run: pytest
       env:
