@@ -1917,7 +1917,7 @@ class TestTimeout(_CommonMethods):
 
 class TestAuthArgs:
     def test_warn_authreqnotls(self, caplog):
-        with pytest.warns(UserWarning) as record:
+        with pytest.warns(UserWarning, match="Requiring AUTH") as record:
             _ = Server(Sink(), auth_required=True, auth_require_tls=False)
         for warning in record:
             if warning.message.args and (
