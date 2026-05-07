@@ -160,14 +160,14 @@ def import_object(import_name: str) -> Any:
         # an ImportError as it did before.
         import glob
         import sys
-        import imp
+        import types
 
         for p in sys.path:
             f = glob.glob(os.path.join(p, module_name))
             if len(f) > 0:
                 with open(f[0]) as fobj:
                     codestring = fobj.read()
-                foo = imp.new_module("foo")
+                foo = types.ModuleType("foo")
                 # noinspection BuiltinExec
                 exec(codestring, foo.__dict__)  # noqa: DUO105  # nosec
 
