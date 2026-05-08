@@ -11,7 +11,7 @@ Fixed/Improved
 --------------
 
 * Dropped Python 3.8, PyPy 3.8
-* Added PyPy 3.9
+* Added PyPy 3.11, dropped PyPy 3.9
 
 
 1.4.6 (2024-05-18)

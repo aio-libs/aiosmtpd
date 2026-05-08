@@ -170,7 +170,7 @@ In general, the ``-e`` parameter to tox specifies one (or more) **testenv**
 to run (separate using comma if more than one testenv). The following testenvs
 have been configured and tested:
 
-* ``{py38,py39,py310,py311,py312,pypy3,pypy37,pypy38,pypy39}-{nocov,cov,diffcov,profile}``
+* ``{py38,py39,py310,py311,py312,pypy3,pypy311}-{nocov,cov,diffcov,profile}``
 
   Specifies the interpreter to run and the kind of testing to perform.
 
