@@ -66,7 +66,7 @@ RT = TypeVar("RT")  # "ReturnType"
 DecoratorType = Callable[[Callable[..., RT]], Callable[..., RT]]
 
 # IPv4, IPv6, UNIX socket, not set
-PeerType = Union[Tuple[str, int], Tuple[str, int, int, int], str, None]
+PeerType = Union[tuple[str, int], tuple[str, int, int, int], str, None]
 
 # endregion
 
