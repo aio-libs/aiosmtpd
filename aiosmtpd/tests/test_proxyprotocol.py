@@ -518,8 +518,8 @@ class TestGetV1(_TestProxyProtocolCommon):
 
     def test_tcp4_random(self, setup_proxy_protocol):
         setup_proxy_protocol(self)
-        srcip = ".".join(f"{random.getrandbits(8)}" for _ in range(0, 4))
-        dstip = ".".join(f"{random.getrandbits(8)}" for _ in range(0, 4))
+        srcip = ".".join(f"{random.getrandbits(8)}" for _ in range(0, 4)) # nosec
+        dstip = ".".join(f"{random.getrandbits(8)}" for _ in range(0, 4)) # nosec
         srcport = random_port()
         dstport = random_port()
         prox_test = f"PROXY TCP4 {srcip} {dstip} {srcport} {dstport}\r\n"
@@ -539,8 +539,8 @@ class TestGetV1(_TestProxyProtocolCommon):
         )
 
     def test_tcp6_random(self, setup_proxy_protocol):
-        srcip = ":".join(f"{random.getrandbits(16):04x}" for _ in range(0, 8))
-        dstip = ":".join(f"{random.getrandbits(16):04x}" for _ in range(0, 8))
+        srcip = ":".join(f"{random.getrandbits(16):04x}" for _ in range(0, 8)) # nosec
+        dstip = ":".join(f"{random.getrandbits(16):04x}" for _ in range(0, 8)) # nosec
         srcport = random_port()
         dstport = random_port()
         prox_test = f"PROXY TCP6 {srcip} {dstip} {srcport} {dstport}\r\n"
