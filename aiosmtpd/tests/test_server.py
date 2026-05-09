@@ -416,12 +416,10 @@ class TestUnthreaded:
             catchup_delay()
 
         def joiner(timeout: Optional[float] = None):
-            nonlocal thread
             assert isinstance(thread, Thread)
             thread.join(timeout=timeout)
 
         def is_alive():
-            nonlocal thread
             assert isinstance(thread, Thread)
             return thread.is_alive()
 

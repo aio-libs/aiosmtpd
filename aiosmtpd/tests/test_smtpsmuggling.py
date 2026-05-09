@@ -5,6 +5,7 @@
 
 import smtplib
 import re
+from typing import Any, Tuple, Union
 
 from aiosmtpd.testing.helpers import ReceivingHandler
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
@@ -12,7 +13,7 @@ from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from .conftest import handler_data
 
 
-def new_data(self, msg):
+def new_data(self: Any, msg: bytes) -> Tuple[int, bytes]:
     self.putcmd("data")
     (code, repl) = self.getreply()
     if self.debuglevel > 0:
@@ -28,7 +29,7 @@ def new_data(self, msg):
         return (code, msg)
 
 
-def orig_data(self, msg):
+def orig_data(self: Any, msg: Union[str, bytes]) -> Tuple[int, bytes]:
     self.putcmd("data")
     (code, repl) = self.getreply()
     if self.debuglevel > 0:
@@ -50,21 +51,21 @@ def orig_data(self, msg):
         return (code, msg)
 
 
-def _fix_eols(data):
+def _fix_eols(data: str) -> str:
     return re.sub(r'(?:\r\n|\n|\r(?!\n))', smtplib.CRLF, data)
 
 
-def _quote_periods(bindata):
+def _quote_periods(bindata: bytes) -> bytes:
     return re.sub(br'(?m)^\.', b'..', bindata)
 
 
-def return_unchanged(data):
+def return_unchanged(data: bytes) -> bytes:
     return data
 
 
 class TestSmuggling:
     @handler_data(class_=ReceivingHandler)
-    def test_smtp_smuggling(self, plain_controller, client):
+    def test_smtp_smuggling(self, plain_controller: Any, client: Any) -> None:
         smtplib._fix_eols = return_unchanged
         smtplib._quote_periods = return_unchanged
         smtplib.SMTP.data = new_data
