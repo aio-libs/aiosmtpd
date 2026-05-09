@@ -448,18 +448,24 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
         Does NOT actually start the protocol object itself;
         _factory_invoker() is only called upon fist connection attempt.
         """
-        kw = {}
         if sys.version_info >= (3, 13, 0):
             # Starting from python 3.13, the unix listener automatically
             # cleans up its socket from the filesystem on shutdown. This can
             # be disabled by passing in cleanup_socket=False. We do that here to keep
             # the shutdown behavior consistent between Python versions.
-            kw["cleanup_socket"] = False
+            return self.loop.create_unix_server(
+                self._factory_invoker,
+                path=self.unix_socket,
+                ssl=self.ssl_context,
+                # Silence mypy warning as cleanup_socket is not yet annotated in
+                # typeshed: https://github.com/python/typeshed/issues/15742
+                cleanup_socket=False, # type: ignore[call-arg]
+            )
+
         return self.loop.create_unix_server(
             self._factory_invoker,
             path=self.unix_socket,
             ssl=self.ssl_context,
-            **kw
         )
 
     def _trigger_server(self):
