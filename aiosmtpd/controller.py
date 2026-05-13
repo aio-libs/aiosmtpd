@@ -459,7 +459,7 @@ class UnixSocketMixin(BaseController, metaclass=ABCMeta):  # pragma: no-unixsock
                 ssl=self.ssl_context,
                 # Silence mypy warning as cleanup_socket is not yet annotated in
                 # typeshed: https://github.com/python/typeshed/issues/15742
-                cleanup_socket=False, # type: ignore[call-arg]
+                cleanup_socket=False,  # type: ignore[call-arg]
             )
 
         return self.loop.create_unix_server(
