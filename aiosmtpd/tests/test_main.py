@@ -5,6 +5,7 @@ import asyncio
 import logging
 import multiprocessing as MP
 import os
+import random
 import sys
 import time
 from contextlib import contextmanager
@@ -80,6 +81,11 @@ def setuid(mocker: MockFixture):
 
 
 def watch_for_tls(ready_flag: MP_Event, retq: MP.Queue):
+    # Rather than using a hardcoded port, pick a random port,
+    # and send it over the return queue, so the test case can
+    # start a listening socket on this port.
+    port = pick_random_port()
+    retq.put(port)
     has_tls = False
     req_tls = False
     ready_flag.set()
@@ -87,7 +93,7 @@ def watch_for_tls(ready_flag: MP_Event, retq: MP.Queue):
     delay = AUTOSTOP_DELAY * 4
     while (time.monotonic() - start) <= delay:
         try:
-            with SMTPClient("localhost", 8025, timeout=0.1) as client:
+            with SMTPClient("localhost", port, timeout=0.1) as client:
                 resp = client.docmd("HELP", "HELO")
                 if resp == S.S530_STARTTLS_FIRST:
                     req_tls = True
@@ -102,13 +108,18 @@ def watch_for_tls(ready_flag: MP_Event, retq: MP.Queue):
 
 
 def watch_for_smtps(ready_flag: MP_Event, retq: MP.Queue):
+    # Rather than using a hardcoded port, pick a random port,
+    # and send it over the return queue, so the test case can
+    # start a listening socket on this port.
+    port = pick_random_port()
+    retq.put(port)
     has_smtps = False
     ready_flag.set()
     start = time.monotonic()
     delay = AUTOSTOP_DELAY * 1.5
     while (time.monotonic() - start) <= delay:
         try:
-            with SMTP_SSL("localhost", 8025, timeout=0.1) as client:
+            with SMTP_SSL("localhost", port, timeout=0.1) as client:
                 client.ehlo("exemple.org")
                 has_smtps = True
                 break
@@ -132,6 +143,9 @@ def watcher_process(func):
     proc.join()
 
 
+def pick_random_port():
+    return random.randint(32768, 49152)
+
 # endregion
 
 
@@ -139,13 +153,13 @@ def watcher_process(func):
 class TestMain:
     def test_setuid(self, nobody_uid, mocker):
         mock = mocker.patch("os.setuid")
-        main(args=())
+        main(args=("-l", ":0"))
         mock.assert_called_with(nobody_uid)
 
     def test_setuid_permission_error(self, nobody_uid, mocker, capsys):
         mock = mocker.patch("os.setuid", side_effect=PermissionError)
         with pytest.raises(SystemExit) as excinfo:
-            main(args=())
+            main(args=("-l", ":0"))
         assert excinfo.value.code == 1
         mock.assert_called_with(nobody_uid)
         assert (
@@ -156,35 +170,35 @@ class TestMain:
     def test_setuid_no_pwd_module(self, nobody_uid, mocker, capsys):
         mocker.patch("aiosmtpd.main.pwd", None)
         with pytest.raises(SystemExit) as excinfo:
-            main(args=())
+            main(args=("-l", ":0"))
         assert excinfo.value.code == 1
         assert capsys.readouterr().err == 'Cannot import module "pwd"; try running with -n option.\n'
 
     def test_n(self, setuid):
         with pytest.raises(RuntimeError):
-            main_n()
+            main_n("-l", ":0")
 
     def test_nosetuid(self, setuid):
         with pytest.raises(RuntimeError):
-            main(("--nosetuid",))
+            main(("--nosetuid", "-l", ":0"))
 
     def test_debug_0(self):
         # For this test, the test runner likely has already set the log level
         # so it may not be logging.ERROR.
         default_level = MAIL_LOG.getEffectiveLevel()
-        main_n()
+        main_n("-l", ":0")
         assert MAIL_LOG.getEffectiveLevel() == default_level
 
     def test_debug_1(self):
-        main_n("-d")
+        main_n("-d", "-l", ":0")
         assert MAIL_LOG.getEffectiveLevel() == logging.INFO
 
     def test_debug_2(self):
-        main_n("-dd")
+        main_n("-dd", "-l", ":0")
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
 
     def test_debug_3(self):
-        main_n("-ddd")
+        main_n("-ddd", "-l", ":0")
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
         assert asyncio.get_event_loop().get_debug()
 
@@ -193,8 +207,16 @@ class TestMain:
 class TestMainByWatcher:
     def test_tls(self, temp_event_loop, tls_cert_pem_path, tls_key_pem_path):
         with watcher_process(watch_for_tls) as retq:
+            port = retq.get()
             temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
-            main_n("--tlscert", tls_cert_pem_path, "--tlskey", tls_key_pem_path)
+            main_n(
+                "--tlscert",
+                tls_cert_pem_path,
+                "--tlskey",
+                tls_key_pem_path,
+                "-l",
+                f":{port}",
+            )
             catchup_delay()
         has_starttls = retq.get()
         assert has_starttls is True
@@ -203,6 +225,7 @@ class TestMainByWatcher:
 
     def test_tls_noreq(self, temp_event_loop, tls_cert_pem_path, tls_key_pem_path):
         with watcher_process(watch_for_tls) as retq:
+            port = retq.get()
             temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
             main_n(
                 "--tlscert",
@@ -210,6 +233,8 @@ class TestMainByWatcher:
                 "--tlskey",
                 tls_key_pem_path,
                 "--no-requiretls",
+                "-l",
+                f":{port}",
             )
             catchup_delay()
         has_starttls = retq.get()
@@ -219,8 +244,16 @@ class TestMainByWatcher:
 
     def test_smtps(self, temp_event_loop, tls_cert_pem_path, tls_key_pem_path):
         with watcher_process(watch_for_smtps) as retq:
+            port = retq.get()
             temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
-            main_n("--smtpscert", tls_cert_pem_path, "--smtpskey", tls_key_pem_path)
+            main_n(
+                "--smtpscert",
+                tls_cert_pem_path,
+                "--smtpskey",
+                tls_key_pem_path,
+                "-l",
+                f":{port}",
+            )
             catchup_delay()
         has_smtps = retq.get()
         assert has_smtps is True
@@ -355,7 +388,7 @@ class TestSigint:
 
         temp_event_loop.call_later(1.0, interrupt)
         try:
-            main_n()
+            main_n("-l", ":0")
         except Exception:
             pytest.fail("main() should've closed cleanly without exceptions!")
         else:
