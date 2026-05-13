@@ -386,7 +386,7 @@ def decoding_authnotls_controller(
 @pytest.fixture
 def error_controller(get_handler: Callable) -> Generator[ErrorController, None, None]:
     handler = get_handler()
-    controller = ErrorController(handler)
+    controller = ErrorController(handler, port=0)
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -1564,22 +1564,31 @@ class TestSMTPWithController(_CommonMethods):
 
     @handler_data(class_=ReceivingHandler)
     def test_bad_encodings(self, decoding_authnotls_controller, client):
-        handler: ReceivingHandler = decoding_authnotls_controller.handler
-        self._helo(client)
-        mail_from = b"anne\xFF@example.com"
-        mail_to = b"bart\xFF@example.com"
-        self._ehlo(client, "test")
-        client.send(b"MAIL FROM:" + mail_from + b"\r\n")
-        assert client.getreply() == S.S250_OK
-        client.send(b"RCPT TO:" + mail_to + b"\r\n")
-        assert client.getreply() == S.S250_OK
-        client.data("Test mail")
-        assert len(handler.box) == 1
-        envelope = handler.box[0]
-        mail_from2 = envelope.mail_from.encode("utf-8", errors="surrogateescape")
-        assert mail_from2 == mail_from
-        mail_to2 = envelope.rcpt_tos[0].encode("utf-8", errors="surrogateescape")
-        assert mail_to2 == mail_to
+        # Disable DEBUG logging temporarily to avoid baly encoded strings in the logs.
+        # Otherwise, running tests in parallel with pytest-xdist will blow up
+        # when trying to serialize the captured logs.
+        prev_level = MAIL_LOG.getEffectiveLevel()
+        MAIL_LOG.setLevel(logging.WARNING)
+
+        try:
+            handler: ReceivingHandler = decoding_authnotls_controller.handler
+            self._helo(client)
+            mail_from = b"anne\xFF@example.com"
+            mail_to = b"bart\xFF@example.com"
+            self._ehlo(client, "test")
+            client.send(b"MAIL FROM:" + mail_from + b"\r\n")
+            assert client.getreply() == S.S250_OK
+            client.send(b"RCPT TO:" + mail_to + b"\r\n")
+            assert client.getreply() == S.S250_OK
+            client.data("Test mail")
+            assert len(handler.box) == 1
+            envelope = handler.box[0]
+            mail_from2 = envelope.mail_from.encode("utf-8", errors="surrogateescape")
+            assert mail_from2 == mail_from
+            mail_to2 = envelope.rcpt_tos[0].encode("utf-8", errors="surrogateescape")
+            assert mail_to2 == mail_to
+        finally:
+            MAIL_LOG.setLevel(prev_level)
 
     @controller_data(decode_data=False)
     def test_data_line_too_long(self, plain_controller, client):
