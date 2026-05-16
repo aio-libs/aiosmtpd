@@ -878,8 +878,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             # New behavior: hand over list of responses so far to the hook, and
             # REPLACE existing list of responses with what the hook returns.
             # We will handle the push()ing
-            response.append('250 HELP')
             response = await self._call_handler_hook("EHLO", hostname, response)
+            response.append('250 HELP')
 
         for r in response:
             await self.push(r)
