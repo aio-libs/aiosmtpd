@@ -306,7 +306,10 @@ class TestController:
             cont.stop()
 
     def test_testconn_raises(self, mocker: MockFixture):
-        mocker.patch("socket.socket.recv", side_effect=RuntimeError("MockError"))
+        mocker.patch(
+            "aiosmtpd.controller.create_connection",
+            side_effect=RuntimeError("MockError"),
+        )
         cont = Controller(Sink(), hostname="")
         try:
             with pytest.raises(RuntimeError, match="MockError"):
