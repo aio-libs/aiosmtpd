@@ -110,7 +110,7 @@ def move_prof(verbose: bool = False):
         for filepath in profpath.glob(fileglob)
     ]
     # fmt: on
-    if not prof_files:
+    if not prof_files or not TOX_ENV_NAME:
         return
     targpath = profpath / TOX_ENV_NAME
     if verbose:
