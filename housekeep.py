@@ -235,9 +235,11 @@ def get_opts(argv):
     parser.add_argument(
         "cmd", metavar="COMMAND", choices=sorted(dispers.keys()), help="(See below)"
     )
-    cgrp = parser.add_argument_group(title="COMMAND is one of")
+    epilog_lines = ["COMMAND is one of"]
     for name, doc in sorted(dispers.items()):
-        cgrp.add_argument(name, help=doc, action="no_action")
+        epilog_lines.append(f"  {name:<15} {doc}")
+    parser.epilog = "\n".join(epilog_lines)
+    parser.formatter_class = argparse.RawDescriptionHelpFormatter
 
     return parser.parse_args(argv)
 
