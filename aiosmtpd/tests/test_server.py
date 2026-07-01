@@ -38,6 +38,12 @@ from aiosmtpd.testing.helpers import catchup_delay
 from .conftest import Global, AUTOSTOP_DELAY
 
 
+class RandomPortController(Controller):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("port", 0)
+        super().__init__(*args, **kwargs)
+
+
 class SlowStartController(Controller):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("ready_timeout", 0.5)
@@ -175,7 +181,7 @@ class TestController:
 
     @pytest.mark.filterwarnings("ignore")
     def test_ready_timeout(self):
-        cont = SlowStartController(Sink())
+        cont = SlowStartController(Sink(), port=0)
         expectre = (
             "SMTP server failed to start within allotted time. "
             "This might happen if the system is too busy. "
@@ -189,7 +195,7 @@ class TestController:
 
     @pytest.mark.filterwarnings("ignore")
     def test_factory_timeout(self):
-        cont = SlowFactoryController(Sink())
+        cont = SlowFactoryController(Sink(), port=0)
         expectre = (
             r"SMTP server started, but not responding within allotted time. "
             r"This might happen if the system is too busy. "
@@ -202,7 +208,7 @@ class TestController:
             cont.stop()
 
     def test_reuse_loop(self, temp_event_loop):
-        cont = Controller(Sink(), loop=temp_event_loop)
+        cont = RandomPortController(Sink(), loop=temp_event_loop)
         assert cont.loop is temp_event_loop
         try:
             cont.start()
@@ -227,6 +233,8 @@ class TestController:
 
     @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
     def test_socket_error_default(self):
+        # Don't specify port so both controllers will try to bind on
+        # the default port, 8025:
         contr1 = Controller(Sink())
         contr2 = Controller(
             Sink(),
@@ -242,7 +250,7 @@ class TestController:
             contr1.stop()
 
     def test_server_attribute(self):
-        controller = Controller(Sink())
+        controller = RandomPortController(Sink())
         assert controller.server is None
         try:
             controller.start()
@@ -256,30 +264,38 @@ class TestController:
     )
     def test_enablesmtputf8_flag(self):
         # Default is True
-        controller = Controller(Sink())
+        controller = RandomPortController(Sink())
         assert controller.SMTP_kwargs["enable_SMTPUTF8"]
         # Explicit set must be reflected in server_kwargs
-        controller = Controller(Sink(), enable_SMTPUTF8=True)
+        controller = RandomPortController(Sink(), enable_SMTPUTF8=True)
         assert controller.SMTP_kwargs["enable_SMTPUTF8"]
-        controller = Controller(Sink(), enable_SMTPUTF8=False)
+        controller = RandomPortController(Sink(), enable_SMTPUTF8=False)
         assert not controller.SMTP_kwargs["enable_SMTPUTF8"]
         # Explicit set must override server_kwargs
         kwargs = dict(enable_SMTPUTF8=False)
-        controller = Controller(Sink(), enable_SMTPUTF8=True, server_kwargs=kwargs)
+        controller = RandomPortController(
+            Sink(),
+            enable_SMTPUTF8=True,
+            server_kwargs=kwargs,
+        )
         assert controller.SMTP_kwargs["enable_SMTPUTF8"]
         kwargs = dict(enable_SMTPUTF8=True)
-        controller = Controller(Sink(), enable_SMTPUTF8=False, server_kwargs=kwargs)
+        controller = RandomPortController(
+            Sink(),
+            enable_SMTPUTF8=False,
+            server_kwargs=kwargs,
+        )
         assert not controller.SMTP_kwargs["enable_SMTPUTF8"]
         # Set through server_kwargs must not be overridden if no explicit set
         kwargs = dict(enable_SMTPUTF8=False)
-        controller = Controller(Sink(), server_kwargs=kwargs)
+        controller = RandomPortController(Sink(), server_kwargs=kwargs)
         assert not controller.SMTP_kwargs["enable_SMTPUTF8"]
 
     @pytest.mark.filterwarnings(
         "ignore:server_kwargs will be removed:DeprecationWarning"
     )
     def test_serverhostname_arg(self):
-        contsink = partial(Controller, Sink())
+        contsink = partial(RandomPortController, Sink())
         controller = contsink()
         assert "hostname" not in controller.SMTP_kwargs
         controller = contsink(server_hostname="testhost1")
@@ -292,14 +308,14 @@ class TestController:
 
     def test_hostname_empty(self):
         # WARNING: This test _always_ succeeds in Windows.
-        cont = Controller(Sink(), hostname="")
+        cont = RandomPortController(Sink(), hostname="")
         try:
             cont.start()
         finally:
             cont.stop()
 
     def test_hostname_none(self):
-        cont = Controller(Sink())
+        cont = RandomPortController(Sink())
         try:
             cont.start()
         finally:
@@ -307,7 +323,7 @@ class TestController:
 
     def test_testconn_raises(self, mocker: MockFixture):
         mocker.patch("socket.socket.recv", side_effect=RuntimeError("MockError"))
-        cont = Controller(Sink(), hostname="")
+        cont = RandomPortController(Sink(), hostname="")
         try:
             with pytest.raises(RuntimeError, match="MockError"):
                 cont.start()
@@ -360,17 +376,17 @@ class TestController:
         mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
 
     def test_stop_default(self):
-        controller = Controller(Sink())
+        controller = RandomPortController(Sink())
         with pytest.raises(AssertionError, match="SMTP daemon not running"):
             controller.stop()
 
     def test_stop_assert(self):
-        controller = Controller(Sink())
+        controller = RandomPortController(Sink())
         with pytest.raises(AssertionError, match="SMTP daemon not running"):
             controller.stop(no_assert=False)
 
     def test_stop_noassert(self):
-        controller = Controller(Sink())
+        controller = RandomPortController(Sink())
         controller.stop(no_assert=True)
 
 
@@ -467,7 +483,7 @@ class TestUnthreaded:
         Verify behavior when the loop is stopped before controller is stopped
         """
         autostop_loop.set_debug(True)
-        cont = UnthreadedController(Sink(), loop=autostop_loop)
+        cont = UnthreadedController(Sink(), loop=autostop_loop, port=0)
         cont.begin()
         # Make sure event loop is not running (will be started in thread)
         assert autostop_loop.is_running() is False
@@ -488,6 +504,11 @@ class TestUnthreaded:
         # SMTPServerDisconnected
         with pytest.raises(SMTPServerDisconnected):
             SMTPClient(cont.hostname, cont.port, timeout=0.1)
+
+        # Take note of the hostname and port, as they will not be available
+        # after controller.end().
+        hostname, port = cont.hostname, cont.port
+
         cont.end()
         catchup_delay()
         cont.ended.wait()
@@ -495,7 +516,11 @@ class TestUnthreaded:
         # or ConnectionError (depending on OS)
         # noinspection PyTypeChecker
         with pytest.raises((socket.timeout, ConnectionError)):
-            SMTPClient(cont.hostname, cont.port, timeout=0.1)
+            SMTPClient(hostname, port, timeout=0.1)
+        # Since the listening socket is closed, cont.port and cont.hostname should
+        # report None
+        assert cont.port is None
+        assert cont.hostname is None
 
     @pytest.mark.filterwarnings(
         "ignore::pytest.PytestUnraisableExceptionWarning"
@@ -504,7 +529,7 @@ class TestUnthreaded:
         """
         Verify behavior when the controller is stopped before loop is stopped
         """
-        cont = UnthreadedController(Sink(), loop=temp_event_loop)
+        cont = UnthreadedController(Sink(), loop=temp_event_loop, port=0)
         cont.begin()
         # Make sure event loop is not running (will be started in thread)
         assert temp_event_loop.is_running() is False
@@ -518,6 +543,11 @@ class TestUnthreaded:
                 assert code == 250
                 client.quit()
             catchup_delay()
+
+            # Take note of the hostname and port, as they will not be available
+            # after controller.end().
+            hostname, port = cont.hostname, cont.port
+
             temp_event_loop.call_soon_threadsafe(cont.end)
             for _ in range(10):  # 10 is arbitrary
                 catchup_delay()  # effectively yield to other threads/event loop
@@ -530,7 +560,11 @@ class TestUnthreaded:
             expect_errs = (socket.timeout, ConnectionError, SMTPServerDisconnected)
             # noinspection PyTypeChecker
             with pytest.raises(expect_errs):
-                SMTPClient(cont.hostname, cont.port, timeout=0.1)
+                SMTPClient(hostname, port, timeout=0.1)
+            # Since the listening socket is closed, cont.port and cont.hostname should
+            # report None
+            assert cont.port is None
+            assert cont.hostname is None
         finally:
             # Wrap up, or else we'll hang
             temp_event_loop.call_soon_threadsafe(cont.cancel_tasks)
@@ -544,7 +578,7 @@ class TestUnthreaded:
 @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 class TestFactory:
     def test_normal_situation(self):
-        cont = Controller(Sink())
+        cont = RandomPortController(Sink())
         try:
             cont.start()
             catchup_delay()
@@ -555,7 +589,7 @@ class TestFactory:
 
     def test_unknown_args_direct(self, silence_event_loop_closed: bool):
         unknown = "this_is_an_unknown_kwarg"
-        cont = Controller(Sink(), ready_timeout=0.3, **{unknown: True})
+        cont = RandomPortController(Sink(), ready_timeout=0.3, **{unknown: True})
         expectedre = r"__init__.. got an unexpected keyword argument '" + unknown + r"'"
         try:
             with pytest.raises(TypeError, match=expectedre):
@@ -570,7 +604,7 @@ class TestFactory:
     )
     def test_unknown_args_inkwargs(self, silence_event_loop_closed: bool):
         unknown = "this_is_an_unknown_kwarg"
-        cont = Controller(Sink(), ready_timeout=0.3, server_kwargs={unknown: True})
+        cont = RandomPortController(Sink(), ready_timeout=0.3, server_kwargs={unknown: True})
         expectedre = r"__init__.. got an unexpected keyword argument '" + unknown + r"'"
         try:
             with pytest.raises(TypeError, match=expectedre):
@@ -583,7 +617,7 @@ class TestFactory:
         # Hypothetical situation where factory() did not raise an Exception
         # but returned None instead
         mocker.patch("aiosmtpd.controller.SMTP", return_value=None)
-        cont = Controller(Sink(), ready_timeout=0.3)
+        cont = RandomPortController(Sink(), ready_timeout=0.3)
         expectedre = r"factory\(\) returned None"
         try:
             with pytest.raises(RuntimeError, match=expectedre):
@@ -597,7 +631,7 @@ class TestFactory:
     ):
         # Hypothetical situation where factory() failed but no
         # Exception was generated.
-        cont = Controller(Sink())
+        cont = RandomPortController(Sink())
 
         def hijacker(*args, **kwargs):
             cont._thread_exception = None

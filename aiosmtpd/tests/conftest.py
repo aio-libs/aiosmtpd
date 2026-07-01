@@ -47,8 +47,9 @@ handler_data = pytest.mark.handler_data
 
 
 class HostPort(NamedTuple):
-    host: str = "localhost"
-    port: int = 8025
+    host: str = "127.0.0.1"
+    # port 0 means "pick a random unused port"
+    port: int = 0
 
 
 RT = TypeVar("RT")  # "ReturnType"
