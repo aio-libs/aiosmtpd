@@ -12,6 +12,9 @@ Fixed/Improved
 
 * Dropped Python 3.8, PyPy 3.8
 * Added PyPy 3.11, dropped PyPy 3.9
+* Removed the trailing NUL byte (``\x00``) from the ``AUTH LOGIN`` username and
+  password challenges, which broke strict clients such as Go's ``net/smtp``
+  (used by Prometheus Alertmanager) and curl (Closes #566)
 
 
 1.4.6 (2024-05-18)

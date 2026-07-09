@@ -11,7 +11,7 @@ import sys
 import time
 import warnings
 from asyncio.transports import Transport
-from base64 import b64encode
+from base64 import b64decode, b64encode
 from contextlib import suppress
 from smtplib import (
     SMTP as SMTPClient,
@@ -1217,6 +1217,23 @@ class TestAuthMechanisms(_CommonMethods):
         assert resp == S.S334_AUTH_PASSWORD
         resp = do_auth_login3("*")
         assert resp == S.S501_AUTH_ABORTED
+
+    def test_login_challenges_have_no_nul_byte(self, do_auth_login3):
+        # GH#566: The AUTH LOGIN 334 challenges must not carry a trailing NUL
+        # byte. Strict clients (e.g. Go's net/smtp, used by Prometheus
+        # Alertmanager, and curl) do an exact compare on the decoded challenge
+        # and abort AUTH when it contains an embedded '\x00'.
+        # do_auth_login3 already sent "AUTH LOGIN" and asserted the username
+        # 334 challenge; decode it and check for an embedded NUL.
+        username_challenge = b64decode(S.S334_AUTH_USERNAME.mesg)
+        assert b"\x00" not in username_challenge
+        resp = do_auth_login3(b64encode(b"goodlogin").decode())
+        assert resp == S.S334_AUTH_PASSWORD
+        password_challenge = b64decode(S.S334_AUTH_PASSWORD.mesg)
+        assert b"\x00" not in password_challenge
+        # Complete the exchange so the connection returns to a clean state.
+        resp = do_auth_login3(b64encode(b"goodpasswd").decode())
+        assert resp == S.S235_AUTH_SUCCESS
 
     def test_DENYFALSE(self, client):
         self._ehlo(client)
