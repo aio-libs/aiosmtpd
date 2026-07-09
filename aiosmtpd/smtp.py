@@ -310,8 +310,8 @@ class SMTP(asyncio.StreamReaderProtocol):
     If 0 or Falsey, local part length is unlimited.
     """
 
-    AuthLoginUsernameChallenge = "User Name\x00"
-    AuthLoginPasswordChallenge = "Password\x00"
+    AuthLoginUsernameChallenge = "User Name"
+    AuthLoginPasswordChallenge = "Password"
 
     def __init__(
             self,
