@@ -71,10 +71,3 @@ ignore = [
     "examples/**",
 ]
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-known_local_folder = [
-    "aiosmtpd"
-]
-combine_as_imports = true

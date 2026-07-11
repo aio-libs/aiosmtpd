@@ -4,11 +4,12 @@
 """Test the sanity of the test suite itself"""
 
 import re
-import pytest
 import socket
+from itertools import combinations
+
+import pytest
 
 from aiosmtpd.testing import statuscodes
-from itertools import combinations
 
 
 ENFORCE_ENHANCED_STATUS_CODES = False

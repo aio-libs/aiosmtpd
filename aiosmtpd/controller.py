@@ -14,13 +14,13 @@ from pathlib import Path
 from socket import AF_INET6, SOCK_STREAM, create_connection, has_ipv6
 from socket import socket as makesock
 from socket import timeout as socket_timeout
+from typing import Any, Awaitable, Dict, Literal, Optional, Union
+from warnings import warn
 
 try:
     from socket import AF_UNIX
 except ImportError:  # pragma: on-not-win32
     AF_UNIX = None  # type: ignore[assignment]
-from typing import Any, Awaitable, Dict, Literal, Optional, Union
-from warnings import warn
 
 from public import public
 

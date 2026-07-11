@@ -18,16 +18,16 @@ import pytest
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import AsyncMessage, Debugging, Mailbox, Proxy, Sink
 from aiosmtpd.handlers import Message as AbstractMessageHandler
+from aiosmtpd.smtp import Envelope
 from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.smtp import Session as ServerSession
-from aiosmtpd.smtp import Envelope
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
 from aiosmtpd.testing.statuscodes import StatusCode
-
 from .conftest import Global, controller_data, handler_data
 
 try:
-    from typing_extensions import Protocol
+    # optional: falls back to typing.Protocol below
+    from typing_extensions import Protocol  # noqa: I900
 except ModuleNotFoundError:
     from typing import Protocol
 

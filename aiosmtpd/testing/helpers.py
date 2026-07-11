@@ -12,7 +12,7 @@ import time
 from smtplib import SMTP as SMTP_Client
 from typing import List
 
-from aiosmtpd.smtp import Envelope, Session, SMTP
+from aiosmtpd.smtp import Envelope, SMTP, Session
 
 ASYNCIO_CATCHUP_DELAY = float(os.environ.get("ASYNCIO_CATCHUP_DELAY", 0.1))
 """

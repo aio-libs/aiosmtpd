@@ -307,7 +307,7 @@ class ProxyData:
         :param log_prefix: If True, add "PROXY error:" prefix to log message
         """
         if log_prefix:
-            log.warning(f"PROXY error: {error_msg}")
+            log.warning("PROXY error: %s", error_msg)
         else:
             log.warning(error_msg)
         self.error = error_msg
@@ -340,7 +340,9 @@ RE_PORT_NOLEADZERO = re.compile(r"^[1-9]\d{0,4}|0$")
 # Reference: https://github.com/haproxy/haproxy/blob/v2.3.0/doc/proxy-protocol.txt
 
 
-async def _get_v1(reader: AsyncReader, initial: Union[bytes, bytearray, memoryview] = b"") -> ProxyData:
+async def _get_v1(
+    reader: AsyncReader, initial: Union[bytes, bytearray, memoryview] = b""
+) -> ProxyData:
     proxy_data = ProxyData(version=1)
     proxy_data.whole_raw = bytearray(initial)
 
@@ -424,7 +426,9 @@ async def _get_v1(reader: AsyncReader, initial: Union[bytes, bytearray, memoryvi
     return proxy_data
 
 
-async def _get_v2(reader: AsyncReader, initial: Union[bytes, bytearray, memoryview] = b"") -> ProxyData:
+async def _get_v2(
+    reader: AsyncReader, initial: Union[bytes, bytearray, memoryview] = b""
+) -> ProxyData:
     proxy_data = ProxyData(version=2)
     whole_raw = bytearray()
 

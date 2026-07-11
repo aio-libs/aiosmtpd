@@ -22,20 +22,20 @@ from pytest_mock import MockFixture
 
 from aiosmtpd.handlers import Sink
 from aiosmtpd.proxy_protocol import (
-    V2_CMD,
     AF,
-    PROTO,
-    V2_SIGNATURE,
     AsyncReader,
     MalformedTLV,
+    PROTO,
     ProxyData,
     ProxyTLV,
     UnknownTypeTLV,
+    V2_CMD,
+    V2_SIGNATURE,
     get_proxy,
 )
+from aiosmtpd.smtp import Envelope as SMTPEnvelope
 from aiosmtpd.smtp import SMTP as SMTPServer
 from aiosmtpd.smtp import Session as SMTPSession
-from aiosmtpd.smtp import Envelope as SMTPEnvelope
 from aiosmtpd.tests.conftest import Global, controller_data, handler_data
 
 DEFAULT_AUTOCANCEL = 0.1

@@ -407,11 +407,11 @@ class SMTP(asyncio.StreamReaderProtocol):
         for m in (auth_exclude_mechanism or []):
             self._auth_methods.pop(m, None)
         log.info(
-            "Available AUTH mechanisms: "
-            + " ".join(
+            "Available AUTH mechanisms: %s",
+            " ".join(
                 m + "(builtin)" if impl.is_builtin else m
                 for m, impl in sorted(self._auth_methods.items())
-            )
+            ),
         )
         self._handle_hooks: Dict[str, Callable] = {
             m.replace("handle_", ""): getattr(handler, m)
@@ -816,7 +816,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         """
         assert self.session is not None
         if self._auth_required and not self.session.authenticated:
-            log.info(f'{caller_method}: Authentication required')
+            log.info('%s: Authentication required', caller_method)
             await self.push('530 5.7.0 Authentication required')
             return True
         return False

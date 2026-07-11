@@ -10,7 +10,6 @@ from itertools import tee
 from pathlib import Path
 
 import pytest
-
 # noinspection PyPackageRequirements
 from packaging import version
 

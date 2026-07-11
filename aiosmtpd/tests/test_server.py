@@ -11,11 +11,10 @@ import sys
 import time
 from contextlib import ExitStack
 from functools import partial
-from threading import Event
 from pathlib import Path
 from smtplib import SMTP as SMTPClient, SMTPServerDisconnected
 from tempfile import mkdtemp
-from threading import Thread
+from threading import Event, Thread
 from typing import Generator, Optional
 
 import pytest
@@ -24,18 +23,17 @@ from pytest_mock import MockFixture
 from aiosmtpd.controller import (
     Controller,
     UnixSocketController,
-    UnthreadedController,
     UnixSocketMixin,
     UnixSocketUnthreadedController,
+    UnthreadedController,
     _FakeServer,
-    get_localhost,
     _server_to_client_ssl_ctx,
+    get_localhost,
 )
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.testing.helpers import catchup_delay
-
-from .conftest import Global, AUTOSTOP_DELAY
+from .conftest import AUTOSTOP_DELAY, Global
 
 
 class SlowStartController(Controller):

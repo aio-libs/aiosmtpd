@@ -21,22 +21,21 @@ from smtplib import (
     SMTPServerDisconnected,
 )
 from textwrap import dedent
-from typing import cast, Any, Callable, Generator, List, Tuple, Union
+from typing import Any, Callable, Generator, List, Tuple, Union, cast
 
 import pytest
 from pytest_mock import MockFixture
 
-from .conftest import Global, controller_data, handler_data
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 from aiosmtpd.smtp import (
+    AuthResult,
     BOGUS_LIMIT,
     CALL_LIMIT_DEFAULT,
-    MISSING,
-    SMTP as Server,
-    AuthResult,
     Envelope as SMTPEnvelope,
     LoginPassword,
+    MISSING,
+    SMTP as Server,
     Session as SMTPSession,
     __ident__ as GREETING,
     auth_mechanism,
@@ -48,6 +47,7 @@ from aiosmtpd.testing.helpers import (
     send_recv,
 )
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
+from .conftest import Global, controller_data, handler_data
 
 CRLF = "\r\n"
 BCRLF = b"\r\n"
@@ -1035,8 +1035,12 @@ class TestAuthMechanisms(_CommonMethods):
         client.user = "goodlogin"
         client.password = PW
         auth_meth = getattr(client, "auth_" + mechanism)
-        if (mechanism, init_resp) == ("login", False) and (
-                (3, 9, 0) < sys.version_info < (3, 9, 4)):
+        smtplib_auth_login_buggy = (3, 9, 0) < sys.version_info < (3, 9, 4)
+        expect_auth_error = (
+            (mechanism, init_resp) == ("login", False) and smtplib_auth_login_buggy
+        )
+        # The buggy path can only run on a Python 3.9.0-3.9.3 interpreter
+        if expect_auth_error:  # pragma: no branch
             # The bug with SMTP.auth_login was fixed in Python 3.10 and backported
             # to 3.9.4
             # See https://github.com/python/cpython/pull/24118 for the fixes.:

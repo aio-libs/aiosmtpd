@@ -276,7 +276,7 @@ def main(args: Optional[Sequence[str]] = None) -> None:
         server_loop = loop.run_until_complete(server)
     except RuntimeError:  # pragma: nocover
         raise
-    log.debug(f"server_loop = {server_loop}")
+    log.debug("server_loop = %r", server_loop)
     log.info("Server is listening on %s:%s", ns.host, ns.port)
 
     # Signal handlers are only supported on *nix, so just ignore the failure

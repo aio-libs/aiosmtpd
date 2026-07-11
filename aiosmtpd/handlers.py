@@ -20,14 +20,14 @@ from abc import ABCMeta, abstractmethod
 from argparse import ArgumentParser
 from email.message import Message as Em_Message
 from email.parser import BytesParser, Parser
-from typing import Any, List, TextIO, Type, TypeVar, Optional, Union
+from typing import Any, List, Optional, TextIO, Type, TypeVar, Union
 
 from public import public
 
 from aiosmtpd import _get_or_new_eventloop
-from aiosmtpd.smtp import SMTP as SMTPServer
 from aiosmtpd.smtp import Envelope as SMTPEnvelope
 from aiosmtpd.smtp import PeerType
+from aiosmtpd.smtp import SMTP as SMTPServer
 from aiosmtpd.smtp import Session as SMTPSession
 
 T = TypeVar("T")
@@ -157,7 +157,7 @@ class Proxy:
             s = smtplib.SMTP()
             s.connect(self._hostname, self._port)
             try:
-                refused = s.sendmail(mail_from, rcpt_tos, data)  # pytype: disable=wrong-arg-types  # noqa: E501
+                refused = s.sendmail(mail_from, rcpt_tos, data)  # pytype: disable=wrong-arg-types  # noqa: E501,B950
             finally:
                 s.quit()
         except smtplib.SMTPRecipientsRefused as e:

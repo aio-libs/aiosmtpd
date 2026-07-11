@@ -11,13 +11,12 @@ import pytest
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
-from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.smtp import Envelope
+from aiosmtpd.smtp import SMTP as Server
 from aiosmtpd.smtp import Session as Sess_
 from aiosmtpd.smtp import TLSSetupException
 from aiosmtpd.testing.helpers import ReceivingHandler, catchup_delay
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-
 from .conftest import Global, handler_data
 
 # region #### Harness Classes & Functions #############################################

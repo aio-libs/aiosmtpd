@@ -158,7 +158,9 @@ class TestMain:
         with pytest.raises(SystemExit) as excinfo:
             main(args=())
         assert excinfo.value.code == 1
-        assert capsys.readouterr().err == 'Cannot import module "pwd"; try running with -n option.\n'
+        assert capsys.readouterr().err == (
+            'Cannot import module "pwd"; try running with -n option.\n'
+        )
 
     def test_n(self, setuid):
         with pytest.raises(RuntimeError):
@@ -336,7 +338,9 @@ class TestParseArgs:
         ids=["x-x", "cert-x", "x-key"],
     )
     @pytest.mark.parametrize("meth", ["smtps", "tls"])
-    def test_ssl_files_err(self, capsys, mocker, meth, certfile_present, keyfile_present, expect, request):
+    def test_ssl_files_err(
+        self, capsys, mocker, meth, certfile_present, keyfile_present, expect, request
+    ):
         certfile = request.getfixturevalue("tls_cert_pem_path") if certfile_present else "x"
         keyfile = request.getfixturevalue("tls_key_pem_path") if keyfile_present else "x"
         mocker.patch("aiosmtpd.main.PROGRAM", "smtpd")

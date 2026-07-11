@@ -12,6 +12,14 @@ Fixed/Improved
 
 * Dropped Python 3.8, PyPy 3.8
 * Added PyPy 3.11, dropped PyPy 3.9
+* Rationalized the flake8 configuration: one plugin list shared by tox and CI,
+  ``extend-select``/``extend-ignore`` instead of ``select``, previously inert
+  plugins (bugbear, builtins, bandit, import-order, requirements) now
+  enforced, stale ignores and the dangling logging-format config dropped,
+  ``max-complexity`` set, and the standalone bandit run folded into
+  flake8-bandit
+  (`#604 <https://github.com/aio-libs/aiosmtpd/issues/604>`_ ...
+  `#612 <https://github.com/aio-libs/aiosmtpd/issues/612>`_)
 
 
 1.4.6 (2024-05-18)

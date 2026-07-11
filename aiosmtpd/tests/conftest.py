@@ -6,10 +6,10 @@ import inspect
 import socket
 import ssl
 import warnings
+from collections.abc import Iterator
 from contextlib import suppress
 from functools import wraps
 from smtplib import SMTP as SMTPClient
-from collections.abc import Iterator
 from typing import Any, Callable, Generator, NamedTuple, Optional, Type, TypeVar
 
 import pytest

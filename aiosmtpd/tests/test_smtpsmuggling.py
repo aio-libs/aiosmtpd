@@ -3,12 +3,11 @@
 
 """Test SMTP smuggling."""
 
-import smtplib
 import re
+import smtplib
 
 from aiosmtpd.testing.helpers import ReceivingHandler
 from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
-
 from .conftest import handler_data
 
 
