@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import hmac
 import logging
-import secrets
 import sqlite3
 import sys
 from functools import lru_cache
@@ -31,18 +31,22 @@ class Authenticator:
             return fail_nothandled
         if not isinstance(auth_data, LoginPassword):
             return fail_nothandled
-        username = auth_data.login
+        # auth_data fields are bytes; the username is stored as text in the DB
+        username = auth_data.login.decode("utf-8", errors="replace")
         password = auth_data.password
-        hashpass = pbkdf2_hmac("sha256", password, secrets.token_bytes(), 1000000).hex()
         conn = sqlite3.connect(self.auth_db)
         curs = conn.execute(
-            "SELECT hashpass FROM userauth WHERE username=?", (username,)
+            "SELECT salt, hashpass FROM userauth WHERE username=?", (username,)
         )
-        hash_db = curs.fetchone()
+        row = curs.fetchone()
         conn.close()
-        if not hash_db:
+        if not row:
             return fail_nothandled
-        if hashpass != hash_db[0]:
+        salt, hash_db = row
+        hashpass = pbkdf2_hmac(
+            "sha256", password, bytes.fromhex(salt), 1000000
+        ).hex()
+        if not hmac.compare_digest(hashpass, hash_db):
             return fail_nothandled
         return AuthResult(success=True)
 
