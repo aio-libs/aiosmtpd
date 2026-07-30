@@ -437,11 +437,12 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         constructor, use `self.requested_port`.
 
         """
-        if isinstance(self.server, asyncio.Server):
-            socket = self.server.sockets[0]
-            addr = socket.getsockname()
-            return addr[1]
-        return None
+        if not isinstance(self.server, asyncio.Server):
+            return None
+
+        socket = self.server.sockets[0]
+        addr = socket.getsockname()
+        return addr[1]
 
     def _create_server(self) -> Awaitable[asyncio.AbstractServer]:
         """
