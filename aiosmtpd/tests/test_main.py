@@ -210,12 +210,9 @@ class TestMainByWatcher:
             port = retq.get()
             temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
             main_n(
-                "--tlscert",
-                tls_cert_pem_path,
-                "--tlskey",
-                tls_key_pem_path,
-                "-l",
-                f":{port}",
+                f"--tlscert={tls_cert_pem_path}",
+                f"--tlskey={tls_key_pem_path}",
+                f"--listen=:{port}",
             )
             catchup_delay()
         has_starttls = retq.get()
@@ -228,13 +225,10 @@ class TestMainByWatcher:
             port = retq.get()
             temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
             main_n(
-                "--tlscert",
-                tls_cert_pem_path,
-                "--tlskey",
-                tls_key_pem_path,
+                f"--tlscert={tls_cert_pem_path}",
+                f"--tlskey={tls_key_pem_path}",
                 "--no-requiretls",
-                "-l",
-                f":{port}",
+                f"--listen=:{port}",
             )
             catchup_delay()
         has_starttls = retq.get()
@@ -247,12 +241,9 @@ class TestMainByWatcher:
             port = retq.get()
             temp_event_loop.call_later(AUTOSTOP_DELAY, temp_event_loop.stop)
             main_n(
-                "--smtpscert",
-                tls_cert_pem_path,
-                "--smtpskey",
-                tls_key_pem_path,
-                "-l",
-                f":{port}",
+                f"--smtpscert={tls_cert_pem_path}",
+                f"--smtpskey={tls_key_pem_path}",
+                f"--listen=:{port}",
             )
             catchup_delay()
         has_smtps = retq.get()
