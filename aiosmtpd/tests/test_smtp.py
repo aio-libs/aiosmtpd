@@ -91,10 +91,10 @@ class ErrorSMTP(Server):
         raise self.exception_type("test")
 
 @pytest.fixture
-def _set_log_level_warning():
+def _set_log_level_warning() -> None:
     prev_level = MAIL_LOG.getEffectiveLevel()
     MAIL_LOG.setLevel(logging.WARNING)
-    yield True
+    yield
     MAIL_LOG.setLevel(prev_level)
 
 
