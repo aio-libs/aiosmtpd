@@ -153,13 +153,13 @@ def pick_random_port():
 class TestMain:
     def test_setuid(self, nobody_uid, mocker):
         mock = mocker.patch("os.setuid")
-        main(args=("-l", ":0"))
+        main(args=("--listen=:0",))
         mock.assert_called_with(nobody_uid)
 
     def test_setuid_permission_error(self, nobody_uid, mocker, capsys):
         mock = mocker.patch("os.setuid", side_effect=PermissionError)
         with pytest.raises(SystemExit) as excinfo:
-            main(args=("-l", ":0"))
+            main(args=("--listen=:0",))
         assert excinfo.value.code == 1
         mock.assert_called_with(nobody_uid)
         assert (
@@ -170,35 +170,35 @@ class TestMain:
     def test_setuid_no_pwd_module(self, nobody_uid, mocker, capsys):
         mocker.patch("aiosmtpd.main.pwd", None)
         with pytest.raises(SystemExit) as excinfo:
-            main(args=("-l", ":0"))
+            main(args=("--listen=:0",))
         assert excinfo.value.code == 1
         assert capsys.readouterr().err == 'Cannot import module "pwd"; try running with -n option.\n'
 
     def test_n(self, setuid):
         with pytest.raises(RuntimeError):
-            main_n("-l", ":0")
+            main_n("--listen=:0")
 
     def test_nosetuid(self, setuid):
         with pytest.raises(RuntimeError):
-            main(("--nosetuid", "-l", ":0"))
+            main(("--nosetuid", "--listen=:0"))
 
     def test_debug_0(self):
         # For this test, the test runner likely has already set the log level
         # so it may not be logging.ERROR.
         default_level = MAIL_LOG.getEffectiveLevel()
-        main_n("-l", ":0")
+        main_n("--listen=:0")
         assert MAIL_LOG.getEffectiveLevel() == default_level
 
     def test_debug_1(self):
-        main_n("-d", "-l", ":0")
+        main_n("--debug", "--listen=:0")
         assert MAIL_LOG.getEffectiveLevel() == logging.INFO
 
     def test_debug_2(self):
-        main_n("-dd", "-l", ":0")
+        main_n("-dd", "--listen=:0")
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
 
     def test_debug_3(self):
-        main_n("-ddd", "-l", ":0")
+        main_n("-ddd", "--listen=:0")
         assert MAIL_LOG.getEffectiveLevel() == logging.DEBUG
         assert asyncio.get_event_loop().get_debug()
 
@@ -379,7 +379,7 @@ class TestSigint:
 
         temp_event_loop.call_later(1.0, interrupt)
         try:
-            main_n("-l", ":0")
+            main_n("--listen=:0")
         except Exception:
             pytest.fail("main() should've closed cleanly without exceptions!")
         else:
