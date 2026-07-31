@@ -90,6 +90,7 @@ class ErrorSMTP(Server):
     async def smtp_HELO(self, hostname: str):
         raise self.exception_type("test")
 
+
 @pytest.fixture
 def _set_log_level_warning() -> None:
     prev_level = MAIL_LOG.getEffectiveLevel()
