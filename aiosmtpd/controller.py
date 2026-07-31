@@ -412,11 +412,12 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         constructor, use `self.requested_hostname`.
 
         """
-        if isinstance(self.server, asyncio.Server):
-            socket = self.server.sockets[0]
-            addr = socket.getsockname()
-            return addr[0]
-        return None
+        if not isinstance(self.server, asyncio.Server):
+            return None
+
+        socket = self.server.sockets[0]
+        addr = socket.getsockname()
+        return addr[0]
 
     @property
     def port(self) -> Union[int, None]:
