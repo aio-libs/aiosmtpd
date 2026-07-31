@@ -467,7 +467,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         # addresses). In such case, it should be safe to connect to localhost)
         hostname = self.hostname or self._localhost
         with ExitStack() as stk:
-            assert self.port
+            assert self.port is not None
             s = stk.enter_context(create_connection((hostname, self.port), 1.0))
             if self.ssl_context:
                 client_ctx = _server_to_client_ssl_ctx(self.ssl_context)
