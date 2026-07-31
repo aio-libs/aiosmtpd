@@ -397,7 +397,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         self.requested_port = port
 
     @property
-    def hostname(self) -> Optional[str]:
+    def hostname(self) -> Union[str, None]:
         """Return the hostname the server is listening on.
 
         If the server is not currently listening on any sockets, return None.
@@ -419,7 +419,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         return None
 
     @property
-    def port(self) -> Optional[int]:
+    def port(self) -> Union[int, None]:
         """Return the port the server is listening on.
 
         If the server is not currently listening on any sockets, return None.
