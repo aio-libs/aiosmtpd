@@ -1036,7 +1036,8 @@ class TestAuthMechanisms(_CommonMethods):
         client.password = PW
         auth_meth = getattr(client, "auth_" + mechanism)
         if (mechanism, init_resp) == ("login", False) and (
-                (3, 9, 0) < sys.version_info < (3, 9, 4)):
+            (3, 9, 0) < sys.version_info < (3, 9, 4)
+        ):
             # The bug with SMTP.auth_login was fixed in Python 3.10 and backported
             # to 3.9.4
             # See https://github.com/python/cpython/pull/24118 for the fixes.:
@@ -1917,7 +1918,7 @@ class TestTimeout(_CommonMethods):
 
 class TestAuthArgs:
     def test_warn_authreqnotls(self, caplog):
-        with pytest.warns(UserWarning) as record:
+        with pytest.warns(UserWarning, match="Requiring AUTH") as record:
             _ = Server(Sink(), auth_required=True, auth_require_tls=False)
         for warning in record:
             if warning.message.args and (
