@@ -24,11 +24,12 @@ if __name__ == '__main__':
         dbfp.unlink()
     conn = sqlite3.connect(DB_FILE)
     curs = conn.cursor()
-    curs.execute("CREATE TABLE userauth (username text, hashpass text)")
-    insert_up = "INSERT INTO userauth VALUES (?, ?)"
+    curs.execute("CREATE TABLE userauth (username text, salt text, hashpass text)")
+    insert_up = "INSERT INTO userauth VALUES (?, ?, ?)"
     for u, p in USER_AND_PASSWORD.items():
-        h = pbkdf2_hmac("sha256", p, secrets.token_bytes(), 1000000).hex()
-        curs.execute(insert_up, (u, h))
+        salt = secrets.token_bytes()
+        h = pbkdf2_hmac("sha256", p, salt, 1000000).hex()
+        curs.execute(insert_up, (u, salt.hex(), h))
     conn.commit()
     conn.close()
     assert dbfp.exists()
