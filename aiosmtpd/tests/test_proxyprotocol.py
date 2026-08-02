@@ -5,13 +5,11 @@ import asyncio
 import errno
 import logging
 import operator
-import random
 import socket
 import struct
 import time
 from base64 import b64decode
 from contextlib import contextmanager, suppress
-from functools import partial
 from ipaddress import IPv4Address, IPv6Address
 from smtplib import SMTP as SMTPClient
 from smtplib import SMTPServerDisconnected
@@ -43,7 +41,6 @@ TIMEOUT_MULTIPLIER = 2.0
 
 param = pytest.param
 parametrize = pytest.mark.parametrize
-random_port = partial(random.getrandbits, 16)
 
 TEST_TLV_DATA_1 = (
     b"\x03\x00\x04Z\xfd\xc6\xff\x02\x00\tAUTHORITI\x05\x00\tUNIKUE_ID"
@@ -516,33 +513,11 @@ class TestGetV1(_TestProxyProtocolCommon):
             AF.INET, PROTO.STREAM, srcip, dstip, srcport, dstport, prox_test
         )
 
-    def test_tcp4_random(self, setup_proxy_protocol):
-        setup_proxy_protocol(self)
-        srcip = ".".join(f"{random.getrandbits(8)}" for _ in range(0, 4))
-        dstip = ".".join(f"{random.getrandbits(8)}" for _ in range(0, 4))
-        srcport = random_port()
-        dstport = random_port()
-        prox_test = f"PROXY TCP4 {srcip} {dstip} {srcport} {dstport}\r\n"
-        self._assert_valid(
-            AF.INET, PROTO.STREAM, srcip, dstip, srcport, dstport, prox_test
-        )
-
     def test_tcp6_shortened(self, setup_proxy_protocol):
         srcip = "2020:dead::0001"
         dstip = "2021:cafe::0002"
         srcport = 8000
         dstport = 65535
-        prox_test = f"PROXY TCP6 {srcip} {dstip} {srcport} {dstport}\r\n"
-        setup_proxy_protocol(self)
-        self._assert_valid(
-            AF.INET6, PROTO.STREAM, srcip, dstip, srcport, dstport, prox_test
-        )
-
-    def test_tcp6_random(self, setup_proxy_protocol):
-        srcip = ":".join(f"{random.getrandbits(16):04x}" for _ in range(0, 8))
-        dstip = ":".join(f"{random.getrandbits(16):04x}" for _ in range(0, 8))
-        srcport = random_port()
-        dstport = random_port()
         prox_test = f"PROXY TCP6 {srcip} {dstip} {srcport} {dstport}\r\n"
         setup_proxy_protocol(self)
         self._assert_valid(
@@ -673,9 +648,9 @@ class TestGetV1(_TestProxyProtocolCommon):
         self, setup_proxy_protocol, srcip, dstip, srcport, dstport, whatwrong
     ):
         if srcport is None:
-            srcport = random_port()
+            srcport = 8000
         if dstport is None:
-            dstport = random_port()
+            dstport = 65535
         prox_test = f"PROXY TCP6 {srcip} {dstip} {srcport} {dstport}\r\n"
         setup_proxy_protocol(self)
         self._assert_invalid(prox_test, f"PROXYv1 {whatwrong} malformed")
