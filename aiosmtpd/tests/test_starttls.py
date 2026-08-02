@@ -218,25 +218,20 @@ class TestTLSEnding:
         # I suspect it's a race condition, but with what, and how to prevent that from
         # happening, that's ... a mystery.
 
-        # Entering portion of code where hang is possible (upon assertion fail), so
-        # we must wrap with "try..finally".
-        try:
-            code, mesg = client.ehlo("example.com")
-            assert code == 250
-            resp = client.starttls()
-            assert resp == S.S220_READY_TLS
-            # Need this to make SMTP update its internal session variable
-            code, mesg = client.ehlo("example.com")
-            assert code == 250
-            sess: Sess_ = tls_controller.smtpd.session
-            assert sess.ssl is not None
-            client.noop()
-            catchup_delay()
-            handler: EOFingHandler = tls_controller.handler
-            assert handler.ssl_existed is True
-            assert handler.result is False
-        finally:
-            tls_controller.stop()
+        code, mesg = client.ehlo("example.com")
+        assert code == 250
+        resp = client.starttls()
+        assert resp == S.S220_READY_TLS
+        # Need this to make SMTP update its internal session variable
+        code, mesg = client.ehlo("example.com")
+        assert code == 250
+        sess: Sess_ = tls_controller.smtpd.session
+        assert sess.ssl is not None
+        client.noop()
+        catchup_delay()
+        handler: EOFingHandler = tls_controller.handler
+        assert handler.ssl_existed is True
+        assert handler.result is False
 
     @handler_data(class_=ExceptionCaptureHandler)
     def test_tls_handshake_failing(self, tls_controller, client):
