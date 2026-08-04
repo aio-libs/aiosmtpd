@@ -397,7 +397,15 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         self.requested_port = port
 
     @property
-    def hostname(self) -> Union[str, None]:
+    def _active_addr(self) -> Union[tuple[str, int], tuple[None, None]]:
+        if not isinstance(self.server, asyncio.Server):
+            return (None, None)
+
+        socket = self.server.sockets[0]
+        return socket.getsockname()
+
+    @property
+    def hostname(self) -> Optional[str]:
         """Return the hostname the server is listening on.
 
         If the server is not currently listening on any sockets, return None.
@@ -412,15 +420,11 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         constructor, use `self.requested_hostname`.
 
         """
-        if not isinstance(self.server, asyncio.Server):
-            return None
 
-        socket = self.server.sockets[0]
-        addr = socket.getsockname()
-        return addr[0]
+        return self._active_addr[0]
 
     @property
-    def port(self) -> Union[int, None]:
+    def port(self) -> Optional[int]:
         """Return the port the server is listening on.
 
         If the server is not currently listening on any sockets, return None.
@@ -438,12 +442,8 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         constructor, use `self.requested_port`.
 
         """
-        if not isinstance(self.server, asyncio.Server):
-            return None
 
-        socket = self.server.sockets[0]
-        addr = socket.getsockname()
-        return addr[1]
+        return self._active_addr[1]
 
     def _create_server(self) -> Awaitable[asyncio.AbstractServer]:
         """
