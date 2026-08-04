@@ -91,6 +91,14 @@ class ErrorSMTP(Server):
         raise self.exception_type("test")
 
 
+@pytest.fixture
+def _set_log_level_warning() -> None:
+    prev_level = MAIL_LOG.getEffectiveLevel()
+    MAIL_LOG.setLevel(logging.WARNING)
+    yield
+    MAIL_LOG.setLevel(prev_level)
+
+
 # endregion
 
 
@@ -386,7 +394,7 @@ def decoding_authnotls_controller(
 @pytest.fixture
 def error_controller(get_handler: Callable) -> Generator[ErrorController, None, None]:
     handler = get_handler()
-    controller = ErrorController(handler)
+    controller = ErrorController(handler, port=0)
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -1563,7 +1571,12 @@ class TestSMTPWithController(_CommonMethods):
         assert resp == S.S250_OK
 
     @handler_data(class_=ReceivingHandler)
+    @pytest.mark.usefixtures('_set_log_level_warning')
     def test_bad_encodings(self, decoding_authnotls_controller, client):
+        # _set_log_level_warning disables DEBUG logging temporarily to avoid badly
+        # encoded strings in the logs. Otherwise, running tests in parallel with
+        # pytest-xdist will blow up when trying to serialize the captured logs.
+
         handler: ReceivingHandler = decoding_authnotls_controller.handler
         self._helo(client)
         mail_from = b"anne\xFF@example.com"

@@ -138,13 +138,14 @@ When you're done with the SMTP server, stop it via the controller.
 
 .. doctest::
 
+    >>> old_port = controller.port
     >>> controller.stop()
 
 The server is guaranteed to be stopped.
 
 .. doctest::
 
-    >>> client.connect(controller.hostname, controller.port)
+    >>> client.connect(controller.hostname, old_port)
     Traceback (most recent call last):
     ...
     ConnectionRefusedError: ...
