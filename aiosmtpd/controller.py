@@ -397,7 +397,10 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         self.requested_port = port
 
     @property
-    def _active_addr(self) -> tuple[str, int]:
+    def _active_addr(self) -> Union[tuple[str, int], tuple[None, None]]:
+        if not isinstance(self.server, asyncio.Server):
+            return (None, None)
+
         socket = self.server.sockets[0]
         return socket.getsockname()
 
@@ -417,10 +420,6 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         constructor, use `self.requested_hostname`.
 
         """
-
-        if not isinstance(self.server, asyncio.Server):
-            return None
-
 
         return self._active_addr[0]
 
@@ -443,9 +442,6 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         constructor, use `self.requested_port`.
 
         """
-
-        if not isinstance(self.server, asyncio.Server):
-            return None
 
         return self._active_addr[1]
 
