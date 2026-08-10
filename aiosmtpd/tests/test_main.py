@@ -72,7 +72,7 @@ def setuid(mocker: MockFixture):
         pytest.skip("setuid is unavailable")
     mocker.patch("aiosmtpd.main.pwd", None)
     mocker.patch("os.setuid", side_effect=PermissionError)
-    mocker.patch("aiosmtpd.main.partial", side_effect=RuntimeError)
+    mocker.patch("aiosmtpd.main.partial", side_effect=RuntimeError("testing"))
 
 
 # endregion
@@ -175,7 +175,7 @@ class TestMain:
         assert capsys.readouterr().err == 'Cannot import module "pwd"; try running with -n option.\n'
 
     def test_n(self, setuid):
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RuntimeError, match="^testing$"):
             main_n("--listen=:0")
 
     def test_nosetuid(self, setuid):
