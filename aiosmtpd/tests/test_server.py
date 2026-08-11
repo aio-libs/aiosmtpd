@@ -521,13 +521,13 @@ class TestUnthreaded:
         # Since the listening socket is closed, cont.port and cont.hostname should
         # raise ConnectionError
         with pytest.raises(
-            ConnectionError,
+            RuntimeError,
             match="The server is currently not listening on any port",
         ):
             _ = cont.port
 
         with pytest.raises(
-            ConnectionError,
+            RuntimeError,
             match="The server is currently not listening on any port",
         ):
             _ = cont.hostname
@@ -574,13 +574,13 @@ class TestUnthreaded:
             # Since the listening socket is closed, cont.port and cont.hostname should
             # raise ConnectionError
             with pytest.raises(
-                ConnectionError,
+                RuntimeError,
                 match="The server is currently not listening on any port",
             ):
                 _ = cont.port
 
             with pytest.raises(
-                ConnectionError,
+                RuntimeError,
                 match="The server is currently not listening on any port",
             ):
                 _ = cont.hostname

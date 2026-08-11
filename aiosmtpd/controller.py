@@ -399,7 +399,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
     @property
     def _active_addr(self) -> tuple[str, int]:
         if not isinstance(self.server, asyncio.Server):
-            raise ConnectionError("The server is currently not listening on any port")
+            raise RuntimeError("The server is currently not listening on any port")
 
         socket = self.server.sockets[0]
         return socket.getsockname()
@@ -409,7 +409,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         """Return the hostname the server is listening on.
 
         If the server is not currently listening on any sockets,
-        raise ConnectionError.
+        raise RuntimeError.
 
         If an empty hostname parameter was passed to the controller's constuctor
         then the server is running on all available interfaces, that may have
@@ -429,7 +429,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         """Return the port the server is listening on.
 
         If the server is not currently listening on any sockets,
-        raise ConnectionError.
+        raise RuntimeError.
 
         If port=0 was passed to the controller's constuctor then the server picks
         a random unused port. This property will return the port that was picked.
