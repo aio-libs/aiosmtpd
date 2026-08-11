@@ -413,7 +413,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
 
         If an empty hostname parameter was passed to the controller's constuctor
         then the server is running on all available interfaces, that may have
-        different hostnames. For example, "127.0.0.1" and "::". This property
+        different hostnames. For example, "127.0.0.1" and "::1". This property
         returns the hostname of the first listening socket, but the order of
         listening sockets is not defined.
 
