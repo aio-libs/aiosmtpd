@@ -397,18 +397,19 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         self.requested_port = port
 
     @property
-    def _active_addr(self) -> Union[tuple[str, int], tuple[None, None]]:
+    def _active_addr(self) -> tuple[str, int]:
         if not isinstance(self.server, asyncio.Server):
-            return (None, None)
+            raise ConnectionError("The server is currently not listening on any port")
 
         socket = self.server.sockets[0]
         return socket.getsockname()
 
     @property
-    def hostname(self) -> Optional[str]:
+    def hostname(self) -> str:
         """Return the hostname the server is listening on.
 
-        If the server is not currently listening on any sockets, return None.
+        If the server is not currently listening on any sockets,
+        raise ConnectionError.
 
         If an empty hostname parameter was passed to the controller's constuctor
         then the server is running on all available interfaces, that may have
@@ -424,10 +425,11 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         return self._active_addr[0]
 
     @property
-    def port(self) -> Optional[int]:
+    def port(self) -> int:
         """Return the port the server is listening on.
 
-        If the server is not currently listening on any sockets, return None.
+        If the server is not currently listening on any sockets,
+        raise ConnectionError.
 
         If port=0 was passed to the controller's constuctor then the server picks
         a random unused port. This property will return the port that was picked.
@@ -468,7 +470,6 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         # addresses). In such case, it should be safe to connect to localhost)
         hostname = self.hostname or self._localhost
         with ExitStack() as stk:
-            assert self.port is not None
             s = stk.enter_context(create_connection((hostname, self.port), 1.0))
             if self.ssl_context:
                 client_ctx = _server_to_client_ssl_ctx(self.ssl_context)
