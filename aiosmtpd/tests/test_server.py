@@ -40,8 +40,8 @@ from .conftest import Global, AUTOSTOP_DELAY
 
 class RandomPortController(Controller):
     def __init__(self, *args, **kwargs):
-        kwargs.setdefault("port", 0)
-        super().__init__(*args, **kwargs)
+        assert "port" not in kwargs
+        super().__init__(*args, port=0, **kwargs)
 
 
 class SlowStartController(Controller):
