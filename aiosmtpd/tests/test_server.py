@@ -525,13 +525,13 @@ class TestUnthreaded:
         # raise ConnectionError
         with pytest.raises(
             RuntimeError,
-            match="The server is currently not listening to any socket",
+            match=r"^The server is currently not listening to any socket$",
         ):
             _ = cont.port
 
         with pytest.raises(
             RuntimeError,
-            match="The server is currently not listening to any socket",
+            match=r"^The server is currently not listening to any socket$",
         ):
             _ = cont.hostname
 
@@ -578,13 +578,13 @@ class TestUnthreaded:
             # raise ConnectionError
             with pytest.raises(
                 RuntimeError,
-                match="The server is currently not listening to any socket",
+                match=r"^The server is currently not listening to any socket$",
             ):
                 _ = cont.port
 
             with pytest.raises(
                 RuntimeError,
-                match="The server is currently not listening to any socket",
+                match=r"^The server is currently not listening to any socket$",
             ):
                 _ = cont.hostname
         finally:
