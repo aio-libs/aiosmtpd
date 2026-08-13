@@ -399,7 +399,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
     @property
     def _active_addr(self) -> tuple[str, int]:
         if not isinstance(self.server, asyncio.Server):
-            raise RuntimeError("The server is currently not listening on any port")
+            raise RuntimeError("The server is currently not listening to any socket")
 
         socket = self.server.sockets[0]
         return socket.getsockname()
