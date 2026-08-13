@@ -429,7 +429,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         """Return the port the server is listening on.
 
         If the server is not currently listening on any sockets,
-        raise RuntimeError.
+        raise :exc:`RuntimeError`.
 
         If port=0 was passed to the controller's constuctor then the server picks
         a random unused port. This property will return the port that was picked.
@@ -441,7 +441,7 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         not defined.
 
         To access the port parameter that was passed in to controller's
-        constructor, use `self.requested_port`.
+        constructor, use ``self.requested_port``.
 
         """
 
