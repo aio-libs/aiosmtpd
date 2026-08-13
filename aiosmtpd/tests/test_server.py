@@ -218,6 +218,9 @@ class TestController:
 
     @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
     def test_socket_error_dupe(self, plain_controller, client):
+        # The plain_controller fixture calls `Global.set_addr_from(),
+        # this is how contr2 will be passed the same hostname and port
+        # as the already running plain_controller.
         contr2 = Controller(
             Sink(),
             hostname=Global.SrvAddr.host,
