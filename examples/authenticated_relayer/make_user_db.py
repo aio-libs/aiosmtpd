@@ -8,6 +8,9 @@ from pathlib import Path
 
 
 DB_FILE = "mail.db~"
+
+# Must match server.py, or nothing will ever verify.
+HASH_ITERATIONS = 1000000
 USER_AND_PASSWORD = {
     "user1": b"not@password",
     "user2": b"correctbatteryhorsestaple",
@@ -27,8 +30,8 @@ if __name__ == '__main__':
     curs.execute("CREATE TABLE userauth (username text, salt text, hashpass text)")
     insert_up = "INSERT INTO userauth VALUES (?, ?, ?)"
     for u, p in USER_AND_PASSWORD.items():
-        salt = secrets.token_bytes()
-        h = pbkdf2_hmac("sha256", p, salt, 1000000).hex()
+        salt = secrets.token_bytes(32)
+        h = pbkdf2_hmac("sha256", p, salt, HASH_ITERATIONS).hex()
         curs.execute(insert_up, (u, salt.hex(), h))
     conn.commit()
     conn.close()
