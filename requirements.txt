@@ -1,6 +1,7 @@
 atpublic==5.0
 attrs==26.1.0
 coverage==7.8.0
+dnspython==2.8.0  # examples/authenticated_relayer, exercised by test_examples.py
 pytest==8.4.2
 pytest-cov==6.1.1
 pytest-mock==3.14.0

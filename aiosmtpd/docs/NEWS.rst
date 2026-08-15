@@ -13,7 +13,9 @@ Fixed/Improved
 * Dropped Python 3.8, PyPy 3.8
 * Added PyPy 3.11, dropped PyPy 3.9
 * The ``authenticated_relayer`` example now stores a per-user salt and uses it
-  during verification, so authentication can succeed (`#475 <https://github.com/aio-libs/aiosmtpd/issues/475>`_)
+  during verification, so authentication can succeed. The user database gained a
+  ``salt`` column, so re-run ``make_user_db.py`` if you already have one.
+  (Closes #475)
 
 
 1.4.6 (2024-05-18)
