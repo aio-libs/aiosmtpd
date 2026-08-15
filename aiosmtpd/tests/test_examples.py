@@ -4,9 +4,8 @@
 """Behavioural tests for the ``examples/authenticated_relayer`` example."""
 
 import importlib.util
-import os
-import runpy
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -56,12 +55,14 @@ A_USER, A_PASSWORD = next(iter(USERS.items()))
 def user_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Build the user DB once, with the real make_user_db.py script."""
     db_dir = tmp_path_factory.mktemp("authrelay")
-    prev_cwd = os.getcwd()
-    os.chdir(db_dir)
-    try:
-        runpy.run_path(str(RELAYER_DIR / "make_user_db.py"), run_name="__main__")
-    finally:
-        os.chdir(prev_cwd)
+    # Run it the way the example tells you to, in its own process, so the
+    # suite never has to chdir out from under the tests that follow.
+    subprocess.run(
+        [sys.executable, str(RELAYER_DIR / "make_user_db.py")],
+        cwd=db_dir,
+        check=True,
+        capture_output=True,
+    )
     return db_dir / make_user_db.DB_FILE
 
 
