@@ -21,7 +21,7 @@ from smtplib import (
     SMTPServerDisconnected,
 )
 from textwrap import dedent
-from typing import cast, Any, Callable, Generator, List, Tuple, Union
+from typing import cast, Any, Callable, Generator, List, Optional, Tuple, Union
 
 import pytest
 from pytest_mock import MockFixture
@@ -47,7 +47,7 @@ from aiosmtpd.testing.helpers import (
     reset_connection,
     send_recv,
 )
-from aiosmtpd.testing.statuscodes import SMTP_STATUS_CODES as S
+from aiosmtpd.testing.statuscodes import StatusCode, SMTP_STATUS_CODES as S
 
 CRLF = "\r\n"
 BCRLF = b"\r\n"
@@ -64,7 +64,7 @@ B64EQUALS = b64encode(b"=").decode()
 # region #### Test Helpers ############################################################
 
 
-def auth_callback(mechanism, login, password) -> bool:
+def auth_callback(mechanism: str, login: bytes, password: bytes) -> bool:
     return login and login.decode() == "goodlogin"
 
 
@@ -152,7 +152,7 @@ class PeekerHandler:
     async def auth_DENYFALSE(self, server, args):
         return False
 
-    async def auth_NONE(self, server: Server, args):
+    async def auth_NONE(self, server: Server, args: List[str]):
         await server.push(S.S235_AUTH_SUCCESS.to_str())
         return None
 
@@ -162,7 +162,7 @@ class PeekerHandler:
     async def auth_DONT(self, server, args):
         return MISSING
 
-    async def auth_WITH_UNDERSCORE(self, server: Server, args) -> str:
+    async def auth_WITH_UNDERSCORE(self, server: Server, args: List[str]) -> str:
         """
         Be careful when using this AUTH mechanism; log_client_response is set to
         True, and this will raise some severe warnings.
@@ -196,10 +196,12 @@ class ErroringHandler:
     error = None
     custom_response = False
 
-    async def handle_DATA(self, server, session, envelope) -> str:
+    async def handle_DATA(
+        self, server: Server, session: SMTPSession, envelope: SMTPEnvelope
+    ) -> str:
         return "499 Could not accept the message"
 
-    async def handle_exception(self, error) -> str:
+    async def handle_exception(self, error: Exception) -> str:
         self.error = error
         if not self.custom_response:
             return "500 ErroringHandler handling error"
@@ -970,7 +972,7 @@ class TestSMTPAuth(_CommonMethods):
 class TestAuthMechanisms(_CommonMethods):
     @pytest.fixture
     def do_auth_plain1(
-        self, client
+        self, client: SMTPClient
     ) -> Callable[[str], Tuple[int, bytes]]:
         self._ehlo(client)
 
@@ -982,7 +984,7 @@ class TestAuthMechanisms(_CommonMethods):
 
     @pytest.fixture
     def do_auth_login3(
-        self, client
+        self, client: SMTPClient
     ) -> Callable[[str], Tuple[int, bytes]]:
         self._ehlo(client)
         resp = client.docmd("AUTH LOGIN")
@@ -1109,7 +1111,7 @@ class TestAuthMechanisms(_CommonMethods):
         assert_nopassleak(PW, caplog.record_tuples)
 
     @pytest.fixture
-    def client_auth_plain2(self, client) -> SMTPClient:
+    def client_auth_plain2(self, client: SMTPClient) -> SMTPClient:
         self._ehlo(client)
         resp = client.docmd("AUTH PLAIN")
         assert resp == S.S334_AUTH_EMPTYPROMPT
@@ -1604,7 +1606,9 @@ class TestSMTPWithController(_CommonMethods):
             client.sendmail("anne@example.com", ["bart@example.com"], mail)
         assert exc.value.args == S.S500_DATALINE_TOO_LONG
 
-    def test_long_line_leak(self, mocker: MockFixture, plain_controller, client):
+    def test_long_line_leak(
+        self, mocker: MockFixture, plain_controller: Controller, client: SMTPClient
+    ):
         # Simulates situation where readuntil() does not raise LimitOverrunError,
         # but somehow the line_fragments when join()ed resulted in a too-long line
 
@@ -1720,7 +1724,7 @@ class TestCustomization(_CommonMethods):
 
 class TestClientCrash(_CommonMethods):
     def test_connection_reset_during_DATA(
-        self, mocker: MockFixture, plain_controller, client
+        self, mocker: MockFixture, plain_controller: Controller, client: SMTPClient
     ):
         # Trigger factory() to produce the smtpd server
         self._helo(client)
@@ -1748,7 +1752,7 @@ class TestClientCrash(_CommonMethods):
             plain_controller.stop()
 
     def test_connection_reset_during_command(
-        self, mocker: MockFixture, plain_controller, client
+        self, mocker: MockFixture, plain_controller: Controller, client: SMTPClient
     ):
         # Trigger factory() to produce the smtpd server
         self._helo(client)
@@ -1789,7 +1793,9 @@ class TestClientCrash(_CommonMethods):
         # and still == True if transport is closed.
         assert writer.transport.is_closing()
 
-    def test_close_in_command_2(self, mocker: MockFixture, plain_controller, client):
+    def test_close_in_command_2(
+        self, mocker: MockFixture, plain_controller: Controller, client: SMTPClient
+    ):
         self._helo(client)
         catchup_delay()
         smtpd: Server = plain_controller.smtpd
@@ -1817,7 +1823,9 @@ class TestClientCrash(_CommonMethods):
         # and still == True if transport is closed.
         assert writer.transport.is_closing()
 
-    def test_close_in_data(self, mocker: MockFixture, plain_controller, client):
+    def test_close_in_data(
+        self, mocker: MockFixture, plain_controller: Controller, client: SMTPClient
+    ):
         self._helo(client)
         smtpd: Server = plain_controller.smtpd
         writer = smtpd._writer
@@ -1843,7 +1851,9 @@ class TestClientCrash(_CommonMethods):
         finally:
             plain_controller.stop()
 
-    def test_sockclose_after_helo(self, mocker: MockFixture, plain_controller, client):
+    def test_sockclose_after_helo(
+        self, mocker: MockFixture, plain_controller: Controller, client: SMTPClient
+    ):
         client.send("HELO example.com\r\n")
         catchup_delay()
         smtpd: Server = plain_controller.smtpd
@@ -1966,7 +1976,12 @@ class TestAuthArgs:
 
 class TestLimits(_CommonMethods):
     def _consume_budget(
-        self, client: SMTPClient, nums: int, cmd: str, *args, ok_expected=None
+        self,
+        client: SMTPClient,
+        nums: int,
+        cmd: str,
+        *args,
+        ok_expected: Optional[StatusCode] = None
     ):
         code, _ = client.ehlo("example.com")
         assert code == 250
