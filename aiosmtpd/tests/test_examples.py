@@ -6,6 +6,7 @@
 import importlib.util
 import os
 import runpy
+import sqlite3
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -139,8 +140,6 @@ def test_stale_database_rejects_without_leaking(
     every attempt; letting sqlite3.OperationalError propagate turns it into
     a 500 quoting the schema back at an unauthenticated client.
     """
-    import sqlite3
-
     stale = tmp_path / "stale.db"
     conn = sqlite3.connect(stale)
     conn.execute("CREATE TABLE userauth (username text, hashpass text)")
@@ -150,6 +149,78 @@ def test_stale_database_rejects_without_leaking(
 
     result = server.Authenticator(stale)(
         None, None, None, "LOGIN", LoginPassword(A_USER.encode("utf-8"), A_PASSWORD)
+    )
+    assert result.success is False
+    assert result.handled is False
+
+
+def test_unknown_user_still_hashes(
+    authenticate: Authenticate, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A missing row must cost a hash, or rejection latency leaks usernames.
+
+    Asserted by counting the hash rather than timing it, so the test cannot
+    flake on a loaded machine.
+    """
+    calls: list[int] = []
+    real = server.pbkdf2_hmac
+
+    def counting(*args: Any, **kwargs: Any) -> bytes:
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(server, "pbkdf2_hmac", counting)
+    result = authenticate("LOGIN", LoginPassword(b"nonexistent", A_PASSWORD))
+
+    assert result.success is False
+    assert calls, "unknown user returned without hashing; timing reveals it exists"
+
+
+def test_corrupt_salt_rejects_without_raising(tmp_path: Path) -> None:
+    """A row whose salt is not hex is a data error, not a credential error."""
+    corrupt = tmp_path / "corrupt.db"
+    conn = sqlite3.connect(corrupt)
+    conn.execute("CREATE TABLE userauth (username text, salt text, hashpass text)")
+    conn.execute(
+        "INSERT INTO userauth VALUES (?, ?, ?)", (A_USER, "not-hex!", "deadbeef")
+    )
+    conn.commit()
+    conn.close()
+
+    result = server.Authenticator(corrupt)(
+        None, None, None, "LOGIN", LoginPassword(A_USER.encode("utf-8"), A_PASSWORD)
+    )
+    assert result.success is False
+    assert result.handled is False
+
+
+def test_undecodable_login_cannot_match_a_replacement_char_user(
+    tmp_path: Path,
+) -> None:
+    """Decoding with errors="replace" would let one login match another user.
+
+    Every invalid byte becomes U+FFFD, so a login of b"\\xff" would match a
+    stored user named U+FFFD. Strict decoding rejects it instead.
+    """
+    salt = bytes(32)
+    db = tmp_path / "replacement.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE userauth (username text, salt text, hashpass text)")
+    conn.execute(
+        "INSERT INTO userauth VALUES (?, ?, ?)",
+        (
+            "\ufffd",
+            salt.hex(),
+            server.pbkdf2_hmac(
+                "sha256", b"secret", salt, server.HASH_ITERATIONS
+            ).hex(),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    result = server.Authenticator(db)(
+        None, None, None, "LOGIN", LoginPassword(b"\xff", b"secret")
     )
     assert result.success is False
     assert result.handled is False
