@@ -5,7 +5,7 @@ import asyncio
 import logging
 import multiprocessing as MP
 import os
-import random
+import socket
 import sys
 import time
 from contextlib import contextmanager
@@ -84,7 +84,7 @@ def watch_for_tls(ready_flag: MP_Event, retq: MP.Queue):
     # Rather than using a hardcoded port, pick a random port,
     # and send it over the return queue, so the test case can
     # start a listening socket on this port.
-    port = pick_random_port()
+    port = pick_available_port()
     retq.put(port)
     has_tls = False
     req_tls = False
@@ -111,7 +111,7 @@ def watch_for_smtps(ready_flag: MP_Event, retq: MP.Queue):
     # Rather than using a hardcoded port, pick a random port,
     # and send it over the return queue, so the test case can
     # start a listening socket on this port.
-    port = pick_random_port()
+    port = pick_available_port()
     retq.put(port)
     has_smtps = False
     ready_flag.set()
@@ -143,8 +143,11 @@ def watcher_process(func):
     proc.join()
 
 
-def pick_random_port():
-    return random.randint(32768, 49152)
+def pick_available_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
 
 # endregion
 
