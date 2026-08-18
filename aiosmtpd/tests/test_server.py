@@ -574,19 +574,6 @@ class TestUnthreaded:
             # noinspection PyTypeChecker
             with pytest.raises(expect_errs):
                 SMTPClient(hostname, port, timeout=0.1)
-            # Since the listening socket is closed, cont.port and cont.hostname should
-            # raise ConnectionError
-            with pytest.raises(
-                RuntimeError,
-                match=r"^The server is currently not listening to any socket$",
-            ):
-                _ = cont.port
-
-            with pytest.raises(
-                RuntimeError,
-                match=r"^The server is currently not listening to any socket$",
-            ):
-                _ = cont.hostname
         finally:
             # Wrap up, or else we'll hang
             temp_event_loop.call_soon_threadsafe(cont.cancel_tasks)
@@ -595,6 +582,19 @@ class TestUnthreaded:
         assert runner.is_alive() is False
         assert temp_event_loop.is_running() is False
         assert temp_event_loop.is_closed() is False
+        # Since the listening socket is closed, cont.port and cont.hostname should
+        # raise RuntimeError
+        with pytest.raises(
+            RuntimeError,
+            match=r"^The server is currently not listening to any socket$",
+        ):
+            _ = cont.port
+
+        with pytest.raises(
+            RuntimeError,
+            match=r"^The server is currently not listening to any socket$",
+        ):
+            _ = cont.hostname
 
 
 @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
