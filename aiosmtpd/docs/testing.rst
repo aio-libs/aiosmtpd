@@ -61,7 +61,7 @@ in alphabetical order:
     :param class\_: The class of the controller to be instantiated.
         If given, overrides ``class_`` arg of :func:`controller_data`.
         If not specified and no ``class_`` from ``controller_data``,
-        defaults to :class:`ExposingController`.
+        defaults to :class:`~aiosmtpd.controller.Controller`.
     :return: an instance of :class:`~aiosmtpd.controller.Controller` (or a subclass of)
 
     In addition to explicitly-specified parameters, ``get_controller`` also

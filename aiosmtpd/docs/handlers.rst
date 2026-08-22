@@ -140,7 +140,7 @@ The following hooks are currently supported (in alphabetical order):
    The hook MUST return a list containing the desired responses.
    The returned list should end with ``250 HELP``
 
-   This hook MUST also set the :attr:``session.host_name`` attribute.
+   This hook MUST also set the :attr:`session.host_name <Session.host_name>` attribute.
 
    .. important::
 
@@ -157,7 +157,7 @@ The following hooks are currently supported (in alphabetical order):
    This hook is called during ``HELO``.
 
    If implemented,
-   this hook MUST also set the :attr:``session.host_name`` attribute
+   this hook MUST also set the :attr:`session.host_name <Session.host_name>` attribute
    before returning ``'250 {}'.format(server.hostname)`` as the status.
 
 .. py:method:: handle_MAIL(server, session, envelope, address, mail_options) -> str
@@ -172,8 +172,8 @@ The following hooks are currently supported (in alphabetical order):
    Called during ``MAIL FROM``.
 
    If implemented,
-   this hook MUST also set the :attr:`envelope.mail_from` attribute
-   and it MAY extend :attr:`envelope.mail_options` (which is always a Python list).
+   this hook MUST also set the :attr:`~.Envelope.mail_from` attribute
+   and it MAY extend :attr:`~.Envelope.mail_options` (which is always a Python list).
 
 .. py:method:: handle_NOOP(server, session, envelope, arg) -> str
    :async:
