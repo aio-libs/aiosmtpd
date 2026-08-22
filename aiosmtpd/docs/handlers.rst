@@ -272,9 +272,16 @@ The following built-in handlers can be imported from :mod:`aiosmtpd.handlers`:
    it is also an :term:`abstract base class` (it must be subclassed).
 
    The only difference with :class:`Message` is that
-   :meth:`~.Message.handle_message` is called *asynchronously*.
+   :meth:`~.AsyncMessage.handle_message` is called *asynchronously*.
 
    This class **cannot** be used on the command line.
+
+   .. py:method:: handle_message(message)
+      :async:
+
+      Coroutine that processes the *message* instance created by
+      :meth:`~.Message.prepare_message`.
+      Subclasses MUST implement this method as an ``async def`` coroutine.
 
 .. py:class:: Debugging
 
@@ -313,14 +320,29 @@ The following built-in handlers can be imported from :mod:`aiosmtpd.handlers`:
 
    This message instance gains a few additional headers
    (e.g. :mailheader:`X-Peer`, :mailheader:`X-MailFrom`, and :mailheader:`X-RcptTo`).
-   You can override this behavior by overriding the :meth:`~.MessageBase.prepare_message` method,
+   You can override this behavior by overriding the :meth:`~.Message.prepare_message` method,
    which takes a session and an envelope.
    The message instance is then passed to the handler's :meth:`~.Message.handle_message` method.
    It is this method that must be implemented in the subclass.
 
-   :meth:`~.MessageBase.prepare_message` and :meth:`~.Message.handle_message` are both called :boldital:`synchronously`.
+   :meth:`~.Message.prepare_message` and :meth:`~.Message.handle_message` are both called :boldital:`synchronously`.
 
    This class **cannot** be used on the command line.
+
+   .. py:method:: prepare_message(session, envelope)
+
+      Convert the message content in *envelope* into an instance of
+      ``message_class``, and add the ``X-Peer``, ``X-MailFrom``,
+      and ``X-RcptTo`` headers to it.
+      Returns the message instance.
+
+      Subclasses can override this method
+      to customize how message instances are created.
+
+   .. py:method:: handle_message(message)
+
+      Process the *message* instance created by :meth:`~.Message.prepare_message`.
+      This is an abstract method; it must be implemented in the subclass.
 
 .. py:class:: Proxy
 

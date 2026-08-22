@@ -105,6 +105,26 @@ in alphabetical order:
     please refer to their respective docstrings for description / usage guide.
 
 
+Custom Data Types
+-----------------
+
+The following custom data types are defined in the test infrastructure:
+
+.. class:: HostPort(host="localhost", port=8025)
+
+   A :class:`typing.NamedTuple` representing a host/port address pair
+   for the test SMTP server.
+
+   :param host: The hostname. Defaults to ``"localhost"``.
+   :type host: str
+   :param port: The port number. Defaults to ``8025``.
+   :type port: int
+
+   Used by the :func:`client_data` marker's ``connect_to`` parameter,
+   the :func:`controller_data` marker's ``host_port`` parameter,
+   and the ``Global.SrvAddr`` attribute.
+
+
 Markers
 -------
 
@@ -113,7 +133,7 @@ Markers
     Provides parameters to the :fixture:`~aiosmtpd.tests.conftest.client` fixture.
 
     :param connect_to: Address to connect to. Defaults to ``Global.SrvAddr``
-    :type connect_to: :class:`HostPort`
+    :type connect_to: HostPort
 
 .. decorator:: controller_data(...)
 

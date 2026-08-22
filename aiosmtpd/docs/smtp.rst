@@ -492,6 +492,23 @@ aiosmtpd.smtp
       extensions to the SMTP protocol.  *arg* is the rest of the SMTP command
       given by the client, or None if nothing but the command was given.
 
+   .. py:method:: smtp_AUTH(arg)
+      :async:
+
+      Coroutine method implementing the SMTP ``AUTH`` command.
+      *arg* is the rest of the AUTH command given by the client,
+      containing the authentication mechanism and optional initial response.
+
+      This method requires that the client has sent ``EHLO`` first,
+      that TLS is active (if ``auth_require_tls`` is set),
+      and that the client is not already authenticated.
+
+      If the ``handle_AUTH`` hook is implemented by the handler,
+      it will be called to perform the authentication.
+      Otherwise, the method will look up the mechanism in the
+      ``_auth_methods`` dictionary and call the corresponding
+      ``auth_<mechanism>`` hook.
+
    .. py:method:: challenge_auth(\
       challenge, encode_to_b64=True, log_client_response=False\
       ) -> Union[_Missing, bytes]
