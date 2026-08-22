@@ -46,7 +46,7 @@ object is created.
 
 .. class:: Session(loop)
 
-   :param loop: asyncio event loop currently running :class:`SMTP`.
+   :param loop: asyncio event loop currently running :class:`~aiosmtpd.smtp.SMTP`.
 
    .. attribute:: peer
 
@@ -89,7 +89,7 @@ object is created.
       .. warning::
 
          This is the "legacy" login_data,
-         populated only if :attr:`auth_callback` parameter is set.
+         populated only if :attr:`~aiosmtpd.smtp.SMTP.auth_callback` parameter is set.
 
       .. deprecated:: 1.3
 
@@ -98,7 +98,7 @@ object is created.
    .. py:attribute:: auth_data
 
       Contains the authentication data returned by
-      the :attr:`authenticator` callback.
+      the :attr:`~aiosmtpd.smtp.SMTP.authenticator` callback.
 
    .. py:attribute:: authenticated
       :type: Optional[bool]

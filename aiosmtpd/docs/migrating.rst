@@ -55,5 +55,5 @@ Important differences to note:
   **must** return an SMTP response code for the sender such as ``"250 OK"``.
 * ``handle_DATA()`` must be a coroutine function, which means it must be
   declared with ``async def``.
-* :meth:`Controller.start` runs the SMTP server in a separate thread and can be
-  stopped again by calling :meth:`Controller.stop`
+* :meth:`~aiosmtpd.controller.Controller.start` runs the SMTP server in a separate thread and can be
+  stopped again by calling :meth:`~aiosmtpd.controller.Controller.stop`

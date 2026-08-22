@@ -224,8 +224,8 @@ Unthreaded Controllers
 In addition to the **threaded** controllers described above,
 ``aiosmtpd`` also provides the following **UNthreaded** controllers:
 
-* :class:`UnthreadedController` -- the unthreaded version of :class:`Controller`
-* :class:`UnixSocketUnthreadedController` -- the unthreaded version of :class:`UnixSocketController`
+* :class:`~aiosmtpd.controller.UnthreadedController` -- the unthreaded version of :class:`~aiosmtpd.controller.Controller`
+* :class:`~aiosmtpd.controller.UnixSocketUnthreadedController` -- the unthreaded version of :class:`~aiosmtpd.controller.UnixSocketController`
 
 These classes are considered *advanced* classes,
 because you'll have to manage the event loop yourself.
@@ -292,7 +292,7 @@ all we have to do is wait for the runner thread to end:
     False
 
 We still need to do some cleanup to fully release the bound port.
-Since the loop has ended, we can simply call the :meth:`end` method:
+Since the loop has ended, we can simply call the :meth:`~aiosmtpd.controller.UnthreadedController.end` method:
 
 .. doctest:: unthreaded
 
@@ -583,7 +583,7 @@ Controller API
             exceeding the ``ready_timeout`` parameter.
         :raises RuntimeError: if an unrecognized & unhandled error happened,
             resulting in non-creation of a server object
-            (:attr:`smtpd` remains ``None``)
+            (:attr:`~aiosmtpd.controller.BaseController.smtpd` remains ``None``)
 
         Start the server in the subthread.
         The subthread is always a :class:`daemon thread <threading.Thread>`

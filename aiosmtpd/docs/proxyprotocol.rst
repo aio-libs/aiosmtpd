@@ -37,7 +37,7 @@ Activating
 ==========
 
 To activate ``aiosmtpd``'s PROXY Protocol Support,
-you have to set the :attr:`proxy_protocol_timeout` parameter of the SMTP Class
+you have to set the :attr:`~aiosmtpd.smtp.SMTP.proxy_protocol_timeout` parameter of the SMTP Class
 to a positive numeric value (``int`` or ``float``)
 
 The `PROXY Protocol documentation suggests`_ that the timeout should not be less than 3.0 seconds.
@@ -63,14 +63,14 @@ The `PROXY Protocol documentation suggests`_ that the timeout should not be less
 
 In addition to activating the PROXY protocol support as described above,
 you MUST implement the ``handle_PROXY`` hook.
-If the :attr:`handler` object does not implement ``handle_PROXY``,
+If the :attr:`~aiosmtpd.smtp.SMTP.handler` object does not implement ``handle_PROXY``,
 then all connection attempts will be rejected.
 
 The signature of ``handle_PROXY`` must be as follows:
 
 .. method:: handle_PROXY(server, session, envelope, proxy_data)
 
-   :param server: The :class:`SMTP` instance invoking the hook.
+   :param server: The :class:`~aiosmtpd.smtp.SMTP` instance invoking the hook.
    :type server: aiosmtpd.smtp.SMTP
    :param session: The Session data *so far* (see Important note below)
    :type session: Session
@@ -180,7 +180,7 @@ Enums
       Valid values for Version 1 excludes :attr:`PROTO.DGRAM`.
 
    .. py:attribute:: src_addr
-      :type: Union[IPv4Address, IPv6Address, AnyStr]
+      :type: Union[~ipaddress.IPv4Address, ~ipaddress.IPv6Address, ~typing.AnyStr]
 
       Contains the source address
       (i.e., address of the "original" client).
@@ -188,7 +188,7 @@ Enums
       The type of this attribute depends on the :attr:`address family <family>`.
 
    .. py:attribute:: dst_addr
-      :type: Union[IPv4Address, IPv6Address, AnyStr]
+      :type: Union[~ipaddress.IPv4Address, ~ipaddress.IPv6Address, ~typing.AnyStr]
 
       Contains the destination address
       (i.e., address of the proxying entity to which the "original" client connected).
@@ -443,7 +443,7 @@ and we have plans to NEVER implement it.
 
 If you *absolutely* need PROXYv2 CRC32C validation,
 you should perform it yourself in the :meth:`handle_PROXY` hook.
-To assist you, we have provided the :attr:`whole_raw`, :attr:`tlv_start`, and :attr:`tlv_loc` attributes.
+To assist you, we have provided the :attr:`~.ProxyData.whole_raw`, :attr:`~.ProxyData.tlv_start`, and :attr:`~.ProxyTLV.tlv_loc` attributes.
 
 You should do the following:
 

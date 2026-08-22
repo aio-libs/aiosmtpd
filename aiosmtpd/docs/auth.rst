@@ -12,7 +12,7 @@ Activating Authentication
 
 ``aiosmtpd`` authentication is always activated,
 but attempts to authenticate will always be rejected
-unless the :attr:`authenticator` parameter of :class:`~aiosmtpd.smtp.SMTP`
+unless the :attr:`~aiosmtpd.smtp.SMTP.authenticator` parameter of :class:`~aiosmtpd.smtp.SMTP`
 is set to a valid & working :ref:`authcallback`.
 
 
@@ -42,7 +42,7 @@ AUTH Handler Hook
 
    ``args`` will contain the list of words following the ``AUTH`` command.
 
-   You will have to leverage the :meth:`SMTP.push` and :meth:`SMTP.challenge_auth` methods
+   You will have to leverage the :meth:`~aiosmtpd.smtp.SMTP.push` and :meth:`~aiosmtpd.smtp.SMTP.challenge_auth` methods
    to interact with the clients.
 
    You will need to modify the :attr:`session.auth_data <Session.auth_data>`
@@ -91,7 +91,7 @@ the methods of the handler instance will override the built-in methods.
 .. py:method:: auth_MECHANISM(server: SMTP, args: List[str]) -> aiosmtpd.smtp.AuthResult
    :async:
 
-   :param server: The instance of the :class:`SMTP` class invoking the AUTH Mechanism hook
+   :param server: The instance of the :class:`~aiosmtpd.smtp.SMTP` class invoking the AUTH Mechanism hook
    :param args: A list of string split from the characters following the ``AUTH`` command.
       ``args[0]`` is usually equal to ``MECHANISM``
       (unless the :func:`~aiosmtpd.smtp.auth_mechanism` decorator has been used).
@@ -100,7 +100,7 @@ the methods of the handler instance will override the built-in methods.
 
    In the built-in AUTH hooks,
    this is done by invoking the function specified
-   by the :attr:`authenticator` initialization argument.
+   by the :attr:`~aiosmtpd.smtp.SMTP.authenticator` initialization argument.
 
    AUTH Mechanism Hooks in handlers are NOT required to do the same,
    and MAY implement their own authenticator system.
@@ -113,8 +113,8 @@ the methods of the handler instance will override the built-in methods.
    Defining *additional* AUTH hooks in your handler
    will NOT disable the built-in LOGIN and PLAIN hooks;
    if you do not want to offer the LOGIN and PLAIN mechanisms,
-   specify them in the :attr:`auth_exclude_mechanism` parameter
-   of the :class:`SMTP` class.
+   specify them in the :attr:`~aiosmtpd.smtp.SMTP.auth_exclude_mechanism` parameter
+   of the :class:`~aiosmtpd.smtp.SMTP` class.
 
 
 .. _authcallback:
@@ -164,7 +164,7 @@ AuthResult API
       (e.g., sending of status codes)
       have been carried out by Authenticator or not.
 
-      If set to ``True``, :meth:`smtp_AUTH` will not perform additional processing
+      If set to ``True``, :meth:`~aiosmtpd.smtp.SMTP.smtp_AUTH` will not perform additional processing
       and will simply exits.
 
       Applicable only if ``success=False``
@@ -180,17 +180,17 @@ AuthResult API
       and optionally, SMTP Extended Status Code.
 
       If not given (set/kept to ``None``),
-      :meth:`smtp_AUTH` will use standard SMTP Status Code & Message.
+      :meth:`~aiosmtpd.smtp.SMTP.smtp_AUTH` will use standard SMTP Status Code & Message.
 
    .. py:attribute:: auth_data
       :type: Any
       :value: None
 
       Optional free-form authentication data.
-      This will be saved by :meth:`smtp_AUTH` into the ``session.auth_data`` attribute.
+      This will be saved by :meth:`~aiosmtpd.smtp.SMTP.smtp_AUTH` into the ``session.auth_data`` attribute.
 
       If ``auth_data`` has the attribute ``login``,
-      then :meth:`smtp_AUTH` will save ``auth_data.login`` into ``session.login_data`` as well.
+      then :meth:`~aiosmtpd.smtp.SMTP.smtp_AUTH` will save ``auth_data.login`` into ``session.login_data`` as well.
       This is to cater for possible backward-compatibility requirements,
       where legacy handlers might be looking for ``session.login_data`` for some reasons.
 
@@ -199,8 +199,8 @@ Security Considerations
 =======================
 
 We have taken steps to prevent leakage of sensitive information (i.e., password) through logging
-by overriding the ``__repr__`` and ``__str__`` methods of the :class:`AuthResult` and
-:class:`LoginPassword` classes.
+by overriding the ``__repr__`` and ``__str__`` methods of the :class:`~aiosmtpd.smtp.AuthResult` and
+:class:`~aiosmtpd.smtp.LoginPassword` classes.
 
 However, we have no control on the (logging) output of your custom hooks.
 Please be very careful emitting/recording AUTH information to prevent leakage.

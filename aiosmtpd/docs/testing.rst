@@ -62,7 +62,7 @@ in alphabetical order:
         If given, overrides ``class_`` arg of :func:`controller_data`.
         If not specified and no ``class_`` from ``controller_data``,
         defaults to :class:`ExposingController`.
-    :return: an instance of :class:`Controller` (or a subclass of)
+    :return: an instance of :class:`~aiosmtpd.controller.Controller` (or a subclass of)
 
     In addition to explicitly-specified parameters, ``get_controller`` also
     fetches all ``*args`` and ``**kwargs`` parameters from :func:`controller_data` marker.
@@ -72,7 +72,7 @@ in alphabetical order:
     :param class\_: The class of the handler to be instantiated.
         If given, overrides ``class_`` arg of :func:`handler_data`.
         If not specified and no ``class_`` from ``handler_data``,
-        defaults to :class:`Sink`.
+        defaults to :class:`~aiosmtpd.handlers.Sink`.
     :return: an instance of the handler class.
 
     In addition to explicitly-specified parameters, ``get_handler`` also

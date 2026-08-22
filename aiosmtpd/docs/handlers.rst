@@ -38,7 +38,7 @@ exceptional cases.  These *handler hooks* are ALL called **asynchronously**
 (i.e. they are coroutines).
 
 All handler hooks are optional and default behaviors are
-carried out by the :class:`SMTP` class when a hook is omitted,
+carried out by the :class:`~aiosmtpd.smtp.SMTP` class when a hook is omitted,
 so you only need to implement the ones you care about.
 
 When a handler hook is defined,
@@ -187,7 +187,7 @@ The following hooks are currently supported (in alphabetical order):
 .. method:: handle_PROXY(server, session, envelope, proxy_data)
    :noindex:
 
-   :param SMTP server: The :class:`SMTP` instance invoking the hook.
+   :param SMTP server: The :class:`~aiosmtpd.smtp.SMTP` instance invoking the hook.
    :param Session session: The Session data *so far* (see Important note below)
    :param Envelope envelope: The Envelope data *so far* (see Important note below)
    :param ProxyData proxy_data: The result of parsing the PROXY Header
