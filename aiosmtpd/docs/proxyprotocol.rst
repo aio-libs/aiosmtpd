@@ -88,7 +88,7 @@ The signature of ``handle_PROXY`` must be as follows:
       it will contain the endpoint identifier of the proxying entity.
 
       Endpoint identifier of the "original" client will be recorded
-      *only* in the :attr:`proxy_data` parameter
+      *only* in the :paramref:`handle_PROXY.proxy_data` parameter
 
       The ``envelope`` data will usually be empty(ish),
       because the PROXY handshake will take place before
@@ -262,6 +262,12 @@ Enums
       you should run the CRC32C calculation against the contents of this attribute.
 
       The value will be ``None`` if PROXY version is 1.
+
+   .. py:attribute:: error
+      :type: str
+
+      If not an empty string, contains the error encountered when parsing
+      the PROXY Protocol header.
 
    |
    | :part:`Methods`

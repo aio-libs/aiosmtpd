@@ -62,6 +62,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.doctest",
     "sphinx_autofixture",
+    "sphinx_paramlinks",
     "autoprogramm",
     "sphinx_rtd_theme"
 ]

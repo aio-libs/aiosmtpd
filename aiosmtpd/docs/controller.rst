@@ -467,7 +467,7 @@ Controller API
         the :class:`~aiosmtpd.smtp.SMTP` class being controlled.
 
         By default, this creates an ``SMTP`` instance,
-        passing in your handler and setting flags from the :attr:`**SMTP_Parameters` parameter.
+        passing in your handler and setting flags from the :paramref:`~BaseController.SMTP_parameters` parameter.
 
         Examples of why you would want to override this method include
         creating an :ref:`LMTP <LMTP>` server instance instead of the standard ``SMTP`` server.
@@ -520,7 +520,7 @@ Controller API
        The ``hostname`` parameter does NOT get passed through to the SMTP instance;
        if you want to give the SMTP instance a custom hostname
        (e.g., for use in HELO/EHLO greeting),
-       you must pass it through the :attr:`server_hostname` parameter.
+       you must pass it through the :paramref:`~Controller.server_hostname` parameter.
 
     Explicitly defined SMTP keyword arguments will override keyword arguments of the
     same names defined in the (deprecated) ``server_kwargs`` argument.
