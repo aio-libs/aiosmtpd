@@ -110,28 +110,37 @@ Enums
 
 .. class:: AF
 
-   .. py:attribute:: \
-      UNSPEC = 0
-      IP4 = 1
-      IP6 = 2
-      UNIX = 3
+   .. py:attribute:: UNSPEC
+      :value: 0
+
+   .. py:attribute:: IP4
+      :value: 1
+
+   .. py:attribute:: IP6
+      :value: 2
+
+   .. py:attribute:: UNIX
+      :value: 3
 
    For Version 1, ``UNKNOWN`` is mapped to ``UNSPEC``.
 
 .. class:: PROTO
 
-   .. py:attribute:: \
-      UNSPEC = 0
-      STREAM = 1
-      DGRAM = 2
+   .. py:attribute:: UNSPEC
+      :value: 0
+   .. py:attribute:: STREAM
+      :value: 1
+   .. py:attribute:: DGRAM
+      :value: 2
 
    For Version 1, ``UNKNOWN`` is mapped to ``UNSPEC``, and ``TCP`` is mapped into ``STREAM``
 
 .. class:: V2_CMD
 
-   .. py:attribute:: \
-      LOCAL = 0
-      PROXY = 1
+   .. py:attribute:: LOCAL
+      :value: 0
+   .. py:attribute:: PROXY
+      :value: 1
 
 
 ``ProxyData`` API

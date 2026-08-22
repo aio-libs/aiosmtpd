@@ -547,8 +547,11 @@ Controller API
     In addition to those provided by :class:`BaseController`,
     this class provides the following:
 
-    .. attribute:: hostname: str
-                   port: int
+    .. attribute:: hostname
+        :type: str
+
+    .. attribute:: port
+        :type: int
 
         The values of the *hostname* and *port* arguments.
 
