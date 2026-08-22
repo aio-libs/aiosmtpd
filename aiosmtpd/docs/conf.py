@@ -151,6 +151,8 @@ rst_prolog = f"""
 .. |copyright| replace:: {copyright}
 """
 
+nitpicky = True
+
 # Ignore the following broken references
 nitpick_ignore = [
     # _Missing is a private class used in the return annotations of
