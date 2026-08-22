@@ -7,7 +7,7 @@
 aiosmtpd is designed to make it easy to migrate an existing application based
 on :mod:`smtpd` to aiosmtpd.
 
-Consider the following subclass of :class:`smtpd.SMTPServer`::
+Consider the following subclass of :class:`python_311:smtpd.SMTPServer`::
 
     import smtpd
     import asyncore

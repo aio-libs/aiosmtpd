@@ -151,6 +151,7 @@ rst_prolog = f"""
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
+    "python_311": ("https://docs.python.org/3.11", None),
 }
 
 doctest_global_setup = """
