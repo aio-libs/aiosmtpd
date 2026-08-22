@@ -32,7 +32,9 @@ def close_existing_loop() -> Generator[Optional[asyncio.AbstractEventLoop], None
 
 class TestInit:
 
-    def test_create_new_if_none(self, close_existing_loop):
+    def test_create_new_if_none(
+        self, close_existing_loop: Optional[asyncio.AbstractEventLoop]
+    ) -> None:
         old_loop = close_existing_loop
         loop: Optional[asyncio.AbstractEventLoop]
         loop = _get_or_new_eventloop()
@@ -40,7 +42,9 @@ class TestInit:
         assert loop is not old_loop
         assert isinstance(loop, asyncio.AbstractEventLoop)
 
-    def test_not_create_new_if_exist(self, close_existing_loop):
+    def test_not_create_new_if_exist(
+        self, close_existing_loop: Optional[asyncio.AbstractEventLoop]
+    ) -> None:
         old_loop = close_existing_loop
         loop: Optional[asyncio.AbstractEventLoop]
         loop = asyncio.new_event_loop()

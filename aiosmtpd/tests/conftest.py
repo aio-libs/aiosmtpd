@@ -65,7 +65,7 @@ class Global:
     FQDN: str = socket.getfqdn()
 
     @classmethod
-    def set_addr_from(cls, contr: Controller):
+    def set_addr_from(cls, contr: Controller) -> None:
         cls.SrvAddr = HostPort(contr.hostname, contr.port)
 
 
@@ -82,7 +82,7 @@ AUTOSTOP_DELAY = 1.5
 
 # autouse=True and scope="session" automatically apply this fixture to ALL test cases
 @pytest.fixture(autouse=True, scope="session")
-def cache_fqdn(session_mocker: MockFixture):
+def cache_fqdn(session_mocker: MockFixture) -> None:
     """
     This fixture "caches" the socket.getfqdn() call. VERY necessary to prevent
     situations where quick repeated getfqdn() causes extreme slowdown. Probably due to

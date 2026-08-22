@@ -73,7 +73,7 @@ def scan_programs(
     maxdepth: int = 0,
     depth: int = 0,
     groups: bool = False,
-):
+) -> Iterable[Tuple[List[str], Any, Any]]:
     if command is None:
         command = []
 
@@ -107,7 +107,7 @@ def scan_programs(
                 yield from scan_programs(sub, command + [cmd], maxdepth, depth + 1)
 
 
-def scan_options(actions: list):
+def scan_options(actions: list) -> Iterable[Tuple[List[str], str]]:
     for arg in actions:
         if not (arg.option_strings or isinstance(arg, argparse._SubParsersAction)):
             yield format_positional_argument(arg)
@@ -201,7 +201,7 @@ class AutoprogrammDirective(Directive):
         "options_adornment": unchanged,
     }
 
-    def make_rst(self):
+    def make_rst(self) -> Iterable[str]:
         (import_name,) = self.arguments
         parser = import_object(import_name or "__undefined__")
         prog = self.options.get("prog")
@@ -306,7 +306,7 @@ def render_rst(
     epilog: Optional[str],
     options_title: Optional[str],
     options_adornment: str,
-):
+) -> Iterable[str]:
     if usage_strip:
         assert usage is not None
         to_strip = (title or "").rsplit(" ", 1)[0]

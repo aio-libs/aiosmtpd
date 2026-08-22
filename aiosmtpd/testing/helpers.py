@@ -21,7 +21,7 @@ to be increased for slow and/or overburdened test systems.
 """
 
 
-def reset_connection(client: SMTP_Client):
+def reset_connection(client: SMTP_Client) -> None:
     # Close the connection with a TCP RST instead of a TCP FIN.  client must
     # be a smtplib.SMTP instance.
     #
@@ -48,7 +48,7 @@ def reset_connection(client: SMTP_Client):
 
 
 class ReceivingHandler:
-    def __init__(self):
+    def __init__(self) -> None:
         self.box: List[Envelope] = []
 
     async def handle_DATA(
@@ -58,7 +58,7 @@ class ReceivingHandler:
         return "250 OK"
 
 
-def catchup_delay(delay: float = ASYNCIO_CATCHUP_DELAY):
+def catchup_delay(delay: float = ASYNCIO_CATCHUP_DELAY) -> None:
     """
     Sleep for awhile to give asyncio's event loop time to catch up.
     """

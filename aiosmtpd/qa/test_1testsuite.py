@@ -6,6 +6,7 @@
 import re
 import pytest
 import socket
+import typing as _t
 
 from aiosmtpd.testing import statuscodes
 from itertools import combinations
@@ -19,7 +20,7 @@ RE_ESC = re.compile(rb"(?P<digit1>\d)\.\d+\.\d+\s")
 
 # noinspection PyUnresolvedReferences
 @pytest.fixture(scope="module", autouse=True)
-def exit_on_fail(request: pytest.FixtureRequest):
+def exit_on_fail(request: pytest.FixtureRequest) -> _t.Generator:
     # Behavior of this will be undefined if tests are running in parallel.
     # But since parallel running is not practically possible (the ports will conflict),
     # then I don't think that will be a problem.
@@ -35,17 +36,17 @@ STATUS_CODES = {
 
 
 class TestStatusCodes:
-    def test_elemtype(self):
+    def test_elemtype(self) -> None:
         """Ensure status codes are instances of StatusCode"""
         for value in STATUS_CODES.values():
             assert isinstance(value, statuscodes.StatusCode)
 
-    def test_nameval(self):
+    def test_nameval(self) -> None:
         """Ensure each status code constant has SMTP Code embedded in the name"""
         for key, value in STATUS_CODES.items():
             assert int(key[1:4]) == value.code
 
-    def test_enhanced(self):
+    def test_enhanced(self) -> None:
         """Compliance with RFC 2034 § 4"""
         total_correct = 0
         for key, value in STATUS_CODES.items():
@@ -70,7 +71,7 @@ class TestStatusCodes:
             total_correct += 1  # noqa: SIM113
         assert total_correct > 0
 
-    def test_commands(self):
+    def test_commands(self) -> None:
         """
         Ensure lists in statuscodes are individual objects, so changes in one list
         won't affect the other lists
@@ -86,7 +87,7 @@ class TestStatusCodes:
 
 
 class TestHarness:
-    def test_fqdn_cached(self):
+    def test_fqdn_cached(self) -> None:
         """
         Ensure that socket.getfqdn does not change between calls
         """

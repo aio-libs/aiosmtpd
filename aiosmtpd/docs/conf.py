@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 from typing import Dict
 
+from sphinx.application import Sphinx as _S
 import sphinx_rtd_theme  # noqa: F401 # pytype: disable=import-error
 
 try:
@@ -35,7 +36,7 @@ else:
 repo_root = Path(".").expanduser().absolute().parent.parent
 
 
-def syspath_insert(pth: Path):
+def syspath_insert(pth: Path) -> None:
     print(f"Inserting {pth}")
     sys.path.insert(0, str(pth))
 
@@ -334,5 +335,5 @@ texinfo_documents = [
 # endregion
 
 
-def setup(app):  # noqa: ANN001
+def setup(app: _S) -> None:
     app.add_css_file("aiosmtpd.css")

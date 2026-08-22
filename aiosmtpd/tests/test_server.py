@@ -7,6 +7,7 @@ import asyncio
 import errno
 import platform
 import socket
+import ssl
 import sys
 import time
 from contextlib import ExitStack
@@ -16,7 +17,7 @@ from pathlib import Path
 from smtplib import SMTP as SMTPClient, SMTPServerDisconnected
 from tempfile import mkdtemp
 from threading import Thread
-from typing import Generator, Optional
+from typing import Callable, Generator, Optional
 
 import pytest
 from pytest_mock import MockFixture
@@ -39,34 +40,34 @@ from .conftest import Global, AUTOSTOP_DELAY
 
 
 class SlowStartController(Controller):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         kwargs.setdefault("ready_timeout", 0.5)
         super().__init__(*args, **kwargs)
 
-    def _run(self, ready_event: Event):
+    def _run(self, ready_event: Event) -> None:
         time.sleep(self.ready_timeout * 1.5)
         super()._run(ready_event)
 
 
 class SlowFactoryController(Controller):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         kwargs.setdefault("ready_timeout", 0.5)
         super().__init__(*args, **kwargs)
 
-    def factory(self):
+    def factory(self) -> Server:
         time.sleep(self.ready_timeout * 3)
         return super().factory()
 
-    def _factory_invoker(self):
+    def _factory_invoker(self) -> None:
         time.sleep(self.ready_timeout * 3)
         return super()._factory_invoker()
 
 
-def in_win32():
+def in_win32() -> bool:
     return platform.system().casefold() == "windows"
 
 
-def in_wsl():
+def in_wsl() -> bool:
     # WSL 1.0 somehow allows more than one listener on one port.
     # So we have to detect when we're running on WSL so we can skip some tests.
 
@@ -76,7 +77,7 @@ def in_wsl():
     return "microsoft" in platform.release().casefold()
 
 
-def in_cygwin():
+def in_cygwin() -> bool:
     return platform.system().casefold().startswith("cygwin")
 
 
@@ -146,21 +147,21 @@ def assert_smtp_socket(controller: UnixSocketMixin) -> bool:
 class TestServer:
     """Tests for the aiosmtpd.smtp.SMTP class"""
 
-    def test_smtp_utf8(self, plain_controller, client):
+    def test_smtp_utf8(self, plain_controller: Controller, client: SMTPClient) -> None:
         code, mesg = client.ehlo("example.com")
         assert code == 250
         assert b"SMTPUTF8" in mesg.splitlines()
 
-    def test_default_max_command_size_limit(self):
+    def test_default_max_command_size_limit(self) -> None:
         server = Server(Sink())
         assert server.max_command_size_limit == 512
 
-    def test_special_max_command_size_limit(self):
+    def test_special_max_command_size_limit(self) -> None:
         server = Server(Sink())
         server.command_size_limits["DATA"] = 1024
         assert server.max_command_size_limit == 1024
 
-    def test_warn_authreq_notls(self):
+    def test_warn_authreq_notls(self) -> None:
         expectedre = (
             r"Requiring AUTH while not requiring TLS can lead to "
             r"security vulnerabilities!"
@@ -174,7 +175,7 @@ class TestController:
     """Tests for the aiosmtpd.controller.Controller class"""
 
     @pytest.mark.filterwarnings("ignore")
-    def test_ready_timeout(self):
+    def test_ready_timeout(self) -> None:
         cont = SlowStartController(Sink())
         expectre = (
             "SMTP server failed to start within allotted time. "
@@ -188,7 +189,7 @@ class TestController:
             cont.stop()
 
     @pytest.mark.filterwarnings("ignore")
-    def test_factory_timeout(self):
+    def test_factory_timeout(self) -> None:
         cont = SlowFactoryController(Sink())
         expectre = (
             r"SMTP server started, but not responding within allotted time. "
@@ -201,7 +202,7 @@ class TestController:
         finally:
             cont.stop()
 
-    def test_reuse_loop(self, temp_event_loop):
+    def test_reuse_loop(self, temp_event_loop: asyncio.AbstractEventLoop) -> None:
         cont = Controller(Sink(), loop=temp_event_loop)
         assert cont.loop is temp_event_loop
         try:
@@ -211,7 +212,9 @@ class TestController:
             cont.stop()
 
     @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
-    def test_socket_error_dupe(self, plain_controller, client):
+    def test_socket_error_dupe(
+        self, plain_controller: Controller, client: SMTPClient
+    ) -> None:
         contr2 = Controller(
             Sink(),
             hostname=Global.SrvAddr.host,
@@ -226,7 +229,7 @@ class TestController:
             contr2.stop()
 
     @pytest.mark.skipif(in_wsl(), reason="WSL prevents socket collision")
-    def test_socket_error_default(self):
+    def test_socket_error_default(self) -> None:
         contr1 = Controller(Sink())
         contr2 = Controller(
             Sink(),
@@ -241,7 +244,7 @@ class TestController:
             contr2.stop()
             contr1.stop()
 
-    def test_server_attribute(self):
+    def test_server_attribute(self) -> None:
         controller = Controller(Sink())
         assert controller.server is None
         try:
@@ -254,7 +257,7 @@ class TestController:
     @pytest.mark.filterwarnings(
         "ignore:server_kwargs will be removed:DeprecationWarning"
     )
-    def test_enablesmtputf8_flag(self):
+    def test_enablesmtputf8_flag(self) -> None:
         # Default is True
         controller = Controller(Sink())
         assert controller.SMTP_kwargs["enable_SMTPUTF8"]
@@ -278,7 +281,7 @@ class TestController:
     @pytest.mark.filterwarnings(
         "ignore:server_kwargs will be removed:DeprecationWarning"
     )
-    def test_serverhostname_arg(self):
+    def test_serverhostname_arg(self) -> None:
         contsink = partial(Controller, Sink())
         controller = contsink()
         assert "hostname" not in controller.SMTP_kwargs
@@ -290,7 +293,7 @@ class TestController:
         controller = contsink(server_hostname="testhost3", server_kwargs=kwargs)
         assert controller.SMTP_kwargs["hostname"] == "testhost3"
 
-    def test_hostname_empty(self):
+    def test_hostname_empty(self) -> None:
         # WARNING: This test _always_ succeeds in Windows.
         cont = Controller(Sink(), hostname="")
         try:
@@ -298,14 +301,14 @@ class TestController:
         finally:
             cont.stop()
 
-    def test_hostname_none(self):
+    def test_hostname_none(self) -> None:
         cont = Controller(Sink())
         try:
             cont.start()
         finally:
             cont.stop()
 
-    def test_testconn_raises(self, mocker: MockFixture):
+    def test_testconn_raises(self, mocker: MockFixture) -> None:
         mocker.patch(
             "aiosmtpd.controller.create_connection",
             side_effect=RuntimeError("MockError"),
@@ -317,15 +320,15 @@ class TestController:
         finally:
             cont.stop()
 
-    def test_getlocalhost(self):
+    def test_getlocalhost(self) -> None:
         assert get_localhost() in ("127.0.0.1", "::1")
 
-    def test_getlocalhost_noipv6(self, mocker):
+    def test_getlocalhost_noipv6(self, mocker: MockFixture) -> None:
         mock_hasip6 = mocker.patch("aiosmtpd.controller._has_ipv6", return_value=False)
         assert get_localhost() == "127.0.0.1"
         assert mock_hasip6.called
 
-    def test_getlocalhost_6yes(self, mocker: MockFixture):
+    def test_getlocalhost_6yes(self, mocker: MockFixture) -> None:
         mock_sock = mocker.Mock()
         mock_makesock: mocker.Mock = mocker.patch("aiosmtpd.controller.makesock")
         mock_makesock.return_value.__enter__.return_value = mock_sock
@@ -336,7 +339,7 @@ class TestController:
     # Apparently errno.E* constants adapts to the OS, so on Windows they will
     # automatically use the analogous WSAE* constants
     @pytest.mark.parametrize("err", [errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT])
-    def test_getlocalhost_6no(self, mocker, err):
+    def test_getlocalhost_6no(self, mocker: MockFixture, err: int) -> None:
         mock_makesock: mocker.Mock = mocker.patch(
             "aiosmtpd.controller.makesock",
             side_effect=OSError(errno.EADDRNOTAVAIL, "Mock IP4-only"),
@@ -344,7 +347,7 @@ class TestController:
         assert get_localhost() == "127.0.0.1"
         mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
 
-    def test_getlocalhost_6inuse(self, mocker):
+    def test_getlocalhost_6inuse(self, mocker: MockFixture) -> None:
         mock_makesock: mocker.Mock = mocker.patch(
             "aiosmtpd.controller.makesock",
             side_effect=OSError(errno.EADDRINUSE, "Mock IP6 used"),
@@ -352,7 +355,7 @@ class TestController:
         assert get_localhost() == "::1"
         mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
 
-    def test_getlocalhost_error(self, mocker):
+    def test_getlocalhost_error(self, mocker: MockFixture) -> None:
         mock_makesock: mocker.Mock = mocker.patch(
             "aiosmtpd.controller.makesock",
             side_effect=OSError(errno.EFAULT, "Mock Error"),
@@ -362,17 +365,17 @@ class TestController:
         assert exc.value.errno == errno.EFAULT
         mock_makesock.assert_called_with(socket.AF_INET6, socket.SOCK_STREAM)
 
-    def test_stop_default(self):
+    def test_stop_default(self) -> None:
         controller = Controller(Sink())
         with pytest.raises(AssertionError, match="SMTP daemon not running"):
             controller.stop()
 
-    def test_stop_assert(self):
+    def test_stop_assert(self) -> None:
         controller = Controller(Sink())
         with pytest.raises(AssertionError, match="SMTP daemon not running"):
             controller.stop(no_assert=False)
 
-    def test_stop_noassert(self):
+    def test_stop_noassert(self) -> None:
         controller = Controller(Sink())
         controller.stop(no_assert=True)
 
@@ -380,7 +383,7 @@ class TestController:
 @pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
 @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
 class TestUnixSocketController:
-    def test_server_creation(self, safe_socket_dir):
+    def test_server_creation(self, safe_socket_dir: Path) -> None:
         sockfile = safe_socket_dir / "smtp"
         cont = UnixSocketController(Sink(), unix_socket=sockfile)
         try:
@@ -389,7 +392,9 @@ class TestUnixSocketController:
         finally:
             cont.stop()
 
-    def test_server_creation_ssl(self, safe_socket_dir, ssl_context_server):
+    def test_server_creation_ssl(
+        self, safe_socket_dir: Path, ssl_context_server: ssl.SSLContext
+    ) -> None:
         sockfile = safe_socket_dir / "smtp"
         cont = UnixSocketController(
             Sink(), unix_socket=sockfile, ssl_context=ssl_context_server
@@ -405,24 +410,24 @@ class TestUnixSocketController:
 
 class TestUnthreaded:
     @pytest.fixture
-    def runner(self):
+    def runner(self) -> Callable:
         thread: Optional[Thread] = None
 
-        def _runner(loop: asyncio.AbstractEventLoop):
+        def _runner(loop: asyncio.AbstractEventLoop) -> None:
             loop.run_forever()
 
-        def starter(loop: asyncio.AbstractEventLoop):
+        def starter(loop: asyncio.AbstractEventLoop) -> None:
             nonlocal thread
             thread = Thread(target=_runner, args=(loop,))
             thread.daemon = True
             thread.start()
             catchup_delay()
 
-        def joiner(timeout: Optional[float] = None):
+        def joiner(timeout: Optional[float] = None) -> None:
             assert isinstance(thread, Thread)
             thread.join(timeout=timeout)
 
-        def is_alive():
+        def is_alive() -> bool:
             assert isinstance(thread, Thread)
             return thread.is_alive()
 
@@ -432,7 +437,12 @@ class TestUnthreaded:
 
     @pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
     @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
-    def test_unixsocket(self, safe_socket_dir, autostop_loop, runner):
+    def test_unixsocket(
+        self,
+        safe_socket_dir: Path,
+        autostop_loop: asyncio.AbstractEventLoop,
+        runner: Callable,
+    ) -> None:
         sockfile = safe_socket_dir / "smtp"
         cont = UnixSocketUnthreadedController(
             Sink(), unix_socket=sockfile, loop=autostop_loop
@@ -463,7 +473,9 @@ class TestUnthreaded:
     @pytest.mark.filterwarnings(
         "ignore::pytest.PytestUnraisableExceptionWarning"
     )
-    def test_inet_loopstop(self, autostop_loop, runner):
+    def test_inet_loopstop(
+        self, autostop_loop: asyncio.AbstractEventLoop, runner: Callable
+    ) -> None:
         """
         Verify behavior when the loop is stopped before controller is stopped
         """
@@ -501,7 +513,9 @@ class TestUnthreaded:
     @pytest.mark.filterwarnings(
         "ignore::pytest.PytestUnraisableExceptionWarning"
     )
-    def test_inet_contstop(self, temp_event_loop, runner):
+    def test_inet_contstop(
+        self, temp_event_loop: asyncio.AbstractEventLoop, runner: Callable
+    ) -> None:
         """
         Verify behavior when the controller is stopped before loop is stopped
         """
@@ -544,7 +558,7 @@ class TestUnthreaded:
 
 @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 class TestFactory:
-    def test_normal_situation(self):
+    def test_normal_situation(self) -> None:
         cont = Controller(Sink())
         try:
             cont.start()
@@ -554,7 +568,7 @@ class TestFactory:
         finally:
             cont.stop()
 
-    def test_unknown_args_direct(self, silence_event_loop_closed: bool):
+    def test_unknown_args_direct(self, silence_event_loop_closed: bool) -> None:
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), ready_timeout=0.3, **{unknown: True})
         expectedre = r"__init__.. got an unexpected keyword argument '" + unknown + r"'"
@@ -569,7 +583,7 @@ class TestFactory:
     @pytest.mark.filterwarnings(
         "ignore:server_kwargs will be removed:DeprecationWarning"
     )
-    def test_unknown_args_inkwargs(self, silence_event_loop_closed: bool):
+    def test_unknown_args_inkwargs(self, silence_event_loop_closed: bool) -> None:
         unknown = "this_is_an_unknown_kwarg"
         cont = Controller(Sink(), ready_timeout=0.3, server_kwargs={unknown: True})
         expectedre = r"__init__.. got an unexpected keyword argument '" + unknown + r"'"
@@ -580,7 +594,7 @@ class TestFactory:
         finally:
             cont.stop()
 
-    def test_factory_none(self, mocker: MockFixture, silence_event_loop_closed: bool):
+    def test_factory_none(self, mocker: MockFixture, silence_event_loop_closed: bool) -> None:
         # Hypothetical situation where factory() did not raise an Exception
         # but returned None instead
         mocker.patch("aiosmtpd.controller.SMTP", return_value=None)
@@ -595,12 +609,12 @@ class TestFactory:
 
     def test_noexc_smtpd_missing(
         self, mocker: MockFixture, silence_event_loop_closed: bool
-    ):
+    ) -> None:
         # Hypothetical situation where factory() failed but no
         # Exception was generated.
         cont = Controller(Sink())
 
-        def hijacker(*args, **kwargs):
+        def hijacker(*args, **kwargs) -> _FakeServer:
             cont._thread_exception = None
             # Must still return an (unmocked) _FakeServer to prevent a whole bunch
             # of messy exceptions, although they doesn't affect the test at all.
@@ -622,7 +636,7 @@ class TestFactory:
 
 
 class TestCompat:
-    def test_version(self):
+    def test_version(self) -> None:
         from aiosmtpd import __version__ as init_version
         from aiosmtpd.smtp import __version__ as smtp_version
 

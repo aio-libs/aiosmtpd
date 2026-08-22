@@ -66,7 +66,7 @@ TERM_WIDTH, TERM_HEIGHT = shutil.get_terminal_size()
 # region #### Helper funcs ############################################################
 
 
-def deldir(targ: Path, verbose: bool = True):
+def deldir(targ: Path, verbose: bool = True) -> None:
     if not targ.exists():
         return
     rev_items = sorted(targ.rglob("*"), reverse=True)
@@ -92,7 +92,7 @@ def deldir(targ: Path, verbose: bool = True):
 # region #### Functional blocks #######################################################
 
 
-def dump_env():
+def dump_env() -> None:
     dumpdir = Path(DUMP_DIR)
     dumpdir.mkdir(exist_ok=True)
     with (dumpdir / f"ENV.{TOX_ENV_NAME}.py").open("wt") as fout:
@@ -100,7 +100,7 @@ def dump_env():
         pprint.pprint(dict(os.environ), stream=fout)
 
 
-def move_prof(verbose: bool = False):
+def move_prof(verbose: bool = False) -> None:
     """Move profiling files to per-testenv dirs"""
     profpath = Path("prof")
     # fmt: off
@@ -126,7 +126,7 @@ def move_prof(verbose: bool = False):
         print(flush=True)
 
 
-def pycache_clean(verbose=False):
+def pycache_clean(verbose: bool = False) -> None:
     """Cleanup __pycache__ dirs & bytecode files (if any)"""
     aiosmtpdpath = Path(".")
     for i, f in enumerate(aiosmtpdpath.rglob("*.py[co]"), start=1):
@@ -141,7 +141,7 @@ def pycache_clean(verbose=False):
         print(flush=True)
 
 
-def rm_work():
+def rm_work() -> None:
     """Remove work dirs & files. They are .gitignore'd anyways."""
     print(f"{Style.BRIGHT}Removing work dirs ... ", end="", flush=True)
     # The reason we list WORKDIRS explicitly is because we don't want to accidentally
@@ -164,28 +164,28 @@ def rm_work():
 # region #### Dispatchers #############################################################
 
 
-def dispatch_prep():
+def dispatch_prep() -> None:
     """
     Prepare work directories and dump env vars
     """
     dump_env()
 
 
-def dispatch_gather():
+def dispatch_gather() -> None:
     """
     Gather inspection results into per-testenv dirs
     """
     move_prof()
 
 
-def dispatch_remcache():
+def dispatch_remcache() -> None:
     """
     Remove all .py[co] files and all __pycache__ dirs
     """
     pycache_clean()
 
 
-def dispatch_superclean():
+def dispatch_superclean() -> None:
     """
     Total cleaning of all test artifacts
     """
@@ -199,15 +199,15 @@ def dispatch_superclean():
 # endregion
 
 
-def get_opts(argv):
+def get_opts(argv: list[str]) -> argparse.Namespace:
     # From: https://stackoverflow.com/a/49999185/149900
     class NoAction(argparse.Action):
-        def __init__(self, **kwargs):
+        def __init__(self, **kwargs) -> None:
             kwargs.setdefault("default", argparse.SUPPRESS)
             kwargs.setdefault("nargs", 0)
             super().__init__(**kwargs)
 
-        def __call__(self, *args, **kwargs):
+        def __call__(self, *args, **kwargs) -> None:
             pass
 
     dispers = {
@@ -244,7 +244,7 @@ def get_opts(argv):
     return parser.parse_args(argv)
 
 
-def python_interp_details():
+def python_interp_details() -> None:
     print(f"{Fore.CYAN}\u259E\u259E\u259E Python interpreter details:")
     details = sys.version.splitlines() + sys.executable.splitlines()
     for ln in details:
