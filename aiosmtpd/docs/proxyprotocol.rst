@@ -113,10 +113,10 @@ Enums
    .. py:attribute:: UNSPEC
       :value: 0
 
-   .. py:attribute:: IP4
+   .. py:attribute:: INET
       :value: 1
 
-   .. py:attribute:: IP6
+   .. py:attribute:: INET6
       :value: 2
 
    .. py:attribute:: UNIX

@@ -123,7 +123,7 @@ Markers
         Will be overridden if ``get_controller`` is invoked with
         the ``class_`` argument.
     :param host_port: The "host:port" to bound to
-    :type host_port: str
+    :type host_port: HostPort
     :param \*\*kwargs: Keyworded arguments given to the marker.
 
 
