@@ -151,6 +151,14 @@ rst_prolog = f"""
 .. |copyright| replace:: {copyright}
 """
 
+# Ignore the following broken references
+nitpick_ignore = [
+    # _Missing is a private class used in the return annotations of
+    # challenge_auth() and the deprecated _auth_interact(). It is
+    # undocumented, and an inline literal does not work inside Union.
+    ('py:class', '_Missing'),
+]
+
 # endregion
 
 # region -- Extensions configuration ---------------------------------------------
