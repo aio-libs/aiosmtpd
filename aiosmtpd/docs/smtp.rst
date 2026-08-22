@@ -375,7 +375,7 @@ aiosmtpd.smtp
       :noindex:
 
       The asyncio event loop to use.
-      If not given, :meth:`asyncio.new_event_loop` will be called to create the event loop.
+      If not given, :func:`asyncio.new_event_loop` will be called to create the event loop.
 
    |
    | :part:`Attributes & Methods`

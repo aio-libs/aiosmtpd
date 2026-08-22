@@ -272,7 +272,7 @@ The following built-in handlers can be imported from :mod:`aiosmtpd.handlers`:
    it is also an :term:`abstract base class` (it must be subclassed).
 
    The only difference with :class:`Message` is that
-   :func:`handle_message()` is called *asynchronously*.
+   :meth:`~.Message.handle_message` is called *asynchronously*.
 
    This class **cannot** be used on the command line.
 
@@ -313,12 +313,12 @@ The following built-in handlers can be imported from :mod:`aiosmtpd.handlers`:
 
    This message instance gains a few additional headers
    (e.g. :mailheader:`X-Peer`, :mailheader:`X-MailFrom`, and :mailheader:`X-RcptTo`).
-   You can override this behavior by overriding the :func:`prepare_message` method,
+   You can override this behavior by overriding the :meth:`~.MessageBase.prepare_message` method,
    which takes a session and an envelope.
-   The message instance is then passed to the handler's :func:`handle_message()` method.
+   The message instance is then passed to the handler's :meth:`~.Message.handle_message` method.
    It is this method that must be implemented in the subclass.
 
-   :func:`prepare_message()` and :func:`handle_message()`` are both called :boldital:`synchronously`.
+   :meth:`~.MessageBase.prepare_message` and :meth:`~.Message.handle_message` are both called :boldital:`synchronously`.
 
    This class **cannot** be used on the command line.
 
