@@ -66,7 +66,7 @@ jobs:
     name: Test
     strategy:
       matrix:
-        pyver: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        pyver: ['3.10', '3.11', '3.12', '3.13']
         os: [ubuntu, macos, windows]
         include:
           - pyver: pypy-3.11
@@ -86,7 +86,7 @@ jobs:
       uses: py-actions/py-dependency-install@v4
       with:
         path: requirements.txt
-    - name: Fetch master branch 
+    - name: Fetch master branch
       # Needed for aiosmtpd.qa.test_0packaging.TestVersion.test_ge_master,
       # it runs a "git show" command which will fail if the master branch
       # does not exist locally
@@ -98,7 +98,7 @@ jobs:
           ${{ github.event.repository.default_branch }}
       run: >-
         git fetch origin
-        "${GITHUB_REPOSITORY_DEFAULT_BRANCH}:${GITHUB_REPOSITORY_DEFAULT_BRANCH}" 
+        "${GITHUB_REPOSITORY_DEFAULT_BRANCH}:${GITHUB_REPOSITORY_DEFAULT_BRANCH}"
     - name: Run unittests
       run: pytest
       env:
