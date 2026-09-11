@@ -1,6 +1,10 @@
 atpublic==5.0
 attrs==24.2.0
 coverage==7.8.0
+# examples/authenticated_relayer, exercised by test_examples.py.
+# 2.8.0 requires Python >= 3.10, so 3.9 pins one back.
+dnspython==2.7.0; python_version < "3.10"
+dnspython==2.8.0; python_version >= "3.10"
 pytest==8.3.4
 pytest-cov==6.1.1
 pytest-mock==3.14.0
