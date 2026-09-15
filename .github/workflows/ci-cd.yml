@@ -39,9 +39,9 @@ jobs:
     - name: Docs Checking
       run: |
         # Prepare sphinx and the deps for sphinx extensions
-        sphinx-build --color -b doctest -d build/.doctree aiosmtpd/docs build/doctest
-        sphinx-build --color -b html    -d build/.doctree aiosmtpd/docs build/html
-        sphinx-build --color -b man     -d build/.doctree aiosmtpd/docs build/man
+        sphinx-build --color -W --keep-going -b doctest -d build/.doctree aiosmtpd/docs build/doctest
+        sphinx-build --color -W --keep-going -b html    -d build/.doctree aiosmtpd/docs build/html
+        sphinx-build --color -W --keep-going -b man     -d build/.doctree aiosmtpd/docs build/man
     - name: Other QA Checks
       shell: bash
       run: |
