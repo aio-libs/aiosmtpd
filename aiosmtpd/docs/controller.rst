@@ -446,8 +446,7 @@ Controller API
 
     .. attribute:: server
 
-        This is the server instance returned by
-        :meth:`_create_server` after the server has started.
+        The asyncio server instance after the controller has started.
 
         You can retrieve the :class:`~socket.socket` objects the server is listening on
         from the ``server.sockets`` attribute.
