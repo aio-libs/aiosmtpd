@@ -37,7 +37,7 @@ Activating
 ==========
 
 To activate ``aiosmtpd``'s PROXY Protocol Support,
-you have to set the :attr:`proxy_protocol_timeout` parameter of the SMTP Class
+you have to set the :attr:`~aiosmtpd.smtp.SMTP.proxy_protocol_timeout` parameter of the SMTP Class
 to a positive numeric value (``int`` or ``float``)
 
 The `PROXY Protocol documentation suggests`_ that the timeout should not be less than 3.0 seconds.
@@ -63,14 +63,14 @@ The `PROXY Protocol documentation suggests`_ that the timeout should not be less
 
 In addition to activating the PROXY protocol support as described above,
 you MUST implement the ``handle_PROXY`` hook.
-If the :attr:`handler` object does not implement ``handle_PROXY``,
+If the :attr:`~aiosmtpd.smtp.SMTP.handler` object does not implement ``handle_PROXY``,
 then all connection attempts will be rejected.
 
 The signature of ``handle_PROXY`` must be as follows:
 
 .. method:: handle_PROXY(server, session, envelope, proxy_data)
 
-   :param server: The :class:`SMTP` instance invoking the hook.
+   :param server: The :class:`~aiosmtpd.smtp.SMTP` instance invoking the hook.
    :type server: aiosmtpd.smtp.SMTP
    :param session: The Session data *so far* (see Important note below)
    :type session: Session
@@ -88,7 +88,7 @@ The signature of ``handle_PROXY`` must be as follows:
       it will contain the endpoint identifier of the proxying entity.
 
       Endpoint identifier of the "original" client will be recorded
-      *only* in the :attr:`proxy_data` parameter
+      *only* in the :paramref:`handle_PROXY.proxy_data` parameter
 
       The ``envelope`` data will usually be empty(ish),
       because the PROXY handshake will take place before
@@ -110,28 +110,37 @@ Enums
 
 .. class:: AF
 
-   .. py:attribute:: \
-      UNSPEC = 0
-      IP4 = 1
-      IP6 = 2
-      UNIX = 3
+   .. py:attribute:: UNSPEC
+      :value: 0
+
+   .. py:attribute:: INET
+      :value: 1
+
+   .. py:attribute:: INET6
+      :value: 2
+
+   .. py:attribute:: UNIX
+      :value: 3
 
    For Version 1, ``UNKNOWN`` is mapped to ``UNSPEC``.
 
 .. class:: PROTO
 
-   .. py:attribute:: \
-      UNSPEC = 0
-      STREAM = 1
-      DGRAM = 2
+   .. py:attribute:: UNSPEC
+      :value: 0
+   .. py:attribute:: STREAM
+      :value: 1
+   .. py:attribute:: DGRAM
+      :value: 2
 
    For Version 1, ``UNKNOWN`` is mapped to ``UNSPEC``, and ``TCP`` is mapped into ``STREAM``
 
 .. class:: V2_CMD
 
-   .. py:attribute:: \
-      LOCAL = 0
-      PROXY = 1
+   .. py:attribute:: LOCAL
+      :value: 0
+   .. py:attribute:: PROXY
+      :value: 1
 
 
 ``ProxyData`` API
@@ -171,7 +180,7 @@ Enums
       Valid values for Version 1 excludes :attr:`PROTO.DGRAM`.
 
    .. py:attribute:: src_addr
-      :type: Union[IPv4Address, IPv6Address, AnyStr]
+      :type: Union[~ipaddress.IPv4Address, ~ipaddress.IPv6Address, ~typing.AnyStr]
 
       Contains the source address
       (i.e., address of the "original" client).
@@ -179,7 +188,7 @@ Enums
       The type of this attribute depends on the :attr:`address family <family>`.
 
    .. py:attribute:: dst_addr
-      :type: Union[IPv4Address, IPv6Address, AnyStr]
+      :type: Union[~ipaddress.IPv4Address, ~ipaddress.IPv6Address, ~typing.AnyStr]
 
       Contains the destination address
       (i.e., address of the proxying entity to which the "original" client connected).
@@ -253,6 +262,12 @@ Enums
       you should run the CRC32C calculation against the contents of this attribute.
 
       The value will be ``None`` if PROXY version is 1.
+
+   .. py:attribute:: error
+      :type: str
+
+      If not an empty string, contains the error encountered when parsing
+      the PROXY Protocol header.
 
    |
    | :part:`Methods`
@@ -434,7 +449,7 @@ and we have plans to NEVER implement it.
 
 If you *absolutely* need PROXYv2 CRC32C validation,
 you should perform it yourself in the :meth:`handle_PROXY` hook.
-To assist you, we have provided the :attr:`whole_raw`, :attr:`tlv_start`, and :attr:`tlv_loc` attributes.
+To assist you, we have provided the :attr:`~.ProxyData.whole_raw`, :attr:`~.ProxyData.tlv_start`, and :attr:`~.ProxyTLV.tlv_loc` attributes.
 
 You should do the following:
 

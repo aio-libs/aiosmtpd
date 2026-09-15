@@ -61,8 +61,8 @@ in alphabetical order:
     :param class\_: The class of the controller to be instantiated.
         If given, overrides ``class_`` arg of :func:`controller_data`.
         If not specified and no ``class_`` from ``controller_data``,
-        defaults to :class:`ExposingController`.
-    :return: an instance of :class:`Controller` (or a subclass of)
+        defaults to :class:`~aiosmtpd.controller.Controller`.
+    :return: an instance of :class:`~aiosmtpd.controller.Controller` (or a subclass of)
 
     In addition to explicitly-specified parameters, ``get_controller`` also
     fetches all ``*args`` and ``**kwargs`` parameters from :func:`controller_data` marker.
@@ -72,7 +72,7 @@ in alphabetical order:
     :param class\_: The class of the handler to be instantiated.
         If given, overrides ``class_`` arg of :func:`handler_data`.
         If not specified and no ``class_`` from ``handler_data``,
-        defaults to :class:`Sink`.
+        defaults to :class:`~aiosmtpd.handlers.Sink`.
     :return: an instance of the handler class.
 
     In addition to explicitly-specified parameters, ``get_handler`` also
@@ -105,6 +105,26 @@ in alphabetical order:
     please refer to their respective docstrings for description / usage guide.
 
 
+Custom Data Types
+-----------------
+
+The following custom data types are defined in the test infrastructure:
+
+.. class:: HostPort(host="localhost", port=8025)
+
+   A :class:`typing.NamedTuple` representing a host/port address pair
+   for the test SMTP server.
+
+   :param host: The hostname. Defaults to ``"localhost"``.
+   :type host: str
+   :param port: The port number. Defaults to ``8025``.
+   :type port: int
+
+   Used by the :func:`client_data` marker's ``connect_to`` parameter,
+   the :func:`controller_data` marker's ``host_port`` parameter,
+   and the ``Global.SrvAddr`` attribute.
+
+
 Markers
 -------
 
@@ -113,7 +133,7 @@ Markers
     Provides parameters to the :fixture:`~aiosmtpd.tests.conftest.client` fixture.
 
     :param connect_to: Address to connect to. Defaults to ``Global.SrvAddr``
-    :type connect_to: :class:`HostPort`
+    :type connect_to: HostPort
 
 .. decorator:: controller_data(...)
 
@@ -123,7 +143,7 @@ Markers
         Will be overridden if ``get_controller`` is invoked with
         the ``class_`` argument.
     :param host_port: The "host:port" to bound to
-    :type host_port: str
+    :type host_port: HostPort
     :param \*\*kwargs: Keyworded arguments given to the marker.
 
 
