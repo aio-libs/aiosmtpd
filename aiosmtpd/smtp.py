@@ -263,6 +263,12 @@ def is_int(o: Any) -> bool:
     return isinstance(o, int)
 
 
+# This could be an inline expression but is a separate function
+# for easier mocking in tests
+def len_contents(lst: list[bytes]) -> int:
+    return sum(len(b) for b in lst)
+
+
 @public
 class TLSSetupException(Exception):
     pass
@@ -1466,8 +1472,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             if line.endswith(b'\r\n'):
                 # Record data only if state is "NOMINAL"
                 if state == _DataState.NOMINAL:
-                    line = EMPTY_BARR.join(line_fragments)
-                    if len(line) > self.line_length_limit:
+                    if len_contents(line_fragments) > self.line_length_limit:
                         # Theoretically we shouldn't reach this place. But it's always
                         # good to practice DEFENSIVE coding.
                         state = _DataState.TOO_LONG

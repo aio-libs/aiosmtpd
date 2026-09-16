@@ -203,6 +203,9 @@ class MessageBase(metaclass=ABCMeta):
             raise TypeError(f"Expected str or bytes, got {type(data)}")
         assert isinstance(message, Em_Message)
         message["X-Peer"] = str(session.peer)
+        # envelope.mail_from defaults to None, but should be set by this
+        # point as MAIL FROM is a mandatory command in a SMTP transaction.
+        assert envelope.mail_from is not None
         message["X-MailFrom"] = envelope.mail_from
         message["X-RcptTo"] = COMMASPACE.join(envelope.rcpt_tos)
         return message

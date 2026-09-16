@@ -458,6 +458,7 @@ class TestMessage:
         enve_ = Envelope()
         handler = MessageHandler()
         enve_.content = content
+        enve_.mail_from = "anne@example.org"
         msg = handler.prepare_message(sess_, enve_)
         assert isinstance(msg, Em_Message)
         assert msg.keys() == ['X-Peer', 'X-MailFrom', 'X-RcptTo']
