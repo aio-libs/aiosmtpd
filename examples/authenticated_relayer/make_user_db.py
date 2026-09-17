@@ -18,18 +18,23 @@ USER_AND_PASSWORD = {
 }
 
 
-if __name__ == '__main__':
-    dbfp = Path(DB_FILE).absolute()
+def make_user_db(db_file=DB_FILE, users=USER_AND_PASSWORD):
+    dbfp = Path(db_file).absolute()
     if dbfp.exists():
         dbfp.unlink()
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(dbfp)
     curs = conn.cursor()
-    curs.execute("CREATE TABLE userauth (username text, hashpass text)")
-    insert_up = "INSERT INTO userauth VALUES (?, ?)"
-    for u, p in USER_AND_PASSWORD.items():
-        h = pbkdf2_hmac("sha256", p, secrets.token_bytes(), 1000000).hex()
-        curs.execute(insert_up, (u, h))
+    curs.execute("CREATE TABLE userauth (username text, salt blob, hashpass text)")
+    insert_up = "INSERT INTO userauth VALUES (?, ?, ?)"
+    for username, password in users.items():
+        salt = secrets.token_bytes()
+        hashpass = pbkdf2_hmac("sha256", password, salt, 1000000).hex()
+        curs.execute(insert_up, (username, salt, hashpass))
     conn.commit()
     conn.close()
     assert dbfp.exists()
     print(f"database created at {dbfp}")
+
+
+if __name__ == '__main__':
+    make_user_db()
