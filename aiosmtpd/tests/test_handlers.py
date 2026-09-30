@@ -203,7 +203,9 @@ class AsyncDeprecatedHandler:
 
 
 @pytest.fixture
-def debugging_controller(get_controller) -> Generator[Controller, None, None]:
+def debugging_controller(
+    get_controller: Callable[..., Controller],
+) -> Generator[Controller, None, None]:
     # Cannot use plain_controller fixture because we need to first create the
     # Debugging handler before creating the controller.
     stream = StringIO()
@@ -225,7 +227,7 @@ def temp_maildir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def mailbox_controller(
-    temp_maildir, get_controller
+    temp_maildir: Path, get_controller: Callable[..., Controller]
 ) -> Generator[Controller, None, None]:
     handler = Mailbox(temp_maildir)
     controller = get_controller(handler)
@@ -263,7 +265,9 @@ def with_fake_parser() -> Callable:
 
 
 @pytest.fixture
-def upstream_controller(get_controller) -> Generator[Controller, None, None]:
+def upstream_controller(
+    get_controller: Callable[..., Controller],
+) -> Generator[Controller, None, None]:
     upstream_handler = DataHandler()
     upstream_controller = get_controller(upstream_handler, port=9025)
     upstream_controller.start()
@@ -276,7 +280,7 @@ def upstream_controller(get_controller) -> Generator[Controller, None, None]:
 
 @pytest.fixture
 def proxy_nodecode_controller(
-    upstream_controller, get_controller
+    upstream_controller: Controller, get_controller: Callable[..., Controller]
 ) -> Generator[Union[Controller, KnowsUpstream], None, None]:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
     proxy_controller = get_controller(proxy_handler)
@@ -291,7 +295,7 @@ def proxy_nodecode_controller(
 
 @pytest.fixture
 def proxy_decoding_controller(
-    upstream_controller, get_controller
+    upstream_controller: Controller, get_controller: Callable[..., Controller]
 ) -> Generator[Union[Controller, KnowsUpstream], None, None]:
     proxy_handler = Proxy(upstream_controller.hostname, upstream_controller.port)
     proxy_controller = get_controller(proxy_handler, decode_data=True)
