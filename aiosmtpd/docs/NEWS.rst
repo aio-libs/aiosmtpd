@@ -7,11 +7,23 @@
 1.4.7 (aiosmtpd-next)
 =====================
 
+Added
+-----
+
+* ``Controller`` (and the other INET controllers) now support ``port=0``:
+  the operating system picks a free port and the ``port`` attribute is updated
+  to the actual value before ``start()`` returns.
+  Requires a single-address-family bind. (Closes #388, #276)
+
 Fixed/Improved
 --------------
 
 * Dropped Python 3.8, PyPy 3.8
 * Added PyPy 3.11, dropped PyPy 3.9
+* The INET controllers no longer poke a wildcard bind address
+  (``0.0.0.0``/``::``) to trigger the SMTP factory,
+  which is not a connectable address on every platform;
+  the matching loopback address is used instead.
 
 
 1.4.6 (2024-05-18)

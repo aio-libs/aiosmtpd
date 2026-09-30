@@ -28,6 +28,12 @@ from aiosmtpd.smtp import SMTP
 
 DEFAULT_READY_TIMEOUT: float = 5.0
 
+# Loopback address to poke when the server is bound to a wildcard address.
+_WILDCARD_LOOPBACK: Dict[str, str] = {
+    "0.0.0.0": "127.0.0.1",  # nosec B104 -- a lookup key, nothing gets bound here
+    "::": "::1",
+}
+
 
 @public
 class IP6_IS:
@@ -173,6 +179,12 @@ class BaseController(metaclass=ABCMeta):
         listener endpoint. When overridden, MUST refer the _factory_invoker() method.
         """
 
+    def _bound(self) -> None:
+        """
+        Invoked right after the listener has been bound, while self.server is set.
+        Subclasses override this to read back properties of the actual endpoint.
+        """
+
     def _cleanup(self):
         """Reset internal variables to prevent contamination"""
         self._thread_exception = None
@@ -231,6 +243,7 @@ class BaseThreadedController(BaseController, metaclass=ABCMeta):
         try:
             self.server_coro = self._create_server()
             self.server = self.loop.run_until_complete(self.server_coro)
+            self._bound()
         except Exception as error:  # pragma: on-wsl
             # Usually will enter this part only if create_server() cannot bind to the
             # specified host:port.
@@ -343,6 +356,7 @@ class BaseUnthreadedController(BaseController, metaclass=ABCMeta):
         asyncio.set_event_loop(self.loop)
         self.server_coro = self._create_server()
         self.server = self.loop.run_until_complete(self.server_coro)
+        self._bound()
 
     async def finalize(self):
         """
@@ -394,7 +408,34 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         )
         self._localhost = get_localhost()
         self.hostname = self._localhost if hostname is None else hostname
+        # Remember what was asked for: port 0 means "OS, pick a free one", and every
+        # start() must ask again instead of reusing the port of the previous run.
+        self._port_requested = port
         self.port = port
+
+    def _bound(self) -> None:
+        if self._port_requested != 0:
+            return
+        assert self.server is not None
+        # AbstractServer does not declare .sockets, but every INET implementation
+        # (asyncio's own, uvloop's) provides it.
+        sockets = self.server.sockets  # type: ignore[attr-defined]
+        ports = {sock.getsockname()[1] for sock in sockets}
+        if len(ports) > 1:
+            # A dual-stack bind asks the OS for a free port once per address family,
+            # and it hands out a different one each time. There is no single port to
+            # report, so refuse instead of returning one that only half works.
+            self.server.close()
+            raise RuntimeError(
+                "port=0 bound a different random port per address family "
+                f'{sorted(ports)}; bind a single address family instead '
+                '(e.g. hostname="0.0.0.0")'
+            )
+        self.port = ports.pop()
+
+    def _cleanup(self):
+        super()._cleanup()
+        self.port = self._port_requested
 
     def _create_server(self) -> Awaitable[asyncio.AbstractServer]:
         """
@@ -415,9 +456,12 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         Context if necessary, and read some data from it to ensure that factory()
         gets invoked.
         """
-        # At this point, if self.hostname is Falsy, it most likely is "" (bind to all
-        # addresses). In such case, it should be safe to connect to localhost)
-        hostname = self.hostname or self._localhost
+        # A wildcard bind is not a connectable address everywhere (e.g. Windows
+        # rejects 0.0.0.0 outright), so poke the matching loopback instead. A Falsy
+        # hostname most likely is "" (dual-stack bind to all addresses).
+        hostname = (
+            _WILDCARD_LOOPBACK.get(self.hostname, self.hostname) or self._localhost
+        )
         with ExitStack() as stk:
             s = stk.enter_context(create_connection((hostname, self.port), 1.0))
             if self.ssl_context:
