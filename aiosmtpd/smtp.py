@@ -57,6 +57,15 @@ class _DataState(enum.Enum):
     TOO_MUCH = enum.auto()
 
 
+class _BdatState(enum.Enum):
+    NONE = enum.auto()
+    """No BDAT chunk has been accepted in the current transaction."""
+    ACTIVE = enum.auto()
+    """At least one BDAT chunk has been accepted; DATA is no longer allowed."""
+    FAILED = enum.auto()
+    """A chunk was rejected; further chunks are discarded until RSET."""
+
+
 AuthCallbackType = Callable[[str, bytes, bytes], bool]
 AuthenticatorType = Callable[["SMTP", "Session", "Envelope", str, Any], "AuthResult"]
 AuthMechanismType = Callable[["SMTP", List[str]], Awaitable[Any]]
@@ -288,6 +297,24 @@ def sanitized_log(func: Callable[..., None], msg: AnyStr, *args, **kwargs) -> No
     func(msg, *sanitized_args, **kwargs)
 
 
+def _parse_bdat_arg(arg: Optional[str]) -> Tuple[Optional[int], bool]:
+    """
+    Parse the argument of a BDAT command (RFC 3030 § 4.1).
+
+    :return: ``(chunk_size, is_last)``; ``chunk_size`` is None if ``arg`` is not
+        valid BDAT syntax.
+    """
+    parts = (arg or "").split()
+    last = len(parts) == 2 and parts[1].upper() == "LAST"
+    if not parts or len(parts) > 2 or (len(parts) == 2 and not last):
+        return None, False
+    # str.isdigit() also accepts non-ASCII digits, which int() would happily
+    # convert; BDAT sizes are ASCII-only.
+    if not (parts[0].isascii() and parts[0].isdigit()):
+        return None, False
+    return int(parts[0]), last
+
+
 @public
 class SMTP(asyncio.StreamReaderProtocol):
     """
@@ -318,6 +345,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             handler: Any,
             *,
             data_size_limit: Optional[int] = DATA_SIZE_DEFAULT,
+            enable_CHUNKING: bool = False,
             enable_SMTPUTF8: bool = False,
             decode_data: bool = False,
             hostname: Optional[str] = None,
@@ -343,6 +371,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.event_handler = handler
         assert data_size_limit is None or isinstance(data_size_limit, int)
         self.data_size_limit = data_size_limit
+        self.enable_CHUNKING = enable_CHUNKING
         self.enable_SMTPUTF8 = enable_SMTPUTF8
         self._decode_data = decode_data
         self.command_size_limits.clear()
@@ -368,6 +397,9 @@ class SMTP(asyncio.StreamReaderProtocol):
         self._original_transport: Optional[asyncio.BaseTransport] = None
         self.session: Optional[Session] = None
         self.envelope: Optional[Envelope] = None
+        self._bdat_state: _BdatState = _BdatState.NONE
+        self._bdat_chunks: List[bytes] = []
+        self._bdat_size: int = 0
         self.transport: Optional[asyncio.BaseTransport] = None
         self._handler_coroutine: Optional[asyncio.Task[None]] = None
         if not auth_require_tls and auth_required:
@@ -584,6 +616,9 @@ class SMTP(asyncio.StreamReaderProtocol):
     def _set_post_data_state(self):
         """Reset state variables to their post-DATA state."""
         self.envelope = self._create_envelope()
+        self._bdat_state = _BdatState.NONE
+        self._bdat_chunks = []
+        self._bdat_size = 0
 
     def _set_rset_state(self):
         """Reset all state variables except the greeting."""
@@ -794,6 +829,25 @@ class SMTP(asyncio.StreamReaderProtocol):
                         # so ignore the error related to wrong argument types.
                         await self.push(status)  # pytype: disable=wrong-arg-types
 
+    def _helo_needed(self, helo: str = "HELO") -> Optional[str]:
+        """
+        :return: The SMTP status to reject with, or None if HELO/EHLO was seen
+        """
+        assert self.session is not None
+        if not self.session.host_name:
+            return f'503 Error: send {helo} first'
+        return None
+
+    def _auth_needed(self, caller_method: str) -> Optional[str]:
+        """
+        :return: The SMTP status to reject with, or None if AUTH is not needed
+        """
+        assert self.session is not None
+        if self._auth_required and not self.session.authenticated:
+            log.info(f'{caller_method}: Authentication required')
+            return '530 5.7.0 Authentication required'
+        return None
+
     async def check_helo_needed(self, helo: str = "HELO") -> bool:
         """
         Check if HELO/EHLO is needed.
@@ -801,11 +855,11 @@ class SMTP(asyncio.StreamReaderProtocol):
         :param helo: The actual string of HELO/EHLO
         :return: True if HELO/EHLO is needed
         """
-        assert self.session is not None
-        if not self.session.host_name:
-            await self.push(f'503 Error: send {helo} first')
-            return True
-        return False
+        status = self._helo_needed(helo)
+        if status is None:
+            return False
+        await self.push(status)
+        return True
 
     async def check_auth_needed(self, caller_method: str) -> bool:
         """
@@ -814,12 +868,11 @@ class SMTP(asyncio.StreamReaderProtocol):
         :param caller_method: The SMTP method needing a check (for logging)
         :return: True if AUTH is needed
         """
-        assert self.session is not None
-        if self._auth_required and not self.session.authenticated:
-            log.info(f'{caller_method}: Authentication required')
-            await self.push('530 5.7.0 Authentication required')
-            return True
-        return False
+        status = self._auth_needed(caller_method)
+        if status is None:
+            return False
+        await self.push(status)
+        return True
 
     # SMTP and ESMTP commands
     @syntax('HELO hostname')
@@ -851,6 +904,8 @@ class SMTP(asyncio.StreamReaderProtocol):
             self.command_size_limits['MAIL'] += 26
         if not self._decode_data:
             response.append('250-8BITMIME')
+        if self.enable_CHUNKING:
+            response.append('250-CHUNKING')
         if self.enable_SMTPUTF8:
             response.append('250-SMTPUTF8')
             self.command_size_limits['MAIL'] += 10
@@ -1419,6 +1474,11 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg:
             await self.push('501 Syntax: DATA')
             return
+        if self._bdat_state is not _BdatState.NONE:
+            # RFC 3030 § 4.1: a transaction started with BDAT must be finished
+            # with BDAT LAST; DATA and BDAT cannot be mixed.
+            await self.push('503 Error: BDAT already used in this transaction')
+            return
 
         await self.push('354 End data with <CR><LF>.<CR><LF>')
         data: List[bytearray] = []
@@ -1498,6 +1558,14 @@ class SMTP(asyncio.StreamReaderProtocol):
         # Discard data immediately to prevent memory pressure
         data *= 0
 
+        await self._deliver(original_content)
+
+    async def _deliver(self, original_content: bytes) -> None:
+        """
+        Hand a fully-received message over to the handler and end the mail
+        transaction. Shared by the DATA and BDAT paths.
+        """
+        assert self.envelope is not None
         content: Union[str, bytes]
         if self._decode_data:
             if self.enable_SMTPUTF8:
@@ -1540,6 +1608,75 @@ class SMTP(asyncio.StreamReaderProtocol):
                     status = MISSING
         self._set_post_data_state()
         await self.push('250 OK' if status is MISSING else status)
+
+    async def _read_chunk(self, size: int, keep: bool) -> List[bytes]:
+        """
+        Consume exactly ``size`` octets of BDAT chunk data off the wire.
+
+        The octets must always be consumed, even when the chunk is going to be
+        rejected, otherwise mail data would be parsed as SMTP commands.
+
+        :param keep: If false, the data is discarded as it is read.
+        """
+        chunks: List[bytes] = []
+        remaining = size
+        while remaining > 0:
+            data = await self._reader.read(remaining)
+            if not data:
+                raise ConnectionResetError("EOF during BDAT chunk")
+            remaining -= len(data)
+            if keep:
+                chunks.append(data)
+            # Receiving a large chunk can outlast the command timeout.
+            self._reset_timeout()
+        return chunks
+
+    @syntax('BDAT <size> [LAST]', when='enable_CHUNKING')
+    async def smtp_BDAT(self, arg: Optional[str]) -> None:
+        if not self.enable_CHUNKING:
+            await self.push('502 Error: CHUNKING not enabled')
+            return
+        size, last = _parse_bdat_arg(arg)
+        if size is None:
+            # The chunk octets follow the command line immediately, so without a
+            # usable size the stream is unsynchronised: anything we read next
+            # could be mail data masquerading as commands. Drop the connection.
+            await self.push('501 Syntax: BDAT <size> [LAST]')
+            assert self.transport is not None
+            self.transport.close()
+            return
+
+        # RFC 3030 § 4.1: the chunk must be read off the wire before any error is
+        # reported, for the same reason -- so every rejection below discards it
+        # first instead of returning early.
+        assert self.envelope is not None
+        refusal = self._helo_needed() or self._auth_needed("BDAT")
+        if refusal is None:
+            if self._bdat_state is _BdatState.FAILED:
+                # RFC 3030 § 4.1: ignore further chunks until RSET.
+                refusal = '554 Error: BDAT transaction failed, issue RSET'
+            elif not self.envelope.rcpt_tos:
+                refusal = '503 Error: need RCPT command'
+            elif self.data_size_limit and (
+                    self._bdat_size + size > self.data_size_limit):
+                self._bdat_state = _BdatState.FAILED
+                refusal = '552 Error: Too much mail data'
+        if refusal is not None:
+            await self._read_chunk(size, keep=False)
+            await self.push(refusal)
+            return
+
+        self._bdat_chunks.extend(await self._read_chunk(size, keep=True))
+        self._bdat_size += size
+        self._bdat_state = _BdatState.ACTIVE
+        if not last:
+            await self.push(f'250 {size} octets received')
+            return
+
+        original_content = EMPTYBYTES.join(self._bdat_chunks)
+        # Discard data immediately to prevent memory pressure
+        self._bdat_chunks *= 0
+        await self._deliver(original_content)
 
     # Commands that have not been implemented.
     async def smtp_EXPN(self, arg: str):

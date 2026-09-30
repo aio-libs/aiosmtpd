@@ -158,7 +158,8 @@ aiosmtpd.smtp
 
    For more information, please refer to the :ref:`auth` page.
 
-.. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, \
+.. class:: SMTP(handler, *, data_size_limit=33554432, enable_CHUNKING=False, \
+   enable_SMTPUTF8=False, \
    decode_data=False, hostname=None, ident=None, tls_context=None, \
    require_starttls=False, timeout=300, auth_required=False, \
    auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, \
@@ -181,6 +182,38 @@ aiosmtpd.smtp
 
       The limit in number of bytes that is accepted for client SMTP commands.
       It is returned to ESMTP clients in the ``250-SIZE`` response.
+
+   .. py:attribute:: enable_CHUNKING
+      :type: bool
+      :value: False
+      :noindex:
+
+      When ``True``, causes the ESMTP ``CHUNKING`` extension to be advertised in the
+      ``EHLO`` response and enables the ``BDAT`` command, as defined in :rfc:`3030`.
+
+      ``BDAT`` is a self-delimiting alternative to ``DATA``: each command carries the
+      octet count of the chunk that follows it, so the message body needs no
+      dot-transparency and may contain arbitrary octets, including a bare ``.`` line.
+      The chunks of one message are accumulated and, on ``BDAT <size> LAST``, handed to
+      the very same :meth:`handle_DATA` hook that ``DATA`` uses --- existing handlers
+      need no change. ``data_size_limit`` applies to the sum of all chunks.
+
+      ``DATA`` and ``BDAT`` cannot be mixed within one mail transaction; whichever
+      comes second is rejected with ``503``. A transaction that had a chunk rejected
+      must be reset with ``RSET`` before it can continue.
+
+      .. important::
+
+         The ``BINARYMIME`` extension (:rfc:`3030` § 5) is *not* implemented, so
+         ``MAIL FROM ... BODY=BINARYMIME`` is still rejected.
+
+         If *command_call_limit* is in effect, remember that every ``BDAT`` chunk
+         counts as one ``BDAT`` call.
+
+         A ``BDAT`` command whose size argument cannot be parsed is answered with
+         ``501`` and the connection is then **closed**: the chunk octets follow the
+         command line immediately, so without a usable octet count the server can no
+         longer tell mail data apart from commands.
 
    .. py:attribute:: enable_SMTPUTF8
       :type: bool
@@ -423,6 +456,10 @@ aiosmtpd.smtp
    .. attribute:: data_size_limit
 
       The value of the *data_size_limit* argument passed into the constructor.
+
+   .. attribute:: enable_CHUNKING
+
+      The value of the *enable_CHUNKING* argument passed into the constructor.
 
    .. attribute:: enable_SMTPUTF8
 

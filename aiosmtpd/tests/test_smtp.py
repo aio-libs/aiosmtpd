@@ -39,6 +39,7 @@ from aiosmtpd.smtp import (
     LoginPassword,
     Session as SMTPSession,
     __ident__ as GREETING,
+    _parse_bdat_arg as parse_bdat_arg,
     auth_mechanism,
 )
 from aiosmtpd.testing.helpers import (
@@ -2062,3 +2063,232 @@ class TestSanitize:
         expect = "AuthResult(success=True, handled=True, message=None, auth_data=...)"
         assert repr(ar) == expect
         assert str(ar) == expect
+
+
+def _bdat(client: SMTPClient, payload: bytes, last: bool = False) -> Tuple[int, bytes]:
+    """Send one BDAT chunk -- command line immediately followed by its octets."""
+    header = f"BDAT {len(payload)}{' LAST' if last else ''}\r\n".encode("ascii")
+    client.send(header + payload)
+    return client.getreply()
+
+
+class TestBdatArgParsing:
+    @pytest.mark.parametrize(
+        "arg, expected",
+        [
+            ("0", (0, False)),
+            ("42", (42, False)),
+            ("42 LAST", (42, True)),
+            ("42 last", (42, True)),
+            (None, (None, False)),
+            ("", (None, False)),
+            ("LAST", (None, False)),
+            ("-1", (None, False)),
+            ("4.2", (None, False)),
+            ("42 LAST extra", (None, False)),
+            ("42 FIRST", (None, False)),
+            # str.isdigit() is True for these, but int() would silently accept them
+            ("４２", (None, False)),
+            ("٢", (None, False)),
+        ],
+    )
+    def test_parse(self, arg, expected):
+        assert parse_bdat_arg(arg) == expected
+
+
+@pytest.mark.usefixtures("plain_controller")
+@controller_data(enable_CHUNKING=True)
+@handler_data(class_=ReceivingHandler)
+class TestChunking(_CommonMethods):
+    def _mailfrom_rcptto(self, client: SMTPClient) -> None:
+        self._ehlo(client)
+        assert client.docmd("MAIL FROM: <anne@example.com>") == S.S250_OK
+        assert client.docmd("RCPT TO: <bart@example.com>") == S.S250_OK
+
+    def test_ehlo_advertises_chunking(self, client):
+        mesg = self._ehlo(client)
+        assert b"CHUNKING" in mesg.splitlines()
+
+    def test_help_lists_bdat(self, client):
+        self._ehlo(client)
+        code, mesg = client.docmd("HELP")
+        assert code == 250
+        assert b"BDAT" in mesg.split()
+
+    def test_help_bdat(self, client):
+        self._ehlo(client)
+        assert client.docmd("HELP", "BDAT") == S.S250_SYNTAX_BDAT
+
+    def test_single_chunk(self, plain_controller, client):
+        self._mailfrom_rcptto(client)
+        assert _bdat(client, b"Subject: test\r\n\r\nhi\r\n", last=True) == S.S250_OK
+        handler = plain_controller.handler
+        assert len(handler.box) == 1
+        assert handler.box[0].content == b"Subject: test\r\n\r\nhi\r\n"
+        assert handler.box[0].rcpt_tos == ["bart@example.com"]
+
+    def test_multiple_chunks(self, plain_controller, client):
+        self._mailfrom_rcptto(client)
+        assert _bdat(client, b"Subject: test\r\n") == S.S250_BDAT_RECEIVED(15)
+        assert _bdat(client, b"\r\nfirst\r\n") == S.S250_BDAT_RECEIVED(9)
+        assert _bdat(client, b"second\r\n", last=True) == S.S250_OK
+        handler = plain_controller.handler
+        assert len(handler.box) == 1
+        assert handler.box[0].content == b"Subject: test\r\n\r\nfirst\r\nsecond\r\n"
+
+    def test_empty_last_chunk(self, plain_controller, client):
+        """A zero-octet BDAT LAST is legal and ends the message."""
+        self._mailfrom_rcptto(client)
+        assert _bdat(client, b"body\r\n") == S.S250_BDAT_RECEIVED(6)
+        assert _bdat(client, b"", last=True) == S.S250_OK
+        assert plain_controller.handler.box[0].content == b"body\r\n"
+
+    def test_no_dot_transparency(self, plain_controller, client):
+        """BDAT is self-delimiting: dots are data, not framing (RFC 3030 § 4.1)."""
+        payload = b".\r\n..dot\r\n.\r\nmore\r\n"
+        self._mailfrom_rcptto(client)
+        assert _bdat(client, payload, last=True) == S.S250_OK
+        assert plain_controller.handler.box[0].content == payload
+
+    def test_binary_payload(self, plain_controller, client):
+        payload = bytes(range(256)) + b"\r\n.\r\n\x00\xff"
+        self._mailfrom_rcptto(client)
+        assert _bdat(client, payload, last=True) == S.S250_OK
+        assert plain_controller.handler.box[0].content == payload
+
+    def test_chunk_bigger_than_stream_limit(self, plain_controller, client):
+        """A single line longer than line_length_limit is fine for BDAT."""
+        payload = b"x" * (Server.line_length_limit * 3) + b"\r\n"
+        self._mailfrom_rcptto(client)
+        assert _bdat(client, payload, last=True) == S.S250_OK
+        assert plain_controller.handler.box[0].content == payload
+
+    def test_two_messages_one_connection(self, plain_controller, client):
+        for _ in range(2):
+            self._mailfrom_rcptto(client)
+            assert _bdat(client, b"body\r\n", last=True) == S.S250_OK
+        assert len(plain_controller.handler.box) == 2
+
+    def test_bdat_without_helo(self, client):
+        assert _bdat(client, b"body\r\n", last=True) == S.S503_HELO_FIRST
+        # The chunk must have been consumed, not left to be read as commands
+        assert client.docmd("NOOP") == S.S250_OK
+
+    def test_bdat_without_rcpt(self, client):
+        self._ehlo(client)
+        assert client.docmd("MAIL FROM: <anne@example.com>") == S.S250_OK
+        assert _bdat(client, b"body\r\n", last=True) == S.S503_RCPT_NEEDED
+        assert client.docmd("NOOP") == S.S250_OK
+
+    def test_bdat_bad_syntax_disconnects(self, client):
+        """Without a usable size the stream is unsynchronised; drop the client."""
+        self._mailfrom_rcptto(client)
+        assert client.docmd("BDAT") == S.S501_SYNTAX_BDAT
+        with pytest.raises(SMTPServerDisconnected):
+            client.noop()
+
+    def test_data_after_bdat(self, client):
+        self._mailfrom_rcptto(client)
+        assert _bdat(client, b"body\r\n") == S.S250_BDAT_RECEIVED(6)
+        assert client.docmd("DATA") == S.S503_BDAT_ALREADY
+
+    def test_rset_clears_bdat(self, plain_controller, client):
+        self._mailfrom_rcptto(client)
+        assert _bdat(client, b"body\r\n") == S.S250_BDAT_RECEIVED(6)
+        assert client.docmd("RSET") == S.S250_OK
+        self._mailfrom_rcptto(client)
+        assert client.data("after rset") == S.S250_OK
+        handler = plain_controller.handler
+        assert len(handler.box) == 1
+        assert handler.box[0].content == b"after rset\r\n"
+
+    def test_bdat_after_data(self, client):
+        self._mailfrom_rcptto(client)
+        assert client.data("via DATA") == S.S250_OK
+        # The transaction is over; a bare BDAT has no recipients
+        assert _bdat(client, b"body\r\n", last=True) == S.S503_RCPT_NEEDED
+
+
+@pytest.mark.usefixtures("plain_controller")
+@controller_data(enable_CHUNKING=True, data_size_limit=20)
+@handler_data(class_=ReceivingHandler)
+class TestChunkingLimit(_CommonMethods):
+    def _mailfrom_rcptto(self, client: SMTPClient) -> None:
+        self._ehlo(client)
+        assert client.docmd("MAIL FROM: <anne@example.com>") == S.S250_OK
+        assert client.docmd("RCPT TO: <bart@example.com>") == S.S250_OK
+
+    def test_oversized_chunk(self, plain_controller, client):
+        self._mailfrom_rcptto(client)
+        assert _bdat(client, b"x" * 21, last=True) == S.S552_DATA_TOO_MUCH
+        assert plain_controller.handler.box == []
+        # The chunk was consumed, so the next command still parses
+        assert client.docmd("NOOP") == S.S250_OK
+
+    def test_limit_applies_across_chunks(self, plain_controller, client):
+        self._mailfrom_rcptto(client)
+        assert _bdat(client, b"x" * 15) == S.S250_BDAT_RECEIVED(15)
+        assert _bdat(client, b"y" * 10) == S.S552_DATA_TOO_MUCH
+        assert plain_controller.handler.box == []
+
+    def test_chunks_ignored_until_rset(self, plain_controller, client):
+        self._mailfrom_rcptto(client)
+        assert _bdat(client, b"x" * 21) == S.S552_DATA_TOO_MUCH
+        assert _bdat(client, b"y" * 2, last=True) == S.S554_BDAT_FAILED
+        assert plain_controller.handler.box == []
+        assert client.docmd("RSET") == S.S250_OK
+        self._mailfrom_rcptto(client)
+        assert _bdat(client, b"ok\r\n", last=True) == S.S250_OK
+        assert plain_controller.handler.box[0].content == b"ok\r\n"
+
+
+@pytest.mark.usefixtures("plain_controller")
+class TestChunkingDisabled(_CommonMethods):
+    def test_ehlo_omits_chunking(self, client):
+        mesg = self._ehlo(client)
+        assert b"CHUNKING" not in mesg.splitlines()
+
+    def test_help_omits_bdat(self, client):
+        self._ehlo(client)
+        code, mesg = client.docmd("HELP")
+        assert code == 250
+        assert b"BDAT" not in mesg.split()
+
+    def test_bdat_refused(self, client):
+        self._ehlo(client)
+        assert client.docmd("MAIL FROM: <anne@example.com>") == S.S250_OK
+        assert client.docmd("RCPT TO: <bart@example.com>") == S.S250_OK
+        assert client.docmd("BDAT", "6 LAST") == S.S502_CHUNKING_DISABLED
+
+
+@pytest.mark.usefixtures("plain_controller")
+@controller_data(enable_CHUNKING=True, decode_data=True, enable_SMTPUTF8=False)
+@handler_data(class_=ReceivingHandler)
+class TestChunkingDecoding(_CommonMethods):
+    def test_decoded_content(self, plain_controller, client):
+        self._ehlo(client)
+        assert client.docmd("MAIL FROM: <anne@example.com>") == S.S250_OK
+        assert client.docmd("RCPT TO: <bart@example.com>") == S.S250_OK
+        assert _bdat(client, b"plain ascii\r\n", last=True) == S.S250_OK
+        envelope = plain_controller.handler.box[0]
+        assert envelope.content == "plain ascii\r\n"
+        assert envelope.original_content == b"plain ascii\r\n"
+
+    def test_non_ascii_refused(self, plain_controller, client):
+        self._ehlo(client)
+        assert client.docmd("MAIL FROM: <anne@example.com>") == S.S250_OK
+        assert client.docmd("RCPT TO: <bart@example.com>") == S.S250_OK
+        assert _bdat(client, b"caf\xc3\xa9\r\n", last=True) == S.S500_STRICT_ASCII
+        assert plain_controller.handler.box == []
+
+
+@pytest.mark.usefixtures("plain_controller")
+@controller_data(enable_CHUNKING=True, decode_data=True, enable_SMTPUTF8=True)
+@handler_data(class_=ReceivingHandler)
+class TestChunkingSMTPUTF8(_CommonMethods):
+    def test_utf8_content(self, plain_controller, client):
+        self._ehlo(client)
+        assert client.docmd("MAIL FROM: <anne@example.com> SMTPUTF8") == S.S250_OK
+        assert client.docmd("RCPT TO: <bart@example.com>") == S.S250_OK
+        assert _bdat(client, b"caf\xc3\xa9\r\n", last=True) == S.S250_OK
+        assert plain_controller.handler.box[0].content == "caf\u00e9\r\n"
