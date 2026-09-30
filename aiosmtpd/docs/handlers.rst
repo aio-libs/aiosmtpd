@@ -98,6 +98,11 @@ The following hooks are currently supported (in alphabetical order):
    ``decode_data=False`` or ``decode_data=True``.
    See :attr:`Envelope.content` for more info.
 
+   Under :ref:`LMTP <LMTP>` the returned status is repeated once per recipient,
+   and a list of statuses -- one per entry in ``envelope.rcpt_tos`` -- may be
+   returned instead to reply differently to each one.
+   See :ref:`LMTP <LMTP>` for details.
+
 .. py:method:: handle_EHLO(server, session, envelope, hostname, responses) -> List[str]
    :async:
    :noindex:

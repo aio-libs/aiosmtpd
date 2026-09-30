@@ -1538,8 +1538,24 @@ class SMTP(asyncio.StreamReaderProtocol):
                 # it's a deprecated API that will go away after 1.0.
                 if status is None:                  # pragma: nocover
                     status = MISSING
-        self._set_post_data_state()
-        await self.push('250 OK' if status is MISSING else status)
+        try:
+            replies = self._data_replies(status)
+        finally:
+            self._set_post_data_state()
+        for reply in replies:
+            await self.push(reply)
+
+    def _data_replies(self, status: Any) -> List[Any]:
+        """Map the ``DATA`` hook's return value onto the wire replies.
+
+        SMTP sends exactly one reply for the whole message.
+        :class:`~aiosmtpd.lmtp.LMTP` overrides this to send one reply per
+        accepted recipient, as required by :rfc:`2033` § 4.2.
+
+        Called while the envelope is still intact, before the post-DATA state
+        reset.
+        """
+        return ['250 OK' if status is MISSING else status]
 
     # Commands that have not been implemented.
     async def smtp_EXPN(self, arg: str):

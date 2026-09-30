@@ -4,6 +4,7 @@
 """Test the LMTP protocol."""
 
 import socket
+from smtplib import SMTP as SMTPClient
 from typing import Generator
 
 import pytest
@@ -61,3 +62,88 @@ def test_help(client):
     # https://github.com/aio-libs/aiosmtpd/issues/113
     resp = client.docmd("HELP")
     assert resp == S.S250_SUPPCMD_LMTP
+
+
+class SingleStatus:
+    """Returns one status for the whole message."""
+
+    async def handle_DATA(self, server, session, envelope) -> str:
+        return "451 4.3.0 Try again later"
+
+
+class PerRecipientStatus:
+    """Returns one status per accepted recipient (RFC 2033 § 4.2)."""
+
+    async def handle_DATA(self, server, session, envelope) -> list:
+        return ["250 OK", "550 5.1.1 No such user"]
+
+
+class TooFewStatuses:
+    """Returns fewer statuses than there are recipients."""
+
+    async def handle_DATA(self, server, session, envelope) -> list:
+        return ["250 OK"]
+
+
+@pytest.fixture
+def lmtp_client(request) -> Generator[SMTPClient, None, None]:
+    """An LMTP controller running ``request.param`` as its handler, plus a
+    client already connected to it."""
+    # A port of its own: the module-scoped ``lmtp_controller`` already holds
+    # the default one.
+    controller = LMTPController(request.param(), port=Global.SrvAddr.port + 1)
+    controller.start()
+    try:
+        with SMTPClient(controller.hostname, controller.port) as client:
+            yield client
+    finally:
+        controller.stop()
+
+
+def send_data(client: SMTPClient, *recipients: str) -> None:
+    """Drive a full LMTP transaction up to (and including) the final dot."""
+    assert client.docmd("LHLO example.com")[0] == 250
+    assert client.docmd("MAIL FROM:<sender@example.com>")[0] == 250
+    for rcpt in recipients:
+        assert client.docmd(f"RCPT TO:<{rcpt}>")[0] == 250
+    assert client.docmd("DATA")[0] == 354
+    client.send(b"From: sender@example.com\r\n\r\nbody\r\n.\r\n")
+
+
+@pytest.mark.parametrize("lmtp_client", [Sink], indirect=True)
+def test_data_replies_once_per_recipient(lmtp_client):
+    # https://github.com/aio-libs/aiosmtpd/issues/517
+    send_data(lmtp_client, "a@example.com", "b@example.com")
+    assert lmtp_client.getreply() == S.S250_OK
+    assert lmtp_client.getreply() == S.S250_OK
+
+
+@pytest.mark.parametrize("lmtp_client", [Sink], indirect=True)
+def test_data_single_recipient_replies_once(lmtp_client):
+    send_data(lmtp_client, "a@example.com")
+    assert lmtp_client.getreply() == S.S250_OK
+    # The session is usable again straight away: no reply is left unread.
+    assert lmtp_client.docmd("NOOP") == S.S250_OK
+
+
+@pytest.mark.parametrize("lmtp_client", [SingleStatus], indirect=True)
+def test_data_single_status_is_repeated(lmtp_client):
+    send_data(lmtp_client, "a@example.com", "b@example.com")
+    expected = (451, b"4.3.0 Try again later")
+    assert lmtp_client.getreply() == expected
+    assert lmtp_client.getreply() == expected
+
+
+@pytest.mark.parametrize("lmtp_client", [PerRecipientStatus], indirect=True)
+def test_data_per_recipient_statuses_in_order(lmtp_client):
+    send_data(lmtp_client, "a@example.com", "b@example.com")
+    assert lmtp_client.getreply() == S.S250_OK
+    assert lmtp_client.getreply() == (550, b"5.1.1 No such user")
+
+
+@pytest.mark.parametrize("lmtp_client", [TooFewStatuses], indirect=True)
+def test_data_status_count_mismatch_is_an_error(lmtp_client):
+    send_data(lmtp_client, "a@example.com", "b@example.com")
+    code, mesg = lmtp_client.getreply()
+    assert code == 500
+    assert b"ValueError" in mesg
