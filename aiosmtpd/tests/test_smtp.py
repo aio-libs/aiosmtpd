@@ -1606,11 +1606,11 @@ class TestSMTPWithController(_CommonMethods):
 
     def test_long_line_leak(self, mocker: MockFixture, plain_controller, client):
         # Simulates situation where readuntil() does not raise LimitOverrunError,
-        # but somehow the line_fragments when join()ed resulted in a too-long line
+        # but somehow the line_fragments when join()ed would result in a too-long line
 
-        # Hijack EMPTY_BARR.join() to return a bytes object that's definitely too long
-        mock_ebarr = mocker.patch("aiosmtpd.smtp.EMPTY_BARR")
-        mock_ebarr.join.return_value = b"a" * 1010
+        # Hijack len_contents() to return a length that's definitely over the limit
+        mock_len_contents = mocker.patch("aiosmtpd.smtp.len_contents")
+        mock_len_contents.return_value = 1010
 
         client.helo("example.com")
         mail = "z" * 72  # Make sure this is small and definitely within limits

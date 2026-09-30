@@ -178,10 +178,8 @@ def import_object(import_name: str) -> Any:
             raise ImportError("No module named {}".format(module_name))
 
     mod = reduce(getattr, module_name.split(".")[1:], mod)
-    globals_ = builtins
-    if not isinstance(globals_, dict):
-        globals_ = globals_.__dict__  # type: ignore[assignment]
-    return eval(expr, globals_, mod.__dict__)  # type: ignore[arg-type]  # noqa: DUO104  # nosec
+    globals_: dict[str, Any] = builtins.__dict__
+    return eval(expr, globals_, mod.__dict__)  # noqa: DUO104  # nosec
 
 
 class AutoprogrammDirective(Directive):
@@ -205,7 +203,7 @@ class AutoprogrammDirective(Directive):
         (import_name,) = self.arguments
         parser = import_object(import_name or "__undefined__")
         prog = self.options.get("prog")
-        original_prog = None
+        original_prog: str | None = None
         if prog:
             original_prog = parser.prog
             parser.prog = prog
@@ -240,7 +238,7 @@ class AutoprogrammDirective(Directive):
                 return subp
 
             parser = get_start_cmd_parser(parser)
-            if prog and parser.prog.startswith(original_prog):
+            if prog and original_prog and parser.prog.startswith(original_prog):
                 parser.prog = parser.prog.replace(original_prog, prog, 1)
 
         for commands, options, group_or_parser in scan_programs(

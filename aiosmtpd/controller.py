@@ -18,7 +18,7 @@ from socket import timeout as socket_timeout
 try:
     from socket import AF_UNIX
 except ImportError:  # pragma: on-not-win32
-    AF_UNIX = None  # type: ignore[assignment]
+    AF_UNIX = None  # type: ignore[assignment,misc]
 from typing import Any, Awaitable, Dict, Literal, Optional, Union
 from warnings import warn
 
