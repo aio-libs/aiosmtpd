@@ -499,7 +499,8 @@ Controller API
     :param hostname: Will be given to the event loop's :meth:`~asyncio.loop.create_server` method
        as the ``host`` parameter, with a slight processing (see below)
     :type hostname: Optional[str]
-    :param port: Will be passed-through to :meth:`~asyncio.loop.create_server` method
+    :param port: Will be passed-through to :meth:`~asyncio.loop.create_server` method.
+       ``0`` lets the operating system pick a free port; see :attr:`port` below.
     :type port: int
     :param ready_timeout: How long to wait until server starts.
         The :envvar:`AIOSMTPD_CONTROLLER_TIMEOUT` takes precedence over this parameter.
@@ -548,9 +549,41 @@ Controller API
     this class provides the following:
 
     .. attribute:: hostname: str
-                   port: int
 
-        The values of the *hostname* and *port* arguments.
+        The value of the *hostname* argument.
+
+    .. attribute:: port: int
+
+        The value of the *port* argument,
+        except when ``port=0`` was given:
+        the operating system then picks a free port at bind time,
+        and this attribute is updated to that port
+        by the time :meth:`start` (or :meth:`begin`) returns.
+        Stopping the controller resets it back to ``0``.
+
+        .. versionadded:: 1.4.7
+           Support for ``port=0``.
+
+        .. important::
+
+           ``port=0`` needs the listener to bind a *single* address family,
+           because the operating system hands out a different free port
+           for each family it is asked about.
+           The default *hostname* is fine;
+           so are explicit addresses such as ``"0.0.0.0"``, ``"::"``,
+           or ``"127.0.0.1"``.
+           A `dual-stack`_ bind (``hostname=""`` or ``hostname="localhost"``)
+           has no single port to report and raises :exc:`RuntimeError` instead.
+
+        .. doctest:: controller_random_port
+
+             >>> from aiosmtpd.controller import Controller
+             >>> from aiosmtpd.handlers import Sink
+             >>> controller = Controller(Sink(), port=0)
+             >>> controller.start()
+             >>> controller.port != 0
+             True
+             >>> controller.stop()
 
     .. attribute:: ready_timeout
         :type: float

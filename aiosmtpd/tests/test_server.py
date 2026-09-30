@@ -15,6 +15,7 @@ from threading import Event
 from pathlib import Path
 from smtplib import SMTP as SMTPClient, SMTPServerDisconnected
 from tempfile import mkdtemp
+from types import SimpleNamespace
 from threading import Thread
 from typing import Generator, Optional
 
@@ -376,6 +377,68 @@ class TestController:
         controller = Controller(Sink())
         controller.stop(no_assert=True)
 
+    def test_random_port(self):
+        controller = Controller(Sink(), port=0)
+        try:
+            controller.start()
+            assert controller.port != 0
+            client = SMTPClient(controller.hostname, controller.port, timeout=5)
+            try:
+                assert client.helo("example.com")[0] == 250
+            finally:
+                client.quit()
+        finally:
+            controller.stop()
+        # A fresh start() must ask the OS again instead of reusing the old port
+        assert controller.port == 0
+
+    def test_fixed_port_unchanged(self):
+        controller = Controller(Sink(), port=8025)
+        try:
+            controller.start()
+            assert controller.port == 8025
+        finally:
+            controller.stop()
+        assert controller.port == 8025
+
+    @pytest.mark.parametrize(
+        "hostname",
+        [
+            pytest.param("0.0.0.0", id="inet4-any"),  # nosec B104
+            pytest.param(
+                "::",
+                id="inet6-any",
+                marks=pytest.mark.skipif(
+                    not socket.has_ipv6, reason="IPv6 unsupported"
+                ),
+            ),
+        ],
+    )
+    def test_random_port_wildcard_host(self, hostname):
+        """A wildcard bind is poked through loopback, not the wildcard address."""
+        controller = Controller(Sink(), hostname=hostname, port=0)
+        try:
+            controller.start()
+            assert controller.port != 0
+        finally:
+            controller.stop()
+
+    def test_random_port_ambiguous(self):
+        """A dual-stack bind gets one random port per family; that has no answer."""
+        controller = Controller(Sink(), port=0)
+        closed = []
+        with ExitStack() as stk:
+            socks = [stk.enter_context(socket.socket()) for _ in range(2)]
+            for sock in socks:
+                sock.bind(("127.0.0.1", 0))
+            controller.server = SimpleNamespace(
+                sockets=socks, close=lambda: closed.append(True)
+            )
+            with pytest.raises(RuntimeError, match=r"random port per address family"):
+                controller._bound()
+        assert closed == [True]
+        assert controller.port == 0
+
 
 @pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
 @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
@@ -429,6 +492,15 @@ class TestUnthreaded:
         starter.join = joiner
         starter.is_alive = is_alive
         return starter
+
+    def test_random_port(self, temp_event_loop):
+        cont = UnthreadedController(Sink(), port=0, loop=temp_event_loop)
+        cont.begin()
+        try:
+            assert cont.port != 0
+        finally:
+            temp_event_loop.run_until_complete(cont.finalize())
+        assert cont.port == 0
 
     @pytest.mark.skipif(in_cygwin(), reason="Cygwin AF_UNIX is problematic")
     @pytest.mark.skipif(in_win32(), reason="Win32 does not yet fully implement AF_UNIX")
