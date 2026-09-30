@@ -235,6 +235,25 @@ class UndescribableErrorHandler:
         raise UndescribableError()
 
 
+class DataAbortedHandler:
+    """Records the partial payload handed over when ``DATA`` is cut short."""
+
+    def __init__(self):
+        self.calls: List[Tuple[str, List[str], bytes, BaseException]] = []
+
+    async def handle_DATA_aborted(
+        self,
+        server: Server,
+        session: SMTPSession,
+        envelope: SMTPEnvelope,
+        partial_content: bytes,
+        error: BaseException,
+    ) -> None:
+        self.calls.append(
+            (envelope.mail_from, list(envelope.rcpt_tos), partial_content, error)
+        )
+
+
 class SleepingHeloHandler:
     async def handle_HELO(
         self,
@@ -461,6 +480,100 @@ class TestProtocol:
         assert responses[5] == S.S250_OK.to_bytes() + b"\r\n"
         assert len(handler.box) == 1
         assert handler.box[0].content == b""
+
+    def _data_then_disconnect(
+        self, temp_event_loop, get_protocol, handler, *lines, **kwargs
+    ) -> Server:
+        """Feed a DATA transaction without its terminator, then hit EOF."""
+        protocol = get_protocol(handler, **kwargs)
+        protocol.data_received(
+            BCRLF.join(
+                [
+                    b"HELO example.org",
+                    b"MAIL FROM: <anne@example.com>",
+                    b"RCPT TO: <bart@example.com>",
+                    b"DATA",
+                    *lines,
+                ]
+            )
+        )
+        # Let the server consume what we sent before the client vanishes.
+        temp_event_loop.call_later(0.05, protocol.eof_received)
+        with suppress(asyncio.CancelledError):
+            temp_event_loop.run_until_complete(protocol._handler_coroutine)
+        return protocol
+
+    def test_data_aborted(self, temp_event_loop, transport_resp, get_protocol):
+        handler = DataAbortedHandler()
+        self._data_then_disconnect(
+            temp_event_loop,
+            get_protocol,
+            handler,
+            b"From: anne@example.com",
+            b"",
+            b"incomplete body\r\n",
+        )
+        assert len(handler.calls) == 1
+        mail_from, rcpt_tos, partial_content, error = handler.calls[0]
+        assert mail_from == "anne@example.com"
+        assert rcpt_tos == ["bart@example.com"]
+        assert partial_content == b"From: anne@example.com\r\n\r\nincomplete body\r\n"
+        assert isinstance(error, asyncio.CancelledError)
+
+    def test_data_aborted_undoes_dot_stuffing(
+        self, temp_event_loop, transport_resp, get_protocol
+    ):
+        handler = DataAbortedHandler()
+        self._data_then_disconnect(
+            temp_event_loop, get_protocol, handler, b"..stuffed\r\n"
+        )
+        assert handler.calls[0][2] == b".stuffed\r\n"
+
+    def test_data_aborted_discards_oversized(
+        self, temp_event_loop, transport_resp, get_protocol
+    ):
+        # Content past data_size_limit is dropped as it arrives, so the hook is
+        # told the transaction aborted but gets nothing to quarantine.
+        handler = DataAbortedHandler()
+        self._data_then_disconnect(
+            temp_event_loop,
+            get_protocol,
+            handler,
+            b"x" * 64 + b"\r\n",
+            data_size_limit=32,
+        )
+        assert len(handler.calls) == 1
+        assert handler.calls[0][2] == b""
+
+    def test_data_aborted_not_called_when_completed(
+        self, temp_event_loop, transport_resp, get_protocol
+    ):
+        handler = DataAbortedHandler()
+        protocol = get_protocol(handler)
+        protocol.data_received(
+            BCRLF.join(
+                [
+                    b"HELO example.org",
+                    b"MAIL FROM: <anne@example.com>",
+                    b"RCPT TO: <bart@example.com>",
+                    b"DATA",
+                    b"complete body",
+                    b".",
+                    b"QUIT\r\n",
+                ]
+            )
+        )
+        with suppress(asyncio.CancelledError):
+            temp_event_loop.run_until_complete(protocol._handler_coroutine)
+        assert handler.calls == []
+
+    def test_data_aborted_without_hook(
+        self, temp_event_loop, transport_resp, get_protocol
+    ):
+        # A handler that does not implement the hook must still tear down cleanly.
+        self._data_then_disconnect(
+            temp_event_loop, get_protocol, Sink(), b"incomplete body\r\n"
+        )
 
 
 @pytest.mark.usefixtures("plain_controller")
@@ -1425,6 +1538,29 @@ class TestSMTPWithController(_CommonMethods):
         self._ehlo(client)
         resp = client.docmd("MAIL FROM: <anne@example.com> SIZE=10000")
         assert resp == S.S552_EXCEED_SIZE
+
+    @handler_data(class_=DataAbortedHandler)
+    def test_data_aborted_on_client_disconnect(self, plain_controller, client):
+        handler = plain_controller.handler
+        assert isinstance(handler, DataAbortedHandler)
+        self._ehlo(client)
+        assert client.docmd("MAIL FROM: <anne@example.com>") == S.S250_OK
+        assert client.docmd("RCPT TO: <bart@example.com>") == S.S250_OK
+        assert client.docmd("DATA")[0] == 354
+        assert client.sock is not None
+        client.sock.sendall(b"incomplete body\r\n")
+        catchup_delay()
+        # Vanish without sending the <CRLF>.<CRLF> terminator
+        client.close()
+        for _ in range(20):
+            if handler.calls:
+                break
+            catchup_delay()
+        assert len(handler.calls) == 1
+        mail_from, rcpt_tos, partial_content, _error = handler.calls[0]
+        assert mail_from == "anne@example.com"
+        assert rcpt_tos == ["bart@example.com"]
+        assert partial_content == b"incomplete body\r\n"
 
     @handler_data(class_=ReceivingHandler)
     def test_mail_with_compatible_smtputf8(self, plain_controller, client):

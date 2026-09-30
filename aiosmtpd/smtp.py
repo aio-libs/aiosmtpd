@@ -370,6 +370,7 @@ class SMTP(asyncio.StreamReaderProtocol):
         self.envelope: Optional[Envelope] = None
         self.transport: Optional[asyncio.BaseTransport] = None
         self._handler_coroutine: Optional[asyncio.Task[None]] = None
+        self._data_aborted_task: Optional["asyncio.Task[Any]"] = None
         if not auth_require_tls and auth_required:
             warn("Requiring AUTH while not requiring TLS "
                  "can lead to security vulnerabilities!")
@@ -474,6 +475,40 @@ class SMTP(asyncio.StreamReaderProtocol):
             return MISSING
         status = await hook(self, self.session, self.envelope, *args)
         return status
+
+    async def _call_data_aborted_hook(
+        self,
+        data: List[bytearray],
+        line_fragments: List[bytes],
+        error: BaseException,
+    ) -> None:
+        """Hand the partial DATA payload to handle_DATA_aborted(), if defined.
+
+        Called when the client vanishes before sending the ``<CRLF>.<CRLF>``
+        terminator. The hook is invoked as a separate task so that a second
+        cancellation (``connection_lost()`` follows ``eof_received()``) cannot
+        abandon it halfway.
+        """
+        hook = self._handle_hooks.get("DATA_aborted")
+        if hook is None:
+            return
+        # De-transparency, same as the nominal path, so what the hook sees
+        # matches what envelope.original_content would have held.
+        for text in data:
+            if text.startswith(b"."):
+                del text[0]
+        partial_content = EMPTYBYTES.join(data) + EMPTYBYTES.join(line_fragments)
+        try:
+            self._data_aborted_task = self.loop.create_task(
+                hook(self, self.session, self.envelope, partial_content, error)
+            )
+            await asyncio.shield(self._data_aborted_task)
+        except asyncio.CancelledError:
+            # We are being torn down; the shielded task keeps running.
+            pass
+        except Exception:
+            log.exception("%r Exception in handle_DATA_aborted()",
+                          self.session.peer if self.session else None)
 
     @property
     def max_command_size_limit(self) -> int:
@@ -1435,9 +1470,10 @@ class SMTP(asyncio.StreamReaderProtocol):
                 line: bytes = await self._reader.readuntil(b'\r\n')
                 log.debug('DATA readline: %s', line)
                 assert line.endswith(b'\r\n')
-            except asyncio.CancelledError:
+            except asyncio.CancelledError as error:
                 # The connection got reset during the DATA command.
                 log.info('Connection lost during DATA')
+                await self._call_data_aborted_hook(data, line_fragments, error)
                 self._writer.close()
                 raise
             except asyncio.LimitOverrunError as e:
