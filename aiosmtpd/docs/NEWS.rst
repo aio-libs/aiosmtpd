@@ -12,6 +12,11 @@ Fixed/Improved
 
 * Dropped Python 3.8, PyPy 3.8
 * Added PyPy 3.11, dropped PyPy 3.9
+* Added the ``require_angle_brackets`` option to ``SMTP``. When enabled, the
+  argument of ``MAIL FROM:`` and ``RCPT TO:`` must be enclosed in angle
+  brackets as required by RFC 5321 § 4.1.2, and a bare address is rejected
+  with ``501``. Defaults to ``False``, preserving the existing lenient
+  behavior. (Closes #563, Closes #564)
 
 
 1.4.6 (2024-05-18)

@@ -160,7 +160,8 @@ aiosmtpd.smtp
 
 .. class:: SMTP(handler, *, data_size_limit=33554432, enable_SMTPUTF8=False, \
    decode_data=False, hostname=None, ident=None, tls_context=None, \
-   require_starttls=False, timeout=300, auth_required=False, \
+   require_starttls=False, require_angle_brackets=False, \
+   timeout=300, auth_required=False, \
    auth_require_tls=True, auth_exclude_mechanism=None, auth_callback=None, \
    authenticator=None, command_call_limit=None, \
    proxy_protocol_timeout=None, \
@@ -237,6 +238,25 @@ aiosmtpd.smtp
 
       "Restricted" ESMTP commands are all commands not in the set
       ``{"NOOP", "EHLO", "STARTTLS", "QUIT"}``
+
+   .. py:attribute:: require_angle_brackets
+      :type: bool
+      :value: False
+
+      If set to ``True``,
+      the argument of ``MAIL FROM:`` and ``RCPT TO:`` must be enclosed in
+      angle brackets, as required by :rfc:`5321#section-4.1.2`;
+      a bare address such as ``MAIL FROM:anne@example.com`` is rejected with
+      ``501`` and the session stays in the same state.
+
+      The default is ``False``, which accepts both bracketed and bare
+      addresses. This matches the historical behavior of this module
+      (and the default of most MTAs), but it is not strictly RFC-conformant.
+
+      This flag does not affect ``VRFY``, whose argument is a free-form
+      string rather than a path.
+
+      .. versionadded:: 1.4.7
 
    .. py:attribute:: timeout
       :type: Union[int, float]
@@ -442,6 +462,11 @@ aiosmtpd.smtp
 
       True if both the *tls_context* argument to the constructor was given
       **and** the *require_starttls* flag was True.
+
+   .. attribute:: require_angle_brackets
+
+      The value of the *require_angle_brackets* argument passed into the
+      constructor.
 
    .. attribute:: session
 

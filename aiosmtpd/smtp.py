@@ -324,6 +324,7 @@ class SMTP(asyncio.StreamReaderProtocol):
             ident: Optional[str] = None,
             tls_context: Optional[ssl.SSLContext] = None,
             require_starttls: bool = False,
+            require_angle_brackets: bool = False,
             timeout: float = 300,
             auth_required: bool = False,
             auth_require_tls: bool = True,
@@ -361,6 +362,7 @@ class SMTP(asyncio.StreamReaderProtocol):
                 log.warning("tls_context.check_hostname == True; "
                             "this might cause client connection problems")
         self.require_starttls = tls_context and require_starttls
+        self.require_angle_brackets = require_angle_brackets
         self._timeout_duration = timeout
         self._timeout_handle: Optional[asyncio.TimerHandle] = None
         self._tls_handshake_okay = True
@@ -1284,6 +1286,10 @@ class SMTP(asyncio.StreamReaderProtocol):
         if arg is None:
             await self.push(syntaxerr)
             return
+        if self.require_angle_brackets and not arg.startswith('<'):
+            # RFC 5321 s 4.1.2: the Reverse-path is always angle-bracketed.
+            await self.push(syntaxerr)
+            return
         address, addrparams = self._getaddr(arg)
         if address is None:
             await self.push("553 5.1.3 Error: malformed address")
@@ -1360,6 +1366,11 @@ class SMTP(asyncio.StreamReaderProtocol):
             return
         arg = self._strip_command_keyword('TO:', arg)
         if arg is None:
+            await self.push(syntaxerr)
+            return
+        if self.require_angle_brackets and not arg.startswith('<'):
+            # RFC 5321 s 4.1.2: the Forward-path is always angle-bracketed,
+            # including the special "RCPT TO:<Postmaster>" case (s 4.5.1).
             await self.push(syntaxerr)
             return
         address, params = self._getaddr(arg)

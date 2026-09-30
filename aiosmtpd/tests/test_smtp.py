@@ -1718,6 +1718,59 @@ class TestCustomization(_CommonMethods):
         assert resp == S.S553_MALFORMED
 
 
+@pytest.mark.usefixtures("plain_controller")
+@controller_data(require_angle_brackets=True)
+class TestRequireAngleBrackets(_CommonMethods):
+    """RFC 5321 § 4.1.2 mandates angle brackets around Reverse-/Forward-path."""
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "MAIL FROM:anne@example.com",
+            "MAIL FROM: anne@example.com",
+            "MAIL FROM: anne@example.com SIZE=1000",
+        ],
+        ids=["nospace", "space", "params"],
+    )
+    def test_mail_bare_path(self, client, command):
+        self._ehlo(client)
+        assert client.docmd(command) == S.S501_SYNTAX_MAIL_E
+
+    @pytest.mark.parametrize(
+        "address",
+        ["<anne@example.com>", " <anne@example.com>", "<>"],
+        ids=["nospace", "space", "null"],
+    )
+    def test_mail_bracketed_path(self, client, address):
+        self._ehlo(client)
+        assert client.docmd(f"MAIL FROM:{address}") == S.S250_OK
+
+    @pytest.mark.parametrize(
+        "command",
+        ["RCPT TO:bob@example.com", "RCPT TO:Postmaster"],
+        ids=["addr", "postmaster"],
+    )
+    def test_rcpt_bare_path(self, client, command):
+        self._ehlo(client)
+        assert client.docmd("MAIL FROM:<anne@example.com>") == S.S250_OK
+        assert client.docmd(command) == S.S501_SYNTAX_RCPT_E
+
+    @pytest.mark.parametrize(
+        "address",
+        ["<bob@example.com>", "<Postmaster>"],
+        ids=["addr", "postmaster"],
+    )
+    def test_rcpt_bracketed_path(self, client, address):
+        self._ehlo(client)
+        assert client.docmd("MAIL FROM:<anne@example.com>") == S.S250_OK
+        assert client.docmd(f"RCPT TO:{address}") == S.S250_OK
+
+    def test_vrfy_unaffected(self, client):
+        # VRFY takes a free-form string, not a path, so it stays lenient.
+        self._ehlo(client)
+        assert client.docmd("VRFY anne@example.com") == S.S252_CANNOT_VRFY
+
+
 class TestClientCrash(_CommonMethods):
     def test_connection_reset_during_DATA(
         self, mocker: MockFixture, plain_controller, client
