@@ -93,7 +93,7 @@ Added
 * Support for |PROXY Protocol|_ (Closes #174)
 * Example for authentication
 * SSL Support for CLI. See :ref:`the man page <manpage>` for more info. (Closes #172)
-* New :class:`UnixSocketController` class to implement Unix socket-based SMTP server
+* New :class:`~aiosmtpd.controller.UnixSocketController` class to implement Unix socket-based SMTP server
   (Closes #114)
 
 .. _`PROXY Protocol`: https://www.haproxy.com/blog/using-haproxy-with-the-proxy-protocol-to-better-secure-your-database/
@@ -185,7 +185,7 @@ Fixed/Improved
 * Implement & enforce line-length-limit, thus becoming Compliant with RFC 5321 § 4.5.3.1.6
 * Delay all SMTP Status Code replies during ``DATA`` phase until the phase termination (Closes #9)
 * Now catches ``Controller.factory()`` failure during ``Controller.start()`` (Closes #212)
-* :class:`SMTP` no longer edits user-supplied SSL Context (Closes #191)
+* :class:`~aiosmtpd.smtp.SMTP` no longer edits user-supplied SSL Context (Closes #191)
 * Implement waiting for SSL setup/handshake within ``STARTTLS`` handler to be able to catch and handle
   (log) errors and to avoid session hanging around until timeout in such cases
 * Add session peer information to some logging output where it was missing

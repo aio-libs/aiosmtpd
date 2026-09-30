@@ -3,4 +3,5 @@
 ### Sphinx deps
 sphinx==8.2.0
 sphinx-autofixture==0.4.0
+sphinx_paramlinks==0.6.0
 sphinx_rtd_theme==3.0.1

@@ -15,8 +15,13 @@
 
 import datetime
 import sys
+import typing as _t
 from pathlib import Path
-from typing import Dict
+
+from docutils import nodes
+from sphinx.addnodes import pending_xref
+from sphinx.application import Sphinx
+from sphinx.environment import BuildEnvironment
 
 import sphinx_rtd_theme  # noqa: F401 # pytype: disable=import-error
 
@@ -62,6 +67,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.doctest",
     "sphinx_autofixture",
+    "sphinx_paramlinks",
     "autoprogramm",
     "sphinx_rtd_theme"
 ]
@@ -145,12 +151,23 @@ rst_prolog = f"""
 .. |copyright| replace:: {copyright}
 """
 
+nitpicky = True
+
+# Ignore the following broken references
+nitpick_ignore = [
+    # _Missing is a private class used in the return annotations of
+    # challenge_auth() and the deprecated _auth_interact(). It is
+    # undocumented, and an inline literal does not work inside Union.
+    ('py:class', '_Missing'),
+]
+
 # endregion
 
 # region -- Extensions configuration ---------------------------------------------
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
+    "python_311": ("https://docs.python.org/3.11", None),
 }
 
 doctest_global_setup = """
@@ -251,7 +268,7 @@ htmlhelp_basename = "aiosmtpddoc"
 
 # region -- Options for LaTeX output ---------------------------------------------
 
-latex_elements: Dict[str, str] = {
+latex_elements: _t.Dict[str, str] = {
     # The paper size ('letterpaper' or 'a4paper').
     # 'papersize': 'letterpaper',
     # The font size ('10pt', '11pt' or '12pt').
@@ -334,5 +351,31 @@ texinfo_documents = [
 # endregion
 
 
+def resolve_missing_reference(
+    app: Sphinx,
+    env: BuildEnvironment,
+    node: pending_xref,
+    contnode: nodes.Element,
+) -> _t.Optional[nodes.reference]:
+    if (
+        node.get("reftarget") == "aiosmtpd.smtp.AuthenticatorType"
+        and node.get("reftype") == "class"
+    ):
+        domain = env.get_domain("py")
+        resolved_node = domain.resolve_xref(
+            env,
+            node.get("refdoc", ""),
+            app.builder,
+            "data",
+            "aiosmtpd.smtp.AuthenticatorType",
+            node,
+            contnode,
+        )
+        if resolved_node is not None:
+            return resolved_node
+    return None
+
+
 def setup(app):  # noqa: ANN001
     app.add_css_file("aiosmtpd.css")
+    app.connect("missing-reference", resolve_missing_reference)

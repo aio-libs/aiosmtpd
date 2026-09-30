@@ -38,7 +38,7 @@ exceptional cases.  These *handler hooks* are ALL called **asynchronously**
 (i.e. they are coroutines).
 
 All handler hooks are optional and default behaviors are
-carried out by the :class:`SMTP` class when a hook is omitted,
+carried out by the :class:`~aiosmtpd.smtp.SMTP` class when a hook is omitted,
 so you only need to implement the ones you care about.
 
 When a handler hook is defined,
@@ -140,7 +140,7 @@ The following hooks are currently supported (in alphabetical order):
    The hook MUST return a list containing the desired responses.
    The returned list should end with ``250 HELP``
 
-   This hook MUST also set the :attr:``session.host_name`` attribute.
+   This hook MUST also set the :attr:`session.host_name <Session.host_name>` attribute.
 
    .. important::
 
@@ -157,7 +157,7 @@ The following hooks are currently supported (in alphabetical order):
    This hook is called during ``HELO``.
 
    If implemented,
-   this hook MUST also set the :attr:``session.host_name`` attribute
+   this hook MUST also set the :attr:`session.host_name <Session.host_name>` attribute
    before returning ``'250 {}'.format(server.hostname)`` as the status.
 
 .. py:method:: handle_MAIL(server, session, envelope, address, mail_options) -> str
@@ -172,8 +172,8 @@ The following hooks are currently supported (in alphabetical order):
    Called during ``MAIL FROM``.
 
    If implemented,
-   this hook MUST also set the :attr:`envelope.mail_from` attribute
-   and it MAY extend :attr:`envelope.mail_options` (which is always a Python list).
+   this hook MUST also set the :attr:`~.Envelope.mail_from` attribute
+   and it MAY extend :attr:`~.Envelope.mail_options` (which is always a Python list).
 
 .. py:method:: handle_NOOP(server, session, envelope, arg) -> str
    :async:
@@ -187,7 +187,7 @@ The following hooks are currently supported (in alphabetical order):
 .. method:: handle_PROXY(server, session, envelope, proxy_data)
    :noindex:
 
-   :param SMTP server: The :class:`SMTP` instance invoking the hook.
+   :param SMTP server: The :class:`~aiosmtpd.smtp.SMTP` instance invoking the hook.
    :param Session session: The Session data *so far* (see Important note below)
    :param Envelope envelope: The Envelope data *so far* (see Important note below)
    :param ProxyData proxy_data: The result of parsing the PROXY Header
@@ -272,9 +272,16 @@ The following built-in handlers can be imported from :mod:`aiosmtpd.handlers`:
    it is also an :term:`abstract base class` (it must be subclassed).
 
    The only difference with :class:`Message` is that
-   :func:`handle_message()` is called *asynchronously*.
+   :meth:`~.AsyncMessage.handle_message` is called *asynchronously*.
 
    This class **cannot** be used on the command line.
+
+   .. py:method:: handle_message(message)
+      :async:
+
+      Coroutine that processes the *message* instance created by
+      :meth:`~.Message.prepare_message`.
+      Subclasses MUST implement this method as an ``async def`` coroutine.
 
 .. py:class:: Debugging
 
@@ -313,14 +320,29 @@ The following built-in handlers can be imported from :mod:`aiosmtpd.handlers`:
 
    This message instance gains a few additional headers
    (e.g. :mailheader:`X-Peer`, :mailheader:`X-MailFrom`, and :mailheader:`X-RcptTo`).
-   You can override this behavior by overriding the :func:`prepare_message` method,
+   You can override this behavior by overriding the :meth:`~.Message.prepare_message` method,
    which takes a session and an envelope.
-   The message instance is then passed to the handler's :func:`handle_message()` method.
+   The message instance is then passed to the handler's :meth:`~.Message.handle_message` method.
    It is this method that must be implemented in the subclass.
 
-   :func:`prepare_message()` and :func:`handle_message()`` are both called :boldital:`synchronously`.
+   :meth:`~.Message.prepare_message` and :meth:`~.Message.handle_message` are both called :boldital:`synchronously`.
 
    This class **cannot** be used on the command line.
+
+   .. py:method:: prepare_message(session, envelope)
+
+      Convert the message content in *envelope* into an instance of
+      ``message_class``, and add the ``X-Peer``, ``X-MailFrom``,
+      and ``X-RcptTo`` headers to it.
+      Returns the message instance.
+
+      Subclasses can override this method
+      to customize how message instances are created.
+
+   .. py:method:: handle_message(message)
+
+      Process the *message* instance created by :meth:`~.Message.prepare_message`.
+      This is an abstract method; it must be implemented in the subclass.
 
 .. py:class:: Proxy
 
