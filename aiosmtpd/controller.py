@@ -393,8 +393,59 @@ class InetMixin(BaseController, metaclass=ABCMeta):
             **kwargs,
         )
         self._localhost = get_localhost()
-        self.hostname = self._localhost if hostname is None else hostname
-        self.port = port
+        self.requested_hostname = self._localhost if hostname is None else hostname
+        self.requested_port = port
+
+    @property
+    def _active_addr(self) -> tuple[str, int]:
+        if not isinstance(self.server, asyncio.Server):
+            raise RuntimeError("The server is currently not listening to any socket")
+
+        socket = self.server.sockets[0]
+        return socket.getsockname()
+
+    @property
+    def hostname(self) -> str:
+        """Return the hostname the server is listening on.
+
+        If the server is not currently listening on any sockets,
+        raise RuntimeError.
+
+        If an empty hostname parameter was passed to the controller's constuctor
+        then the server is running on all available interfaces, that may have
+        different hostnames. For example, "127.0.0.1" and "::1". This property
+        returns the hostname of the first listening socket, but the order of
+        listening sockets is not defined.
+
+        To access the hostname parameter that was passed in to controller's
+        constructor, use `self.requested_hostname`.
+
+        """
+
+        return self._active_addr[0]
+
+    @property
+    def port(self) -> int:
+        """Return the port the server is listening on.
+
+        If the server is not currently listening on any sockets,
+        raise :exc:`RuntimeError`.
+
+        If port=0 was passed to the controller's constuctor then the server picks
+        a random unused port. This property will return the port that was picked.
+
+        If port=0 *and* an empty hostname parameter was passed to the controller's
+        constuctor then the server is running on all available interfaces, and
+        on a different randomly chosen port on each. This property returns the
+        port of the first listening socket, but the order of listening sockets is
+        not defined.
+
+        To access the port parameter that was passed in to controller's
+        constructor, use ``self.requested_port``.
+
+        """
+
+        return self._active_addr[1]
 
     def _create_server(self) -> Awaitable[asyncio.AbstractServer]:
         """
@@ -404,8 +455,8 @@ class InetMixin(BaseController, metaclass=ABCMeta):
         """
         return self.loop.create_server(
             self._factory_invoker,
-            host=self.hostname,
-            port=self.port,
+            host=self.requested_hostname,
+            port=self.requested_port,
             ssl=self.ssl_context,
         )
 
