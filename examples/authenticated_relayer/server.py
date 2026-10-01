@@ -2,17 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import hmac
 import logging
-import secrets
 import sqlite3
 import sys
+from contextlib import closing
 from functools import lru_cache
 from hashlib import pbkdf2_hmac
 from pathlib import Path
 from smtplib import SMTP as SMTPCLient
 from typing import Dict
 
-import dns.resolver
 from aiosmtpd.controller import Controller
 from aiosmtpd.smtp import AuthResult, LoginPassword
 
@@ -24,6 +24,15 @@ DB_AUTH = Path("mail.db~")
 class Authenticator:
     def __init__(self, auth_database):
         self.auth_db = Path(auth_database)
+        with closing(sqlite3.connect(self.auth_db)) as conn:
+            columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(userauth)")
+            }
+        if not {"username", "salt", "hashpass"} <= columns:
+            raise RuntimeError(
+                "incompatible authentication database; recreate it with "
+                "make_user_db.py"
+            )
 
     def __call__(self, server, session, envelope, mechanism, auth_data):
         fail_nothandled = AuthResult(success=False, handled=False)
@@ -31,24 +40,28 @@ class Authenticator:
             return fail_nothandled
         if not isinstance(auth_data, LoginPassword):
             return fail_nothandled
-        username = auth_data.login
-        password = auth_data.password
-        hashpass = pbkdf2_hmac("sha256", password, secrets.token_bytes(), 1000000).hex()
-        conn = sqlite3.connect(self.auth_db)
-        curs = conn.execute(
-            "SELECT hashpass FROM userauth WHERE username=?", (username,)
-        )
-        hash_db = curs.fetchone()
-        conn.close()
-        if not hash_db:
+        try:
+            username = auth_data.login.decode("utf-8")
+        except UnicodeDecodeError:
             return fail_nothandled
-        if hashpass != hash_db[0]:
+        password = auth_data.password
+        with closing(sqlite3.connect(self.auth_db)) as conn:
+            credentials = conn.execute(
+                "SELECT salt, hashpass FROM userauth WHERE username=?", (username,)
+            ).fetchone()
+        if not credentials:
+            return fail_nothandled
+        salt, hash_db = credentials
+        hashpass = pbkdf2_hmac("sha256", password, salt, 1000000).hex()
+        if not hmac.compare_digest(hashpass, hash_db):
             return fail_nothandled
         return AuthResult(success=True)
 
 
 @lru_cache(maxsize=256)
 def get_mx(domain):
+    import dns.resolver
+
     records = dns.resolver.resolve(domain, "MX")
     if not records:
         return None
@@ -86,6 +99,7 @@ async def amain():
     )
     try:
         cont.start()
+        await asyncio.Event().wait()
     finally:
         cont.stop()
 
@@ -95,10 +109,7 @@ if __name__ == '__main__':
         print(f"Please create {DB_AUTH} first using make_user_db.py")
         sys.exit(1)
     logging.basicConfig(level=logging.DEBUG)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.create_task(amain())  # type: ignore[unused-awaitable]
     try:
-        loop.run_forever()
+        asyncio.run(amain())
     except KeyboardInterrupt:
         print("User abort indicated")
