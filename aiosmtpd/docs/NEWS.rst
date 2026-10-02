@@ -12,6 +12,9 @@ Fixed/Improved
 
 * Dropped Python 3.8, PyPy 3.8
 * Added PyPy 3.11, dropped PyPy 3.9
+* ``LMTP`` now sends one reply per accepted recipient after ``DATA``,
+  as required by :rfc:`2033` § 4.2.  ``handle_DATA`` may return a list of
+  per-recipient statuses to reply differently to each one. (Closes #517)
 
 
 1.4.6 (2024-05-18)
