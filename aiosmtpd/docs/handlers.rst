@@ -98,6 +98,34 @@ The following hooks are currently supported (in alphabetical order):
    ``decode_data=False`` or ``decode_data=True``.
    See :attr:`Envelope.content` for more info.
 
+.. py:method:: handle_DATA_aborted(server, session, envelope, partial_content, error)
+   :async:
+
+   :param partial_content: The message content received so far
+   :type partial_content: bytes
+   :param error: The exception that ended the ``DATA`` phase
+   :type error: BaseException
+
+   Called when the client disconnects during ``DATA``,
+   before the ``<CRLF>.<CRLF>`` terminator has been received.
+   The message was **not** accepted:
+   ``handle_DATA()`` is not called,
+   ``envelope.content`` is left unset,
+   and no status is sent back to the (already gone) client.
+   The return value of this hook is ignored.
+
+   ``partial_content`` holds the complete lines received so far,
+   normalized according to the transparency rules
+   as defined in :rfc:`RFC 5321, §4.5.2 <5321#section-4.5.2>`.
+   Bytes of a trailing line that never got its ``CRLF`` are *not* included.
+   It will be empty if the aborted transaction had already exceeded
+   ``data_size_limit`` or ``line_length_limit``,
+   because such content is discarded as it arrives to avoid memory pressure.
+
+   Implement this hook only if incomplete payloads are interesting to you
+   (e.g. for quarantine or diagnostics);
+   when it is absent, an aborted ``DATA`` is silently discarded as before.
+
 .. py:method:: handle_EHLO(server, session, envelope, hostname, responses) -> List[str]
    :async:
    :noindex:

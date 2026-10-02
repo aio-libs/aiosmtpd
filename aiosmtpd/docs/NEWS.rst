@@ -10,6 +10,8 @@
 Fixed/Improved
 --------------
 
+* Added the ``handle_DATA_aborted`` handler hook, called with the partial payload
+  when a client disconnects mid-``DATA`` (Closes #614)
 * Dropped Python 3.8, PyPy 3.8
 * Added PyPy 3.11, dropped PyPy 3.9
 
