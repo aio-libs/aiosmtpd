@@ -8,6 +8,9 @@ from pathlib import Path
 
 
 DB_FILE = "mail.db~"
+
+# Must match server.py, or nothing will ever verify.
+HASH_ITERATIONS = 1000000
 USER_AND_PASSWORD = {
     "user1": b"not@password",
     "user2": b"correctbatteryhorsestaple",
@@ -24,11 +27,12 @@ if __name__ == '__main__':
         dbfp.unlink()
     conn = sqlite3.connect(DB_FILE)
     curs = conn.cursor()
-    curs.execute("CREATE TABLE userauth (username text, hashpass text)")
-    insert_up = "INSERT INTO userauth VALUES (?, ?)"
+    curs.execute("CREATE TABLE userauth (username text, salt text, hashpass text)")
+    insert_up = "INSERT INTO userauth VALUES (?, ?, ?)"
     for u, p in USER_AND_PASSWORD.items():
-        h = pbkdf2_hmac("sha256", p, secrets.token_bytes(), 1000000).hex()
-        curs.execute(insert_up, (u, h))
+        salt = secrets.token_bytes(32)
+        h = pbkdf2_hmac("sha256", p, salt, HASH_ITERATIONS).hex()
+        curs.execute(insert_up, (u, salt.hex(), h))
     conn.commit()
     conn.close()
     assert dbfp.exists()
