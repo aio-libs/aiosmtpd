@@ -6,46 +6,55 @@
 import sqlite3
 import subprocess
 import sys
+import typing as _t
 from contextlib import closing
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable
 
 import pytest
 
 from aiosmtpd.smtp import AuthResult, LoginPassword
 
 #: Calls the example Authenticator with a mechanism and auth_data.
-Authenticate = Callable[[str, Any], AuthResult]
+Authenticate = _t.Callable[[str, object], AuthResult]
 
 
-# Outside a repo checkout there are no examples to import, and server.py also
-# needs dnspython for its relaying half; both skip. Any other import error in
-# the examples still fails the tests.
 @pytest.fixture(scope="module")
 def make_user_db() -> ModuleType:
-    pytest.importorskip("examples.authenticated_relayer")
-    from examples.authenticated_relayer import make_user_db as module
+    """Import the example's ``make_user_db``, skipping when ``examples/`` is absent.
 
-    return module
+    The sdist ships the tests but not the examples.
+    """
+    make_user_db_mod = pytest.importorskip(
+        "examples.authenticated_relayer.make_user_db",
+    )
+    if not isinstance(make_user_db_mod, ModuleType):  # pragma: no cover
+        raise ImportError(f"Imported thing {make_user_db_mod!r} was not a module")
+    return make_user_db_mod
 
 
 @pytest.fixture(scope="module")
 def server() -> ModuleType:
-    pytest.importorskip("examples.authenticated_relayer")
-    pytest.importorskip("dns.resolver")
-    from examples.authenticated_relayer import server as module
+    """Import the example's ``server``, skipping without ``examples/`` or dnspython.
 
-    return module
+    The sdist ships no ``examples/``, and the example imports dnspython for
+    its relaying half.
+    """
+    server_mod = pytest.importorskip("examples.authenticated_relayer.server")
+    if not isinstance(server_mod, ModuleType):  # pragma: no cover
+        raise ImportError(f"Imported thing {server_mod!r} was not a module")
+    return server_mod
 
 
 @pytest.fixture(scope="module")
 def users(make_user_db: ModuleType) -> dict[str, bytes]:
+    """Map each username that make_user_db.py creates to its password."""
     return make_user_db.USER_AND_PASSWORD
 
 
 @pytest.fixture(scope="module")
 def known_user(users: dict[str, bytes]) -> tuple[str, bytes]:
+    """Return the first username and password that make_user_db.py creates."""
     return next(iter(users.items()))
 
 
@@ -67,38 +76,42 @@ def user_db(make_user_db: ModuleType, tmp_path_factory: pytest.TempPathFactory) 
 
 @pytest.fixture(scope="module")
 def authenticate(server: ModuleType, user_db: Path) -> Authenticate:
+    """Return a function running the example's Authenticator on the user DB."""
     authenticator = server.Authenticator(user_db)
 
-    def do_auth(mechanism: str, auth_data: Any) -> AuthResult:
+    def do_auth(mechanism: str, auth_data: object) -> AuthResult:
         return authenticator(None, None, None, mechanism, auth_data)
 
     return do_auth
 
 
-@pytest.mark.parametrize("mechanism", ["LOGIN", "PLAIN"])
+@pytest.mark.parametrize("mechanism", ("LOGIN", "PLAIN"))  # noqa: PT007
 def test_correct_password_accepted(
-    authenticate: Authenticate, known_user: tuple[str, bytes], mechanism: str
+    authenticate: Authenticate, known_user: tuple[str, bytes], mechanism: str,
 ) -> None:
+    """A known user's password is accepted over both LOGIN and PLAIN."""
     user, password = known_user
     result = authenticate(mechanism, LoginPassword(user.encode("utf-8"), password))
     assert result.success is True
 
 
 def test_all_created_users_can_authenticate(
-    authenticate: Authenticate, users: dict[str, bytes]
+    authenticate: Authenticate, users: dict[str, bytes],
 ) -> None:
-    # The salt written by make_user_db.py must round-trip through the DB
-    # into verification for every user, not just the first row.
-    last_user, last_password = list(users.items())[-1]
-    result = authenticate(
-        "LOGIN", LoginPassword(last_user.encode("utf-8"), last_password)
-    )
-    assert result.success is True
+    """Every user make_user_db.py creates logs in, not just the first row.
+
+    Each row carries its own salt, which has to round-trip through the DB
+    into verification.
+    """
+    for user, password in users.items():
+        result = authenticate("LOGIN", LoginPassword(user.encode("utf-8"), password))
+        assert result.success is True, user
 
 
 def test_wrong_password_rejected(
-    authenticate: Authenticate, known_user: tuple[str, bytes]
+    authenticate: Authenticate, known_user: tuple[str, bytes],
 ) -> None:
+    """A known user with a wrong password is rejected."""
     user, _ = known_user
     result = authenticate("LOGIN", LoginPassword(user.encode("utf-8"), b"hunter2"))
     assert result.success is False
@@ -106,8 +119,9 @@ def test_wrong_password_rejected(
 
 
 def test_unknown_user_rejected(
-    authenticate: Authenticate, known_user: tuple[str, bytes]
+    authenticate: Authenticate, known_user: tuple[str, bytes],
 ) -> None:
+    """A username missing from the DB is rejected, even with a real password."""
     _, password = known_user
     result = authenticate("LOGIN", LoginPassword(b"nonexistent", password))
     assert result.success is False
@@ -115,27 +129,28 @@ def test_unknown_user_rejected(
 
 
 def test_unsupported_mechanism_rejected(
-    authenticate: Authenticate, known_user: tuple[str, bytes]
+    authenticate: Authenticate, known_user: tuple[str, bytes],
 ) -> None:
+    """A mechanism other than LOGIN or PLAIN is rejected, even with valid data."""
     user, password = known_user
     result = authenticate("CRAM-MD5", LoginPassword(user.encode("utf-8"), password))
     assert result.success is False
     assert result.handled is False
 
 
-@pytest.mark.parametrize(
+@pytest.mark.parametrize(  # noqa: PT007
     "auth_data",
-    [
+    (
         pytest.param(("user1", b"not@password"), id="not-a-LoginPassword"),
         # user1's real password behind invalid UTF-8, so a decoder that drops
         # the invalid bytes would log in instead of rejecting.
         pytest.param(
-            LoginPassword(b"\xff\xfeuser1", b"not@password"), id="non-utf8-login"
+            LoginPassword(b"\xff\xfeuser1", b"not@password"), id="non-utf8-login",
         ),
-    ],
+    ),
 )
 def test_malformed_auth_data_rejected(
-    authenticate: Authenticate, auth_data: Any
+    authenticate: Authenticate, auth_data: object,
 ) -> None:
     """Malformed auth data is rejected rather than raising."""
     result = authenticate("LOGIN", auth_data)
@@ -144,7 +159,7 @@ def test_malformed_auth_data_rejected(
 
 
 def test_stale_database_rejects_without_leaking(
-    server: ModuleType, known_user: tuple[str, bytes], tmp_path: Path
+    server: ModuleType, known_user: tuple[str, bytes], tmp_path: Path,
 ) -> None:
     """A DB predating the salt column must not escape as an exception.
 
@@ -160,7 +175,7 @@ def test_stale_database_rejects_without_leaking(
         conn.commit()
 
     result = server.Authenticator(stale)(
-        None, None, None, "LOGIN", LoginPassword(user.encode("utf-8"), password)
+        None, None, None, "LOGIN", LoginPassword(user.encode("utf-8"), password),
     )
     assert result.success is False
     assert result.handled is False
@@ -180,9 +195,11 @@ def test_unknown_user_still_hashes(
     calls: list[int] = []
     real = server.pbkdf2_hmac
 
-    def counting(*args: Any, **kwargs: Any) -> bytes:
+    def counting(
+        hash_name: str, password: bytes, salt: bytes, iterations: int,
+    ) -> bytes:
         calls.append(1)
-        return real(*args, **kwargs)
+        return real(hash_name, password, salt, iterations)
 
     monkeypatch.setattr(server, "pbkdf2_hmac", counting)
     result = authenticate("LOGIN", LoginPassword(b"nonexistent", known_user[1]))
@@ -192,7 +209,7 @@ def test_unknown_user_still_hashes(
 
 
 def test_corrupt_salt_rejects_without_raising(
-    server: ModuleType, known_user: tuple[str, bytes], tmp_path: Path
+    server: ModuleType, known_user: tuple[str, bytes], tmp_path: Path,
 ) -> None:
     """A row whose salt is not hex is a data error, not a credential error."""
     user, password = known_user
@@ -200,19 +217,19 @@ def test_corrupt_salt_rejects_without_raising(
     with closing(sqlite3.connect(corrupt)) as conn:
         conn.execute("CREATE TABLE userauth (username text, salt text, hashpass text)")
         conn.execute(
-            "INSERT INTO userauth VALUES (?, ?, ?)", (user, "not-hex!", "deadbeef")
+            "INSERT INTO userauth VALUES (?, ?, ?)", (user, "not-hex!", "deadbeef"),
         )
         conn.commit()
 
     result = server.Authenticator(corrupt)(
-        None, None, None, "LOGIN", LoginPassword(user.encode("utf-8"), password)
+        None, None, None, "LOGIN", LoginPassword(user.encode("utf-8"), password),
     )
     assert result.success is False
     assert result.handled is False
 
 
 def test_undecodable_login_cannot_match_a_replacement_char_user(
-    server: ModuleType, tmp_path: Path
+    server: ModuleType, tmp_path: Path,
 ) -> None:
     """Decoding with errors="replace" would let one login match another user.
 
@@ -226,17 +243,17 @@ def test_undecodable_login_cannot_match_a_replacement_char_user(
         conn.execute(
             "INSERT INTO userauth VALUES (?, ?, ?)",
             (
-                "\ufffd",
+                "�",
                 salt.hex(),
                 server.pbkdf2_hmac(
-                    "sha256", b"secret", salt, server.HASH_ITERATIONS
+                    "sha256", b"secret", salt, server.HASH_ITERATIONS,
                 ).hex(),
             ),
         )
         conn.commit()
 
     result = server.Authenticator(db)(
-        None, None, None, "LOGIN", LoginPassword(b"\xff", b"secret")
+        None, None, None, "LOGIN", LoginPassword(b"\xff", b"secret"),
     )
     assert result.success is False
     assert result.handled is False
