@@ -108,52 +108,46 @@ def test_all_created_users_can_authenticate(
         assert result.success is True, user
 
 
-def test_wrong_password_rejected(
-    authenticate: Authenticate, known_user: tuple[str, bytes],
-) -> None:
-    """A known user with a wrong password is rejected."""
-    user, _ = known_user
-    result = authenticate("LOGIN", LoginPassword(user.encode("utf-8"), b"hunter2"))
-    assert result.success is False
-    assert result.handled is False
-
-
-def test_unknown_user_rejected(
-    authenticate: Authenticate, known_user: tuple[str, bytes],
-) -> None:
-    """A username missing from the DB is rejected, even with a real password."""
-    _, password = known_user
-    result = authenticate("LOGIN", LoginPassword(b"nonexistent", password))
-    assert result.success is False
-    assert result.handled is False
-
-
-def test_unsupported_mechanism_rejected(
-    authenticate: Authenticate, known_user: tuple[str, bytes],
-) -> None:
-    """A mechanism other than LOGIN or PLAIN is rejected, even with valid data."""
-    user, password = known_user
-    result = authenticate("CRAM-MD5", LoginPassword(user.encode("utf-8"), password))
-    assert result.success is False
-    assert result.handled is False
+#: make_user_db.py's first user. Each case below breaks one part of this real
+#: login, so it is rejected for that reason alone.
+REAL_LOGIN, REAL_PASSWORD = b"user1", b"not@password"
 
 
 @pytest.mark.parametrize(  # noqa: PT007
-    "auth_data",
+    ("mechanism", "auth_data"),
     (
-        pytest.param(("user1", b"not@password"), id="not-a-LoginPassword"),
-        # user1's real password behind invalid UTF-8, so a decoder that drops
+        pytest.param(
+            "LOGIN", LoginPassword(REAL_LOGIN, b"hunter2"), id="wrong-password",
+        ),
+        pytest.param(
+            "LOGIN", LoginPassword(b"nonexistent", REAL_PASSWORD), id="unknown-user",
+        ),
+        pytest.param(
+            "CRAM-MD5",
+            LoginPassword(REAL_LOGIN, REAL_PASSWORD),
+            id="unsupported-mechanism",
+        ),
+        pytest.param(
+            "LOGIN", (REAL_LOGIN, REAL_PASSWORD), id="not-a-LoginPassword",
+        ),
+        # Invalid UTF-8 in front of the real login, so a decoder that drops
         # the invalid bytes would log in instead of rejecting.
         pytest.param(
-            LoginPassword(b"\xff\xfeuser1", b"not@password"), id="non-utf8-login",
+            "LOGIN",
+            LoginPassword(b"\xff\xfe" + REAL_LOGIN, REAL_PASSWORD),
+            id="non-utf8-login",
         ),
     ),
 )
-def test_malformed_auth_data_rejected(
-    authenticate: Authenticate, auth_data: object,
+def test_bad_login_rejected(
+    authenticate: Authenticate,
+    users: dict[str, bytes],
+    mechanism: str,
+    auth_data: object,
 ) -> None:
-    """Malformed auth data is rejected rather than raising."""
-    result = authenticate("LOGIN", auth_data)
+    """Bad credentials, mechanisms and auth data are all rejected, never raised."""
+    assert users[REAL_LOGIN.decode()] == REAL_PASSWORD, "REAL_LOGIN is stale"
+    result = authenticate(mechanism, auth_data)
     assert result.success is False
     assert result.handled is False
 
