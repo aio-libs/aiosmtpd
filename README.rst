@@ -61,10 +61,9 @@ Requirements
 Supported Platforms
 -----------------------
 
-``aiosmtpd`` has been tested on **CPython**>=3.9 and |PyPy|_>=3.9
+``aiosmtpd`` has been tested on **CPython**>=3.10 and |PyPy|_>=3.10
 for the following platforms (in alphabetical order):
 
-* Cygwin (as of 2022-12-22, only for CPython 3.9)
 * MacOS 11 and 12
 * Ubuntu 18.04
 * Ubuntu 20.04
@@ -170,7 +169,7 @@ In general, the ``-e`` parameter to tox specifies one (or more) **testenv**
 to run (separate using comma if more than one testenv). The following testenvs
 have been configured and tested:
 
-* ``{py39,py310,py311,py312,pypy3,pypy311}-{nocov,cov,diffcov,profile}``
+* ``{py310,py311,py312,pypy3,pypy311}-{nocov,cov,diffcov,profile}``
 
   Specifies the interpreter to run and the kind of testing to perform.
 
@@ -182,10 +181,7 @@ have been configured and tested:
   - ``profile`` = no coverage testing, but code profiling instead.
     This must be **invoked manually** using the ``-e`` parameter
 
-  **Note 1:** As of 2021-02-23,
-  only the ``{py39}-{nocov,cov}`` combinations work on **Cygwin**.
-
-  **Note 2:** It is also possible to use whatever Python version is used when
+  **Note:** It is also possible to use whatever Python version is used when
   invoking ``tox`` by using the ``py`` target, but you must explicitly include
   the type of testing you want. For example::
 
