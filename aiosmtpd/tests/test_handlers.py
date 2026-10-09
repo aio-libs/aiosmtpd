@@ -265,7 +265,7 @@ def with_fake_parser() -> Callable:
 @pytest.fixture
 def upstream_controller(get_controller) -> Generator[Controller, None, None]:
     upstream_handler = DataHandler()
-    upstream_controller = get_controller(upstream_handler, port=9025)
+    upstream_controller = get_controller(upstream_handler, port=0)
     upstream_controller.start()
     # Notice that we do NOT invoke Global.set_addr_from() here
     #
@@ -735,10 +735,8 @@ class TestProxy:
     )
 
     # There are two controllers and two SMTPd's running here.  The
-    # "upstream" one listens on port 9025 and is connected to a "data
-    # handler" which captures the messages it receives.  The second -and
-    # the one under test here- listens on port 9024 and proxies to the one
-    # on port 9025.
+    # "upstream" one is connected to a "data handler" which captures the messages it
+    # receives.  The second -and the one under test here-  proxies to upstream.
 
     def test_deliver_bytes(self, proxy_nodecode_controller, client):
         client.sendmail(self.sender_addr, [self.receiver_addr], self.source)

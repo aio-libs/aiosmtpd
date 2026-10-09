@@ -91,6 +91,13 @@ class ErrorSMTP(Server):
         raise self.exception_type("test")
 
 
+@pytest.fixture
+def _unpropagated_mail_log() -> Generator[None, None, None]:
+    MAIL_LOG.propagate = False
+    yield
+    MAIL_LOG.propagate = True
+
+
 # endregion
 
 
@@ -386,7 +393,7 @@ def decoding_authnotls_controller(
 @pytest.fixture
 def error_controller(get_handler: Callable) -> Generator[ErrorController, None, None]:
     handler = get_handler()
-    controller = ErrorController(handler)
+    controller = ErrorController(handler, port=0)
     controller.start()
     Global.set_addr_from(controller)
     #
@@ -1564,7 +1571,13 @@ class TestSMTPWithController(_CommonMethods):
         assert resp == S.S250_OK
 
     @handler_data(class_=ReceivingHandler)
+    @pytest.mark.usefixtures('_unpropagated_mail_log')
     def test_bad_encodings(self, decoding_authnotls_controller, client):
+        # Running this test in parallel with pytest-xdist will blow up when
+        # trying to serialize the captured logs that contain badly encoded strings.
+        # To avoid this, the _unpropagated_mail_log fixture prevents logs from
+        # being propagated to pytest's capture handler.
+
         handler: ReceivingHandler = decoding_authnotls_controller.handler
         self._helo(client)
         mail_from = b"anne\xFF@example.com"
