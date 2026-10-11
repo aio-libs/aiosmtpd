@@ -24,7 +24,7 @@ DB_AUTH = Path("mail.db~")
 log = logging.getLogger("mail.log")
 
 # Must match make_user_db.py, or nothing will ever verify.
-HASH_ITERATIONS = 1000000
+HASH_ITERATIONS = 1_000_000
 
 # Hashed against when the username is unknown, so that case costs the same as a
 # known username with the wrong password. Without it the early return is fast

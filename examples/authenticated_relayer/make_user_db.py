@@ -10,7 +10,7 @@ from pathlib import Path
 DB_FILE = "mail.db~"
 
 # Must match server.py, or nothing will ever verify.
-HASH_ITERATIONS = 1000000
+HASH_ITERATIONS = 1_000_000
 USER_AND_PASSWORD = {
     "user1": b"not@password",
     "user2": b"correctbatteryhorsestaple",
