@@ -67,6 +67,7 @@ class SMTP_STATUS_CODES:
     S235_AUTH_SUCCESS = StatusCode(235, b"2.7.0 Authentication successful")
 
     S250_OK = StatusCode(250, b"OK")
+    S250_BDAT_RECEIVED = StatusCode(250, b"%d octets received")
     S250_FQDN = StatusCode(250, bytes(socket.getfqdn(), "utf-8"))
 
     S250_SUPPCMD_LMTP = StatusCode(250, _suppcmd(SUPPORTED_COMMANDS_LMTP))
@@ -74,6 +75,7 @@ class SMTP_STATUS_CODES:
     S250_SUPPCMD_TLS = StatusCode(250, _suppcmd(SUPPORTED_COMMANDS_TLS))
 
     S250_SYNTAX_AUTH = StatusCode(250, b"Syntax: AUTH <mechanism>")
+    S250_SYNTAX_BDAT = StatusCode(250, b"Syntax: BDAT <size> [LAST]")
     S250_SYNTAX_DATA = StatusCode(250, b"Syntax: DATA")
     S250_SYNTAX_EHLO = StatusCode(250, b"Syntax: EHLO hostname")
     S250_SYNTAX_HELO = StatusCode(250, b"Syntax: HELO hostname")
@@ -131,6 +133,7 @@ class SMTP_STATUS_CODES:
 
     S501_SUPPCMD_NOTLS = StatusCode(501, S250_SUPPCMD_NOTLS.mesg)
 
+    S501_SYNTAX_BDAT = StatusCode(501, S250_SYNTAX_BDAT.mesg)
     S501_SYNTAX_DATA = StatusCode(501, S250_SYNTAX_DATA.mesg)
     S501_SYNTAX_EHLO = StatusCode(501, S250_SYNTAX_EHLO.mesg)
     S501_SYNTAX_HELO = StatusCode(501, S250_SYNTAX_HELO.mesg)
@@ -146,6 +149,7 @@ class SMTP_STATUS_CODES:
     S501_TOO_FEW = StatusCode(501, b"Not enough value")
     S501_TOO_MANY = StatusCode(501, b"Too many values")
 
+    S502_CHUNKING_DISABLED = StatusCode(502, b"Error: CHUNKING not enabled")
     S502_EXPN_NOTIMPL = StatusCode(502, b"EXPN not implemented")
     S502_VRFY_COULDNT = StatusCode(502, b"Could not VRFY %b")
     S502_TOO_MANY_UNRECOG = StatusCode(
@@ -153,6 +157,9 @@ class SMTP_STATUS_CODES:
     )
 
     S503_ALREADY_AUTH = StatusCode(503, b"Already authenticated")
+    S503_BDAT_ALREADY = StatusCode(
+        503, b"Error: BDAT already used in this transaction"
+    )
     S503_EHLO_FIRST = StatusCode(503, b"Error: send EHLO first")
     S503_HELO_FIRST = StatusCode(503, b"Error: send HELO first")
     S503_MAIL_NEEDED = StatusCode(503, b"Error: need MAIL command")
@@ -177,6 +184,9 @@ class SMTP_STATUS_CODES:
     )
     S552_DATA_TOO_MUCH = StatusCode(552, b"Error: Too much mail data")
     S553_MALFORMED = StatusCode(553, b"5.1.3 Error: malformed address")
+    S554_BDAT_FAILED = StatusCode(
+        554, b"Error: BDAT transaction failed, issue RSET"
+    )
     S554_LACK_SECURITY = StatusCode(554, b"Command refused due to lack of security")
 
     S555_MAIL_PARAMS_UNRECOG = StatusCode(
