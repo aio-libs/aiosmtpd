@@ -16,6 +16,9 @@ Fixed/Improved
   during verification, so authentication can succeed. The user database gained a
   ``salt`` column, so re-run ``make_user_db.py`` if you already have one.
   (Closes #475)
+* Removed the trailing NUL byte (``\x00``) from the ``AUTH LOGIN`` username and
+  password challenges, which broke strict clients such as Go's ``net/smtp``
+  (used by Prometheus Alertmanager) and curl (Closes #566)
 
 
 1.4.6 (2024-05-18)
