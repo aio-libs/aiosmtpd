@@ -98,8 +98,8 @@ class SMTP_STATUS_CODES:
     )
 
     S334_AUTH_EMPTYPROMPT = StatusCode(334, b"")
-    S334_AUTH_USERNAME = StatusCode(334, b"VXNlciBOYW1lAA==")
-    S334_AUTH_PASSWORD = StatusCode(334, b"UGFzc3dvcmQA")
+    S334_AUTH_USERNAME = StatusCode(334, b"VXNlciBOYW1l")
+    S334_AUTH_PASSWORD = StatusCode(334, b"UGFzc3dvcmQ=")
 
     S354_DATA_ENDWITH = StatusCode(354, b"End data with <CR><LF>.<CR><LF>")
 
