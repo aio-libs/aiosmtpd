@@ -5,7 +5,7 @@ import ssl
 from contextlib import suppress
 from email.mime.text import MIMEText
 from smtplib import SMTPServerDisconnected
-from typing import Generator
+from typing import Callable, Generator
 
 import pytest
 
@@ -42,7 +42,7 @@ class EOFingHandler:
 
 class HandshakeFailingHandler:
     def handle_STARTTLS(
-            self, server: Server, session: Sess_, envelope: Envelope
+        self, server: Server, session: Sess_, envelope: Envelope
     ) -> bool:
         return False
 
@@ -55,7 +55,9 @@ class HandshakeFailingHandler:
 
 @pytest.fixture
 def tls_controller(
-    get_handler, get_controller, ssl_context_server
+    get_handler: Callable,
+    get_controller: Callable[..., Controller],
+    ssl_context_server: ssl.SSLContext,
 ) -> Generator[Controller, None, None]:
     handler = get_handler()
     # controller = TLSController(handler)
@@ -79,7 +81,9 @@ def tls_controller(
 
 @pytest.fixture
 def tls_req_controller(
-    get_handler, get_controller, ssl_context_server
+    get_handler: Callable,
+    get_controller: Callable[..., Controller],
+    ssl_context_server: ssl.SSLContext,
 ) -> Generator[Controller, None, None]:
     handler = get_handler()
     controller = get_controller(
@@ -98,7 +102,9 @@ def tls_req_controller(
 
 @pytest.fixture
 def auth_req_tls_controller(
-    get_handler, get_controller, ssl_context_server
+    get_handler: Callable,
+    get_controller: Callable[..., Controller],
+    ssl_context_server: ssl.SSLContext,
 ) -> Generator[Controller, None, None]:
     handler = get_handler()
     controller = get_controller(
