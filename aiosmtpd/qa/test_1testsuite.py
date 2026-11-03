@@ -4,7 +4,6 @@
 """Test the sanity of the test suite itself"""
 
 import re
-import pytest
 import socket
 
 from aiosmtpd.testing import statuscodes
@@ -15,18 +14,6 @@ ENFORCE_ENHANCED_STATUS_CODES = False
 """Whether to do strict compliance checking against RFC 2034 § 4"""
 
 RE_ESC = re.compile(rb"(?P<digit1>\d)\.\d+\.\d+\s")
-
-
-# noinspection PyUnresolvedReferences
-@pytest.fixture(scope="module", autouse=True)
-def exit_on_fail(request: pytest.FixtureRequest):
-    # Behavior of this will be undefined if tests are running in parallel.
-    # But since parallel running is not practically possible (the ports will conflict),
-    # then I don't think that will be a problem.
-    failcount = request.session.testsfailed
-    yield
-    if request.session.testsfailed != failcount:
-        pytest.exit("Test Suite is Not Sane!")
 
 
 STATUS_CODES = {
