@@ -7,6 +7,13 @@
 1.4.7 (aiosmtpd-next)
 =====================
 
+Added
+-----
+
+* New ``SMTP`` keyword argument ``enable_CHUNKING`` advertises the :rfc:`3030`
+  ``CHUNKING`` extension and enables the ``BDAT`` command. Chunks are delivered
+  through the existing ``handle_DATA()`` hook. Defaults to ``False``. (Closes #558)
+
 Fixed/Improved
 --------------
 
